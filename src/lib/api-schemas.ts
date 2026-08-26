@@ -172,3 +172,8 @@ export const emitEventSchema = z.object({
   eventType: z.string().trim().min(1).max(64),
   data: z.record(z.string(), z.unknown()).optional().default({}),
 });
+
+export const aiDraftEstimateSchema = z.object({
+  jobId: z.string().cuid(),
+  notes: z.string().trim().min(10).max(10_000),
+});

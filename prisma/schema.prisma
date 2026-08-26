@@ -414,6 +414,14 @@ model Estimate {
   /// Set by the "Send to Job Budget" action, which locks the estimate.
   sentToBudgetAt DateTime?
 
+  /// True when this estimate was drafted by the AI assistant from field notes
+  /// rather than entered by hand. Always created as DRAFT for human review —
+  /// never sent to budget automatically (CLAUDE.md Phase 8 principle: a human
+  /// reviews AI-drafted numbers before they touch money).
+  aiGenerated   Boolean @default(false)
+  /// The field notes the AI draft was generated from, kept for audit/re-generation.
+  aiPromptNotes String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

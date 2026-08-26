@@ -414,3 +414,14 @@ Record every architectural decision that departs from the above, with the reason
 - **Auth fallback (Phase 0):** when Clerk env vars are absent, `src/lib/auth.ts` falls back
   to a dev-only stub user so the app builds and CI runs without secrets. The stub refuses
   to activate when `NODE_ENV === "production"`.
+- **AI estimate drafting pulled forward from Phase 8 (added by explicit request):** the
+  original roadmap put AI features last, after every module had validated data to work
+  with. Damien asked for handoff.ai-style AI-assisted estimating alongside Phase 1's
+  financial core instead of waiting. Scoped narrowly to stay safe this early: it drafts
+  an `Estimate` (always status `DRAFT`, `aiGenerated: true`) from field notes, constrained
+  to the org's real `CostCode` catalog via a Zod enum built from the actual catalog (a
+  hallucinated cost code cannot pass schema validation, not just "the prompt says not
+  to"). It never locks the estimate and never calls "Send to Job Budget" itself — a human
+  reviews it like any hand-entered estimate first. See `src/lib/ai/`. Optional integration,
+  same pattern as Clerk: without `ANTHROPIC_API_KEY` it returns a clear 503 rather than
+  breaking the build.

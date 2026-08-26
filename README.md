@@ -8,6 +8,11 @@ landed the financial core: the Estimate builder, the commitment funnel, Purchase
 Orders, Bills/AP with approval routing, the webhook dispatcher, and Duke's agent
 surface including road-name job matching.
 
+Also added, pulled forward from the original Phase 8/5 schedule by explicit request:
+an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that turns
+rough field notes into a full line-item estimate against the org's real cost code
+catalog — always created as a review-first draft, never auto-sent to budget.
+
 Still to come in Phase 1: Invoicing and draw schedules, the Time Clock, the six
 standard reports, the two-way QuickBooks sync, and the published OpenAPI spec.
 
@@ -27,6 +32,10 @@ Then open <http://localhost:3000>.
 
 Clerk is optional locally: with no Clerk keys set, the app signs you in as a local dev
 admin. That fallback is disabled when `NODE_ENV=production`.
+
+The AI estimate assistant is also optional — set `ANTHROPIC_API_KEY` in `.env` to
+enable `/admin/ai-estimate` and `POST /api/v1/estimates/ai-draft`. Without it, both
+return a clear "not configured" message rather than the app failing to build.
 
 ## Using the API
 
@@ -62,6 +71,7 @@ Phase 0 endpoints:
 | `POST` | `/api/v1/bills/{id}/status` | `bills:write` |
 | `GET` `POST` | `/api/v1/webhooks` | `webhooks:read` / `webhooks:write` |
 | `POST` | `/api/v1/events` | `events:write` |
+| `POST` | `/api/v1/estimates/ai-draft` | `estimates:write` |
 
 A published OpenAPI spec lands with the rest of the public API in Phase 1.
 

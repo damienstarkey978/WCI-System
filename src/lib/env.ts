@@ -45,3 +45,13 @@ export function devOrganizationSlug(): string {
 export function devUserEmail(): string {
   return optional("DEV_USER_EMAIL") ?? "dev@worldconstructioninc.com";
 }
+
+/**
+ * The AI estimate assistant is optional, same pattern as Clerk: without a key, the
+ * feature returns a clear "not configured" error rather than the app failing to build
+ * or start. WCI OS needs its own key — this is never the coding session's own
+ * credentials.
+ */
+export function isAnthropicConfigured(): boolean {
+  return optional("ANTHROPIC_API_KEY") !== undefined;
+}
