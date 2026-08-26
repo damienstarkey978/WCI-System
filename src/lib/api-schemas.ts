@@ -621,3 +621,87 @@ export const createProposalSchema = z.object({
 export const portalAcceptProposalSchema = z.object({
   clientSignatureName: z.string().trim().min(1).max(255).optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Phase 6 — Specifications, Submittals, Warranty, Surveys
+// ---------------------------------------------------------------------------
+
+const createSpecificationSectionSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  body: z.string().trim().min(1).max(20_000),
+});
+
+export const createSpecificationSchema = z.object({
+  jobId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  viewMode: z.enum(["BOOK_VIEW", "LIST_VIEW"]).optional(),
+  sections: z.array(createSpecificationSectionSchema).max(200).optional(),
+});
+
+export const generateSpecificationFromEstimateSchema = z.object({
+  jobId: z.string().cuid(),
+  estimateId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+});
+
+export const createSubmittalSchema = z.object({
+  jobId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  type: z.enum(["MATERIAL_SPEC", "SHOP_DRAWING"]),
+  documentUrl: z.string().url().max(2_000),
+  notes: z.string().trim().max(5_000).nullish(),
+});
+
+export const addSubmittalRevisionSchema = z.object({
+  documentUrl: z.string().url().max(2_000),
+  notes: z.string().trim().max(5_000).nullish(),
+});
+
+export const issueSubmittalReviewLinkSchema = z.object({
+  reviewerName: z.string().trim().min(1).max(255),
+  reviewerEmail: z.string().trim().toLowerCase().email().max(255),
+});
+
+export const recordSubmittalReviewSchema = z.object({
+  decision: z.enum(["APPROVED", "REJECTED", "REVISE_AND_RESUBMIT"]),
+  comments: z.string().trim().max(5_000).nullish(),
+});
+
+export const createWarrantyClaimSchema = z.object({
+  jobId: z.string().cuid(),
+  claimNumber: z.string().trim().min(1).max(64),
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().min(1).max(10_000),
+  submittedByName: z.string().trim().max(255).nullish(),
+  submittedByEmail: z.string().trim().toLowerCase().email().max(255).nullish(),
+  clientId: z.string().cuid().nullish(),
+});
+
+export const scheduleWarrantyAppointmentSchema = z.object({
+  appointmentAt: z.coerce.date(),
+  assignedVendorId: z.string().cuid().nullish(),
+});
+
+export const portalAcceptWarrantyWorkSchema = z.object({
+  signatureName: z.string().trim().min(1).max(255).optional(),
+});
+
+const createSurveyQuestionSchema = z.object({
+  prompt: z.string().trim().min(1).max(1_000),
+});
+
+export const createSurveySchema = z.object({
+  jobId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  touchpoint: z.enum(["PRE_PROJECT", "MID_PROJECT", "POST_COMPLETION"]),
+  questions: z.array(createSurveyQuestionSchema).min(1).max(50),
+});
+
+export const issueSurveyResponseLinkSchema = z.object({
+  recipientName: z.string().trim().max(255).nullish(),
+  recipientEmail: z.string().trim().toLowerCase().email().max(255).nullish(),
+});
+
+export const submitSurveyResponseSchema = z.object({
+  answers: z.record(z.string(), z.string().trim().max(5_000)),
+});

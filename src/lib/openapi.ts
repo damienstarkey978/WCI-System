@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import {
   addCertificationSchema,
+  addSubmittalRevisionSchema,
   aiDraftEstimateSchema,
   bulkClockInSchema,
   clockInSchema,
@@ -33,21 +34,32 @@ import {
   createProposalSchema,
   createPurchaseOrderSchema,
   createSelectionSchema,
+  createSpecificationSchema,
+  createSubmittalSchema,
+  createSurveySchema,
   createVendorSchema,
+  createWarrantyClaimSchema,
   createWebhookSubscriptionSchema,
   emitEventSchema,
+  generateSpecificationFromEstimateSchema,
   grantJobAccessSchema,
   grantVendorJobAccessSchema,
   inviteVendorToBidSchema,
+  issueSubmittalReviewLinkSchema,
+  issueSurveyResponseLinkSchema,
   matchByRoadNameSchema,
   portalAcceptProposalSchema,
   portalAcceptPurchaseOrderSchema,
+  portalAcceptWarrantyWorkSchema,
   portalApproveChangeOrderSchema,
   pushBidToPurchaseOrderSchema,
   recordPaymentSchema,
+  recordSubmittalReviewSchema,
   requestApprovalLinkSchema,
   requestVendorApprovalLinkSchema,
+  scheduleWarrantyAppointmentSchema,
   submitBidSchema,
+  submitSurveyResponseSchema,
   transitionJobStatusSchema,
   updateBillStatusSchema,
   updateLeadStageSchema,
@@ -92,8 +104,11 @@ interface EndpointDef {
    * even though all three travel as `Authorization: Bearer`. `scopes` is
    * ignored for portal endpoints; per-job module gating (ClientJobAccess/
    * VendorJobAccess) isn't a static scope and is documented in `description`.
+   * "public": a single-use link token scoped to a standalone no-account
+   * table (SubmittalReviewLink/SurveyResponseLink) — not a Client/Vendor at
+   * all, so it isn't clientPortal/vendorPortal either; `scopes` is ignored.
    */
-  readonly authKind?: "apiKey" | "clientPortal" | "vendorPortal";
+  readonly authKind?: "apiKey" | "clientPortal" | "vendorPortal" | "public";
   readonly scopes: readonly string[];
   readonly pathParams?: readonly string[];
   readonly queryParams?: readonly { name: string; description: string; schema?: Record<string, unknown> }[];
@@ -1122,6 +1137,237 @@ const ENDPOINTS: readonly EndpointDef[] = [
     pathParams: ["proposalId"],
     requestSchema: portalAcceptProposalSchema,
   },
+
+  // --- Specifications --------------------------------------------------------
+  {
+    method: "get",
+    path: "/specifications",
+    summary: "List Specifications",
+    description: "Optionally filter by jobId. Includes ordered sections.",
+    tags: ["Specifications"],
+    scopes: ["specifications:read"],
+    queryParams: [{ name: "jobId", description: "Filter to one job." }],
+  },
+  {
+    method: "post",
+    path: "/specifications",
+    summary: "Create a Specification manually",
+    description: "Provide sections directly, or use POST /specifications/generate-from-estimate instead.",
+    tags: ["Specifications"],
+    scopes: ["specifications:write"],
+    requestSchema: createSpecificationSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/specifications/generate-from-estimate",
+    summary: "Auto-generate a Specification from an Estimate",
+    description:
+      "Groups the Estimate's line items by their groupLabel (room/assembly tag, defaulting to \"General\") into " +
+      "one SpecificationSection per group, with a bulleted body of each line item's title/description.",
+    tags: ["Specifications"],
+    scopes: ["specifications:write"],
+    requestSchema: generateSpecificationFromEstimateSchema,
+    successStatus: 201,
+  },
+
+  // --- Submittals --------------------------------------------------------
+  {
+    method: "get",
+    path: "/submittals",
+    summary: "List Submittals",
+    description: "Optionally filter by jobId and/or status. Includes revisions ordered newest-first.",
+    tags: ["Submittals"],
+    scopes: ["submittals:read"],
+    queryParams: [
+      { name: "jobId", description: "Filter to one job." },
+      { name: "status", description: "Filter to one SubmittalStatus." },
+    ],
+  },
+  {
+    method: "post",
+    path: "/submittals",
+    summary: "Create a Submittal",
+    description: "Creates the Submittal with its first revision (revisionNumber 1).",
+    tags: ["Submittals"],
+    scopes: ["submittals:write"],
+    requestSchema: createSubmittalSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/submittals/{submittalId}/revisions",
+    summary: "Add a Submittal revision",
+    description: "Appends the next sequential revisionNumber and resets status to PENDING.",
+    tags: ["Submittals"],
+    scopes: ["submittals:write"],
+    pathParams: ["submittalId"],
+    requestSchema: addSubmittalRevisionSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/submittals/{submittalId}/review-link",
+    summary: "Issue a headless review link for an external reviewer (architect/engineer)",
+    description:
+      "Single-use, scoped to exactly this submittal. The reviewer has no Client/Vendor account — this issues a " +
+      "standalone SubmittalReviewLink token, not a clientPortal/vendorPortal one. See POST /submittal-reviews.",
+    tags: ["Submittals"],
+    scopes: ["submittals:write"],
+    pathParams: ["submittalId"],
+    requestSchema: issueSubmittalReviewLinkSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/submittal-reviews",
+    summary: "Record an external reviewer's decision (no account)",
+    description:
+      "The review-link token travels as Authorization: Bearer (same convention as every other bearer token in " +
+      "this API, so src/proxy.ts's single coarse auth-header rule stays universally true). Single-use — a second " +
+      "call with the same token returns 401.",
+    tags: ["Submittals"],
+    authKind: "public",
+    scopes: [],
+    requestSchema: recordSubmittalReviewSchema,
+  },
+
+  // --- Warranty ------------------------------------------------------------
+  {
+    method: "get",
+    path: "/warranty-claims",
+    summary: "List Warranty claims",
+    description: "Optionally filter by jobId and/or status.",
+    tags: ["Warranty"],
+    scopes: ["warranty:read"],
+    queryParams: [
+      { name: "jobId", description: "Filter to one job." },
+      { name: "status", description: "Filter to one WarrantyClaimStatus." },
+    ],
+  },
+  {
+    method: "post",
+    path: "/warranty-claims",
+    summary: "Create a Warranty claim",
+    description: "Starts in SUBMITTED. Optionally links a Client (for later client-acceptance headless links).",
+    tags: ["Warranty"],
+    scopes: ["warranty:write"],
+    requestSchema: createWarrantyClaimSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/warranty-claims/{claimId}/schedule",
+    summary: "Schedule a Warranty claim's repair appointment",
+    description: "Sets appointmentAt and assignedVendorId, moves status to SCHEDULED.",
+    tags: ["Warranty"],
+    scopes: ["warranty:write"],
+    pathParams: ["claimId"],
+    requestSchema: scheduleWarrantyAppointmentSchema,
+  },
+  {
+    method: "post",
+    path: "/warranty-claims/{claimId}/trade-approval-link",
+    summary: "Issue a headless link for the assigned trade to confirm work is done",
+    description:
+      "Single-use, scoped to exactly this claim and the assigned vendor. See " +
+      "POST /vendor-portal/warranty-claims/{claimId}/accept-trade.",
+    tags: ["Warranty"],
+    scopes: ["warranty:write"],
+    pathParams: ["claimId"],
+    requestSchema: requestVendorApprovalLinkSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/warranty-claims/{claimId}/client-approval-link",
+    summary: "Issue a headless link for the client to confirm they're satisfied",
+    description:
+      "Single-use, scoped to exactly this claim and client. See POST /portal/warranty-claims/{claimId}/accept-client.",
+    tags: ["Warranty"],
+    scopes: ["warranty:write"],
+    pathParams: ["claimId"],
+    requestSchema: requestApprovalLinkSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/vendor-portal/warranty-claims/{claimId}/accept-trade",
+    summary: "Confirm warranty work is done, as the assigned trade",
+    description:
+      "Works with either a portal session or a single-use WARRANTY_TRADE_ACCEPTANCE token from " +
+      "POST /warranty-claims/{id}/trade-approval-link. Rejects (403) a vendor session that isn't the claim's " +
+      "assignedVendorId. Status becomes IN_PROGRESS if only the trade has accepted so far, or COMPLETED once the " +
+      "client has accepted too.",
+    tags: ["Warranty", "Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+    pathParams: ["claimId"],
+    requestSchema: portalAcceptWarrantyWorkSchema,
+  },
+  {
+    method: "post",
+    path: "/portal/warranty-claims/{claimId}/accept-client",
+    summary: "Confirm satisfaction with warranty work, as the client",
+    description:
+      "Works with either a portal session or a single-use WARRANTY_CLIENT_ACCEPTANCE token from " +
+      "POST /warranty-claims/{id}/client-approval-link. Status becomes COMPLETED once the trade has accepted too, " +
+      "otherwise stays at its current status.",
+    tags: ["Warranty", "Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["claimId"],
+    requestSchema: portalAcceptWarrantyWorkSchema,
+  },
+
+  // --- Surveys ---------------------------------------------------------------
+  {
+    method: "get",
+    path: "/surveys",
+    summary: "List Surveys",
+    description: "Optionally filter by jobId and/or touchpoint. Includes ordered questions.",
+    tags: ["Surveys"],
+    scopes: ["surveys:read"],
+    queryParams: [
+      { name: "jobId", description: "Filter to one job." },
+      { name: "touchpoint", description: "Filter to one SurveyTouchpoint." },
+    ],
+  },
+  {
+    method: "post",
+    path: "/surveys",
+    summary: "Create a Survey",
+    description: "Creates the Survey with its questions in the given order.",
+    tags: ["Surveys"],
+    scopes: ["surveys:write"],
+    requestSchema: createSurveySchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/surveys/{surveyId}/response-link",
+    summary: "Issue a headless response link for a recipient (no account)",
+    description:
+      "Single-use, scoped to exactly this survey. Issues a standalone SurveyResponseLink token, not a " +
+      "clientPortal/vendorPortal one — the recipient may not even be a known Client/Vendor. See POST /survey-responses.",
+    tags: ["Surveys"],
+    scopes: ["surveys:write"],
+    pathParams: ["surveyId"],
+    requestSchema: issueSurveyResponseLinkSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/survey-responses",
+    summary: "Submit survey answers (no account)",
+    description:
+      "The response-link token travels as Authorization: Bearer, same convention as /submittal-reviews. " +
+      "Single-use — a second call with the same token returns 401. `answers` keys are SurveyQuestion ids.",
+    tags: ["Surveys"],
+    authKind: "public",
+    scopes: [],
+    requestSchema: submitSurveyResponseSchema,
+  },
 ];
 
 function toOperation(endpoint: EndpointDef): Record<string, unknown> {
@@ -1142,23 +1388,30 @@ function toOperation(endpoint: EndpointDef): Record<string, unknown> {
   ];
 
   const authKind = endpoint.authKind ?? "apiKey";
-  const isPortal = authKind !== "apiKey";
+  const isPortal = authKind === "clientPortal" || authKind === "vendorPortal";
+  const isPublic = authKind === "public";
 
   const responses: Record<string, unknown> = {
     [String(endpoint.successStatus ?? 200)]: {
       description: endpoint.successDescription ?? "Success. See CLAUDE.md and the route source for the exact response shape.",
     },
     "401": {
-      description: isPortal ? "Missing or invalid portal session/action token." : "Missing or invalid API key.",
+      description: isPublic
+        ? "Missing, invalid, or already-used single-use link token."
+        : isPortal
+          ? "Missing or invalid portal session/action token."
+          : "Missing or invalid API key.",
       content: jsonContent(ERROR_SCHEMA),
     },
-    "403": {
+  };
+  if (!isPublic) {
+    responses["403"] = {
       description: isPortal
         ? `The ${authKind === "clientPortal" ? "client" : "vendor"} has access to the job but not this module (${authKind === "clientPortal" ? "ClientJobAccess" : "VendorJobAccess"}).`
         : "The API key lacks a required scope.",
       content: jsonContent(ERROR_SCHEMA),
-    },
-  };
+    };
+  }
   if (endpoint.requestSchema) {
     responses["422"] = { description: "Validation failed.", content: jsonContent(ERROR_SCHEMA) };
   }
@@ -1168,7 +1421,7 @@ function toOperation(endpoint: EndpointDef): Record<string, unknown> {
     description: endpoint.description,
     tags: endpoint.tags,
     security: [{ [authKind]: [] }],
-    ...(isPortal ? {} : { "x-required-scopes": endpoint.scopes }),
+    ...(authKind === "apiKey" ? { "x-required-scopes": endpoint.scopes } : {}),
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(endpoint.requestSchema
       ? { requestBody: { required: true, content: jsonContent(schemaOf(endpoint.requestSchema)) } }
@@ -1238,6 +1491,16 @@ export function buildOpenApiDocument(): Record<string, unknown> {
             "separate token namespace from both apiKey and clientPortal. A wcivps_ session comes from " +
             "POST /vendor-portal/login; a wcivpa_ token is a single-use link issued by staff/an agent " +
             "(POST /vendors/{vendorId}/portal-invite, /purchase-orders/{id}/approval-link) for headless PO acceptance.",
+        },
+        public: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "wcisrl_<tokenId>_<secret> (SubmittalReviewLink) or wcisvl_<tokenId>_<secret> (SurveyResponseLink)",
+          description:
+            "A single-use link token scoped to one standalone no-account record (src/lib/submittals/service.ts, " +
+            "src/lib/surveys/service.ts) — the recipient (external reviewer, survey respondent) has no Client/Vendor " +
+            "account or session at all, so this is neither clientPortal nor vendorPortal. A third, completely " +
+            "separate token namespace, never interchangeable with apiKey/clientPortal/vendorPortal.",
         },
       },
     },

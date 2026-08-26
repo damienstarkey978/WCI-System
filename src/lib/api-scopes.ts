@@ -61,6 +61,15 @@ export const SCOPES = [
   "leads:write",
   "proposals:read",
   "proposals:write",
+  // Phase 6 — warranty, submittals, surveys, specifications
+  "specifications:read",
+  "specifications:write",
+  "submittals:read",
+  "submittals:write",
+  "warranty:read",
+  "warranty:write",
+  "surveys:read",
+  "surveys:write",
 ] as const;
 
 export type Scope = (typeof SCOPES)[number];
@@ -147,6 +156,14 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "selections:write",
     "vendors:read",
     "bids:read",
+    "specifications:read",
+    "specifications:write",
+    "submittals:read",
+    "submittals:write",
+    "warranty:read",
+    "warranty:write",
+    "surveys:read",
+    "surveys:write",
   ],
   vince: ["jobs:read", "jobs:write", "leads:read", "leads:write", "proposals:read", "proposals:write"],
   neil: ["jobs:read", "cost-codes:read", "estimates:read", "estimates:write", "budgets:read"],

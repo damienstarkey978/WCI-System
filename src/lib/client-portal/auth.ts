@@ -71,7 +71,8 @@ export interface IssueApprovalLinkInput {
   readonly purpose:
     | typeof ClientActionTokenPurpose.CHANGE_ORDER_APPROVAL
     | typeof ClientActionTokenPurpose.SELECTION_APPROVAL
-    | typeof ClientActionTokenPurpose.PROPOSAL_ACCEPTANCE;
+    | typeof ClientActionTokenPurpose.PROPOSAL_ACCEPTANCE
+    | typeof ClientActionTokenPurpose.WARRANTY_CLIENT_ACCEPTANCE;
   readonly resourceId: string;
 }
 

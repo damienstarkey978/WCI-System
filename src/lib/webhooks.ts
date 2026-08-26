@@ -46,6 +46,12 @@ export const WEBHOOK_EVENT_TYPES = [
   "proposal.sent",
   "proposal.accepted",
   "proposal.declined",
+  "submittal.review_requested",
+  "submittal.reviewed",
+  "warranty_claim.trade_accepted",
+  "warranty_claim.client_accepted",
+  "survey.response_requested",
+  "survey.response_submitted",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];

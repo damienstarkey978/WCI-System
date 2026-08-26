@@ -71,7 +71,7 @@ export async function issuePortalLoginInvite(organizationId: string, vendorId: s
 export interface IssueApprovalLinkInput {
   readonly organizationId: string;
   readonly vendorId: string;
-  readonly purpose: typeof VendorActionTokenPurpose.PO_ACCEPTANCE;
+  readonly purpose: typeof VendorActionTokenPurpose.PO_ACCEPTANCE | typeof VendorActionTokenPurpose.WARRANTY_TRADE_ACCEPTANCE;
   readonly resourceId: string;
 }
 

@@ -343,8 +343,12 @@ phase is independently useful.
   Bid Board, PO acceptance/e-sign in portal, certifications/insurance tracking.
 - **Phase 5 — CRM/Sales.** Leads/Opportunities, Proposal builder, Estimate↔Proposal
   linkage, Lead→Job conversion. Vince's and Neil's API surfaces.
-- **Phase 6 — Warranty, Submittals, Surveys, Specifications, Airtable migration + cutover.**
-  Also Job Group/multi-family rollup views.
+- **Phase 6 — Warranty, Submittals, Surveys, Specifications.** Landed: dual-acceptance
+  Warranty claims, numbered Submittal revisions + headless external review, auto-generated
+  Specifications from an Estimate, Survey response links. Hank's API surface extended.
+- **Phase 6b — Airtable migration + cutover, Job Group/multi-family rollup views.** Split
+  out of the original Phase 6 bullet — needs Damien's Airtable export/schema, so it did not
+  land alongside the rest of Phase 6.
 - **Phase 7 — Mobile/field PWA hardening.** Offline daily logs + time clock.
 - **Phase 8 — AI layer.** Weekly client-update summaries, receipt/bill OCR capture, agent-
   facing summarization — built as a read/write layer over the canonical entities (2.3), not
@@ -391,7 +395,7 @@ build Phase 4 on an unvalidated Phase 1.
 | jarvis | Orchestrator | Read-heavy, cross-module, all webhook subscriptions |
 | heather | Office manager | Daily Logs, Files, custom permit-milestone events (Phase 2) |
 | duke | Purchasing | Purchase Orders, Bills, unmatched-transaction webhook (Phase 1) |
-| hank | PM | Project management module (Phase 2 onward) |
+| hank | PM | Project management module (Phase 2 onward); Specifications/Submittals/Warranty/Surveys (Phase 6) |
 | vince | Sales | Leads/Opportunities/Proposals (Phase 5) |
 | neil | Estimator | Estimates (Phase 5, though Estimate itself ships in Phase 1) |
 
@@ -528,3 +532,31 @@ Record every architectural decision that departs from the above, with the reason
   redeemed token's `clientId` against `Proposal.clientId` itself
   (`ProposalClientMismatchError`) rather than widening `issueApprovalLink()`
   with a check only one of its three callers needs.
+- **Submittal review and survey-response links have no reminder/notification
+  delivery (Phase 6):** `POST /submittals/{id}/review-link` and `POST
+  /surveys/{id}/response-link` mint the token and return it — there is no
+  outbound email/SMS to actually deliver the link, the same gap as
+  certifications' expiry tracking (Phase 4) and Notifications' non-`IN_APP`
+  channels (Phase 2): no scheduled-job/email-provider infrastructure yet, so
+  an agent or staff member sends the link out-of-band for now.
+- **`SubmittalReviewLink`/`SurveyResponseLink` are a third token namespace,
+  not a repurposed Client/Vendor Portal one (Phase 6):** an external
+  reviewer or survey recipient may have no `Client`/`Vendor` row at all — no
+  standing relationship with the job — so `src/lib/submittals/service.ts`
+  and `src/lib/surveys/service.ts` call `parseSecureToken`/`secretMatches`
+  from `src/lib/secure-tokens.ts` directly rather than going through
+  `client-portal/auth.ts` or `vendor-portal/auth.ts`, which both assume an
+  underlying Client/Vendor record.
+- **`WarrantyClaim` dual acceptance reuses Client/Vendor Portal tokens rather
+  than a fourth auth mechanism (Phase 6):** `WARRANTY_CLIENT_ACCEPTANCE` and
+  `WARRANTY_TRADE_ACCEPTANCE` are just two more purposes added to the
+  existing `ClientActionToken`/`VendorActionToken` tables. Each acceptance
+  path checks the *other* side's acceptance timestamp to decide whether the
+  claim moves to `IN_PROGRESS` (one side accepted) or `COMPLETED` (both
+  have) — there is no separate "who signed last" flag.
+- **A `Specification` reuses `ClientJobAccess.canViewDocuments` (Phase 6):**
+  no new per-entity visibility flag was added; a Specification is
+  document-like enough that the existing documents flag already covers it.
+  Auto-generation from an Estimate (`generateSpecificationFromEstimate`)
+  groups line items by the pre-existing `EstimateLineItem.groupLabel` field
+  rather than inventing a new grouping concept.

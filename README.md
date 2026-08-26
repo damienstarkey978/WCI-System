@@ -4,7 +4,8 @@ Construction management platform for **World Construction Inc** — built to rea
 Buildertrend feature parity and then exceed it with an open, agent-facing API.
 
 **Current state: Phases 0-2 complete (except QuickBooks sync); Phases 3 (Client
-Portal), 4 (Sub/Vendor Portal + Bidding), and 5 (CRM/Sales) landed.**
+Portal), 4 (Sub/Vendor Portal + Bidding), 5 (CRM/Sales), and 6 (Specifications,
+Submittals, Warranty, Surveys) landed.**
 Phase 1 landed the financial core: the Estimate builder, the commitment funnel,
 Purchase Orders, Bills/AP with approval routing, Invoicing and draw schedules, Time
 Tracking with geofencing and overtime, the six standard reports, the webhook
@@ -62,6 +63,28 @@ and `sendEstimateToBudget()`. Vince (sales) got `jobs:write` added to his
 default scopes for this, since converting a lead is fundamentally creating a
 job.
 
+Phase 6 (Specifications, Submittals, Warranty, Surveys) has landed. A
+`Specification` can be built manually or auto-generated from an `Estimate`
+(`POST /specifications/generate-from-estimate` groups line items by their
+existing `groupLabel` into one `SpecificationSection` per group — no new
+grouping concept invented); its visibility to a client reuses the existing
+`ClientJobAccess.canViewDocuments` flag rather than adding a new per-entity
+one. `Submittal` tracks numbered revisions and gets reviewed via a
+`SubmittalReviewLink` — a standalone, no-account single-use token, since an
+architect/engineer reviewer is neither a `Client` nor a `Vendor` and has no
+standing relationship with the job at all. `WarrantyClaim` supports **dual
+acceptance**: the assigned trade and the client each confirm independently
+(trade headlessly via a `WARRANTY_TRADE_ACCEPTANCE` token, client via a portal
+session or a `WARRANTY_CLIENT_ACCEPTANCE` token), and the claim only reaches
+`COMPLETED` once both sides have signed off — reusing the existing Client/
+Vendor Portal token machinery rather than building a fourth auth mechanism.
+`Survey` mirrors the Submittal pattern for post-completion feedback: a
+`SurveyResponseLink` is another standalone no-account token, since a survey
+recipient may not even be a known Client. Airtable migration + cutover and
+Job Group/multi-family rollup views — also originally scoped under "Phase 6"
+— are deliberately not part of this: they need Damien's actual Airtable
+export/schema, which isn't available yet.
+
 Also added, pulled forward from the original Phase 8/5 schedule by explicit request:
 an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that turns
 rough field notes into a full line-item estimate against the org's real cost code
@@ -82,8 +105,9 @@ can disagree with another about a job's numbers.
 A published OpenAPI 3.1 spec is also in — see below.
 
 Still to come: the two-way QuickBooks sync (needs Intuit developer credentials
-from Damien), a full admin UI for the Phase 2-5 modules, and Phase 6 onward
-(Warranty/Submittals/Surveys/Specifications, Mobile PWA).
+from Damien), a full admin UI for the Phase 2-6 modules, the Airtable
+migration + cutover (needs Damien's Airtable export), Job Group/multi-family
+rollup views, and Phase 7 onward (Mobile PWA, AI layer).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -246,6 +270,35 @@ Phase 5 (CRM/Sales) routes:
 | `POST` | `/api/v1/proposals/{id}/approval-link` | `proposals:write` |
 | `POST` | `/api/v1/portal/proposals/{id}/accept` | client portal session **or** a `PROPOSAL_ACCEPTANCE` one-time token |
 
+Phase 6 (Specifications, Submittals, Warranty, Surveys) routes:
+
+| Method | Path | Scope |
+|---|---|---|
+| `GET` `POST` | `/api/v1/specifications` | `specifications:read` / `specifications:write` |
+| `POST` | `/api/v1/specifications/generate-from-estimate` | `specifications:write` |
+| `GET` `POST` | `/api/v1/submittals` | `submittals:read` / `submittals:write` |
+| `POST` | `/api/v1/submittals/{id}/revisions` | `submittals:write` |
+| `POST` | `/api/v1/submittals/{id}/review-link` | `submittals:write` |
+| `GET` `POST` | `/api/v1/warranty-claims` | `warranty:read` / `warranty:write` |
+| `POST` | `/api/v1/warranty-claims/{id}/schedule` | `warranty:write` |
+| `POST` | `/api/v1/warranty-claims/{id}/trade-approval-link` | `warranty:write` |
+| `POST` | `/api/v1/warranty-claims/{id}/client-approval-link` | `warranty:write` |
+| `POST` | `/api/v1/vendor-portal/warranty-claims/{id}/accept-trade` | vendor portal session **or** a `WARRANTY_TRADE_ACCEPTANCE` one-time token |
+| `POST` | `/api/v1/portal/warranty-claims/{id}/accept-client` | client portal session **or** a `WARRANTY_CLIENT_ACCEPTANCE` one-time token |
+| `GET` `POST` | `/api/v1/surveys` | `surveys:read` / `surveys:write` |
+| `POST` | `/api/v1/surveys/{id}/response-link` | `surveys:write` |
+
+`/api/v1/submittal-reviews` and `/api/v1/survey-responses` are fully public
+routes with no scope at all — they authenticate with a standalone single-use
+link token (`SubmittalReviewLink` / `SurveyResponseLink`), not an ApiKey or a
+Client/Vendor Portal token, since the recipient (an external reviewer or
+survey respondent) has no account or standing relationship with the job:
+
+| Method | Path | Auth |
+|---|---|---|
+| `POST` | `/api/v1/submittal-reviews` | single-use review-link token (`Authorization: Bearer`) |
+| `POST` | `/api/v1/survey-responses` | single-use response-link token (`Authorization: Bearer`) |
+
 **Full API reference:** `GET /api/v1/openapi.json` — the one route under `/api/v1`
 that needs no API key, so you can read the contract before you have credentials.
 It's generated straight from the same Zod schemas the routes validate against
@@ -363,6 +416,21 @@ These are load-bearing. Breaking one is a bug even if the types still check.
   already independently tested. `transitionJobStatus`'s `actor` is optional
   for exactly this: a client's e-signature has no User or ApiKey to attribute
   it to, and forcing one through would misattribute the audit trail.
+- **A `Specification` reuses `ClientJobAccess.canViewDocuments` rather than
+  getting its own visibility flag.** Auto-generating one from an Estimate
+  groups line items by the pre-existing `groupLabel` field — no new grouping
+  concept was invented for this.
+- **`SubmittalReviewLink` and `SurveyResponseLink` are standalone, no-account
+  tables — not Client/Vendor Portal tokens.** An external reviewer or survey
+  recipient may have zero standing relationship with the job (not even a
+  `Client`/`Vendor` row), so these are a third token namespace sharing only
+  `src/lib/secure-tokens.ts` crypto, redeemed directly rather than through
+  `client-portal/auth.ts` or `vendor-portal/auth.ts`.
+- **A `WarrantyClaim` only reaches `COMPLETED` once both the trade and the
+  client have independently accepted.** Either acceptance alone moves it to
+  `IN_PROGRESS` at most; `acceptTradeWork()`/`acceptClientSatisfaction()` each
+  check the other side's acceptance timestamp before deciding the next
+  status, rather than a single "who signed last" flag.
 
 ## Stack
 

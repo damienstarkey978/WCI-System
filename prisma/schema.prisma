@@ -111,6 +111,10 @@ model Organization {
   bidPackages          BidPackage[]
   leads                Lead[]
   proposals            Proposal[]
+  specifications       Specification[]
+  submittals           Submittal[]
+  warrantyClaims       WarrantyClaim[]
+  surveys              Survey[]
 }
 
 model User {
@@ -241,6 +245,10 @@ model Job {
   /// action (src/lib/crm/service.ts) — null for a job created any other way.
   convertedFromLead Lead?
   proposals         Proposal[]
+  specifications    Specification[]
+  submittals        Submittal[]
+  warrantyClaims    WarrantyClaim[]
+  surveys           Survey[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -485,8 +493,9 @@ model Estimate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lineItems EstimateLineItem[]
-  proposals Proposal[]
+  lineItems               EstimateLineItem[]
+  proposals               Proposal[]
+  generatedSpecifications Specification[]
 
   @@index([organizationId])
   @@index([jobId, status])
@@ -1330,10 +1339,11 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  jobAccess    ClientJobAccess[]
-  sessions     ClientSession[]
-  actionTokens ClientActionToken[]
-  proposals    Proposal[]
+  jobAccess      ClientJobAccess[]
+  sessions       ClientSession[]
+  actionTokens   ClientActionToken[]
+  proposals      Proposal[]
+  warrantyClaims WarrantyClaim[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1399,6 +1409,7 @@ enum ClientActionTokenPurpose {
   CHANGE_ORDER_APPROVAL
   SELECTION_APPROVAL
   PROPOSAL_ACCEPTANCE
+  WARRANTY_CLIENT_ACCEPTANCE
 }
 
 /// One-shot signed link. PORTAL_LOGIN tokens exchange for a ClientSession;
@@ -1542,6 +1553,7 @@ model Vendor {
   purchaseOrders PurchaseOrder[]
   bills          Bill[]
   bidSubmissions BidSubmission[]
+  warrantyClaims WarrantyClaim[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1610,6 +1622,7 @@ model VendorSession {
 enum VendorActionTokenPurpose {
   PORTAL_LOGIN
   PO_ACCEPTANCE
+  WARRANTY_TRADE_ACCEPTANCE
 }
 
 /// One-shot signed link — same shape and purpose as ClientActionToken.
@@ -1842,4 +1855,232 @@ model Proposal {
   @@index([jobId])
   @@index([leadId])
   @@index([organizationId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 — Specifications, Submittals, Warranty, Surveys
+// ---------------------------------------------------------------------------
+
+enum SpecificationViewMode {
+  BOOK_VIEW
+  LIST_VIEW
+}
+
+/// Portal visibility for a Specification piggybacks on ClientJobAccess.canViewDocuments
+/// (CLAUDE.md 2.4) rather than a new flag — a spec is a document, visibility-wise.
+model Specification {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title    String
+  viewMode SpecificationViewMode @default(LIST_VIEW)
+
+  /// Set when generateSpecificationFromEstimate() created this — the Estimate
+  /// line items' groupLabel/title/description are the source, not re-entered.
+  sourceEstimateId String?
+  sourceEstimate   Estimate? @relation(fields: [sourceEstimateId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sections SpecificationSection[]
+
+  @@index([jobId])
+}
+
+model SpecificationSection {
+  id              String        @id @default(cuid())
+  specificationId String
+  specification   Specification @relation(fields: [specificationId], references: [id], onDelete: Cascade)
+
+  title     String
+  body      String
+  sortOrder Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([specificationId, sortOrder])
+}
+
+enum SubmittalType {
+  MATERIAL_SPEC
+  SHOP_DRAWING
+}
+
+enum SubmittalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVISE_AND_RESUBMIT
+}
+
+model Submittal {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title  String
+  type   SubmittalType
+  status SubmittalStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  revisions   SubmittalRevision[]
+  reviewLinks SubmittalReviewLink[]
+
+  @@index([jobId, status])
+}
+
+model SubmittalRevision {
+  id          String    @id @default(cuid())
+  submittalId String
+  submittal   Submittal @relation(fields: [submittalId], references: [id], onDelete: Cascade)
+
+  revisionNumber Int
+  /// External URL — same "no upload infra yet" pattern as File.url.
+  documentUrl    String
+  notes          String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([submittalId, revisionNumber])
+}
+
+/// "externalReviewers[] who need NO account" (CLAUDE.md 2.3) — deliberately not
+/// a Client or Vendor: an architect/engineer/inspector reviewing one submittal
+/// has no standing relationship with WCI OS, just a single signed link. Same
+/// crypto as ClientActionToken/VendorActionToken (src/lib/secure-tokens.ts),
+/// but its own table since there's no session concept here at all — one link,
+/// one decision, done.
+model SubmittalReviewLink {
+  id          String    @id @default(cuid())
+  submittalId String
+  submittal   Submittal @relation(fields: [submittalId], references: [id], onDelete: Cascade)
+
+  reviewerName  String
+  reviewerEmail String
+
+  tokenId      String   @unique
+  hashedSecret String
+  expiresAt    DateTime
+
+  decision  SubmittalStatus?
+  comments  String?
+  decidedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([submittalId])
+}
+
+enum WarrantyClaimStatus {
+  SUBMITTED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+}
+
+/// "Dual acceptance" (CLAUDE.md 2.3): the assigned trade confirms the work is
+/// done, and separately the client confirms they're satisfied with it. Either
+/// can happen from a portal session or a headless link — same pattern as
+/// every other external-facing approval in this system.
+model WarrantyClaim {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  claimNumber String
+  title       String
+  description String
+
+  /// Freeform — not every warranty claim comes from a portal Client.
+  submittedByName  String?
+  submittedByEmail String?
+  clientId         String?
+  client           Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  status WarrantyClaimStatus @default(SUBMITTED)
+
+  appointmentAt    DateTime?
+  assignedVendorId String?
+  assignedVendor   Vendor?   @relation(fields: [assignedVendorId], references: [id], onDelete: SetNull)
+
+  tradeAcceptedAt      DateTime?
+  tradeAcceptanceName  String?
+  clientAcceptedAt     DateTime?
+  clientAcceptanceName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, claimNumber])
+  @@index([jobId, status])
+}
+
+enum SurveyTouchpoint {
+  PRE_PROJECT
+  MID_PROJECT
+  POST_COMPLETION
+}
+
+model Survey {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title      String
+  touchpoint SurveyTouchpoint
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions     SurveyQuestion[]
+  responseLinks SurveyResponseLink[]
+}
+
+model SurveyQuestion {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  prompt    String
+  sortOrder Int    @default(0)
+
+  @@index([surveyId, sortOrder])
+}
+
+/// Same "no account, one signed link" shape as SubmittalReviewLink — a survey
+/// recipient is rarely a portal Client (or the survey wouldn't be needed).
+/// `answers` is a questionId -> answer text map; write-once feedback has no
+/// need to be queried per-question, unlike a Submittal's structured decision.
+model SurveyResponseLink {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  recipientName  String?
+  recipientEmail String?
+
+  tokenId      String   @unique
+  hashedSecret String
+  expiresAt    DateTime
+
+  answers     Json?
+  submittedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([surveyId])
 }
