@@ -17,17 +17,23 @@ import {
   bulkClockInSchema,
   clockInSchema,
   clockOutSchema,
+  createAllowanceSchema,
   createBillSchema,
+  createClientSchema,
   createCostCodeSchema,
   createDrawScheduleSchema,
   createEstimateSchema,
   createInvoiceSchema,
   createJobSchema,
   createPurchaseOrderSchema,
+  createSelectionSchema,
   createWebhookSubscriptionSchema,
   emitEventSchema,
+  grantJobAccessSchema,
   matchByRoadNameSchema,
+  portalApproveChangeOrderSchema,
   recordPaymentSchema,
+  requestApprovalLinkSchema,
   transitionJobStatusSchema,
   updateBillStatusSchema,
 } from "@/lib/api-schemas";
@@ -62,6 +68,16 @@ interface EndpointDef {
   readonly summary: string;
   readonly description?: string;
   readonly tags: readonly string[];
+  /**
+   * "apiKey" (default): a scoped ApiKey Bearer token — `scopes` names the
+   * required ones. "clientPortal": a Client Portal ClientSession or
+   * ClientActionToken (src/lib/client-portal/auth.ts) — a completely
+   * separate token namespace (CLAUDE.md 2.1/2.3), never interchangeable with
+   * an ApiKey even though both travel as `Authorization: Bearer`. `scopes`
+   * is ignored for clientPortal endpoints; per-job module gating
+   * (ClientJobAccess) isn't a static scope and is documented in `description`.
+   */
+  readonly authKind?: "apiKey" | "clientPortal";
   readonly scopes: readonly string[];
   readonly pathParams?: readonly string[];
   readonly queryParams?: readonly { name: string; description: string; schema?: Record<string, unknown> }[];
@@ -509,6 +525,229 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["reports:read"],
     queryParams: [{ name: "windowDays", description: "1-365, default 30" }],
   },
+
+  // --- Client Portal management (staff/agent side, apiKey-authed) ----------
+  {
+    method: "get",
+    path: "/clients",
+    summary: "List clients",
+    tags: ["Client Portal"],
+    scopes: ["clients:read"],
+    queryParams: [{ name: "jobId", description: "Filter to clients with access to one job" }],
+  },
+  {
+    method: "post",
+    path: "/clients",
+    summary: "Create a client",
+    tags: ["Client Portal"],
+    scopes: ["clients:write"],
+    requestSchema: createClientSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/clients/{clientId}/job-access",
+    summary: "Grant/update a client's per-job portal module visibility",
+    description: "Upsert — re-running this to flip one flag (e.g. canViewBudget) doesn't need a separate update endpoint.",
+    tags: ["Client Portal"],
+    scopes: ["clients:write"],
+    pathParams: ["clientId"],
+    requestSchema: grantJobAccessSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/clients/{clientId}/portal-invite",
+    summary: "Issue a one-time portal login link",
+    description:
+      "Returns the raw token exactly once, same convention as ApiKey issuance — WCI OS has no email provider wired up " +
+      "yet, so the caller is responsible for getting it to the client.",
+    tags: ["Client Portal"],
+    scopes: ["clients:write"],
+    pathParams: ["clientId"],
+    successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/allowances",
+    summary: "List Allowances",
+    tags: ["Selections"],
+    scopes: ["selections:read"],
+    queryParams: [{ name: "jobId", description: "Filter to one job" }],
+  },
+  {
+    method: "post",
+    path: "/allowances",
+    summary: "Create an Allowance",
+    description: "A budget placeholder booked against a CostCode, for a Selection's Options to be priced against.",
+    tags: ["Selections"],
+    scopes: ["selections:write"],
+    requestSchema: createAllowanceSchema,
+    successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/selections",
+    summary: "List Selections (with their Options)",
+    tags: ["Selections"],
+    scopes: ["selections:read"],
+    queryParams: [{ name: "jobId", description: "Filter to one job" }],
+  },
+  {
+    method: "post",
+    path: "/selections",
+    summary: "Create a Selection with its Options",
+    tags: ["Selections"],
+    scopes: ["selections:write"],
+    requestSchema: createSelectionSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/change-orders/{changeOrderId}/approval-link",
+    summary: "Issue a headless approval link for a Change Order",
+    description: "Single-use, scoped to exactly this change order. See POST /portal/change-orders/{changeOrderId}/approve.",
+    tags: ["Client Portal"],
+    scopes: ["change-orders:write"],
+    pathParams: ["changeOrderId"],
+    requestSchema: requestApprovalLinkSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/selections/{selectionId}/options/{optionId}/approval-link",
+    summary: "Issue a headless approval link for a Selection Option",
+    description:
+      "Single-use, scoped to exactly this option. Approving it settles the whole Selection (siblings are DECLINED).",
+    tags: ["Client Portal"],
+    scopes: ["selections:write"],
+    pathParams: ["selectionId", "optionId"],
+    requestSchema: requestApprovalLinkSchema,
+    successStatus: 201,
+  },
+
+  // --- Client Portal (client-authed: ClientSession or a one-time token) ----
+  {
+    method: "post",
+    path: "/portal/login",
+    summary: "Exchange a portal login/invite token for a session",
+    description:
+      "The token travels as the Authorization: Bearer header, not the JSON body, so the one rule at src/proxy.ts " +
+      '("every /api/v1/* call needs an Authorization or x-api-key header") holds for every portal call too.',
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+  },
+  {
+    method: "get",
+    path: "/portal/jobs",
+    summary: "List jobs this client has portal access to",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+  },
+  {
+    method: "get",
+    path: "/portal/jobs/{jobId}/daily-logs",
+    summary: "Client-visible daily logs for a job",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/portal/jobs/{jobId}/schedule",
+    summary: "Client-visible schedule for a job, computed (CPM)",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/portal/jobs/{jobId}/documents",
+    summary: "Client-visible files for a job",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/portal/jobs/{jobId}/invoices",
+    summary: "Invoices for a job, with payment history",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/portal/jobs/{jobId}/change-orders",
+    summary: "Change orders for a job",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/portal/jobs/{jobId}/selections",
+    summary: "Selections (with Options) for a job",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/portal/jobs/{jobId}/budget",
+    summary: "Client pricing view of a job's budget",
+    description:
+      "Client price only — never cost or profit. Gated by ClientJobAccess.canViewBudget, off by default (CLAUDE.md 3).",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "post",
+    path: "/portal/change-orders/{changeOrderId}/approve",
+    summary: "Approve a Change Order as the client",
+    description:
+      "Works with either a portal session (gated by ClientJobAccess.canApproveChangeOrders) or a single-use " +
+      "CHANGE_ORDER_APPROVAL token from POST /change-orders/{id}/approval-link — the headless, no-login path.",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["changeOrderId"],
+    requestSchema: portalApproveChangeOrderSchema,
+  },
+  {
+    method: "post",
+    path: "/portal/selections/{selectionId}/options/{optionId}/approve",
+    summary: "Approve a Selection Option as the client",
+    description:
+      "Works with either a portal session (gated by ClientJobAccess.canApproveSelections) or a single-use " +
+      "SELECTION_APPROVAL token from POST /selections/{id}/options/{id}/approval-link.",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["selectionId", "optionId"],
+  },
+  {
+    method: "post",
+    path: "/portal/invoices/{invoiceId}/pay",
+    summary: "Create a Stripe PaymentIntent for an invoice's remaining balance",
+    description:
+      "Gated by ClientJobAccess.canMakePayments. Returns 503 if STRIPE_SECRET_KEY is unconfigured — never a " +
+      "fabricated payment. The Payment row itself is written by POST /webhooks/stripe once Stripe confirms the charge.",
+    tags: ["Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["invoiceId"],
+  },
 ];
 
 function toOperation(endpoint: EndpointDef): Record<string, unknown> {
@@ -528,12 +767,22 @@ function toOperation(endpoint: EndpointDef): Record<string, unknown> {
     })),
   ];
 
+  const isClientPortal = endpoint.authKind === "clientPortal";
+
   const responses: Record<string, unknown> = {
     [String(endpoint.successStatus ?? 200)]: {
       description: endpoint.successDescription ?? "Success. See CLAUDE.md and the route source for the exact response shape.",
     },
-    "401": { description: "Missing or invalid API key.", content: jsonContent(ERROR_SCHEMA) },
-    "403": { description: "The API key lacks a required scope.", content: jsonContent(ERROR_SCHEMA) },
+    "401": {
+      description: isClientPortal ? "Missing or invalid portal session/action token." : "Missing or invalid API key.",
+      content: jsonContent(ERROR_SCHEMA),
+    },
+    "403": {
+      description: isClientPortal
+        ? "The client has access to the job but not this module (ClientJobAccess)."
+        : "The API key lacks a required scope.",
+      content: jsonContent(ERROR_SCHEMA),
+    },
   };
   if (endpoint.requestSchema) {
     responses["422"] = { description: "Validation failed.", content: jsonContent(ERROR_SCHEMA) };
@@ -543,8 +792,8 @@ function toOperation(endpoint: EndpointDef): Record<string, unknown> {
     summary: endpoint.summary,
     description: endpoint.description,
     tags: endpoint.tags,
-    security: [{ apiKey: [] }],
-    "x-required-scopes": endpoint.scopes,
+    security: [{ [isClientPortal ? "clientPortal" : "apiKey"]: [] }],
+    ...(isClientPortal ? {} : { "x-required-scopes": endpoint.scopes }),
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(endpoint.requestSchema
       ? { requestBody: { required: true, content: jsonContent(schemaOf(endpoint.requestSchema)) } }
@@ -593,6 +842,17 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           scheme: "bearer",
           bearerFormat: "wci_<tokenId>_<secret>",
           description: 'Also accepted as the "x-api-key" header instead of Authorization.',
+        },
+        clientPortal: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "wcicps_<tokenId>_<secret> (session) or wcicpa_<tokenId>_<secret> (one-time action token)",
+          description:
+            "Client Portal auth (src/lib/client-portal/auth.ts) — a completely separate token namespace from apiKey, " +
+            "never interchangeable with it even though both are Bearer tokens. A wcicps_ session comes from " +
+            "POST /portal/login; a wcicpa_ token is a single-use link issued by staff/an agent " +
+            "(POST /clients/{clientId}/portal-invite, /change-orders/{id}/approval-link, " +
+            "/selections/{id}/options/{id}/approval-link) for headless, no-login approvals.",
         },
       },
     },

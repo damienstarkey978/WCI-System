@@ -3,7 +3,8 @@
 Construction management platform for **World Construction Inc** — built to reach
 Buildertrend feature parity and then exceed it with an open, agent-facing API.
 
-**Current state: Phase 1 complete (except QuickBooks sync); Phase 2 in progress.**
+**Current state: Phases 0-2 complete (except QuickBooks sync); Phase 3 (Client
+Portal) landed.**
 Phase 1 landed the financial core: the Estimate builder, the commitment funnel,
 Purchase Orders, Bills/AP with approval routing, Invoicing and draw schedules, Time
 Tracking with geofencing and overtime, the six standard reports, the webhook
@@ -16,6 +17,20 @@ Budget, Daily Logs with optional auto-weather, Todos (the generic entity that al
 covers punch lists), RFIs, Files, and the unified Comment/Activity layer with
 Notifications. Heather's (office manager) agent surface — daily logs, files,
 comments, and custom permit-milestone events — is live and scope-verified.
+
+Phase 3 (Client Portal) has landed: a Client is its own auth path — never a
+User, never a Clerk or API-key session — authenticated via a portal login link
+or a single-use headless approval token, both signed the same way as an
+ApiKey (`src/lib/secure-tokens.ts`, shared crypto only). Clients get per-job,
+per-module read access (`ClientJobAccess` — daily logs, schedule, documents,
+invoices, change orders, selections, bills visibility, budget off by default),
+can approve a Change Order or a Selection option either from a logged-in
+portal session or by clicking a signed one-time link with **no login
+required**, and can pay an invoice via Stripe (optional integration — 503s
+cleanly without a key, never a fabricated payment). Selections & Allowances
+are new: an Allowance is a budget placeholder booked against a cost code, and
+approving one of a Selection's Options posts the price variance onto the
+Budget, the same explicit-conversion-action pattern as Change Orders.
 
 Also added, pulled forward from the original Phase 8/5 schedule by explicit request:
 an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that turns
@@ -37,7 +52,8 @@ can disagree with another about a job's numbers.
 A published OpenAPI 3.1 spec is also in — see below.
 
 Still to come: the two-way QuickBooks sync (needs Intuit developer credentials
-from Damien) and the rest of Phase 2 (a full admin UI for the new modules).
+from Damien), a full admin UI for the Phase 2/3 modules, and Phase 4 onward
+(Sub/Vendor Portal + Bidding, CRM/Sales, Warranty/Submittals/Surveys, Mobile PWA).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -59,6 +75,11 @@ admin. That fallback is disabled when `NODE_ENV=production`.
 The AI estimate assistant is also optional — set `ANTHROPIC_API_KEY` in `.env` to
 enable `/admin/ai-estimate` and `POST /api/v1/estimates/ai-draft`. Without it, both
 return a clear "not configured" message rather than the app failing to build.
+
+Client Portal payments are optional too — set `STRIPE_SECRET_KEY` (and
+`STRIPE_WEBHOOK_SECRET` for the webhook receiver) to enable
+`POST /api/v1/portal/invoices/{id}/pay`. Without them it returns a clean 503;
+it never fabricates a payment.
 
 ## Using the API
 
@@ -131,6 +152,30 @@ Phase 0 endpoints:
 | `GET` `POST` | `/api/v1/comments` | `comments:read` / `comments:write` |
 | `GET` | `/api/v1/notifications` | `notifications:read` |
 | `POST` | `/api/v1/notifications/{id}/read` | `notifications:write` |
+| `GET` `POST` | `/api/v1/clients` | `clients:read` / `clients:write` |
+| `POST` | `/api/v1/clients/{id}/job-access` | `clients:write` |
+| `POST` | `/api/v1/clients/{id}/portal-invite` | `clients:write` |
+| `GET` `POST` | `/api/v1/allowances` | `selections:read` / `selections:write` |
+| `GET` `POST` | `/api/v1/selections` | `selections:read` / `selections:write` |
+| `POST` | `/api/v1/change-orders/{id}/approval-link` | `change-orders:write` |
+| `POST` | `/api/v1/selections/{id}/options/{id}/approval-link` | `selections:write` |
+| `POST` | `/api/v1/webhooks/stripe` | none (Stripe-Signature verified) |
+
+**Client Portal** (`/api/v1/portal/*`) is a separate auth path — a `ClientSession` or
+single-use `ClientActionToken`, never an API key or Clerk session:
+
+| Method | Path | Auth |
+|---|---|---|
+| `POST` | `/api/v1/portal/login` | invite/login token (`Authorization: Bearer`) |
+| `GET` | `/api/v1/portal/jobs` | portal session |
+| `GET` | `/api/v1/portal/jobs/{id}/daily-logs` \| `/schedule` \| `/documents` \| `/invoices` \| `/change-orders` \| `/selections` \| `/budget` | portal session, gated per-job by `ClientJobAccess` |
+| `POST` | `/api/v1/portal/change-orders/{id}/approve` | portal session **or** a `CHANGE_ORDER_APPROVAL` one-time token |
+| `POST` | `/api/v1/portal/selections/{id}/options/{id}/approve` | portal session **or** a `SELECTION_APPROVAL` one-time token |
+| `POST` | `/api/v1/portal/invoices/{id}/pay` | portal session; 503 without `STRIPE_SECRET_KEY` |
+
+The one-time-token paths are what makes an approval **headless**: a client can
+approve a Change Order or a Selection straight from a signed link in an email,
+no portal login required (CLAUDE.md 2.3).
 
 **Full API reference:** `GET /api/v1/openapi.json` — the one route under `/api/v1`
 that needs no API key, so you can read the contract before you have credentials.
@@ -202,6 +247,21 @@ These are load-bearing. Breaking one is a bug even if the types still check.
   transformation over that shared array (`src/lib/reports/calc.ts`) — there is
   exactly one place that computes projected cost, so no report can silently
   disagree with the Budget screen or with another report about a job's numbers.
+- **A Client is never a User.** Portal auth (`src/lib/client-portal/auth.ts`)
+  shares no authentication code with Clerk (staff) or ApiKey (machine) auth —
+  only the token crypto (`src/lib/secure-tokens.ts`) is common.
+- **"Access granted" ≠ "invited" ≠ "activated."** These are three separate,
+  independently-observable states for a Client: a `ClientJobAccess` row
+  existing, `Client.invitedAt` being set, and `Client.activatedAt` being set
+  (on first successful login) — never conflated into one boolean.
+- **The client-facing Budget view is structurally incapable of returning cost
+  or profit.** `getClientBudgetView()` (`src/lib/client-portal/service.ts`)
+  is its own function that only ever selects client-price fields off the
+  funnel — not a parameter that toggles what `getJobBudget()` returns.
+- **Approving a Selection Option is the explicit conversion action that
+  touches the Budget**, exactly like a Change Order: the variance between the
+  chosen option's price and its Allowance posts to `BudgetLine.revised*`, and
+  nothing before approval touches the Budget at all.
 
 ## Stack
 

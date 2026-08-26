@@ -46,6 +46,11 @@ export const SCOPES = [
   "notifications:read",
   "notifications:write",
   "events:write",
+  // Phase 3 — client portal
+  "clients:read",
+  "clients:write",
+  "selections:read",
+  "selections:write",
   // Phase 5 — CRM
   "leads:read",
   "leads:write",
@@ -109,6 +114,8 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "files:write",
     "comments:read",
     "comments:write",
+    "clients:read",
+    "clients:write",
     "events:write",
   ],
   hank: [
@@ -126,6 +133,9 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "change-orders:write",
     "comments:read",
     "comments:write",
+    "clients:read",
+    "selections:read",
+    "selections:write",
   ],
   vince: ["jobs:read", "leads:read", "leads:write", "proposals:read", "proposals:write"],
   neil: ["jobs:read", "cost-codes:read", "estimates:read", "estimates:write", "budgets:read"],

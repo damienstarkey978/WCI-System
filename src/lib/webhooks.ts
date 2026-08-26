@@ -36,6 +36,8 @@ export const WEBHOOK_EVENT_TYPES = [
   "daily_log.created",
   "time_clock.out_of_bounds",
   "permit.milestone_reached",
+  "selection.option_approved",
+  "client.invited",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];

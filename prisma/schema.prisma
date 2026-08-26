@@ -70,9 +70,9 @@ enum ScheduleScope {
 // ---------------------------------------------------------------------------
 
 model Organization {
-  id   String @id @default(cuid())
-  name String
-  slug String @unique
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
   /// Clerk organization id, once the org is linked to Clerk. Null in local/dev.
   clerkOrgId String?  @unique
   createdAt  DateTime @default(now())
@@ -93,15 +93,19 @@ model Organization {
   drawSchedules        DrawSchedule[]
   payments             Payment[]
   timeClockEntries     TimeClockEntry[]
-  nonWorkingDays  NonWorkingDay[]
-  schedules       Schedule[]
-  changeOrders    ChangeOrder[]
-  dailyLogs       DailyLog[]
-  todos           Todo[]
-  rfis            Rfi[]
-  files           File[]
-  comments        Comment[]
-  notifications   Notification[]
+  nonWorkingDays       NonWorkingDay[]
+  schedules            Schedule[]
+  changeOrders         ChangeOrder[]
+  dailyLogs            DailyLog[]
+  todos                Todo[]
+  rfis                 Rfi[]
+  files                File[]
+  comments             Comment[]
+  notifications        Notification[]
+  clients              Client[]
+  clientActionTokens   ClientActionToken[]
+  allowances           Allowance[]
+  selections           Selection[]
 }
 
 model User {
@@ -110,10 +114,10 @@ model User {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   /// Clerk user id for human staff. Null for agent users, which authenticate via ApiKey.
-  clerkUserId String? @unique
+  clerkUserId String?    @unique
   email       String
   name        String?
-  role        UserRole @default(FIELD)
+  role        UserRole   @default(FIELD)
   /// Set only when role = AGENT.
   agentKind   AgentKind?
   isActive    Boolean    @default(true)
@@ -121,18 +125,18 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  jobGrants       JobAccessGrant[]
-  createdApiKeys  ApiKey[]         @relation("ApiKeyCreatedBy")
-  jobStatusEvents JobStatusEvent[]
-  timeClockEntries         TimeClockEntry[] @relation("TimeClockEntryUser")
-  approvedTimeClockEntries TimeClockEntry[] @relation("TimeClockEntryApprovedBy")
+  jobGrants                 JobAccessGrant[]
+  createdApiKeys            ApiKey[]         @relation("ApiKeyCreatedBy")
+  jobStatusEvents           JobStatusEvent[]
+  timeClockEntries          TimeClockEntry[] @relation("TimeClockEntryUser")
+  approvedTimeClockEntries  TimeClockEntry[] @relation("TimeClockEntryApprovedBy")
   clockedInTimeClockEntries TimeClockEntry[] @relation("TimeClockEntryClockedInBy")
-  authoredDailyLogs DailyLog[]
-  assignedTodos  Todo[]
-  assignedRfis   Rfi[]
-  uploadedFiles  File[]
-  authoredComments Comment[]
-  notifications  Notification[]
+  authoredDailyLogs         DailyLog[]
+  assignedTodos             Todo[]
+  assignedRfis              Rfi[]
+  uploadedFiles             File[]
+  authoredComments          Comment[]
+  notifications             Notification[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -172,14 +176,14 @@ model Job {
   contractType ContractType
   status       JobStatus    @default(PRE_SALE)
 
-  addressLine1 String?
-  addressLine2 String?
-  city         String?
-  state        String?
-  postalCode   String?
+  addressLine1         String?
+  addressLine2         String?
+  city                 String?
+  state                String?
+  postalCode           String?
   /// Used by the weather lookup on Daily Logs (Phase 2) and time-clock geofencing.
-  latitude     Float?
-  longitude    Float?
+  latitude             Float?
+  longitude            Float?
   /// Null means no geofence is enforced for this job, even if latitude/longitude are set.
   geofenceRadiusMeters Int?
 
@@ -209,19 +213,22 @@ model Job {
   statusEvents JobStatusEvent[]
   accessGrants JobAccessGrant[]
 
-  estimates      Estimate[]
-  budgetLines    BudgetLine[]
-  purchaseOrders PurchaseOrder[]
-  bills          Bill[]
-  invoices       Invoice[]
-  drawSchedules  DrawSchedule[]
+  estimates        Estimate[]
+  budgetLines      BudgetLine[]
+  purchaseOrders   PurchaseOrder[]
+  bills            Bill[]
+  invoices         Invoice[]
+  drawSchedules    DrawSchedule[]
   timeClockEntries TimeClockEntry[]
-  schedules      Schedule[]
-  changeOrders   ChangeOrder[]
-  dailyLogs      DailyLog[]
-  todos          Todo[]
-  rfis           Rfi[]
-  files          File[]
+  schedules        Schedule[]
+  changeOrders     ChangeOrder[]
+  dailyLogs        DailyLog[]
+  todos            Todo[]
+  rfis             Rfi[]
+  files            File[]
+  clientAccess     ClientJobAccess[]
+  allowances       Allowance[]
+  selections       Selection[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -305,6 +312,7 @@ model CostCode {
   budgetLines            BudgetLine[]
   purchaseOrderLineItems PurchaseOrderLineItem[]
   billLineItems          BillLineItem[]
+  allowances             Allowance[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -325,7 +333,7 @@ model ApiKey {
   agentKind AgentKind?
 
   /// Public, non-secret identifier embedded in the token and safe to display.
-  tokenId String @unique
+  tokenId      String @unique
   /// SHA-256 of the secret half of the token. The plaintext is shown exactly once.
   hashedSecret String
 
@@ -479,11 +487,11 @@ model EstimateLineItem {
   costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
   costType   CostType @default(NONE)
 
-  title       String
-  description String?
+  title         String
+  description   String?
   /// Quantity × 1000. 2.5 units is stored as 2500.
-  quantityMilli Int    @default(1000)
-  unitCostCents Int    @default(0)
+  quantityMilli Int     @default(1000)
+  unitCostCents Int     @default(0)
 
   rateMode        RateMode @default(MARKUP)
   rateBasisPoints Int      @default(0)
@@ -506,9 +514,9 @@ model EstimateLineItem {
 /// pending, committed, actual, projected, cost-to-complete — is computed from
 /// POs and bills by src/lib/budget/funnel.ts and deliberately not stored.
 model BudgetLine {
-  id     String @id @default(cuid())
-  jobId  String
-  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  jobId      String
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   costCodeId String
   costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
 
@@ -653,9 +661,9 @@ model WebhookSubscription {
   secret     String
   eventTypes String[]
 
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   deliveries WebhookDelivery[]
 
@@ -669,10 +677,10 @@ model WebhookDelivery {
   subscriptionId String
   subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
-  eventType   String
-  payload     Json
+  eventType String
+  payload   Json
   /// Stable id used for idempotent redelivery.
-  eventId     String
+  eventId   String
 
   attempts       Int       @default(0)
   lastAttemptAt  DateTime?
@@ -756,7 +764,7 @@ model InvoiceLineItem {
   title       String
   description String?
   amountCents Int
-  sortOrder   Int    @default(0)
+  sortOrder   Int     @default(0)
 
   @@index([invoiceId, sortOrder])
 }
@@ -791,7 +799,7 @@ model Draw {
 
   /// Forward reference to a ScheduleItem — no FK yet, since Schedule/ScheduleItem
   /// land in Phase 2. Wire this into a real relation once that model exists.
-  linkedScheduleItemId      String?
+  linkedScheduleItemId       String?
   autoGeneratesInvoiceOnDate DateTime?
 
   createdAt DateTime @default(now())
@@ -815,7 +823,7 @@ model Payment {
   amountCents Int
   /// Check number, Stripe payment intent id, QBO transaction id, etc.
   reference   String?
-  receivedAt  DateTime @default(now())
+  receivedAt  DateTime      @default(now())
 
   createdAt DateTime @default(now())
 
@@ -867,7 +875,7 @@ model TimeClockEntry {
   /// Checked at clock-in. Clock-out is re-checked but does not overwrite this — an
   /// entry that started outside the geofence stays flagged even if the worker
   /// wanders back before clocking out.
-  geofenceStatus GeofenceStatus @default(NOT_APPLICABLE)
+  geofenceStatus  GeofenceStatus @default(NOT_APPLICABLE)
 
   approvalStatus   TimeClockApprovalStatus @default(PENDING)
   approvedByUserId String?
@@ -1013,8 +1021,8 @@ model ChangeOrder {
 
   /// FLAT mode only: the cost code the cost side is booked against, and the raw
   /// cost/price deltas entered directly (a flat CO does not recompute a markup).
-  flatCostCodeId    String?
-  flatCostCents     Int?
+  flatCostCodeId       String?
+  flatCostCents        Int?
   flatClientPriceCents Int?
 
   clientSignatureName String?
@@ -1039,12 +1047,12 @@ model ChangeOrderLineItem {
   costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
   costType   CostType @default(NONE)
 
-  title         String
-  quantityMilli Int      @default(1000)
-  unitCostCents Int      @default(0)
-  rateMode      RateMode @default(MARKUP)
-  rateBasisPoints Int    @default(0)
-  sortOrder     Int      @default(0)
+  title           String
+  quantityMilli   Int      @default(1000)
+  unitCostCents   Int      @default(0)
+  rateMode        RateMode @default(MARKUP)
+  rateBasisPoints Int      @default(0)
+  sortOrder       Int      @default(0)
 
   @@index([changeOrderId, sortOrder])
 }
@@ -1181,13 +1189,13 @@ model File {
   jobId          String
   job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
-  fileName String
+  fileName  String
   /// External URL — no S3/R2 integration yet (needs storage credentials); the
   /// caller uploads elsewhere and registers the resulting URL here.
-  url      String
-  mimeType String?
+  url       String
+  mimeType  String?
   sizeBytes Int?
-  category FileCategory @default(DOCUMENT)
+  category  FileCategory @default(DOCUMENT)
 
   clientVisible Boolean @default(true)
   subVisible    Boolean @default(true)
@@ -1199,10 +1207,15 @@ model File {
   dailyLogId String?
   dailyLog   DailyLog? @relation(fields: [dailyLogId], references: [id], onDelete: SetNull)
 
+  /// Set when this file is an image attached to a Selection option.
+  selectionOptionId String?
+  selectionOption   SelectionOption? @relation(fields: [selectionOptionId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
 
   @@index([jobId, category])
   @@index([dailyLogId])
+  @@index([selectionOptionId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1224,8 +1237,8 @@ model Comment {
   authorUserId String?
   authorUser   User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
 
-  body      String
-  mentions  String[]
+  body     String
+  mentions String[]
 
   createdAt DateTime @default(now())
 
@@ -1263,4 +1276,203 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([organizationId, userId, readAt])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Client Portal
+//
+// A Client is never a User: it authenticates through its own token pair
+// (ClientSession, ClientActionToken), never through Clerk or an ApiKey. This
+// keeps the "external party" boundary from CLAUDE.md 2.3 ("access granted" ≠
+// "invited" ≠ "activated") a hard schema boundary, not just a role check.
+// ---------------------------------------------------------------------------
+
+model Client {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name  String
+  email String
+  phone String?
+
+  /// Set when a staff member/agent issues a portal invite; null until then.
+  invitedAt   DateTime?
+  /// Set on the client's first successful portal login. Null forever for a
+  /// client who has access but has never logged in — the "activated" state
+  /// from CLAUDE.md 2.3 is this timestamp, not a boolean.
+  activatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobAccess    ClientJobAccess[]
+  sessions     ClientSession[]
+  actionTokens ClientActionToken[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+/// Permission Wizard equivalent for clients (CLAUDE.md 2.4): per-client,
+/// per-job module visibility. Row existence is "access granted" — the three
+/// states (granted/invited/activated) live one on Client, one here.
+model ClientJobAccess {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  jobId    String
+  job      Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  canViewDailyLogs       Boolean @default(true)
+  canViewSchedule        Boolean @default(true)
+  canViewDocuments       Boolean @default(true)
+  /// Off by default per CLAUDE.md 3 ("budget (off by default)") — most clients
+  /// see price, not cost.
+  canViewBudget          Boolean @default(false)
+  canViewInvoices        Boolean @default(true)
+  canMakePayments        Boolean @default(true)
+  canViewBills           Boolean @default(false)
+  canViewSelections      Boolean @default(true)
+  canApproveSelections   Boolean @default(true)
+  canViewChangeOrders    Boolean @default(true)
+  canApproveChangeOrders Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, jobId])
+  @@index([jobId])
+}
+
+/// A logged-in client portal session. Same token shape as ApiKey (tokenId
+/// public/indexed, only the secret's hash stored) but a fully separate model —
+/// client auth shares no code path with machine auth (src/lib/api-auth.ts) or
+/// staff auth (Clerk).
+model ClientSession {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  tokenId      String @unique
+  hashedSecret String
+
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+}
+
+/// Purpose of a single-use client action token (CLAUDE.md 2.3: "headless
+/// actions — a client approving a Change Order via a signed link in an email,
+/// with no login required").
+enum ClientActionTokenPurpose {
+  PORTAL_LOGIN
+  CHANGE_ORDER_APPROVAL
+  SELECTION_APPROVAL
+}
+
+/// One-shot signed link. PORTAL_LOGIN tokens exchange for a ClientSession;
+/// approval-purpose tokens are consumed directly by the action they authorize
+/// and never touch a session. resourceId scopes an approval token to exactly
+/// the one ChangeOrder/SelectionOption it was issued for.
+model ClientActionToken {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  purpose    ClientActionTokenPurpose
+  resourceId String?
+
+  tokenId      String @unique
+  hashedSecret String
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId, purpose])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Selections & Allowances
+// ---------------------------------------------------------------------------
+
+/// Budget placeholder created against a CostCode (CLAUDE.md 2.3: "created only
+/// via the Estimate worksheet, links to a Selection category"). The variance
+/// between this amount and the client's chosen SelectionOption price is what
+/// approveSelectionOption() posts to the Budget.
+model Allowance {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  costCodeId     String
+  costCode       CostCode     @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+
+  title            String
+  amountCents      Int
+  clientPriceCents Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  selections Selection[]
+
+  @@index([jobId])
+}
+
+model Selection {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  allowanceId String?
+  allowance   Allowance? @relation(fields: [allowanceId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String?
+  dueDate     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options SelectionOption[]
+
+  @@index([jobId])
+}
+
+enum SelectionOptionStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+model SelectionOption {
+  id          String    @id @default(cuid())
+  selectionId String
+  selection   Selection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+
+  title            String
+  description      String?
+  priceCents       Int
+  clientPriceCents Int
+  sortOrder        Int                   @default(0)
+  status           SelectionOptionStatus @default(PENDING)
+  decidedAt        DateTime?
+
+  createdAt DateTime @default(now())
+
+  files File[]
+
+  @@index([selectionId, sortOrder])
 }

@@ -10,11 +10,18 @@
  *   - secret   — shown exactly once at issue time; only its SHA-256 is stored
  */
 
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-
 import type { AgentKind } from "@/generated/prisma/enums";
 import { grantsAllScopes, missingScopes, type Scope } from "@/lib/api-scopes";
 import { db } from "@/lib/db";
+import {
+  generateSecureToken,
+  hashSecret,
+  parseSecureToken,
+  secretMatches,
+  type ParsedSecureToken,
+} from "@/lib/secure-tokens";
+
+export { hashSecret, secretMatches };
 
 const TOKEN_PREFIX = "wci";
 
@@ -25,43 +32,14 @@ export interface GeneratedApiKeyToken {
   readonly hashedSecret: string;
 }
 
-export function hashSecret(secret: string): string {
-  return createHash("sha256").update(secret, "utf8").digest("hex");
-}
-
 export function generateApiKeyToken(): GeneratedApiKeyToken {
-  const tokenId = randomBytes(8).toString("hex");
-  const secret = randomBytes(32).toString("base64url");
-  return {
-    token: `${TOKEN_PREFIX}_${tokenId}_${secret}`,
-    tokenId,
-    hashedSecret: hashSecret(secret),
-  };
+  return generateSecureToken(TOKEN_PREFIX);
 }
 
-export interface ParsedToken {
-  readonly tokenId: string;
-  readonly secret: string;
-}
-
-/**
- * Parsed with a regex rather than split("_"): the secret is base64url, whose alphabet
- * includes "_", so splitting on the delimiter would reject every token whose secret
- * happens to contain one. The tokenId is hex, so anchoring on it is unambiguous.
- */
-const TOKEN_PATTERN = new RegExp(`^${TOKEN_PREFIX}_([0-9a-f]+)_([A-Za-z0-9_-]+)$`);
+export type ParsedToken = ParsedSecureToken;
 
 export function parseApiKeyToken(token: string): ParsedToken | null {
-  const match = TOKEN_PATTERN.exec(token.trim());
-  if (!match) return null;
-  return { tokenId: match[1], secret: match[2] };
-}
-
-/** Constant-time comparison of two hex digests of equal length. */
-export function secretMatches(candidateSecret: string, storedHash: string): boolean {
-  const candidateHash = hashSecret(candidateSecret);
-  if (candidateHash.length !== storedHash.length) return false;
-  return timingSafeEqual(Buffer.from(candidateHash, "utf8"), Buffer.from(storedHash, "utf8"));
+  return parseSecureToken(TOKEN_PREFIX, token);
 }
 
 /** Reads the token from an Authorization: Bearer header, or the legacy X-API-Key header. */

@@ -437,3 +437,32 @@ Record every architectural decision that departs from the above, with the reason
   SendGrid/Twilio/APNs/FCM credentials); rows for those channels are still persisted so
   nothing is silently dropped, but `deliveredAt` stays null until a real provider exists.
   See `src/lib/notifications/service.ts`.
+- **Client portal invites are issued, not emailed (Phase 3):** with no email provider
+  configured yet (same gap as Notifications above), `POST /api/v1/clients/{id}/
+  portal-invite` returns the raw one-time login token directly in the response —
+  exactly like `ApiKey` issuance — rather than emailing it. The caller (Heather, or a
+  staff member) is responsible for getting it to the client until a real provider
+  exists. `client.invited` still fires as a webhook event so an email step can be
+  wired in later without touching the issuance endpoint.
+- **Portal login tokens are single-use, so re-login means re-inviting (Phase 3):**
+  `PORTAL_LOGIN` is a `ClientActionToken` purpose, and every action token is
+  consumed on first use (same as the headless approval tokens). A `ClientSession`
+  lasts 30 days, but once it expires (or is revoked) the client cannot exchange the
+  same invite link again — staff/an agent must issue a fresh one. A real "log in
+  again with your email" flow needs the email provider from the point above; this
+  keeps the mechanism correct without inventing a password system to work around it.
+- **The OpenAPI spec has a Phase 2 gap (found while adding Phase 3's entries):**
+  `src/lib/openapi.ts`'s `ENDPOINTS` array is hand-transcribed per route, and Phase 2
+  (scheduling, daily logs, todos, RFIs, files, comments, notifications, change orders)
+  was never added to it — only Phase 0/1 and, as of this entry, Phase 3 are documented.
+  The routes themselves are unaffected (this file only feeds `GET /api/v1/openapi.json`);
+  backfilling Phase 2's ~20 entries is a clearly-scoped follow-up, deliberately not
+  done in the same change as Phase 3 to keep that diff reviewable.
+- **Stripe integration is minimal by design (Phase 3):** `src/lib/payments/stripe.ts`
+  talks to Stripe's REST API directly via `fetch` (no SDK dependency) for exactly two
+  calls — create a PaymentIntent, verify a webhook signature. The webhook receiver
+  records every successful charge as `PaymentMethod.STRIPE_CARD`, even an ACH charge,
+  since telling them apart needs a second API call this integration doesn't make yet.
+  Optional integration, same pattern as Weather/Anthropic: without `STRIPE_SECRET_KEY`,
+  `POST /api/v1/portal/invoices/{id}/pay` returns a clean 503, never a fabricated
+  payment.

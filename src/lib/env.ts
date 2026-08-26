@@ -76,3 +76,20 @@ export function weatherApiKey(): string | undefined {
 export function isEmailConfigured(): boolean {
   return optional("EMAIL_PROVIDER_API_KEY") !== undefined;
 }
+
+/**
+ * Stripe (client portal payments, Phase 3) is optional, same pattern as every
+ * other integration here: without it, payment endpoints return a clear
+ * "not configured" error rather than fabricating a payment.
+ */
+export function isStripeConfigured(): boolean {
+  return optional("STRIPE_SECRET_KEY") !== undefined;
+}
+
+export function stripeSecretKey(): string | undefined {
+  return optional("STRIPE_SECRET_KEY");
+}
+
+export function stripeWebhookSecret(): string | undefined {
+  return optional("STRIPE_WEBHOOK_SECRET");
+}

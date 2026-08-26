@@ -432,3 +432,72 @@ export const listNotificationsQuerySchema = z.object({
   unreadOnly: z.coerce.boolean().optional().default(false),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Client Portal, Selections & Allowances
+// ---------------------------------------------------------------------------
+
+export const createClientSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  email: z.string().trim().toLowerCase().email().max(255),
+  phone: z.string().trim().max(32).nullish(),
+});
+
+const jobAccessFlags = {
+  canViewDailyLogs: z.boolean().optional(),
+  canViewSchedule: z.boolean().optional(),
+  canViewDocuments: z.boolean().optional(),
+  canViewBudget: z.boolean().optional(),
+  canViewInvoices: z.boolean().optional(),
+  canMakePayments: z.boolean().optional(),
+  canViewBills: z.boolean().optional(),
+  canViewSelections: z.boolean().optional(),
+  canApproveSelections: z.boolean().optional(),
+  canViewChangeOrders: z.boolean().optional(),
+  canApproveChangeOrders: z.boolean().optional(),
+};
+
+export const grantJobAccessSchema = z.object({
+  jobId: z.string().cuid(),
+  ...jobAccessFlags,
+});
+
+/**
+ * The portal login/approval token itself always travels as the request's
+ * Authorization: Bearer header, same as an API key or a session token
+ * (src/lib/api-auth.ts extractToken) — never in the JSON body. That keeps a
+ * single rule at src/proxy.ts ("every /api/v1/* call needs an Authorization
+ * or x-api-key header") true for every portal call too, login and headless
+ * approvals included, with no path-specific carve-out.
+ */
+export const portalApproveChangeOrderSchema = z.object({
+  clientSignatureName: z.string().trim().min(1).max(255).optional(),
+});
+
+export const createAllowanceSchema = z.object({
+  jobId: z.string().cuid(),
+  costCodeId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  amountCents: z.number().int().nonnegative(),
+  clientPriceCents: z.number().int().nonnegative(),
+});
+
+export const createSelectionOptionInputSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(5_000).nullish(),
+  priceCents: z.number().int().nonnegative(),
+  clientPriceCents: z.number().int().nonnegative(),
+});
+
+export const createSelectionSchema = z.object({
+  jobId: z.string().cuid(),
+  allowanceId: z.string().cuid().nullish(),
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(5_000).nullish(),
+  dueDate: z.coerce.date().nullish(),
+  options: z.array(createSelectionOptionInputSchema).min(1).max(50),
+});
+
+export const requestApprovalLinkSchema = z.object({
+  clientId: z.string().cuid(),
+});

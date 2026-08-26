@@ -21,10 +21,14 @@ import { isClerkConfigured } from "@/lib/env";
 const clerk = isClerkConfigured() ? clerkMiddleware() : null;
 
 /**
- * The one /api/v1 route reachable without an API key: an integrator has to be able
- * to read the contract before they have credentials to call anything in it.
+ * Routes reachable without an API key or x-api-key header:
+ *   - the OpenAPI spec — an integrator has to be able to read the contract before
+ *     they have credentials to call anything in it.
+ *   - the Stripe webhook receiver — Stripe signs its request with a
+ *     Stripe-Signature header, not a bearer token; that signature (verified in
+ *     the route itself, src/lib/payments/stripe.ts) *is* this route's auth.
  */
-const PUBLIC_API_PATHS: ReadonlySet<string> = new Set(["/api/v1/openapi.json"]);
+const PUBLIC_API_PATHS: ReadonlySet<string> = new Set(["/api/v1/openapi.json", "/api/v1/webhooks/stripe"]);
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (request.nextUrl.pathname.startsWith("/api/v1")) {
