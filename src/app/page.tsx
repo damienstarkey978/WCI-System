@@ -31,6 +31,16 @@ export default function Home() {
             The org-level catalog everything downstream codes against.
           </div>
         </Link>
+
+        <Link
+          href="/field"
+          className="rounded-lg border border-black/10 p-4 transition hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+        >
+          <div className="text-sm font-medium">Field app</div>
+          <div className="mt-1 text-xs text-black/55 dark:text-white/55">
+            Installable PWA for crews — offline-capable time clock and daily logs.
+          </div>
+        </Link>
       </div>
 
       <div className="rounded-lg border border-black/10 p-4 text-xs dark:border-white/15">

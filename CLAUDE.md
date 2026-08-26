@@ -349,7 +349,8 @@ phase is independently useful.
 - **Phase 6b — Airtable migration + cutover, Job Group/multi-family rollup views.** Split
   out of the original Phase 6 bullet — needs Damien's Airtable export/schema, so it did not
   land alongside the rest of Phase 6.
-- **Phase 7 — Mobile/field PWA hardening.** Offline daily logs + time clock.
+- **Phase 7 — Mobile/field PWA hardening.** Offline daily logs + time clock. Landed:
+  installable PWA at `/field`, offline queue + auto-sync-on-reconnect for both tools.
 - **Phase 8 — AI layer.** Weekly client-update summaries, receipt/bill OCR capture, agent-
   facing summarization — built as a read/write layer over the canonical entities (2.3), not
   a new subsystem.
@@ -560,3 +561,29 @@ Record every architectural decision that departs from the above, with the reason
   Auto-generation from an Estimate (`generateSpecificationFromEstimate`)
   groups line items by the pre-existing `EstimateLineItem.groupLabel` field
   rather than inventing a new grouping concept.
+- **`/field`'s offline queue is localStorage, not IndexedDB (Phase 7):** the
+  payloads are a handful of small JSON records (no photo/binary attachments
+  in this phase's scope), so the simpler synchronous API is enough —
+  IndexedDB's transaction/versioning machinery would buy nothing here. If a
+  later phase adds offline photo capture to daily logs, that data belongs in
+  IndexedDB (or the Cache API) instead; don't stretch this queue to fit it.
+- **Only one offline time-clock action queues at a time (Phase 7):** a
+  queued clock-out, start-break, or end-break references the `entryId` its
+  clock-in creates, and that id doesn't exist until the clock-in has
+  actually reached the server. Rather than build client-generated-id
+  correlation to support an arbitrary queue depth, `src/app/field/time-
+  clock/time-clock-client.tsx` simply blocks starting a second time-clock
+  action until the first one syncs. Daily logs have no such dependency and
+  queue without limit (`src/lib/field-offline-queue.ts`).
+- **`/field` has no dedicated sign-in page (Phase 7):** this is the same
+  whole-app gap `/admin` already had (CLAUDE.md 7 established that Clerk
+  sign-in/sign-up screens don't exist yet anywhere in WCI OS) — Phase 7
+  reused the existing `currentAppUser()` "not signed in" fallback pattern
+  rather than building auth-flow UI as a side effect of the field app.
+- **The service worker only caches the app shell, not API responses (Phase
+  7):** `public/sw.js` exists so `/field` still *opens* with zero
+  connectivity; it deliberately does not intercept or cache `fetch` calls to
+  Server Actions or `/api/v1` — that would risk serving stale job/cost-code
+  data or, worse, a stale encrypted Server Action reference from a previous
+  deploy. Offline *mutations* are handled entirely by the localStorage queue
+  instead, which always calls the live action.

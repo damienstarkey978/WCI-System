@@ -4,8 +4,8 @@ Construction management platform for **World Construction Inc** — built to rea
 Buildertrend feature parity and then exceed it with an open, agent-facing API.
 
 **Current state: Phases 0-2 complete (except QuickBooks sync); Phases 3 (Client
-Portal), 4 (Sub/Vendor Portal + Bidding), 5 (CRM/Sales), and 6 (Specifications,
-Submittals, Warranty, Surveys) landed.**
+Portal), 4 (Sub/Vendor Portal + Bidding), 5 (CRM/Sales), 6 (Specifications,
+Submittals, Warranty, Surveys), and 7 (Mobile/Field PWA) landed.**
 Phase 1 landed the financial core: the Estimate builder, the commitment funnel,
 Purchase Orders, Bills/AP with approval routing, Invoicing and draw schedules, Time
 Tracking with geofencing and overtime, the six standard reports, the webhook
@@ -85,6 +85,27 @@ Job Group/multi-family rollup views — also originally scoped under "Phase 6"
 — are deliberately not part of this: they need Damien's actual Airtable
 export/schema, which isn't available yet.
 
+Phase 7 (Mobile/Field PWA) has landed: an installable PWA at `/field` — a
+mobile-first shell (`src/app/field/layout.tsx`) with a manifest
+(`src/app/manifest.ts`, served at `/manifest.webmanifest`) and an app-shell
+service worker (`public/sw.js`) so the app opens with zero connectivity, not
+just flaky connectivity. It's a normal Clerk-authenticated part of the web
+app, not a new API surface — `/field`'s Server Actions
+(`src/app/field/actions.ts`) call the exact same `time-clock`/`daily-logs`
+service functions the agent-facing routes call, just authenticated via the
+signed-in staff session instead of an ApiKey (CLAUDE.md 2.1's two auth
+worlds stay separate). The offline part is client-side: a small
+localStorage-backed queue (`src/lib/field-offline-queue.ts`) holds a daily
+log or time-clock action a worker submits with no signal, and
+`FieldSyncManager` replays it the moment the browser reports being back
+online. Daily logs queue freely (they're independent of each other); time
+clock is deliberately limited to **one** outstanding offline action at a
+time, since a queued clock-out/break references the entryId a clock-in
+creates, and that id doesn't exist until the clock-in has actually reached
+the server — the field UI blocks starting a second action until the first
+syncs, rather than pretending to support conflict resolution it doesn't
+have.
+
 Also added, pulled forward from the original Phase 8/5 schedule by explicit request:
 an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that turns
 rough field notes into a full line-item estimate against the org's real cost code
@@ -107,7 +128,8 @@ A published OpenAPI 3.1 spec is also in — see below.
 Still to come: the two-way QuickBooks sync (needs Intuit developer credentials
 from Damien), a full admin UI for the Phase 2-6 modules, the Airtable
 migration + cutover (needs Damien's Airtable export), Job Group/multi-family
-rollup views, and Phase 7 onward (Mobile PWA, AI layer).
+rollup views, and Phase 8 (the AI layer — weekly client-update summaries,
+receipt/bill OCR).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -306,6 +328,25 @@ It's generated straight from the same Zod schemas the routes validate against
 the server actually accepts. Paste it into any OpenAPI viewer (Swagger UI,
 Postman, Redocly) for a browsable reference.
 
+## Field app
+
+`/field` (Phase 7) is a normal part of the web app, not the agent API — it
+authenticates with the same Clerk staff session `/admin` uses, gated on
+`currentAppUser()`. Visit it, sign in as an invited staff member (`UserRole`
+`FIELD`/`PM`/`ADMIN` all work — there's no role restriction on the field
+tools themselves), and the browser will offer to install it as a PWA.
+
+| Page | What it does |
+|---|---|
+| `/field` | Home: current clock status, links to the two tools |
+| `/field/time-clock` | Clock in/out, start/end a break, GPS captured best-effort |
+| `/field/daily-log` | Submit a daily log against any active job |
+
+Both tools work with no signal: a submission made while offline is held in
+a `localStorage` queue and synced automatically once the browser is back
+online (`src/lib/field-offline-queue.ts`, `src/app/field/field-sync-
+manager.tsx`) — no separate "sync" button, no data entered twice.
+
 ## Scripts
 
 | Script | Purpose |
@@ -431,6 +472,15 @@ These are load-bearing. Breaking one is a bug even if the types still check.
   `IN_PROGRESS` at most; `acceptTradeWork()`/`acceptClientSatisfaction()` each
   check the other side's acceptance timestamp before deciding the next
   status, rather than a single "who signed last" flag.
+- **`/field`'s Server Actions authenticate with the Clerk staff session, never
+  an ApiKey.** They call the exact same `time-clock`/`daily-logs` service
+  functions the agent-facing `/api/v1` routes call — only the auth layer
+  differs — so field behavior and agent behavior can never silently diverge.
+- **At most one offline time-clock action is ever queued at a time.** A
+  queued clock-out/break references the entryId its clock-in creates, and
+  that id doesn't exist until the clock-in reaches the server — so the field
+  UI blocks starting a second time-clock action until the first syncs.
+  Offline daily logs have no such dependency and queue without limit.
 
 ## Stack
 
