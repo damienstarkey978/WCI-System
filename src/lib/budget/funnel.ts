@@ -43,6 +43,24 @@ export type PurchaseOrderStatus =
 
 export type BillApprovalStatus = "IN_REVIEW" | "APPROVED" | "READY_FOR_PAYMENT" | "PAID" | "VOID";
 
+export type InvoiceStatus = "DRAFT" | "SENT" | "PARTIALLY_PAID" | "PAID" | "VOID";
+
+/**
+ * Job-level invoice input for `amountInvoiced` / `remainingToInvoice` (CLAUDE.md
+ * 2.3's Budget.clientPricing). Invoices are not tied to a cost code the way POs and
+ * bills are — a progress invoice bills against the whole contract — so this tracking
+ * is a job total, not a per-line figure like the rest of the funnel.
+ */
+export interface InvoiceCostInput {
+  readonly status: InvoiceStatus;
+  readonly amountCents: Cents;
+}
+
+/** A draft invoice hasn't gone out yet, so it doesn't count as billed. Void never counts. */
+function countsAsInvoiced(status: InvoiceStatus): boolean {
+  return status !== "DRAFT" && status !== "VOID";
+}
+
 /** The authored numbers for one Job × CostCode. */
 export interface BudgetLineInput {
   readonly costCodeId: string;
@@ -235,6 +253,8 @@ export interface FunnelTotals {
   readonly revisedClientPriceCents: Cents;
   readonly projectedProfitCents: Cents;
   readonly projectedMarginBasisPoints: BasisPoints;
+  readonly amountInvoicedCents: Cents;
+  readonly remainingToInvoiceCents: Cents;
 }
 
 export interface JobFunnel {
@@ -249,6 +269,7 @@ export function computeJobFunnel(
   bills: readonly BillCostInput[],
   unapprovedLabor: readonly UnapprovedLaborInput[] = [],
   options: ComputeFunnelOptions = {},
+  invoices: readonly InvoiceCostInput[] = [],
 ): JobFunnel {
   const lines = budgetLines.map((line) =>
     computeFunnelLine(line, purchaseOrders, bills, unapprovedLabor, options),
@@ -258,6 +279,7 @@ export function computeJobFunnel(
 
   const revisedClientPriceCents = sum((line) => line.revisedClientPriceCents);
   const projectedCostCents = sum((line) => line.projectedCostCents);
+  const amountInvoicedCents = sumBy(invoices, (invoice) => countsAsInvoiced(invoice.status), (invoice) => invoice.amountCents);
 
   return {
     lines,
@@ -273,6 +295,10 @@ export function computeJobFunnel(
       revisedClientPriceCents,
       projectedProfitCents: revisedClientPriceCents - projectedCostCents,
       projectedMarginBasisPoints: marginBasisPoints(revisedClientPriceCents, projectedCostCents),
+      amountInvoicedCents,
+      // Never negative: an overbilled job (a draw schedule totalling >100%, or a
+      // late change order) has nothing left to invoice, not a negative amount.
+      remainingToInvoiceCents: Math.max(0, revisedClientPriceCents - amountInvoicedCents),
     },
   };
 }

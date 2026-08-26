@@ -45,6 +45,7 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
       budgetLines: { include: { costCode: { select: { code: true, name: true } } } },
       purchaseOrders: { include: { lineItems: true } },
       bills: { include: { lineItems: true } },
+      invoices: { select: { status: true, amountCents: true } },
     },
   });
 
@@ -68,10 +69,14 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     })),
   );
 
-  const funnel = computeJobFunnel(job.budgetLines, purchaseOrderCosts, billCosts, [], {
-    projectionReference: job.projectionReference,
-    accountingBasis: job.accountingBasis,
-  });
+  const funnel = computeJobFunnel(
+    job.budgetLines,
+    purchaseOrderCosts,
+    billCosts,
+    [],
+    { projectionReference: job.projectionReference, accountingBasis: job.accountingBasis },
+    job.invoices,
+  );
 
   const costCodes: Record<string, { code: string; name: string }> = {};
   for (const line of job.budgetLines) {

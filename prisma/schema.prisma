@@ -89,6 +89,9 @@ model Organization {
   purchaseOrders       PurchaseOrder[]
   bills                Bill[]
   webhookSubscriptions WebhookSubscription[]
+  invoices             Invoice[]
+  drawSchedules        DrawSchedule[]
+  payments             Payment[]
 }
 
 model User {
@@ -189,6 +192,8 @@ model Job {
   budgetLines    BudgetLine[]
   purchaseOrders PurchaseOrder[]
   bills          Bill[]
+  invoices       Invoice[]
+  drawSchedules  DrawSchedule[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -646,4 +651,139 @@ model WebhookDelivery {
 
   @@index([subscriptionId, deliveredAt])
   @@index([nextAttemptAt])
+}
+
+// ---------------------------------------------------------------------------
+// Invoicing, draw schedules, payments
+// ---------------------------------------------------------------------------
+
+enum InvoiceType {
+  FLAT
+  LINE_ITEM
+  PROGRESS
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum PaymentMethod {
+  STRIPE_CARD
+  STRIPE_ACH
+  QBO_SYNC
+  MANUAL
+}
+
+model Invoice {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  type          InvoiceType
+  status        InvoiceStatus @default(DRAFT)
+  invoiceNumber String
+
+  /// Authoritative total. For LINE_ITEM/PROGRESS this must equal the sum of
+  /// lineItems — enforced in src/lib/invoicing/service.ts, not by a DB constraint.
+  amountCents Int
+
+  issuedOn DateTime?
+  dueOn    DateTime?
+  paidAt   DateTime?
+  voidedAt DateTime?
+
+  /// Set when this invoice was auto-generated from a Draw (CLAUDE.md 2.3:
+  /// "DrawSchedule -> Draw ... autoGeneratesInvoiceOnDate"). One draw generates at
+  /// most one invoice.
+  drawId String? @unique
+  draw   Draw?   @relation(fields: [drawId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems InvoiceLineItem[]
+  payments  Payment[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([jobId, status])
+}
+
+model InvoiceLineItem {
+  id        String  @id @default(cuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  amountCents Int
+  sortOrder   Int    @default(0)
+
+  @@index([invoiceId, sortOrder])
+}
+
+/// One per job in the common case, though nothing here enforces that — a job could
+/// have a superseding schedule if terms are renegotiated.
+model DrawSchedule {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  name String @default("Draw Schedule")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  draws Draw[]
+
+  @@index([jobId])
+}
+
+model Draw {
+  id             String       @id @default(cuid())
+  drawScheduleId String
+  drawSchedule   DrawSchedule @relation(fields: [drawScheduleId], references: [id], onDelete: Cascade)
+
+  title                    String
+  pctOfContractBasisPoints Int
+  sortOrder                Int    @default(0)
+
+  /// Forward reference to a ScheduleItem — no FK yet, since Schedule/ScheduleItem
+  /// land in Phase 2. Wire this into a real relation once that model exists.
+  linkedScheduleItemId      String?
+  autoGeneratesInvoiceOnDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Set once "generate draft invoice" has run for this draw (CLAUDE.md 2.3). A
+  /// draw generates at most one invoice — regenerating requires voiding it first.
+  invoice Invoice?
+
+  @@index([drawScheduleId, sortOrder])
+}
+
+model Payment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoiceId      String
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  method      PaymentMethod
+  amountCents Int
+  /// Check number, Stripe payment intent id, QBO transaction id, etc.
+  reference   String?
+  receivedAt  DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
 }

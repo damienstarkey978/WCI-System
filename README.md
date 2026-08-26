@@ -13,8 +13,11 @@ an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that 
 rough field notes into a full line-item estimate against the org's real cost code
 catalog — always created as a review-first draft, never auto-sent to budget.
 
-Still to come in Phase 1: Invoicing and draw schedules, the Time Clock, the six
-standard reports, the two-way QuickBooks sync, and the published OpenAPI spec.
+Invoicing (flat/line-item/progress), draw schedules with auto-generated draft
+invoices, and manual payment recording (with an overpayment guard) are also in.
+
+Still to come in Phase 1: the Time Clock, the six standard reports, the two-way
+QuickBooks sync, and the published OpenAPI spec.
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -72,6 +75,11 @@ Phase 0 endpoints:
 | `GET` `POST` | `/api/v1/webhooks` | `webhooks:read` / `webhooks:write` |
 | `POST` | `/api/v1/events` | `events:write` |
 | `POST` | `/api/v1/estimates/ai-draft` | `estimates:write` |
+| `GET` `POST` | `/api/v1/invoices` | `invoices:read` / `invoices:write` |
+| `POST` | `/api/v1/invoices/{id}/send` | `invoices:write` |
+| `POST` | `/api/v1/invoices/{id}/payments` | `invoices:write` |
+| `GET` `POST` | `/api/v1/draw-schedules` | `invoices:read` / `invoices:write` |
+| `POST` | `/api/v1/draws/{id}/generate-invoice` | `invoices:write` |
 
 A published OpenAPI spec lands with the rest of the public API in Phase 1.
 
@@ -108,6 +116,12 @@ These are load-bearing. Breaking one is a bug even if the types still check.
   See `src/lib/budget/funnel.ts`.
 - **Estimate lines are priced individually, then summed.** Lines under one cost code
   can carry different markups, so pricing the aggregated cost silently discards them.
+- **A payment can never overpay an invoice.** `src/lib/invoicing/calc.ts` rejects any
+  payment that would exceed what's left, since a fat-fingered amount there would
+  corrupt `amountInvoiced`/`remainingToInvoice` for the rest of the job's life.
+- **A draw's invoice amount is frozen at generation time**, priced from the job's
+  *current* revised client price. A later change order does not retroactively alter
+  an already-generated draw invoice.
 
 ## Stack
 

@@ -302,3 +302,39 @@ describe("margin reporting", () => {
     expect(result.projectedMarginBasisPoints).toBeLessThan(0);
   });
 });
+
+describe("amount invoiced and remaining to invoice", () => {
+  it("counts sent, partially-paid and paid invoices as invoiced", () => {
+    for (const status of ["SENT", "PARTIALLY_PAID", "PAID"] as const) {
+      const funnel = computeJobFunnel([PAINT], [], [], [], {}, [{ status, amountCents: 50_000 }]);
+      expect(funnel.totals.amountInvoicedCents).toBe(50_000);
+    }
+  });
+
+  it("does not count a draft invoice — it hasn't gone out yet", () => {
+    const funnel = computeJobFunnel([PAINT], [], [], [], {}, [{ status: "DRAFT", amountCents: 50_000 }]);
+    expect(funnel.totals.amountInvoicedCents).toBe(0);
+  });
+
+  it("never counts a void invoice", () => {
+    const funnel = computeJobFunnel([PAINT], [], [], [], {}, [{ status: "VOID", amountCents: 50_000 }]);
+    expect(funnel.totals.amountInvoicedCents).toBe(0);
+  });
+
+  it("computes remaining to invoice against the revised client price", () => {
+    const funnel = computeJobFunnel([PAINT], [], [], [], {}, [{ status: "SENT", amountCents: 50_000 }]);
+    expect(funnel.totals.revisedClientPriceCents).toBe(120_000);
+    expect(funnel.totals.remainingToInvoiceCents).toBe(70_000);
+  });
+
+  it("never reports a negative remaining-to-invoice on an overbilled job", () => {
+    const funnel = computeJobFunnel([PAINT], [], [], [], {}, [{ status: "PAID", amountCents: 200_000 }]);
+    expect(funnel.totals.remainingToInvoiceCents).toBe(0);
+  });
+
+  it("defaults to zero invoiced when no invoices are passed", () => {
+    const funnel = computeJobFunnel([PAINT], [], [], []);
+    expect(funnel.totals.amountInvoicedCents).toBe(0);
+    expect(funnel.totals.remainingToInvoiceCents).toBe(120_000);
+  });
+});

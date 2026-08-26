@@ -10,7 +10,9 @@ import {
   ContractType,
   CostType,
   FinancialSourceType,
+  InvoiceType,
   JobStatus,
+  PaymentMethod,
   RateMode,
 } from "@/generated/prisma/enums";
 
@@ -176,4 +178,44 @@ export const emitEventSchema = z.object({
 export const aiDraftEstimateSchema = z.object({
   jobId: z.string().cuid(),
   notes: z.string().trim().min(10).max(10_000),
+});
+
+// ---------------------------------------------------------------------------
+// Invoicing, draw schedules, payments
+// ---------------------------------------------------------------------------
+
+export const createInvoiceLineItemSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(1_000).nullish(),
+  amountCents: cents,
+});
+
+export const createInvoiceSchema = z.object({
+  jobId: z.string().cuid(),
+  type: z.enum(InvoiceType),
+  invoiceNumber: z.string().trim().min(1).max(64),
+  issuedOn: z.coerce.date().nullish(),
+  dueOn: z.coerce.date().nullish(),
+  amountCents: cents.optional(),
+  lineItems: z.array(createInvoiceLineItemSchema).max(500).optional(),
+});
+
+export const createDrawSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  pctOfContractBasisPoints: z.number().int().min(1).max(10_000),
+  linkedScheduleItemId: z.string().trim().max(64).nullish(),
+  autoGeneratesInvoiceOnDate: z.coerce.date().nullish(),
+});
+
+export const createDrawScheduleSchema = z.object({
+  jobId: z.string().cuid(),
+  name: z.string().trim().min(1).max(255).optional(),
+  draws: z.array(createDrawSchema).min(1).max(50),
+});
+
+export const recordPaymentSchema = z.object({
+  method: z.enum(PaymentMethod),
+  amountCents: z.number().int().positive().max(1_000_000_000),
+  reference: z.string().trim().max(255).nullish(),
+  receivedAt: z.coerce.date().nullish(),
 });
