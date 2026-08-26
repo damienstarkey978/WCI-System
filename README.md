@@ -15,9 +15,13 @@ catalog — always created as a review-first draft, never auto-sent to budget.
 
 Invoicing (flat/line-item/progress), draw schedules with auto-generated draft
 invoices, and manual payment recording (with an overpayment guard) are also in.
+So is Time Tracking: clock in/out with breaks, GPS geofencing, supervisor bulk
+clock-in, cost-code-linked labor rates, an approval workflow, and weekly overtime
+(daily-vs-weekly-rule, whichever is greater) computed across every job a worker
+touched that week.
 
-Still to come in Phase 1: the Time Clock, the six standard reports, the two-way
-QuickBooks sync, and the published OpenAPI spec.
+Still to come in Phase 1: the six standard reports, the two-way QuickBooks sync,
+and the published OpenAPI spec.
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -80,6 +84,12 @@ Phase 0 endpoints:
 | `POST` | `/api/v1/invoices/{id}/payments` | `invoices:write` |
 | `GET` `POST` | `/api/v1/draw-schedules` | `invoices:read` / `invoices:write` |
 | `POST` | `/api/v1/draws/{id}/generate-invoice` | `invoices:write` |
+| `GET` `POST` | `/api/v1/time-clock` | `time-clock:read` / `time-clock:write` |
+| `POST` | `/api/v1/time-clock/bulk-clock-in` | `time-clock:write` |
+| `POST` | `/api/v1/time-clock/{id}/clock-out` | `time-clock:write` |
+| `POST` | `/api/v1/time-clock/{id}/breaks/start` \| `/end` | `time-clock:write` |
+| `POST` | `/api/v1/time-clock/{id}/approve` \| `/reject` | `time-clock:write` |
+| `GET` | `/api/v1/time-clock/overtime-summary` | `time-clock:read` |
 
 A published OpenAPI spec lands with the rest of the public API in Phase 1.
 
@@ -122,6 +132,15 @@ These are load-bearing. Breaking one is a bug even if the types still check.
 - **A draw's invoice amount is frozen at generation time**, priced from the job's
   *current* revised client price. A later change order does not retroactively alter
   an already-generated draw invoice.
+- **Overtime is a property of a worker's week, not of any one job.** It is computed
+  across every job and cost code a worker touched that week
+  (`src/lib/time-clock/overtime.ts`), and kept separate from per-job cost
+  attribution — a per-entry labor cost booked to the funnel is base hours × base
+  rate, with no OT premium mixed in. Daily-rule and weekly-rule overtime are both
+  computed; whichever credits *more* overtime hours wins.
+- **An approved timesheet counts as committed cost; a pending one does not.** Only
+  once a supervisor has signed off does a time clock entry's cost enter the funnel's
+  `committedCost` (CLAUDE.md 2.3's "approved POs + unapproved labor").
 
 ## Stack
 

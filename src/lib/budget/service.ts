@@ -4,9 +4,11 @@
  * testable without a database.
  */
 
+import { TimeClockApprovalStatus } from "@/generated/prisma/enums";
 import { extendedCostCents, computeJobFunnel, type JobFunnel } from "@/lib/budget/funnel";
 import { contractTypePolicy } from "@/lib/contract-type";
 import { db } from "@/lib/db";
+import { baseLaborCostCents, workedHours } from "@/lib/time-clock/hours";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -46,6 +48,10 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
       purchaseOrders: { include: { lineItems: true } },
       bills: { include: { lineItems: true } },
       invoices: { select: { status: true, amountCents: true } },
+      timeClockEntries: {
+        where: { approvalStatus: TimeClockApprovalStatus.APPROVED, clockOutAt: { not: null } },
+        include: { breaks: true },
+      },
     },
   });
 
@@ -69,11 +75,22 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     })),
   );
 
+  // Approved timesheets count as committed cost — the money is owed once a
+  // supervisor has signed off on the hours, whether or not payroll has run yet
+  // (CLAUDE.md 2.3: committedCost = approved POs + unapproved labor). This is base
+  // hours x base rate only; the overtime premium is a payroll-reporting concern
+  // computed separately in src/lib/time-clock/overtime.ts, not mixed into per-job
+  // cost attribution — see the comment in src/lib/time-clock/hours.ts for why.
+  const unapprovedLabor = job.timeClockEntries.map((entry) => ({
+    costCodeId: entry.costCodeId,
+    amountCents: baseLaborCostCents(workedHours(entry.clockInAt, entry.clockOutAt, entry.breaks), entry.hourlyRateCents),
+  }));
+
   const funnel = computeJobFunnel(
     job.budgetLines,
     purchaseOrderCosts,
     billCosts,
-    [],
+    unapprovedLabor,
     { projectionReference: job.projectionReference, accountingBasis: job.accountingBasis },
     job.invoices,
   );

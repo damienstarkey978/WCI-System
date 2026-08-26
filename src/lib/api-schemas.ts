@@ -219,3 +219,46 @@ export const recordPaymentSchema = z.object({
   reference: z.string().trim().max(255).nullish(),
   receivedAt: z.coerce.date().nullish(),
 });
+
+// ---------------------------------------------------------------------------
+// Time clock
+// ---------------------------------------------------------------------------
+
+const gpsPointSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+export const clockInSchema = z.object({
+  // Required: /api/v1 is API-key-only (CLAUDE.md 2.1), so there is no "current
+  // user" session to default to. A human-facing field client (Phase 7's PWA) will
+  // need its own session-authenticated path when it's built.
+  userId: z.string().cuid(),
+  jobId: z.string().cuid(),
+  costCodeId: z.string().cuid(),
+  gps: gpsPointSchema.nullish(),
+  overrideRateCents: z.number().int().positive().max(1_000_000).optional(),
+});
+
+export const bulkClockInSchema = z.object({
+  jobId: z.string().cuid(),
+  costCodeId: z.string().cuid(),
+  userIds: z.array(z.string().cuid()).min(1).max(200),
+  gps: gpsPointSchema.nullish(),
+});
+
+export const clockOutSchema = z.object({
+  gps: gpsPointSchema.nullish(),
+});
+
+export const weeklyOvertimeQuerySchema = z.object({
+  userId: z.string().cuid(),
+  weekStart: z.coerce.date(),
+});
+
+export const listTimeClockQuerySchema = z.object({
+  jobId: z.string().cuid().optional(),
+  userId: z.string().cuid().optional(),
+  approvalStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+});

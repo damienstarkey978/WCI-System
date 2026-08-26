@@ -92,6 +92,7 @@ model Organization {
   invoices             Invoice[]
   drawSchedules        DrawSchedule[]
   payments             Payment[]
+  timeClockEntries     TimeClockEntry[]
 }
 
 model User {
@@ -114,6 +115,9 @@ model User {
   jobGrants       JobAccessGrant[]
   createdApiKeys  ApiKey[]         @relation("ApiKeyCreatedBy")
   jobStatusEvents JobStatusEvent[]
+  timeClockEntries         TimeClockEntry[] @relation("TimeClockEntryUser")
+  approvedTimeClockEntries TimeClockEntry[] @relation("TimeClockEntryApprovedBy")
+  clockedInTimeClockEntries TimeClockEntry[] @relation("TimeClockEntryClockedInBy")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -158,9 +162,11 @@ model Job {
   city         String?
   state        String?
   postalCode   String?
-  /// Used by the weather lookup on Daily Logs (Phase 2) and time-clock geofencing (Phase 1).
+  /// Used by the weather lookup on Daily Logs (Phase 2) and time-clock geofencing.
   latitude     Float?
   longitude    Float?
+  /// Null means no geofence is enforced for this job, even if latitude/longitude are set.
+  geofenceRadiusMeters Int?
 
   sqft         Int?
   permitNumber String?
@@ -194,6 +200,7 @@ model Job {
   bills          Bill[]
   invoices       Invoice[]
   drawSchedules  DrawSchedule[]
+  timeClockEntries TimeClockEntry[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -262,11 +269,16 @@ model CostCode {
   parent   CostCode?  @relation("CostCodeHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children CostCode[] @relation("CostCodeHierarchy")
 
+  /// Only meaningful for LABOR cost codes. Snapshotted onto each TimeClockEntry at
+  /// clock-in, so this is the *current* rate — past entries are unaffected by edits.
+  defaultHourlyRateCents Int?
+
   isActive  Boolean  @default(true)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  timeClockEntries       TimeClockEntry[]
   estimateLineItems      EstimateLineItem[]
   budgetLines            BudgetLine[]
   purchaseOrderLineItems PurchaseOrderLineItem[]
@@ -786,4 +798,85 @@ model Payment {
   createdAt DateTime @default(now())
 
   @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// Time tracking
+// ---------------------------------------------------------------------------
+
+enum TimeClockApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum GeofenceStatus {
+  /// GPS was provided and fell within the job's configured radius.
+  INSIDE
+  /// GPS was provided and fell outside the job's configured radius.
+  OUTSIDE
+  /// No geofence to check against: no GPS provided, or the job has none configured.
+  NOT_APPLICABLE
+}
+
+enum LaborRateSource {
+  COST_CODE_DEFAULT
+  MANUAL_OVERRIDE
+}
+
+model TimeClockEntry {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("TimeClockEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  costCodeId     String
+  costCode       CostCode     @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+
+  clockInAt  DateTime
+  clockOutAt DateTime?
+
+  gpsInLatitude   Float?
+  gpsInLongitude  Float?
+  gpsOutLatitude  Float?
+  gpsOutLongitude Float?
+  /// Checked at clock-in. Clock-out is re-checked but does not overwrite this — an
+  /// entry that started outside the geofence stays flagged even if the worker
+  /// wanders back before clocking out.
+  geofenceStatus GeofenceStatus @default(NOT_APPLICABLE)
+
+  approvalStatus   TimeClockApprovalStatus @default(PENDING)
+  approvedByUserId String?
+  approvedByUser   User?                   @relation("TimeClockEntryApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  approvedAt       DateTime?
+
+  /// Snapshotted at clock-in so a later change to the cost code's default rate
+  /// never rewrites the cost of hours already worked.
+  hourlyRateCents Int
+  rateSource      LaborRateSource @default(COST_CODE_DEFAULT)
+
+  /// Set when a supervisor clocked this worker in on their behalf.
+  clockedInByUserId String?
+  clockedInByUser   User?   @relation("TimeClockEntryClockedInBy", fields: [clockedInByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  breaks TimeClockBreak[]
+
+  @@index([organizationId, userId])
+  @@index([jobId, approvalStatus])
+}
+
+model TimeClockBreak {
+  id               String         @id @default(cuid())
+  timeClockEntryId String
+  timeClockEntry   TimeClockEntry @relation(fields: [timeClockEntryId], references: [id], onDelete: Cascade)
+
+  startAt DateTime
+  endAt   DateTime?
+
+  @@index([timeClockEntryId])
 }
