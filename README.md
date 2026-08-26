@@ -20,8 +20,12 @@ clock-in, cost-code-linked labor rates, an approval workflow, and weekly overtim
 (daily-vs-weekly-rule, whichever is greater) computed across every job a worker
 touched that week.
 
-Still to come in Phase 1: the six standard reports, the two-way QuickBooks sync,
-and the published OpenAPI spec.
+The six standard reports (WIP, Budgeted vs Projected, Profitability, Invoicing,
+Labor Actuals vs Budgeted, Cash Flow) are also in — every one of them is a
+transformation over the same per-job funnel the Budget screen reads, so no report
+can disagree with another about a job's numbers.
+
+Still to come in Phase 1: the two-way QuickBooks sync and the published OpenAPI spec.
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -90,6 +94,12 @@ Phase 0 endpoints:
 | `POST` | `/api/v1/time-clock/{id}/breaks/start` \| `/end` | `time-clock:write` |
 | `POST` | `/api/v1/time-clock/{id}/approve` \| `/reject` | `time-clock:write` |
 | `GET` | `/api/v1/time-clock/overtime-summary` | `time-clock:read` |
+| `GET` | `/api/v1/reports/wip` | `reports:read` |
+| `GET` | `/api/v1/reports/budgeted-vs-projected` | `reports:read` |
+| `GET` | `/api/v1/reports/profitability` | `reports:read` |
+| `GET` | `/api/v1/reports/invoicing` | `reports:read` |
+| `GET` | `/api/v1/reports/labor` | `reports:read` |
+| `GET` | `/api/v1/reports/cash-flow` | `reports:read` |
 
 A published OpenAPI spec lands with the rest of the public API in Phase 1.
 
@@ -141,6 +151,11 @@ These are load-bearing. Breaking one is a bug even if the types still check.
 - **An approved timesheet counts as committed cost; a pending one does not.** Only
   once a supervisor has signed off does a time clock entry's cost enter the funnel's
   `committedCost` (CLAUDE.md 2.3's "approved POs + unapproved labor").
+- **Every report reads from the same per-job funnel computation.** `src/lib/reports/
+  service.ts` computes each active job's funnel once and every report is a pure
+  transformation over that shared array (`src/lib/reports/calc.ts`) — there is
+  exactly one place that computes projected cost, so no report can silently
+  disagree with the Budget screen or with another report about a job's numbers.
 
 ## Stack
 
