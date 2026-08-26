@@ -1,0 +1,308 @@
+// WCI OS — Phase 0 schema.
+// See CLAUDE.md section 2.3 for the full target data model. Only the Phase 0 subset
+// (Organization, User, Job, CostCode + the auth/permission scaffolding) is implemented here.
+// Job is the aggregate root: every entity added in later phases belongs to exactly one Job.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Coarse capability boundary (CLAUDE.md 2.4, layer 1).
+enum UserRole {
+  ADMIN
+  PM
+  OFFICE
+  FIELD
+  AGENT
+}
+
+/// Which Jarvis-system agent a machine consumer represents (CLAUDE.md section 6).
+enum AgentKind {
+  JARVIS
+  HEATHER
+  DUKE
+  HANK
+  VINCE
+  NEIL
+}
+
+/// Branches markup / invoice / report logic system-wide. Never treat as a display
+/// label — behavior lives in src/lib/contract-type/.
+enum ContractType {
+  FIXED_PRICE
+  OPEN_BOOK
+}
+
+/// Job lifecycle. Transitions are guarded by src/lib/job-status.ts — never assign directly.
+enum JobStatus {
+  PRE_SALE
+  OPEN
+  WARRANTY
+  CLOSED
+}
+
+enum CostType {
+  LABOR
+  MATERIAL
+  EQUIPMENT
+  SUBCONTRACTOR
+  OTHER
+  NONE
+}
+
+/// Permission Wizard equivalent: how much of a job's schedule a user may see.
+enum ScheduleScope {
+  ASSIGNED_ONLY
+  ALL_ITEMS
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+  /// Clerk organization id, once the org is linked to Clerk. Null in local/dev.
+  clerkOrgId String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users        User[]
+  jobs         Job[]
+  jobGroups    JobGroup[]
+  costCodes    CostCode[]
+  apiKeys      ApiKey[]
+  oauthClients OAuthClient[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Clerk user id for human staff. Null for agent users, which authenticate via ApiKey.
+  clerkUserId String? @unique
+  email       String
+  name        String?
+  role        UserRole @default(FIELD)
+  /// Set only when role = AGENT.
+  agentKind   AgentKind?
+  isActive    Boolean    @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobGrants       JobAccessGrant[]
+  createdApiKeys  ApiKey[]         @relation("ApiKeyCreatedBy")
+  jobStatusEvents JobStatusEvent[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Job — the aggregate root
+// ---------------------------------------------------------------------------
+
+/// Multi-family / subdivision rollup container (CLAUDE.md 2.3, Job.jobGroupId).
+model JobGroup {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  jobs Job[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model Job {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  jobGroupId String?
+  jobGroup   JobGroup? @relation(fields: [jobGroupId], references: [id], onDelete: SetNull)
+
+  /// Short job code used across POs and bills, e.g. "283RC". Duke's road-name matching
+  /// (Phase 1) keys off this plus the street address.
+  prefix       String?
+  name         String
+  contractType ContractType
+  status       JobStatus    @default(PRE_SALE)
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  /// Used by the weather lookup on Daily Logs (Phase 2) and time-clock geofencing (Phase 1).
+  latitude     Float?
+  longitude    Float?
+
+  sqft         Int?
+  permitNumber String?
+  lotInfo      String?
+
+  projectedStart DateTime?
+  projectedEnd   DateTime?
+  actualStart    DateTime?
+  actualEnd      DateTime?
+  scheduleColor  String?
+
+  customFields Json    @default("{}")
+  /// Jobs are templatable, like estimates/schedules/specs.
+  isTemplate   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  statusEvents JobStatusEvent[]
+  accessGrants JobAccessGrant[]
+
+  @@unique([organizationId, prefix])
+  @@index([organizationId, status])
+  @@index([jobGroupId])
+}
+
+/// Append-only audit of every status transition. Written by transitionJobStatus()
+/// in src/lib/job-status.ts — the only supported way to change Job.status.
+model JobStatusEvent {
+  id    String     @id @default(cuid())
+  jobId String
+  job   Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  from  JobStatus?
+  to    JobStatus
+
+  /// Exactly one actor is set, depending on whether a human or an agent made the change.
+  actorUserId   String?
+  actorUser     User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorApiKeyId String?
+  actorApiKey   ApiKey? @relation(fields: [actorApiKeyId], references: [id], onDelete: SetNull)
+
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([jobId, createdAt])
+}
+
+/// Permission model layer 2 (CLAUDE.md 2.4): (User × Job) grants.
+model JobAccessGrant {
+  id     String @id @default(cuid())
+  jobId  String
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scheduleScope            ScheduleScope @default(ASSIGNED_ONLY)
+  canViewPricing           Boolean       @default(false)
+  canViewCostDetail        Boolean       @default(false)
+  canManageSchedule        Boolean       @default(false)
+  canApproveChangeOrders   Boolean       @default(false)
+  canViewDocuments         Boolean       @default(true)
+  canCommunicateWithClient Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Cost code catalog (org-level, not per-job)
+// ---------------------------------------------------------------------------
+
+model CostCode {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  code            String
+  name            String
+  defaultCostType CostType @default(NONE)
+
+  /// Supports the cost-code hierarchy the Estimate builder groups by (Phase 1).
+  parentId String?
+  parent   CostCode?  @relation("CostCodeHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children CostCode[] @relation("CostCodeHierarchy")
+
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@index([parentId])
+}
+
+// ---------------------------------------------------------------------------
+// Machine auth — deliberately separate from human session auth (CLAUDE.md 2.1)
+// ---------------------------------------------------------------------------
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Human-readable consumer name: "duke", "heather", "jarvis", ...
+  name      String
+  agentKind AgentKind?
+
+  /// Public, non-secret identifier embedded in the token and safe to display.
+  tokenId String @unique
+  /// SHA-256 of the secret half of the token. The plaintext is shown exactly once.
+  hashedSecret String
+
+  scopes             String[]
+  rateLimitPerMinute Int      @default(120)
+
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+
+  createdByUserId String?
+  createdBy       User?   @relation("ApiKeyCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobStatusEvents JobStatusEvent[]
+
+  @@index([organizationId])
+}
+
+/// OAuth2 client-credentials consumer. Modelled in Phase 0; the token endpoint lands
+/// with the full public API in Phase 1.
+model OAuthClient {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name               String
+  agentKind          AgentKind?
+  clientId           String     @unique
+  hashedClientSecret String
+  scopes             String[]
+
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([organizationId])
+}
