@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import {
   BillApprovalStatus,
+  ChangeOrderMode,
   ContractType,
   CostType,
   FinancialSourceType,
@@ -260,5 +261,174 @@ export const listTimeClockQuerySchema = z.object({
   jobId: z.string().cuid().optional(),
   userId: z.string().cuid().optional(),
   approvalStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+});
+
+// ---------------------------------------------------------------------------
+// Scheduling
+// ---------------------------------------------------------------------------
+
+export const createScheduleSchema = z.object({
+  jobId: z.string().cuid(),
+  name: z.string().trim().min(1).max(255).optional(),
+});
+
+export const createScheduleItemSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  durationDays: z.number().int().min(1).max(3_650),
+  predecessorIds: z.array(z.string().cuid()).max(50).optional(),
+  lagDays: z.number().int().min(-365).max(365).optional(),
+  manualStartDate: z.coerce.date().nullish(),
+  clientVisible: z.boolean().optional(),
+  subVisible: z.boolean().optional(),
+  assigneeUserIds: z.array(z.string().cuid()).max(50).optional(),
+});
+
+export const updateScheduleItemSchema = z.object({
+  title: z.string().trim().min(1).max(255).optional(),
+  durationDays: z.number().int().min(1).max(3_650).optional(),
+  predecessorIds: z.array(z.string().cuid()).max(50).optional(),
+  lagDays: z.number().int().min(-365).max(365).optional(),
+  manualStartDate: z.coerce.date().nullish(),
+  confirmationStatus: z.enum(["UNCONFIRMED", "CONFIRMED"]).optional(),
+  clientVisible: z.boolean().optional(),
+  subVisible: z.boolean().optional(),
+  assigneeUserIds: z.array(z.string().cuid()).max(50).optional(),
+});
+
+export const createNonWorkingDaySchema = z.object({
+  date: z.coerce.date(),
+  reason: z.string().trim().max(255).nullish(),
+});
+
+// ---------------------------------------------------------------------------
+// Change Orders
+// ---------------------------------------------------------------------------
+
+const changeOrderLineItemSchema = z.object({
+  costCodeId: z.string().cuid(),
+  costType: z.enum(CostType).optional(),
+  title: z.string().trim().min(1).max(255),
+  quantityMilli: quantityMilli.optional().default(1_000),
+  unitCostCents: cents,
+  rateMode: rateMode.optional().default(RateMode.MARKUP),
+  rateBasisPoints: basisPoints.optional().default(0),
+});
+
+export const createChangeOrderSchema = z
+  .object({
+    jobId: z.string().cuid(),
+    title: z.string().trim().min(1).max(255),
+    mode: z.enum(ChangeOrderMode),
+    flatCostCodeId: z.string().cuid().optional(),
+    flatCostCents: cents.optional(),
+    flatClientPriceCents: cents.optional(),
+    lineItems: z.array(changeOrderLineItemSchema).max(500).optional(),
+  })
+  .refine(
+    (input) =>
+      input.mode !== ChangeOrderMode.FLAT ||
+      (input.flatCostCodeId !== undefined && input.flatCostCents !== undefined && input.flatClientPriceCents !== undefined),
+    { message: "FLAT change orders require flatCostCodeId, flatCostCents, and flatClientPriceCents." },
+  )
+  .refine((input) => input.mode !== ChangeOrderMode.ITEMIZED || (input.lineItems?.length ?? 0) > 0, {
+    message: "ITEMIZED change orders require at least one line item.",
+  });
+
+export const approveChangeOrderSchema = z.object({
+  clientSignatureName: z.string().trim().min(1).max(255).optional(),
+  clientSignatureIp: z.string().trim().max(64).optional(),
+});
+
+export const pushChangeOrderToPurchaseOrderSchema = z.object({
+  poNumber: z.string().trim().min(1).max(64),
+  vendorName: z.string().trim().min(1).max(255),
+});
+
+// ---------------------------------------------------------------------------
+// Daily Logs, Todos, RFIs, Files
+// ---------------------------------------------------------------------------
+
+export const createDailyLogSchema = z.object({
+  jobId: z.string().cuid(),
+  // Required: /api/v1 is API-key-only, so there is no session user to default to.
+  authorUserId: z.string().cuid(),
+  note: z.string().trim().min(1).max(10_000),
+  clientVisible: z.boolean().optional(),
+  subVisible: z.boolean().optional(),
+});
+
+export const listDailyLogsQuerySchema = z.object({
+  jobId: z.string().cuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+});
+
+export const createTodoSchema = z.object({
+  jobId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(5_000).nullish(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  dueDate: z.coerce.date().nullish(),
+  category: z.string().trim().max(64).nullish(),
+  assigneeUserId: z.string().cuid().nullish(),
+  clientVisible: z.boolean().optional(),
+  subVisible: z.boolean().optional(),
+  checklistItems: z.array(z.string().trim().min(1).max(255)).max(100).optional(),
+});
+
+export const updateTodoStatusSchema = z.object({
+  status: z.enum(["OPEN", "IN_PROGRESS", "DONE"]),
+});
+
+export const setChecklistItemDoneSchema = z.object({
+  isDone: z.boolean(),
+});
+
+export const createRfiSchema = z.object({
+  jobId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  question: z.string().trim().min(1).max(10_000),
+  dueDate: z.coerce.date().nullish(),
+  assigneeUserId: z.string().cuid().nullish(),
+  relatedItemRef: z.string().trim().max(255).nullish(),
+});
+
+export const answerRfiSchema = z.object({
+  answer: z.string().trim().min(1).max(10_000),
+});
+
+export const registerFileSchema = z.object({
+  jobId: z.string().cuid(),
+  uploadedByUserId: z.string().cuid(),
+  fileName: z.string().trim().min(1).max(255),
+  url: z.string().url().max(2_000),
+  mimeType: z.string().trim().max(255).nullish(),
+  sizeBytes: z.number().int().positive().max(10_000_000_000).nullish(),
+  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO"]).optional(),
+  clientVisible: z.boolean().optional(),
+  subVisible: z.boolean().optional(),
+  dailyLogId: z.string().cuid().nullish(),
+});
+
+// ---------------------------------------------------------------------------
+// Comments / Notifications
+// ---------------------------------------------------------------------------
+
+export const createCommentSchema = z.object({
+  featureType: z.string().trim().min(1).max(64),
+  featureId: z.string().trim().min(1).max(64),
+  authorUserId: z.string().cuid().nullish(),
+  body: z.string().trim().min(1).max(10_000),
+  mentions: z.array(z.string().cuid()).max(50).optional(),
+});
+
+export const listCommentsQuerySchema = z.object({
+  featureType: z.string().trim().min(1).max(64),
+  featureId: z.string().trim().min(1).max(64),
+});
+
+export const listNotificationsQuerySchema = z.object({
+  userId: z.string().cuid(),
+  unreadOnly: z.coerce.boolean().optional().default(false),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
 });

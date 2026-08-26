@@ -3,10 +3,19 @@
 Construction management platform for **World Construction Inc** — built to reach
 Buildertrend feature parity and then exceed it with an open, agent-facing API.
 
-**Current state: Phase 1 in progress.** Phase 0 (foundation) is complete. Phase 1 has
-landed the financial core: the Estimate builder, the commitment funnel, Purchase
-Orders, Bills/AP with approval routing, the webhook dispatcher, and Duke's agent
-surface including road-name job matching.
+**Current state: Phase 1 complete (except QuickBooks sync); Phase 2 in progress.**
+Phase 1 landed the financial core: the Estimate builder, the commitment funnel,
+Purchase Orders, Bills/AP with approval routing, Invoicing and draw schedules, Time
+Tracking with geofencing and overtime, the six standard reports, the webhook
+dispatcher, a published OpenAPI spec, and Duke's agent surface including
+road-name job matching.
+
+Phase 2 (project management core) has landed: Scheduling with real dependency
+auto-shift and critical-path (CPM) computation, Change Orders wired into the
+Budget, Daily Logs with optional auto-weather, Todos (the generic entity that also
+covers punch lists), RFIs, Files, and the unified Comment/Activity layer with
+Notifications. Heather's (office manager) agent surface — daily logs, files,
+comments, and custom permit-milestone events — is live and scope-verified.
 
 Also added, pulled forward from the original Phase 8/5 schedule by explicit request:
 an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that turns
@@ -27,8 +36,8 @@ can disagree with another about a job's numbers.
 
 A published OpenAPI 3.1 spec is also in — see below.
 
-Still to come in Phase 1: the two-way QuickBooks sync (needs Intuit developer
-credentials from Damien).
+Still to come: the two-way QuickBooks sync (needs Intuit developer credentials
+from Damien) and the rest of Phase 2 (a full admin UI for the new modules).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -103,6 +112,25 @@ Phase 0 endpoints:
 | `GET` | `/api/v1/reports/invoicing` | `reports:read` |
 | `GET` | `/api/v1/reports/labor` | `reports:read` |
 | `GET` | `/api/v1/reports/cash-flow` | `reports:read` |
+| `GET` `POST` | `/api/v1/schedules` | `schedule:read` / `schedule:write` |
+| `GET` | `/api/v1/schedules/{id}` | `schedule:read` |
+| `POST` | `/api/v1/schedules/{id}/items` | `schedule:write` |
+| `POST` | `/api/v1/schedules/{id}/baseline` | `schedule:write` |
+| `POST` | `/api/v1/schedule-items/{id}` | `schedule:write` |
+| `GET` `POST` | `/api/v1/non-working-days` | `schedule:read` / `schedule:write` |
+| `GET` `POST` | `/api/v1/change-orders` | `change-orders:read` / `:write` |
+| `POST` | `/api/v1/change-orders/{id}/approve` \| `/decline` | `change-orders:write` |
+| `POST` | `/api/v1/change-orders/{id}/push-to-purchase-order` | `change-orders:write` |
+| `GET` `POST` | `/api/v1/daily-logs` | `daily-logs:read` / `daily-logs:write` |
+| `GET` `POST` | `/api/v1/todos` | `todos:read` / `todos:write` |
+| `POST` | `/api/v1/todos/{id}/status` | `todos:write` |
+| `POST` | `/api/v1/todos/checklist-items/{id}` | `todos:write` |
+| `GET` `POST` | `/api/v1/rfis` | `rfis:read` / `rfis:write` |
+| `POST` | `/api/v1/rfis/{id}/answer` \| `/close` | `rfis:write` |
+| `GET` `POST` | `/api/v1/files` | `files:read` / `files:write` |
+| `GET` `POST` | `/api/v1/comments` | `comments:read` / `comments:write` |
+| `GET` | `/api/v1/notifications` | `notifications:read` |
+| `POST` | `/api/v1/notifications/{id}/read` | `notifications:write` |
 
 **Full API reference:** `GET /api/v1/openapi.json` — the one route under `/api/v1`
 that needs no API key, so you can read the contract before you have credentials.
@@ -159,6 +187,16 @@ These are load-bearing. Breaking one is a bug even if the types still check.
 - **An approved timesheet counts as committed cost; a pending one does not.** Only
   once a supervisor has signed off does a time clock entry's cost enter the funnel's
   `committedCost` (CLAUDE.md 2.3's "approved POs + unapproved labor").
+- **Schedule dates and critical path are computed, never stored** — the same
+  principle as the Budget. A ScheduleItem persists only duration/predecessors/lag;
+  `src/lib/scheduling/cpm.ts` recomputes start/end/float/critical-path from scratch
+  on every read, so editing one item's duration or the holiday calendar immediately
+  reflows everything downstream.
+- **Approving a Change Order is the explicit conversion action that touches the
+  Budget** — nothing about a CO affects cost or client price until then. A cost
+  code with no prior budget line gets `originalBudgetCost` seeded at zero, so
+  original vs. revised diverges by exactly the CO's amount rather than backfilling
+  an original figure that never existed.
 - **Every report reads from the same per-job funnel computation.** `src/lib/reports/
   service.ts` computes each active job's funnel once and every report is a pure
   transformation over that shared array (`src/lib/reports/calc.ts`) — there is

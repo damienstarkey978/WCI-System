@@ -425,3 +425,15 @@ Record every architectural decision that departs from the above, with the reason
   reviews it like any hand-entered estimate first. See `src/lib/ai/`. Optional integration,
   same pattern as Clerk: without `ANTHROPIC_API_KEY` it returns a clear 503 rather than
   breaking the build.
+- **File storage (Phase 2):** no S3/R2 integration yet — needs storage credentials. The
+  `File` model stores metadata plus a caller-supplied `url`; the caller uploads elsewhere
+  (for now) and registers the resulting URL. Swapping in real presigned uploads later only
+  touches `src/lib/files/service.ts`, not the schema.
+- **Daily Log weather (Phase 2):** optional integration, same pattern as Clerk/Anthropic —
+  without `WEATHER_API_KEY`, `DailyLog.weather` stays `null` rather than the app failing
+  or fabricating a value. See `src/lib/daily-logs/weather.ts`.
+- **Notifications (Phase 2):** `IN_APP` is "delivered" the moment the row exists — no
+  transport step needed. `EMAIL`/`SMS`/`PUSH` have no provider configured yet (needs
+  SendGrid/Twilio/APNs/FCM credentials); rows for those channels are still persisted so
+  nothing is silently dropped, but `deliveredAt` stays null until a real provider exists.
+  See `src/lib/notifications/service.ts`.

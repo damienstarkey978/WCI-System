@@ -55,3 +55,24 @@ export function devUserEmail(): string {
 export function isAnthropicConfigured(): boolean {
   return optional("ANTHROPIC_API_KEY") !== undefined;
 }
+
+/**
+ * Auto-populated Daily Log weather (src/lib/daily-logs/weather.ts) is optional —
+ * without it, DailyLog.weather stays null rather than the app failing.
+ */
+export function isWeatherConfigured(): boolean {
+  return optional("WEATHER_API_KEY") !== undefined;
+}
+
+export function weatherApiKey(): string | undefined {
+  return optional("WEATHER_API_KEY");
+}
+
+/**
+ * No email/SMS/push provider is wired up yet. Notification rows for those channels
+ * are still persisted (src/lib/notifications/service.ts) so nothing is silently
+ * dropped; this flag is the seam a real provider integration will check.
+ */
+export function isEmailConfigured(): boolean {
+  return optional("EMAIL_PROVIDER_API_KEY") !== undefined;
+}

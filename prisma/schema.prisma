@@ -93,6 +93,15 @@ model Organization {
   drawSchedules        DrawSchedule[]
   payments             Payment[]
   timeClockEntries     TimeClockEntry[]
+  nonWorkingDays  NonWorkingDay[]
+  schedules       Schedule[]
+  changeOrders    ChangeOrder[]
+  dailyLogs       DailyLog[]
+  todos           Todo[]
+  rfis            Rfi[]
+  files           File[]
+  comments        Comment[]
+  notifications   Notification[]
 }
 
 model User {
@@ -118,6 +127,12 @@ model User {
   timeClockEntries         TimeClockEntry[] @relation("TimeClockEntryUser")
   approvedTimeClockEntries TimeClockEntry[] @relation("TimeClockEntryApprovedBy")
   clockedInTimeClockEntries TimeClockEntry[] @relation("TimeClockEntryClockedInBy")
+  authoredDailyLogs DailyLog[]
+  assignedTodos  Todo[]
+  assignedRfis   Rfi[]
+  uploadedFiles  File[]
+  authoredComments Comment[]
+  notifications  Notification[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -201,6 +216,12 @@ model Job {
   invoices       Invoice[]
   drawSchedules  DrawSchedule[]
   timeClockEntries TimeClockEntry[]
+  schedules      Schedule[]
+  changeOrders   ChangeOrder[]
+  dailyLogs      DailyLog[]
+  todos          Todo[]
+  rfis           Rfi[]
+  files          File[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -279,6 +300,7 @@ model CostCode {
   updatedAt DateTime @updatedAt
 
   timeClockEntries       TimeClockEntry[]
+  changeOrderLineItems   ChangeOrderLineItem[]
   estimateLineItems      EstimateLineItem[]
   budgetLines            BudgetLine[]
   purchaseOrderLineItems PurchaseOrderLineItem[]
@@ -879,4 +901,366 @@ model TimeClockBreak {
   endAt   DateTime?
 
   @@index([timeClockEntryId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Scheduling
+// ---------------------------------------------------------------------------
+
+enum ScheduleItemConfirmationStatus {
+  UNCONFIRMED
+  CONFIRMED
+}
+
+/// Org-wide non-working days (holidays, shutdowns) the scheduling engine skips
+/// over. Per-job overrides can be layered on later; a shared org calendar is the
+/// common case and keeps this simple for v1.
+model NonWorkingDay {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  date   DateTime
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, date])
+  @@index([organizationId])
+}
+
+/// One per job in the common case, mirroring DrawSchedule's shape.
+model Schedule {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  name String @default("Schedule")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items ScheduleItem[]
+
+  @@index([jobId])
+}
+
+model ScheduleItem {
+  id         String   @id @default(cuid())
+  scheduleId String
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  title        String
+  /// Working-day duration. Start/end dates are computed, not stored — see
+  /// src/lib/scheduling/cpm.ts — the same "computed not stored where possible"
+  /// principle CLAUDE.md 2.3 applies to the Budget.
+  durationDays Int    @default(1)
+
+  /// Ids of other ScheduleItems in the same schedule this one cannot start before.
+  predecessorIds String[]
+  /// Working days between a predecessor's finish and this item's earliest start.
+  lagDays        Int      @default(0)
+
+  /// Only meaningful for items with no predecessors — the anchor date the engine
+  /// propagates everything else from.
+  manualStartDate DateTime?
+
+  /// Captured only by an explicit "snapshot baseline" action, never auto-updated.
+  baselineStart DateTime?
+  baselineEnd   DateTime?
+
+  confirmationStatus ScheduleItemConfirmationStatus @default(UNCONFIRMED)
+  clientVisible      Boolean                        @default(true)
+  subVisible         Boolean                        @default(true)
+  assigneeUserIds    String[]
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scheduleId, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Change Orders (wired into the Budget)
+// ---------------------------------------------------------------------------
+
+enum ChangeOrderMode {
+  FLAT
+  ITEMIZED
+}
+
+enum ChangeOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  DECLINED
+}
+
+model ChangeOrder {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title  String
+  mode   ChangeOrderMode
+  status ChangeOrderStatus @default(DRAFT)
+
+  /// FLAT mode only: the cost code the cost side is booked against, and the raw
+  /// cost/price deltas entered directly (a flat CO does not recompute a markup).
+  flatCostCodeId    String?
+  flatCostCents     Int?
+  flatClientPriceCents Int?
+
+  clientSignatureName String?
+  clientSignedAt      DateTime?
+  clientSignatureIp   String?
+  approvedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems ChangeOrderLineItem[]
+
+  @@index([jobId, status])
+}
+
+model ChangeOrderLineItem {
+  id            String      @id @default(cuid())
+  changeOrderId String
+  changeOrder   ChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+
+  costCodeId String
+  costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+  costType   CostType @default(NONE)
+
+  title         String
+  quantityMilli Int      @default(1000)
+  unitCostCents Int      @default(0)
+  rateMode      RateMode @default(MARKUP)
+  rateBasisPoints Int    @default(0)
+  sortOrder     Int      @default(0)
+
+  @@index([changeOrderId, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Daily Logs, Todos, RFIs, Files
+// ---------------------------------------------------------------------------
+
+model DailyLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  authorUserId   String
+  authorUser     User         @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  note String
+
+  /// Populated only when a weather provider is configured — see
+  /// src/lib/daily-logs/weather.ts. Null otherwise, never a fabricated value.
+  weather Json?
+
+  clientVisible Boolean @default(true)
+  subVisible    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files File[]
+
+  @@index([jobId, createdAt])
+}
+
+enum TodoStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum TodoPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/// The generic entity that also covers punch lists (CLAUDE.md 2.3) — `category`
+/// is a freeform filter tag ("punch", "milestone"), not a schema split.
+model Todo {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  status      TodoStatus   @default(OPEN)
+  priority    TodoPriority @default(MEDIUM)
+  dueDate     DateTime?
+  category    String?
+
+  assigneeUserId String?
+  assigneeUser   User?   @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
+
+  clientVisible Boolean @default(false)
+  subVisible    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checklistItems TodoChecklistItem[]
+
+  @@index([jobId, status])
+  @@index([category])
+}
+
+model TodoChecklistItem {
+  id     String @id @default(cuid())
+  todoId String
+  todo   Todo   @relation(fields: [todoId], references: [id], onDelete: Cascade)
+
+  title     String
+  isDone    Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  @@index([todoId, sortOrder])
+}
+
+enum RfiStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+model Rfi {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title    String
+  question String
+  status   RfiStatus @default(OPEN)
+  dueDate  DateTime?
+
+  assigneeUserId String?
+  assigneeUser   User?   @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
+
+  answer     String?
+  answeredAt DateTime?
+
+  /// Freeform polymorphic reference ("schedule_item:abc123") — no FK, since the
+  /// referent can be any module.
+  relatedItemRef String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobId, status])
+}
+
+enum FileCategory {
+  DOCUMENT
+  PHOTO
+  VIDEO
+}
+
+model File {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  fileName String
+  /// External URL — no S3/R2 integration yet (needs storage credentials); the
+  /// caller uploads elsewhere and registers the resulting URL here.
+  url      String
+  mimeType String?
+  sizeBytes Int?
+  category FileCategory @default(DOCUMENT)
+
+  clientVisible Boolean @default(true)
+  subVisible    Boolean @default(true)
+
+  uploadedByUserId String
+  uploadedByUser   User   @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  /// Set when this file was attached to a Daily Log entry (photos/videos).
+  dailyLogId String?
+  dailyLog   DailyLog? @relation(fields: [dailyLogId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId, category])
+  @@index([dailyLogId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Unified Comment/Activity layer + Notifications
+// ---------------------------------------------------------------------------
+
+/// One table for comments across every module (CLAUDE.md 2.3), not per-module
+/// comment tables. featureType is a plain string ("DailyLog", "Todo", "Rfi",
+/// "ChangeOrder", "PurchaseOrder", "Bill", ...) rather than an enum, so a new
+/// module never needs a migration just to be commentable.
+model Comment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  featureType String
+  featureId   String
+
+  authorUserId String?
+  authorUser   User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  body      String
+  mentions  String[]
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, featureType, featureId])
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  IN_APP
+}
+
+model Notification {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Exactly one of userId/externalEmail is set, same pattern as JobStatusEvent's
+  /// actor fields — an in-app notification targets a User, an email-only
+  /// notification (e.g. to a not-yet-onboarded contact) targets a raw address.
+  userId        String?
+  user          User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalEmail String?
+
+  channel NotificationChannel
+  payload Json
+  readAt  DateTime?
+
+  /// Set once an actual delivery attempt has been made for non-IN_APP channels.
+  /// Null forever for a channel with no configured provider — see
+  /// src/lib/notifications/service.ts.
+  deliveredAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, userId, readAt])
 }

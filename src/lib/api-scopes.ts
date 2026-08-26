@@ -41,6 +41,10 @@ export const SCOPES = [
   "rfis:write",
   "change-orders:read",
   "change-orders:write",
+  "comments:read",
+  "comments:write",
+  "notifications:read",
+  "notifications:write",
   "events:write",
   // Phase 5 — CRM
   "leads:read",
@@ -103,6 +107,8 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "daily-logs:write",
     "files:read",
     "files:write",
+    "comments:read",
+    "comments:write",
     "events:write",
   ],
   hank: [
@@ -118,6 +124,8 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "rfis:write",
     "change-orders:read",
     "change-orders:write",
+    "comments:read",
+    "comments:write",
   ],
   vince: ["jobs:read", "leads:read", "leads:write", "proposals:read", "proposals:write"],
   neil: ["jobs:read", "cost-codes:read", "estimates:read", "estimates:write", "budgets:read"],
