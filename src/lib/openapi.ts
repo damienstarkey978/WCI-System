@@ -19,6 +19,7 @@ import {
   clockInSchema,
   clockOutSchema,
   closeBidPackageSchema,
+  convertLeadToJobSchema,
   createAllowanceSchema,
   createBidPackageSchema,
   createBillSchema,
@@ -28,6 +29,8 @@ import {
   createEstimateSchema,
   createInvoiceSchema,
   createJobSchema,
+  createLeadSchema,
+  createProposalSchema,
   createPurchaseOrderSchema,
   createSelectionSchema,
   createVendorSchema,
@@ -37,6 +40,7 @@ import {
   grantVendorJobAccessSchema,
   inviteVendorToBidSchema,
   matchByRoadNameSchema,
+  portalAcceptProposalSchema,
   portalAcceptPurchaseOrderSchema,
   portalApproveChangeOrderSchema,
   pushBidToPurchaseOrderSchema,
@@ -46,6 +50,7 @@ import {
   submitBidSchema,
   transitionJobStatusSchema,
   updateBillStatusSchema,
+  updateLeadStageSchema,
 } from "@/lib/api-schemas";
 import { AGENT_DEFAULT_SCOPES, SCOPES } from "@/lib/api-scopes";
 
@@ -1008,6 +1013,114 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: [],
     pathParams: ["bidSubmissionId"],
     requestSchema: submitBidSchema,
+  },
+
+  // --- CRM/Sales (apiKey-authed) --------------------------------------------
+  {
+    method: "get",
+    path: "/leads",
+    summary: "List leads",
+    tags: ["CRM"],
+    scopes: ["leads:read"],
+    queryParams: [
+      { name: "stage", description: "Filter by LeadStage" },
+      { name: "assignedUserId", description: "Filter to one assignee" },
+    ],
+  },
+  {
+    method: "post",
+    path: "/leads",
+    summary: "Create a lead",
+    tags: ["CRM"],
+    scopes: ["leads:write"],
+    requestSchema: createLeadSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/leads/{leadId}/stage",
+    summary: "Move a lead through the CRM pipeline",
+    tags: ["CRM"],
+    scopes: ["leads:write"],
+    pathParams: ["leadId"],
+    requestSchema: updateLeadStageSchema,
+  },
+  {
+    method: "post",
+    path: "/leads/{leadId}/convert-to-job",
+    summary: "Convert a lead into a real Job (PRE_SALE)",
+    description:
+      "Explicit conversion action (CLAUDE.md 2.3) — the only entity that legitimately predates a Job. " +
+      "Same request shape as POST /jobs; a lead converts to at most one job.",
+    tags: ["CRM"],
+    scopes: ["leads:write", "jobs:write"],
+    pathParams: ["leadId"],
+    requestSchema: convertLeadToJobSchema,
+    successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/proposals",
+    summary: "List proposals",
+    tags: ["CRM"],
+    scopes: ["proposals:read"],
+    queryParams: [
+      { name: "jobId", description: "Filter to one job" },
+      { name: "status", description: "Filter by ProposalStatus" },
+    ],
+  },
+  {
+    method: "post",
+    path: "/proposals",
+    summary: "Create a proposal (the e-sign wrapper around an Estimate)",
+    tags: ["CRM"],
+    scopes: ["proposals:write"],
+    requestSchema: createProposalSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/proposals/{proposalId}/send",
+    summary: "Mark a proposal SENT",
+    tags: ["CRM"],
+    scopes: ["proposals:write"],
+    pathParams: ["proposalId"],
+  },
+  {
+    method: "post",
+    path: "/proposals/{proposalId}/decline",
+    summary: "Record a staff-observed decline (e.g. a verbal no)",
+    tags: ["CRM"],
+    scopes: ["proposals:write"],
+    pathParams: ["proposalId"],
+  },
+  {
+    method: "post",
+    path: "/proposals/{proposalId}/approval-link",
+    summary: "Issue a headless e-sign link for the client",
+    description: "Single-use, scoped to exactly this proposal. See POST /portal/proposals/{proposalId}/accept.",
+    tags: ["CRM"],
+    scopes: ["proposals:write"],
+    pathParams: ["proposalId"],
+    requestSchema: requestApprovalLinkSchema,
+    successStatus: 201,
+  },
+
+  // --- Client Portal: proposal acceptance -----------------------------------
+  {
+    method: "post",
+    path: "/portal/proposals/{proposalId}/accept",
+    summary: "Accept a Proposal as the client",
+    description:
+      "Works with either a portal session or a single-use PROPOSAL_ACCEPTANCE token from " +
+      "POST /proposals/{id}/approval-link. Accepting chains three already-existing actions: e-signs the " +
+      "proposal, moves the Job from PRE_SALE to OPEN, and sends its Estimate to the Budget. Not gated by " +
+      "ClientJobAccess — at PRE_SALE the client typically has no job access yet.",
+    tags: ["CRM", "Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["proposalId"],
+    requestSchema: portalAcceptProposalSchema,
   },
 ];
 

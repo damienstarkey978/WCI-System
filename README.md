@@ -4,7 +4,7 @@ Construction management platform for **World Construction Inc** — built to rea
 Buildertrend feature parity and then exceed it with an open, agent-facing API.
 
 **Current state: Phases 0-2 complete (except QuickBooks sync); Phases 3 (Client
-Portal) and 4 (Sub/Vendor Portal + Bidding) landed.**
+Portal), 4 (Sub/Vendor Portal + Bidding), and 5 (CRM/Sales) landed.**
 Phase 1 landed the financial core: the Estimate builder, the commitment funnel,
 Purchase Orders, Bills/AP with approval routing, Invoicing and draw schedules, Time
 Tracking with geofencing and overtime, the six standard reports, the webhook
@@ -49,6 +49,19 @@ submission is accepted. Certification/insurance expiry tracking is in
 (`GET /certifications/expiring`) — no reminder delivery yet, since there's no
 email provider to send one with.
 
+Phase 5 (CRM/Sales) has landed: a `Lead` is the one entity that legitimately
+predates a Job (CLAUDE.md 2.3). Converting a lead (`POST /leads/{id}/
+convert-to-job`) creates a real Job in `PRE_SALE` — the exact status Phase 0's
+`job-status.ts` already modeled for this ("Proposal accepted — job sold and
+under construction") — so the existing Estimate builder works against it
+unmodified. A `Proposal` is a thin e-sign wrapper around an Estimate (never
+duplicates its pricing); accepting one, either via a Client Portal session or
+a headless one-time link, chains three already-tested actions rather than a
+bespoke fourth: e-sign the proposal, `transitionJobStatus(PRE_SALE -> OPEN)`,
+and `sendEstimateToBudget()`. Vince (sales) got `jobs:write` added to his
+default scopes for this, since converting a lead is fundamentally creating a
+job.
+
 Also added, pulled forward from the original Phase 8/5 schedule by explicit request:
 an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that turns
 rough field notes into a full line-item estimate against the org's real cost code
@@ -69,8 +82,8 @@ can disagree with another about a job's numbers.
 A published OpenAPI 3.1 spec is also in — see below.
 
 Still to come: the two-way QuickBooks sync (needs Intuit developer credentials
-from Damien), a full admin UI for the Phase 2-4 modules, and Phase 5 onward
-(CRM/Sales, Warranty/Submittals/Surveys, Mobile PWA).
+from Damien), a full admin UI for the Phase 2-5 modules, and Phase 6 onward
+(Warranty/Submittals/Surveys/Specifications, Mobile PWA).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -221,6 +234,18 @@ with its own token namespace (`VendorSession` / `VendorActionToken`):
 | `GET` | `/api/v1/vendor-portal/bid-packages` | portal session — packages this vendor is invited to, **not** gated by `VendorJobAccess` |
 | `POST` | `/api/v1/vendor-portal/bid-submissions/{id}/submit` | portal session, must own the submission |
 
+Phase 5 (CRM/Sales) routes:
+
+| Method | Path | Scope |
+|---|---|---|
+| `GET` `POST` | `/api/v1/leads` | `leads:read` / `leads:write` |
+| `POST` | `/api/v1/leads/{id}/stage` | `leads:write` |
+| `POST` | `/api/v1/leads/{id}/convert-to-job` | `leads:write`, `jobs:write` |
+| `GET` `POST` | `/api/v1/proposals` | `proposals:read` / `proposals:write` |
+| `POST` | `/api/v1/proposals/{id}/send` \| `/decline` | `proposals:write` |
+| `POST` | `/api/v1/proposals/{id}/approval-link` | `proposals:write` |
+| `POST` | `/api/v1/portal/proposals/{id}/accept` | client portal session **or** a `PROPOSAL_ACCEPTANCE` one-time token |
+
 **Full API reference:** `GET /api/v1/openapi.json` — the one route under `/api/v1`
 that needs no API key, so you can read the contract before you have credentials.
 It's generated straight from the same Zod schemas the routes validate against
@@ -324,6 +349,20 @@ These are load-bearing. Breaking one is a bug even if the types still check.
   under any real load. Found via this phase's live verification when enough
   distinct routes got hit in quick succession to actually exhaust
   `max_connections`. Never reintroduce an environment-conditional branch here.
+- **A Lead is the one entity that legitimately predates a Job.** Every other
+  Phase 3-5 model still belongs to exactly one Job. Converting a Lead
+  (`src/lib/crm/service.ts`) creates a real Job in `PRE_SALE` using the exact
+  same shape as `POST /jobs` — a converted lead's job is not a special kind
+  of job.
+- **A Proposal never duplicates Estimate pricing.** It carries a reference to
+  one Estimate and nothing else money-shaped — the same "one place computes
+  the numbers" principle as the Budget.
+- **Accepting a Proposal chains three existing actions, not a fourth bespoke
+  one.** `acceptProposal()` e-signs the proposal, then calls
+  `transitionJobStatus(PRE_SALE -> OPEN)` and `sendEstimateToBudget()` — both
+  already independently tested. `transitionJobStatus`'s `actor` is optional
+  for exactly this: a client's e-signature has no User or ApiKey to attribute
+  it to, and forcing one through would misattribute the audit trail.
 
 ## Stack
 

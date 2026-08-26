@@ -27,7 +27,14 @@ export interface TransitionJobStatusInput {
   readonly jobId: string;
   readonly organizationId: string;
   readonly to: JobStatus;
-  readonly actor: Actor;
+  /**
+   * Omitted when the transition has no internal actor to record — e.g. a
+   * Proposal's PRE_SALE -> OPEN triggered by a client's e-signature
+   * (src/lib/proposals/service.ts): the client isn't a User or an ApiKey, and
+   * forcing one through here would misattribute the audit trail. Both
+   * JobStatusEvent actor columns are nullable for exactly this case.
+   */
+  readonly actor?: Actor;
   readonly reason?: string;
 }
 
@@ -49,9 +56,9 @@ export async function transitionJobStatus(input: TransitionJobStatusInput): Prom
       throw new JobNotFoundError(jobId);
     }
 
-    // API keys are scope-authorized rather than role-authorized, so role rules are
+    // API keys (and no actor at all) are not role-authorized, so role rules are
     // checked only for human actors.
-    assertJobStatusTransition(job.status, to, actor.kind === "user" ? actor.role : undefined);
+    assertJobStatusTransition(job.status, to, actor?.kind === "user" ? actor.role : undefined);
 
     const updated = await tx.job.update({
       where: { id: job.id },
@@ -71,8 +78,8 @@ export async function transitionJobStatus(input: TransitionJobStatusInput): Prom
         jobId: job.id,
         from: job.status,
         to,
-        actorUserId: actor.kind === "user" ? actor.userId : null,
-        actorApiKeyId: actor.kind === "apiKey" ? actor.apiKeyId : null,
+        actorUserId: actor?.kind === "user" ? actor.userId : null,
+        actorApiKeyId: actor?.kind === "apiKey" ? actor.apiKeyId : null,
         reason: reason ?? null,
       },
     });

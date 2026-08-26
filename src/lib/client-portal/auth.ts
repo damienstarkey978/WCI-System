@@ -68,7 +68,10 @@ export async function issuePortalLoginInvite(organizationId: string, clientId: s
 export interface IssueApprovalLinkInput {
   readonly organizationId: string;
   readonly clientId: string;
-  readonly purpose: typeof ClientActionTokenPurpose.CHANGE_ORDER_APPROVAL | typeof ClientActionTokenPurpose.SELECTION_APPROVAL;
+  readonly purpose:
+    | typeof ClientActionTokenPurpose.CHANGE_ORDER_APPROVAL
+    | typeof ClientActionTokenPurpose.SELECTION_APPROVAL
+    | typeof ClientActionTokenPurpose.PROPOSAL_ACCEPTANCE;
   readonly resourceId: string;
 }
 

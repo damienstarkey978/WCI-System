@@ -109,6 +109,8 @@ model Organization {
   vendors              Vendor[]
   vendorActionTokens   VendorActionToken[]
   bidPackages          BidPackage[]
+  leads                Lead[]
+  proposals            Proposal[]
 }
 
 model User {
@@ -140,6 +142,7 @@ model User {
   uploadedFiles             File[]
   authoredComments          Comment[]
   notifications             Notification[]
+  assignedLeads             Lead[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -216,24 +219,28 @@ model Job {
   statusEvents JobStatusEvent[]
   accessGrants JobAccessGrant[]
 
-  estimates        Estimate[]
-  budgetLines      BudgetLine[]
-  purchaseOrders   PurchaseOrder[]
-  bills            Bill[]
-  invoices         Invoice[]
-  drawSchedules    DrawSchedule[]
-  timeClockEntries TimeClockEntry[]
-  schedules        Schedule[]
-  changeOrders     ChangeOrder[]
-  dailyLogs        DailyLog[]
-  todos            Todo[]
-  rfis             Rfi[]
-  files            File[]
-  clientAccess     ClientJobAccess[]
-  allowances       Allowance[]
-  selections       Selection[]
-  vendorAccess     VendorJobAccess[]
-  bidPackages      BidPackage[]
+  estimates         Estimate[]
+  budgetLines       BudgetLine[]
+  purchaseOrders    PurchaseOrder[]
+  bills             Bill[]
+  invoices          Invoice[]
+  drawSchedules     DrawSchedule[]
+  timeClockEntries  TimeClockEntry[]
+  schedules         Schedule[]
+  changeOrders      ChangeOrder[]
+  dailyLogs         DailyLog[]
+  todos             Todo[]
+  rfis              Rfi[]
+  files             File[]
+  clientAccess      ClientJobAccess[]
+  allowances        Allowance[]
+  selections        Selection[]
+  vendorAccess      VendorJobAccess[]
+  bidPackages       BidPackage[]
+  /// Set only when this Job was created by the explicit Lead -> Job conversion
+  /// action (src/lib/crm/service.ts) — null for a job created any other way.
+  convertedFromLead Lead?
+  proposals         Proposal[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -479,6 +486,7 @@ model Estimate {
   updatedAt DateTime @updatedAt
 
   lineItems EstimateLineItem[]
+  proposals Proposal[]
 
   @@index([organizationId])
   @@index([jobId, status])
@@ -1325,6 +1333,7 @@ model Client {
   jobAccess    ClientJobAccess[]
   sessions     ClientSession[]
   actionTokens ClientActionToken[]
+  proposals    Proposal[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1389,6 +1398,7 @@ enum ClientActionTokenPurpose {
   PORTAL_LOGIN
   CHANGE_ORDER_APPROVAL
   SELECTION_APPROVAL
+  PROPOSAL_ACCEPTANCE
 }
 
 /// One-shot signed link. PORTAL_LOGIN tokens exchange for a ClientSession;
@@ -1733,4 +1743,103 @@ model BidSubmissionLineItem {
   sortOrder     Int    @default(0)
 
   @@index([bidSubmissionId, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — CRM/Sales
+//
+// A Lead is the only entity in this schema that legitimately predates a Job
+// (CLAUDE.md 2.3: "Lead / Opportunity (pre-Job, CRM)"). Everything else keeps
+// the aggregate-root rule; converting a Lead creates a real Job in PRE_SALE —
+// the exact transition job-status.ts already modeled in Phase 0
+// (PRE_SALE -> OPEN: "Proposal accepted — job sold and under construction") —
+// so Estimates and Proposals can be built against it with zero changes to
+// either subsystem.
+// ---------------------------------------------------------------------------
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  WON
+  LOST
+}
+
+model Lead {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name   String
+  email  String?
+  phone  String?
+  source String?
+  stage  LeadStage @default(NEW)
+
+  addressLine1 String?
+  city         String?
+  state        String?
+  postalCode   String?
+
+  notes String?
+
+  assignedUserId String?
+  assignedUser   User?   @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  /// Set by the explicit Lead -> Job conversion action. One Lead converts to at
+  /// most one Job — re-converting an already-converted Lead is rejected rather
+  /// than silently creating a second Job for the same opportunity.
+  convertedJobId String? @unique
+  convertedJob   Job?    @relation(fields: [convertedJobId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  proposals Proposal[]
+
+  @@index([organizationId, stage])
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DECLINED
+}
+
+/// Wraps an Estimate with the client-facing e-sign layer (CLAUDE.md 3:
+/// "Proposal builder with e-signature that converts to a Job on acceptance").
+/// Pricing is never duplicated here — it lives entirely on the linked
+/// Estimate, same "one place computes the numbers" principle as the Budget.
+model Proposal {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  leadId         String?
+  lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  estimateId     String
+  estimate       Estimate     @relation(fields: [estimateId], references: [id], onDelete: Restrict)
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  title        String
+  coverMessage String?
+  status       ProposalStatus @default(DRAFT)
+
+  sentAt DateTime?
+
+  clientSignatureName String?
+  clientSignedAt      DateTime?
+  clientSignatureIp   String?
+  declinedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([leadId])
+  @@index([organizationId, status])
 }

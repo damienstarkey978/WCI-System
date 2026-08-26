@@ -584,3 +584,40 @@ export const pushBidToPurchaseOrderSchema = z.object({
   poNumber: z.string().trim().min(1).max(64),
   fallbackCostCodeId: z.string().cuid().optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Phase 5 — CRM/Sales
+// ---------------------------------------------------------------------------
+
+export const createLeadSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  email: z.string().trim().toLowerCase().email().max(255).nullish(),
+  phone: z.string().trim().max(32).nullish(),
+  source: z.string().trim().max(255).nullish(),
+  addressLine1: nullableTrimmed,
+  city: nullableTrimmed,
+  state: z.string().trim().length(2).nullish(),
+  postalCode: z.string().trim().min(3).max(16).nullish(),
+  notes: z.string().trim().max(10_000).nullish(),
+  assignedUserId: z.string().cuid().nullish(),
+});
+
+export const updateLeadStageSchema = z.object({
+  stage: z.enum(["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "WON", "LOST"]),
+});
+
+/** Same shape as createJobSchema — converting a Lead creates a job exactly like POST /jobs. */
+export const convertLeadToJobSchema = createJobSchema;
+
+export const createProposalSchema = z.object({
+  jobId: z.string().cuid(),
+  leadId: z.string().cuid().nullish(),
+  estimateId: z.string().cuid(),
+  clientId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  coverMessage: z.string().trim().max(10_000).nullish(),
+});
+
+export const portalAcceptProposalSchema = z.object({
+  clientSignatureName: z.string().trim().min(1).max(255).optional(),
+});

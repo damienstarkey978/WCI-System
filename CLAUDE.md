@@ -499,3 +499,32 @@ Record every architectural decision that departs from the above, with the reason
   state for PO acceptance to protect, so this was left permissive rather than
   adding a guard against a scenario (does re-signing ever matter?) the spec
   doesn't actually call out.
+- **`transitionJobStatus`'s `actor` became optional (Phase 5):** Proposal
+  acceptance can move a Job from `PRE_SALE` to `OPEN` off a client's
+  e-signature — a Client is neither a `User` nor an `ApiKey`
+  (src/lib/jobs.ts's `Actor` union), so there was no honest value to pass.
+  Forcing a fake `apiKeyId` through would have corrupted `JobStatusEvent`'s
+  audit trail (a foreign key to a row that doesn't represent what actually
+  happened) or required a DB migration to add a third actor kind for a single
+  call site. Making `actor` optional — both `JobStatusEvent` actor columns
+  are already nullable — was the smaller, more honest change: `reason` alone
+  ("Proposal {id} accepted") already explains the transition.
+- **Lead/Proposal reuse existing subsystems rather than inventing CRM-specific
+  ones (Phase 5):** `convertLeadToJob()` creates a Job exactly like `POST
+  /jobs` (always `PRE_SALE`, writes the opening `JobStatusEvent`) instead of
+  a parallel "lead job" concept. `Proposal` has no line items of its own — it
+  references one `Estimate` — and `acceptProposal()` calls the existing
+  `sendEstimateToBudget()` rather than re-deriving budget numbers. The
+  `PRE_SALE -> OPEN` transition rule ("Proposal accepted — job sold and under
+  construction") was already written in Phase 0's `job-status.ts`,
+  anticipating this exact flow.
+- **Proposal e-signature reuses the Client Portal's token mechanism (Phase
+  5):** a new `ClientActionTokenPurpose.PROPOSAL_ACCEPTANCE` value, not a
+  fourth parallel auth path. `issueApprovalLink()` (Phase 3) does not
+  validate that the `clientId` it's issuing for actually matches a given
+  resource's expected client — for Change Orders/Selections there is no such
+  expectation to check (neither model records one), but `Proposal.clientId`
+  does, so `POST /portal/proposals/{id}/accept`'s headless branch checks the
+  redeemed token's `clientId` against `Proposal.clientId` itself
+  (`ProposalClientMismatchError`) rather than widening `issueApprovalLink()`
+  with a check only one of its three callers needs.

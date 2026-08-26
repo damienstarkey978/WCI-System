@@ -42,6 +42,10 @@ export const WEBHOOK_EVENT_TYPES = [
   "po.vendor_accepted",
   "bid.submitted",
   "bid.accepted",
+  "lead.converted",
+  "proposal.sent",
+  "proposal.accepted",
+  "proposal.declined",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];

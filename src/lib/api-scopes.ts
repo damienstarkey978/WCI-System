@@ -148,6 +148,6 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "vendors:read",
     "bids:read",
   ],
-  vince: ["jobs:read", "leads:read", "leads:write", "proposals:read", "proposals:write"],
+  vince: ["jobs:read", "jobs:write", "leads:read", "leads:write", "proposals:read", "proposals:write"],
   neil: ["jobs:read", "cost-codes:read", "estimates:read", "estimates:write", "budgets:read"],
 };
