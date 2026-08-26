@@ -5,7 +5,14 @@
 
 import { z } from "zod";
 
-import { ContractType, CostType, JobStatus } from "@/generated/prisma/enums";
+import {
+  BillApprovalStatus,
+  ContractType,
+  CostType,
+  FinancialSourceType,
+  JobStatus,
+  RateMode,
+} from "@/generated/prisma/enums";
 
 const nullableTrimmed = z.string().trim().min(1).max(255).nullish();
 
@@ -71,3 +78,97 @@ export function formatZodIssues(error: z.ZodError): ReadonlyArray<{ path: string
     message: issue.message,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Phase 1 — financial core
+// ---------------------------------------------------------------------------
+
+const rateMode = z.enum(RateMode);
+const quantityMilli = z.number().int().positive().max(1_000_000_000);
+const cents = z.number().int().min(-1_000_000_000).max(1_000_000_000);
+const basisPoints = z.number().int().min(-9_999).max(1_000_000);
+
+export const estimateLineItemSchema = z.object({
+  costCodeId: z.string().cuid(),
+  costType: z.enum(CostType).optional(),
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(2_000).nullish(),
+  quantityMilli: quantityMilli.optional().default(1_000),
+  unitCostCents: cents,
+  rateMode: rateMode.optional(),
+  rateBasisPoints: basisPoints.optional(),
+  taxable: z.boolean().optional(),
+  internalNote: z.string().trim().max(2_000).nullish(),
+  groupLabel: z.string().trim().max(120).nullish(),
+});
+
+export const createEstimateSchema = z.object({
+  jobId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  rateMode: rateMode.optional().default(RateMode.MARKUP),
+  defaultRateBasisPoints: basisPoints.optional().default(0),
+  lineItems: z.array(estimateLineItemSchema).min(1).max(500),
+});
+
+export const createPurchaseOrderSchema = z.object({
+  jobId: z.string().cuid(),
+  poNumber: z.string().trim().min(1).max(64),
+  poSuffix: z.string().trim().max(16).nullish(),
+  vendorName: z.string().trim().min(1).max(255),
+  sourceType: z.enum(FinancialSourceType).optional().default(FinancialSourceType.SCRATCH),
+  sourceId: z.string().trim().max(64).nullish(),
+  lineItems: z
+    .array(
+      z.object({
+        costCodeId: z.string().cuid(),
+        costType: z.enum(CostType).optional(),
+        title: z.string().trim().min(1).max(255),
+        quantityMilli: quantityMilli.optional().default(1_000),
+        unitCostCents: cents,
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+export const createBillSchema = z.object({
+  jobId: z.string().cuid(),
+  purchaseOrderId: z.string().cuid().nullish(),
+  vendorName: z.string().trim().min(1).max(255),
+  billNumber: z.string().trim().max(64).nullish(),
+  issuedOn: z.coerce.date().nullish(),
+  dueOn: z.coerce.date().nullish(),
+  fromOcr: z.boolean().optional(),
+  lineItems: z
+    .array(
+      z.object({
+        costCodeId: z.string().cuid(),
+        costType: z.enum(CostType).optional(),
+        title: z.string().trim().min(1).max(255),
+        amountCents: cents,
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+export const updateBillStatusSchema = z.object({
+  approvalStatus: z.enum(BillApprovalStatus),
+});
+
+export const matchByRoadNameSchema = z.object({
+  query: z.string().trim().min(1).max(500),
+  minimumScore: z.number().int().min(0).max(100).optional(),
+  limit: z.number().int().min(1).max(25).optional(),
+});
+
+export const createWebhookSubscriptionSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  targetUrl: z.string().url().max(2_000),
+  eventTypes: z.array(z.string().trim().min(1).max(64)).min(1).max(50),
+});
+
+export const emitEventSchema = z.object({
+  eventType: z.string().trim().min(1).max(64),
+  data: z.record(z.string(), z.unknown()).optional().default({}),
+});

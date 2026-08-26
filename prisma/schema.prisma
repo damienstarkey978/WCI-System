@@ -84,6 +84,11 @@ model Organization {
   costCodes    CostCode[]
   apiKeys      ApiKey[]
   oauthClients OAuthClient[]
+
+  estimates            Estimate[]
+  purchaseOrders       PurchaseOrder[]
+  bills                Bill[]
+  webhookSubscriptions WebhookSubscription[]
 }
 
 model User {
@@ -168,11 +173,22 @@ model Job {
   /// Jobs are templatable, like estimates/schedules/specs.
   isTemplate   Boolean @default(false)
 
+  /// Which funnel layer drives projectedCost, and whether actual cost counts
+  /// open bills (accrual) or only paid ones (cash). Per-job because different
+  /// clients and lenders want the job reported differently.
+  projectionReference ProjectionReference @default(GREATEST)
+  accountingBasis     AccountingBasis     @default(ACCRUAL)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   statusEvents JobStatusEvent[]
   accessGrants JobAccessGrant[]
+
+  estimates      Estimate[]
+  budgetLines    BudgetLine[]
+  purchaseOrders PurchaseOrder[]
+  bills          Bill[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -246,6 +262,11 @@ model CostCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  estimateLineItems      EstimateLineItem[]
+  budgetLines            BudgetLine[]
+  purchaseOrderLineItems PurchaseOrderLineItem[]
+  billLineItems          BillLineItem[]
+
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
   @@index([parentId])
@@ -305,4 +326,316 @@ model OAuthClient {
   updatedAt DateTime  @updatedAt
 
   @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1 — financial core
+//
+// Money is always integer cents. Quantities are integer thousandths
+// (quantityMilli), so 2.5 units is 2500 — this keeps every calculation in
+// integer arithmetic, per CLAUDE.md section 5.
+// ---------------------------------------------------------------------------
+
+/// Whether a rate is applied as a markup on cost or a margin on price.
+enum RateMode {
+  MARKUP
+  MARGIN
+}
+
+enum EstimateStatus {
+  DRAFT
+  SENT
+  LOCKED
+  ACCEPTED
+  DECLINED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  DECLINED
+  COMPLETED
+  CANCELLED
+}
+
+enum BillApprovalStatus {
+  IN_REVIEW
+  APPROVED
+  READY_FOR_PAYMENT
+  PAID
+  VOID
+}
+
+/// Which layer of the funnel drives projectedCost. GREATEST is Buildertrend's
+/// default behavior and the safest: a job is projected at the worst known number.
+enum ProjectionReference {
+  GREATEST
+  REVISED_BUDGET
+  COMMITTED
+  ACTUAL
+}
+
+/// Accrual counts open + paid bills as actual cost; cash counts only paid bills.
+enum AccountingBasis {
+  ACCRUAL
+  CASH
+}
+
+/// Where a purchase order came from. Conversions are explicit, back-referenced
+/// actions (CLAUDE.md 2.3) so a line can always be traced to its origin.
+enum FinancialSourceType {
+  SCRATCH
+  ESTIMATE
+  CHANGE_ORDER
+  BID
+  SELECTION
+}
+
+model Estimate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title   String
+  status  EstimateStatus @default(DRAFT)
+  /// Bumped when a locked estimate is revised, preserving history.
+  version Int            @default(1)
+
+  /// Default pricing rate applied to new line items.
+  rateMode               RateMode @default(MARKUP)
+  defaultRateBasisPoints Int      @default(0)
+
+  sentAt         DateTime?
+  lockedAt       DateTime?
+  acceptedAt     DateTime?
+  /// Set by the "Send to Job Budget" action, which locks the estimate.
+  sentToBudgetAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems EstimateLineItem[]
+
+  @@index([organizationId])
+  @@index([jobId, status])
+}
+
+model EstimateLineItem {
+  id         String   @id @default(cuid())
+  estimateId String
+  estimate   Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  costCodeId String
+  costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+  costType   CostType @default(NONE)
+
+  title       String
+  description String?
+  /// Quantity × 1000. 2.5 units is stored as 2500.
+  quantityMilli Int    @default(1000)
+  unitCostCents Int    @default(0)
+
+  rateMode        RateMode @default(MARKUP)
+  rateBasisPoints Int      @default(0)
+
+  taxable      Boolean @default(false)
+  internalNote String?
+  /// Free-form grouping (room, assembly) for the estimate worksheet.
+  groupLabel   String?
+  sortOrder    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([estimateId, sortOrder])
+  @@index([costCodeId])
+}
+
+/// One row per Job × CostCode. Stores only the *authored* numbers (what was
+/// budgeted and what the client was quoted). Every other layer of the funnel —
+/// pending, committed, actual, projected, cost-to-complete — is computed from
+/// POs and bills by src/lib/budget/funnel.ts and deliberately not stored.
+model BudgetLine {
+  id     String @id @default(cuid())
+  jobId  String
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  costCodeId String
+  costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+
+  originalBudgetCostCents Int @default(0)
+  /// Original plus approved change orders and selections.
+  revisedBudgetCostCents  Int @default(0)
+
+  originalClientPriceCents Int @default(0)
+  revisedClientPriceCents  Int @default(0)
+
+  rateMode        RateMode @default(MARKUP)
+  rateBasisPoints Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobId, costCodeId])
+  @@index([jobId])
+}
+
+model PurchaseOrder {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  poNumber String
+  /// Reconciliation suffix used when a PO is billed in parts (CLAUDE.md 2.3).
+  poSuffix String?
+
+  /// Vendor is a string until the Vendor model lands in Phase 4.
+  vendorName String
+
+  status PurchaseOrderStatus @default(DRAFT)
+
+  sourceType FinancialSourceType @default(SCRATCH)
+  /// Id of the originating record, so a PO can be traced back to its source.
+  sourceId   String?
+
+  /// Amend-in-place with version history.
+  version    Int       @default(1)
+  approvedAt DateTime?
+  declinedAt DateTime?
+
+  vendorSignatureName String?
+  vendorSignedAt      DateTime?
+  vendorSignatureIp   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems PurchaseOrderLineItem[]
+  bills     Bill[]
+
+  @@unique([organizationId, poNumber])
+  @@index([jobId, status])
+}
+
+model PurchaseOrderLineItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  costCodeId String
+  costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+  costType   CostType @default(NONE)
+
+  title         String
+  quantityMilli Int    @default(1000)
+  unitCostCents Int    @default(0)
+  sortOrder     Int    @default(0)
+
+  @@index([purchaseOrderId, sortOrder])
+  @@index([costCodeId])
+}
+
+model Bill {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// Set when the bill was raised against a PO, which is what makes PO-to-bill
+  /// reconciliation possible.
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  vendorName String
+  billNumber String?
+
+  approvalStatus BillApprovalStatus @default(IN_REVIEW)
+
+  issuedOn DateTime?
+  dueOn    DateTime?
+  paidAt   DateTime?
+
+  /// True when the bill was drafted from a scanned receipt (Phase 8 OCR).
+  fromOcr Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems BillLineItem[]
+
+  @@index([jobId, approvalStatus])
+  @@index([organizationId])
+  @@index([purchaseOrderId])
+}
+
+model BillLineItem {
+  id     String @id @default(cuid())
+  billId String
+  bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  costCodeId String
+  costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+  costType   CostType @default(NONE)
+
+  title       String
+  amountCents Int    @default(0)
+  sortOrder   Int    @default(0)
+
+  @@index([billId, sortOrder])
+  @@index([costCodeId])
+}
+
+// ---------------------------------------------------------------------------
+// Webhooks — how the Jarvis agents react to events instead of polling
+// ---------------------------------------------------------------------------
+
+model WebhookSubscription {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Which consumer owns this subscription ("duke", "jarvis", ...).
+  name       String
+  targetUrl  String
+  /// Shared secret used to sign payloads (HMAC-SHA256).
+  secret     String
+  eventTypes String[]
+
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  deliveries WebhookDelivery[]
+
+  @@index([organizationId, isActive])
+}
+
+/// Delivery log, so a failed webhook is visible and retryable rather than
+/// silently dropped — the same principle as the QuickBooks sync log.
+model WebhookDelivery {
+  id             String              @id @default(cuid())
+  subscriptionId String
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  eventType   String
+  payload     Json
+  /// Stable id used for idempotent redelivery.
+  eventId     String
+
+  attempts       Int       @default(0)
+  lastAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  lastStatusCode Int?
+  lastError      String?
+  nextAttemptAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([subscriptionId, deliveredAt])
+  @@index([nextAttemptAt])
 }

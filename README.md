@@ -3,9 +3,13 @@
 Construction management platform for **World Construction Inc** — built to reach
 Buildertrend feature parity and then exceed it with an open, agent-facing API.
 
-**Current state: Phase 0 (Foundation).** Organizations, users and roles, the Job
-lifecycle state machine, Contract Type branching, the cost code catalog, machine auth
-for `/api/v1`, and a minimal admin UI for verifying the data model by hand.
+**Current state: Phase 1 in progress.** Phase 0 (foundation) is complete. Phase 1 has
+landed the financial core: the Estimate builder, the commitment funnel, Purchase
+Orders, Bills/AP with approval routing, the webhook dispatcher, and Duke's agent
+surface including road-name job matching.
+
+Still to come in Phase 1: Invoicing and draw schedules, the Time Clock, the six
+standard reports, the two-way QuickBooks sync, and the published OpenAPI spec.
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -48,6 +52,16 @@ Phase 0 endpoints:
 | `POST` | `/api/v1/jobs/{jobId}/status` | `jobs:write` |
 | `GET` | `/api/v1/cost-codes` | `cost-codes:read` |
 | `POST` | `/api/v1/cost-codes` | `cost-codes:write` |
+| `GET` `POST` | `/api/v1/estimates` | `estimates:read` / `estimates:write` |
+| `POST` | `/api/v1/estimates/{id}/send-to-budget` | `estimates:write` |
+| `GET` | `/api/v1/jobs/{jobId}/budget` | `budgets:read` |
+| `GET` `POST` | `/api/v1/purchase-orders` | `purchase-orders:read` / `:write` |
+| `POST` | `/api/v1/purchase-orders/{id}/approve` | `purchase-orders:write` |
+| `POST` | `/api/v1/purchase-orders/match-by-road-name` | `jobs:read` |
+| `GET` `POST` | `/api/v1/bills` | `bills:read` / `bills:write` |
+| `POST` | `/api/v1/bills/{id}/status` | `bills:write` |
+| `GET` `POST` | `/api/v1/webhooks` | `webhooks:read` / `webhooks:write` |
+| `POST` | `/api/v1/events` | `events:write` |
 
 A published OpenAPI spec lands with the rest of the public API in Phase 1.
 
@@ -78,6 +92,12 @@ These are load-bearing. Breaking one is a bug even if the types still check.
 - **Human auth and machine auth never mix.** `/api/v1/*` authenticates by API key only;
   `src/proxy.ts` is a coarse pre-filter, and real authorization happens per-route via
   `withApiAuth`.
+- **The funnel's layers overlap and must never be summed.** A PO that has been billed
+  appears in both `committedCost` and `actualCost`. `projectedCost` is therefore a
+  *max* across the layers, not a sum — summing them double-counts every job's cost.
+  See `src/lib/budget/funnel.ts`.
+- **Estimate lines are priced individually, then summed.** Lines under one cost code
+  can carry different markups, so pricing the aggregated cost silently discards them.
 
 ## Stack
 
