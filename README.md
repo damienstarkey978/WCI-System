@@ -25,7 +25,10 @@ Labor Actuals vs Budgeted, Cash Flow) are also in — every one of them is a
 transformation over the same per-job funnel the Budget screen reads, so no report
 can disagree with another about a job's numbers.
 
-Still to come in Phase 1: the two-way QuickBooks sync and the published OpenAPI spec.
+A published OpenAPI 3.1 spec is also in — see below.
+
+Still to come in Phase 1: the two-way QuickBooks sync (needs Intuit developer
+credentials from Damien).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -101,7 +104,12 @@ Phase 0 endpoints:
 | `GET` | `/api/v1/reports/labor` | `reports:read` |
 | `GET` | `/api/v1/reports/cash-flow` | `reports:read` |
 
-A published OpenAPI spec lands with the rest of the public API in Phase 1.
+**Full API reference:** `GET /api/v1/openapi.json` — the one route under `/api/v1`
+that needs no API key, so you can read the contract before you have credentials.
+It's generated straight from the same Zod schemas the routes validate against
+(`src/lib/openapi.ts`), not hand-written, so request bodies can't drift from what
+the server actually accepts. Paste it into any OpenAPI viewer (Swagger UI,
+Postman, Redocly) for a browsable reference.
 
 ## Scripts
 

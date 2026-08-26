@@ -20,8 +20,18 @@ import { isClerkConfigured } from "@/lib/env";
 
 const clerk = isClerkConfigured() ? clerkMiddleware() : null;
 
+/**
+ * The one /api/v1 route reachable without an API key: an integrator has to be able
+ * to read the contract before they have credentials to call anything in it.
+ */
+const PUBLIC_API_PATHS: ReadonlySet<string> = new Set(["/api/v1/openapi.json"]);
+
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (request.nextUrl.pathname.startsWith("/api/v1")) {
+    if (PUBLIC_API_PATHS.has(request.nextUrl.pathname)) {
+      return NextResponse.next();
+    }
+
     const hasCredentials =
       request.headers.get("authorization") !== null || request.headers.get("x-api-key") !== null;
 
