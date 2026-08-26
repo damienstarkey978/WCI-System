@@ -38,6 +38,10 @@ export const WEBHOOK_EVENT_TYPES = [
   "permit.milestone_reached",
   "selection.option_approved",
   "client.invited",
+  "vendor.invited",
+  "po.vendor_accepted",
+  "bid.submitted",
+  "bid.accepted",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];

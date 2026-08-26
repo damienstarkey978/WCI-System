@@ -1,7 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "@/generated/prisma/client";
-import { databaseUrl, isProduction } from "@/lib/env";
+import { databaseUrl } from "@/lib/env";
 
 /**
  * A single PrismaClient per process, created lazily.
@@ -14,8 +14,15 @@ import { databaseUrl, isProduction } from "@/lib/env";
  * client eagerly would make the build (and unit tests of pure helpers) require a
  * DATABASE_URL that isn't needed until a query actually runs.
  *
- * Next.js dev-mode hot reload re-evaluates modules, so the instance is cached on
- * globalThis to avoid exhausting database connections.
+ * The instance is cached on globalThis unconditionally — in every environment, not
+ * only dev. `db` below is a Proxy that calls getClient() on every property access
+ * (every single query), so a `!isProduction` guard here (an earlier version of this
+ * file had one) doesn't just fail to help production — it means production never
+ * caches at all: every query opens a brand-new PrismaClient and its own pg.Pool,
+ * which leaks Postgres connections until the server hits max_connections under any
+ * real load. Caching is correct in both dev (survives hot-reload) and production
+ * (this is the only thing making the "one PrismaClient per process" doc comment
+ * above actually true).
  */
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
@@ -29,9 +36,7 @@ function getClient(): PrismaClient {
     log: ["warn", "error"],
   });
 
-  if (!isProduction) {
-    globalForPrisma.prisma = client;
-  }
+  globalForPrisma.prisma = client;
   return client;
 }
 

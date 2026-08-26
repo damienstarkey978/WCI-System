@@ -466,3 +466,36 @@ Record every architectural decision that departs from the above, with the reason
   Optional integration, same pattern as Weather/Anthropic: without `STRIPE_SECRET_KEY`,
   `POST /api/v1/portal/invoices/{id}/pay` returns a clean 503, never a fabricated
   payment.
+- **Production PrismaClient was leaking connections (found via Phase 4 live
+  verification, fixed in this change):** `src/lib/db.ts` only cached its client
+  on `globalThis` when `!isProduction`. The comment above it explained the cache
+  as a *dev-mode hot-reload* concern, but `db` is exported as a Proxy that calls
+  the client-getter on every property access — so in production the guard meant
+  every single query created a brand-new `PrismaClient` (and its own `pg.Pool`),
+  which never got torn down. Harmless at low request volume; under this phase's
+  live-verification script (dozens of distinct routes hit back-to-back) it
+  reliably exhausted Postgres's `max_connections` and requests started failing
+  with "too many clients already." Fixed by caching unconditionally — there is
+  no environment where NOT caching the client is correct. Filed as a fix, not a
+  deviation-with-a-workaround, since the original behavior was simply wrong.
+- **Vendor schedule visibility does not yet filter by `scheduleScope` (Phase 4):**
+  `VendorJobAccess.scheduleScope` (`ASSIGNED_ONLY` | `ALL_ITEMS`) exists in the
+  schema per CLAUDE.md 2.4's Permission Wizard, but `GET /vendor-portal/jobs/
+  {jobId}/schedule` only filters on `ScheduleItem.subVisible` — every sub-visible
+  item, regardless of scope. `ScheduleItem` assignment is by `assigneeUserIds`
+  (`User` ids), and a `Vendor` is never a `User`, so there is no assignee match
+  to filter `ASSIGNED_ONLY` against yet. Closing this needs either a
+  vendor-assignment field on `ScheduleItem` or a join table, deliberately not
+  added speculatively here.
+- **Certification/insurance expiry has no reminder delivery (Phase 4):**
+  `GET /api/v1/certifications/expiring` is query-only — the seam a scheduled job
+  would poll once a queue exists (same gap as Notifications' non-`IN_APP`
+  channels and QuickBooks sync: no scheduled-job infrastructure yet).
+- **A vendor's PO acceptance can be re-signed with no guard (Phase 4):**
+  `acceptPurchaseOrder()` only checks `status === APPROVED`, not whether
+  `vendorSignedAt` is already set — accepting an already-accepted PO just
+  re-signs it (a later signature overwrites an earlier one). Unlike Selection
+  approval or Change Order approval, there is no terminal "already decided"
+  state for PO acceptance to protect, so this was left permissive rather than
+  adding a guard against a scenario (does re-signing ever matter?) the spec
+  doesn't actually call out.

@@ -82,12 +82,20 @@ export const POST = withApiAuth(["bills:write"], async (request, auth) => {
   }
   const defaultCostTypeById = new Map(known.map((code) => [code.id, code.defaultCostType]));
 
+  if (input.vendorId) {
+    const vendor = await db.vendor.findFirst({ where: { id: input.vendorId, organizationId: auth.organizationId }, select: { id: true } });
+    if (!vendor) {
+      return apiError(422, "unknown_vendor", `No vendor ${input.vendorId} in this organization.`);
+    }
+  }
+
   const bill = await db.bill.create({
     data: {
       organizationId: auth.organizationId,
       jobId: input.jobId,
       purchaseOrderId: input.purchaseOrderId ?? null,
       vendorName: input.vendorName,
+      vendorId: input.vendorId ?? null,
       billNumber: input.billNumber ?? null,
       issuedOn: input.issuedOn ?? null,
       dueOn: input.dueOn ?? null,

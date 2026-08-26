@@ -13,11 +13,14 @@
 import { z } from "zod";
 
 import {
+  addCertificationSchema,
   aiDraftEstimateSchema,
   bulkClockInSchema,
   clockInSchema,
   clockOutSchema,
+  closeBidPackageSchema,
   createAllowanceSchema,
+  createBidPackageSchema,
   createBillSchema,
   createClientSchema,
   createCostCodeSchema,
@@ -27,13 +30,20 @@ import {
   createJobSchema,
   createPurchaseOrderSchema,
   createSelectionSchema,
+  createVendorSchema,
   createWebhookSubscriptionSchema,
   emitEventSchema,
   grantJobAccessSchema,
+  grantVendorJobAccessSchema,
+  inviteVendorToBidSchema,
   matchByRoadNameSchema,
+  portalAcceptPurchaseOrderSchema,
   portalApproveChangeOrderSchema,
+  pushBidToPurchaseOrderSchema,
   recordPaymentSchema,
   requestApprovalLinkSchema,
+  requestVendorApprovalLinkSchema,
+  submitBidSchema,
   transitionJobStatusSchema,
   updateBillStatusSchema,
 } from "@/lib/api-schemas";
@@ -70,14 +80,15 @@ interface EndpointDef {
   readonly tags: readonly string[];
   /**
    * "apiKey" (default): a scoped ApiKey Bearer token — `scopes` names the
-   * required ones. "clientPortal": a Client Portal ClientSession or
-   * ClientActionToken (src/lib/client-portal/auth.ts) — a completely
-   * separate token namespace (CLAUDE.md 2.1/2.3), never interchangeable with
-   * an ApiKey even though both travel as `Authorization: Bearer`. `scopes`
-   * is ignored for clientPortal endpoints; per-job module gating
-   * (ClientJobAccess) isn't a static scope and is documented in `description`.
+   * required ones. "clientPortal"/"vendorPortal": a Client/Vendor Portal
+   * session or single-use action token (src/lib/client-portal/auth.ts,
+   * src/lib/vendor-portal/auth.ts) — completely separate token namespaces
+   * (CLAUDE.md 2.1/2.3), never interchangeable with an ApiKey or each other
+   * even though all three travel as `Authorization: Bearer`. `scopes` is
+   * ignored for portal endpoints; per-job module gating (ClientJobAccess/
+   * VendorJobAccess) isn't a static scope and is documented in `description`.
    */
-  readonly authKind?: "apiKey" | "clientPortal";
+  readonly authKind?: "apiKey" | "clientPortal" | "vendorPortal";
   readonly scopes: readonly string[];
   readonly pathParams?: readonly string[];
   readonly queryParams?: readonly { name: string; description: string; schema?: Record<string, unknown> }[];
@@ -748,6 +759,256 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: [],
     pathParams: ["invoiceId"],
   },
+
+  // --- Sub/Vendor Portal management (staff/agent side, apiKey-authed) ------
+  {
+    method: "get",
+    path: "/vendors",
+    summary: "List vendors",
+    tags: ["Vendor Portal"],
+    scopes: ["vendors:read"],
+    queryParams: [{ name: "jobId", description: "Filter to vendors with access to one job" }],
+  },
+  {
+    method: "post",
+    path: "/vendors",
+    summary: "Create a vendor",
+    tags: ["Vendor Portal"],
+    scopes: ["vendors:write"],
+    requestSchema: createVendorSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/vendors/{vendorId}/job-access",
+    summary: "Grant/update a vendor's per-job portal module visibility",
+    tags: ["Vendor Portal"],
+    scopes: ["vendors:write"],
+    pathParams: ["vendorId"],
+    requestSchema: grantVendorJobAccessSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/vendors/{vendorId}/portal-invite",
+    summary: "Issue a one-time portal login link",
+    tags: ["Vendor Portal"],
+    scopes: ["vendors:write"],
+    pathParams: ["vendorId"],
+    successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/vendors/{vendorId}/certifications",
+    summary: "List a vendor's certifications",
+    tags: ["Vendor Portal"],
+    scopes: ["vendors:read"],
+    pathParams: ["vendorId"],
+  },
+  {
+    method: "post",
+    path: "/vendors/{vendorId}/certifications",
+    summary: "Add a certification/insurance record",
+    tags: ["Vendor Portal"],
+    scopes: ["vendors:write"],
+    pathParams: ["vendorId"],
+    requestSchema: addCertificationSchema,
+    successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/certifications/expiring",
+    summary: "Certifications/insurance expiring soon, across every vendor",
+    description: "No reminder delivery yet — this is the query a scheduled job will eventually poll (CLAUDE.md 7).",
+    tags: ["Vendor Portal"],
+    scopes: ["vendors:read"],
+    queryParams: [{ name: "withinDays", description: "1-365, default 30" }],
+  },
+  {
+    method: "post",
+    path: "/purchase-orders/{purchaseOrderId}/approval-link",
+    summary: "Issue a headless PO acceptance link for a vendor",
+    description: "Single-use, scoped to exactly this PO. See POST /vendor-portal/purchase-orders/{purchaseOrderId}/accept.",
+    tags: ["Vendor Portal"],
+    scopes: ["purchase-orders:write"],
+    pathParams: ["purchaseOrderId"],
+    requestSchema: requestVendorApprovalLinkSchema,
+    successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/bid-packages",
+    summary: "List bid packages",
+    tags: ["Bid Board"],
+    scopes: ["bids:read"],
+    queryParams: [
+      { name: "jobId", description: "Filter to one job" },
+      { name: "status", description: "Filter by BidPackageStatus" },
+    ],
+  },
+  {
+    method: "post",
+    path: "/bid-packages",
+    summary: "Create a bid package (with line items)",
+    tags: ["Bid Board"],
+    scopes: ["bids:write"],
+    requestSchema: createBidPackageSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/bid-packages/{bidPackageId}/invite",
+    summary: "Invite a vendor to bid",
+    description: "Creates the BidSubmission row in INVITED status. Not gated by VendorJobAccess (CLAUDE.md 3).",
+    tags: ["Bid Board"],
+    scopes: ["bids:write"],
+    pathParams: ["bidPackageId"],
+    requestSchema: inviteVendorToBidSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/bid-packages/{bidPackageId}/close",
+    summary: "Close or award a bid package",
+    description: "AWARDED requires at least one ACCEPTED submission — a package can have more than one (split scope).",
+    tags: ["Bid Board"],
+    scopes: ["bids:write"],
+    pathParams: ["bidPackageId"],
+    requestSchema: closeBidPackageSchema,
+  },
+  {
+    method: "post",
+    path: "/bid-submissions/{bidSubmissionId}/submit",
+    summary: "Submit or edit a bid on the vendor's behalf",
+    description: "Staff/agent \"builder-edit-on-behalf\" (CLAUDE.md 3), e.g. transcribing a phone bid.",
+    tags: ["Bid Board"],
+    scopes: ["bids:write"],
+    pathParams: ["bidSubmissionId"],
+    requestSchema: submitBidSchema,
+  },
+  {
+    method: "post",
+    path: "/bid-submissions/{bidSubmissionId}/lock",
+    summary: "Freeze a bid submission against further edits",
+    tags: ["Bid Board"],
+    scopes: ["bids:write"],
+    pathParams: ["bidSubmissionId"],
+  },
+  {
+    method: "post",
+    path: "/bid-submissions/{bidSubmissionId}/accept",
+    summary: "Accept (award) a bid submission",
+    tags: ["Bid Board"],
+    scopes: ["bids:write"],
+    pathParams: ["bidSubmissionId"],
+  },
+  {
+    method: "post",
+    path: "/bid-submissions/{bidSubmissionId}/decline",
+    summary: "Decline a bid submission",
+    tags: ["Bid Board"],
+    scopes: ["bids:write"],
+    pathParams: ["bidSubmissionId"],
+  },
+  {
+    method: "post",
+    path: "/bid-submissions/{bidSubmissionId}/push-to-purchase-order",
+    summary: "Push an accepted bid submission to a Purchase Order",
+    description: "Explicit conversion action (CLAUDE.md 2.3: Bid -> PO), same pattern as Change Order -> PO.",
+    tags: ["Bid Board"],
+    scopes: ["bids:write", "purchase-orders:write"],
+    pathParams: ["bidSubmissionId"],
+    requestSchema: pushBidToPurchaseOrderSchema,
+    successStatus: 201,
+  },
+
+  // --- Vendor Portal (vendor-authed: VendorSession or a one-time token) ----
+  {
+    method: "post",
+    path: "/vendor-portal/login",
+    summary: "Exchange a portal login/invite token for a session",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+  },
+  {
+    method: "get",
+    path: "/vendor-portal/jobs",
+    summary: "List jobs this vendor has portal access to",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+  },
+  {
+    method: "get",
+    path: "/vendor-portal/jobs/{jobId}/schedule",
+    summary: "Sub-visible schedule for a job, computed (CPM)",
+    description:
+      "VendorJobAccess.scheduleScope is not yet enforced here (CLAUDE.md 7) — every subVisible item is returned.",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/vendor-portal/jobs/{jobId}/documents",
+    summary: "Sub-visible files for a job",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/vendor-portal/jobs/{jobId}/purchase-orders",
+    summary: "This vendor's own purchase orders on the job",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/vendor-portal/jobs/{jobId}/bills",
+    summary: "This vendor's own bills on the job",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "post",
+    path: "/vendor-portal/purchase-orders/{purchaseOrderId}/accept",
+    summary: "Accept (e-sign) a Purchase Order as the vendor",
+    description:
+      "Works with either a portal session or a single-use PO_ACCEPTANCE token from " +
+      "POST /purchase-orders/{id}/approval-link — the headless, no-login path.",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+    pathParams: ["purchaseOrderId"],
+    requestSchema: portalAcceptPurchaseOrderSchema,
+  },
+  {
+    method: "get",
+    path: "/vendor-portal/bid-packages",
+    summary: "Bid packages this vendor has been invited to",
+    description: "Not gated by VendorJobAccess — bid participation is independent of job access (CLAUDE.md 3).",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+  },
+  {
+    method: "post",
+    path: "/vendor-portal/bid-submissions/{bidSubmissionId}/submit",
+    summary: "Submit or edit this vendor's own bid",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+    pathParams: ["bidSubmissionId"],
+    requestSchema: submitBidSchema,
+  },
 ];
 
 function toOperation(endpoint: EndpointDef): Record<string, unknown> {
@@ -767,19 +1028,20 @@ function toOperation(endpoint: EndpointDef): Record<string, unknown> {
     })),
   ];
 
-  const isClientPortal = endpoint.authKind === "clientPortal";
+  const authKind = endpoint.authKind ?? "apiKey";
+  const isPortal = authKind !== "apiKey";
 
   const responses: Record<string, unknown> = {
     [String(endpoint.successStatus ?? 200)]: {
       description: endpoint.successDescription ?? "Success. See CLAUDE.md and the route source for the exact response shape.",
     },
     "401": {
-      description: isClientPortal ? "Missing or invalid portal session/action token." : "Missing or invalid API key.",
+      description: isPortal ? "Missing or invalid portal session/action token." : "Missing or invalid API key.",
       content: jsonContent(ERROR_SCHEMA),
     },
     "403": {
-      description: isClientPortal
-        ? "The client has access to the job but not this module (ClientJobAccess)."
+      description: isPortal
+        ? `The ${authKind === "clientPortal" ? "client" : "vendor"} has access to the job but not this module (${authKind === "clientPortal" ? "ClientJobAccess" : "VendorJobAccess"}).`
         : "The API key lacks a required scope.",
       content: jsonContent(ERROR_SCHEMA),
     },
@@ -792,8 +1054,8 @@ function toOperation(endpoint: EndpointDef): Record<string, unknown> {
     summary: endpoint.summary,
     description: endpoint.description,
     tags: endpoint.tags,
-    security: [{ [isClientPortal ? "clientPortal" : "apiKey"]: [] }],
-    ...(isClientPortal ? {} : { "x-required-scopes": endpoint.scopes }),
+    security: [{ [authKind]: [] }],
+    ...(isPortal ? {} : { "x-required-scopes": endpoint.scopes }),
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(endpoint.requestSchema
       ? { requestBody: { required: true, content: jsonContent(schemaOf(endpoint.requestSchema)) } }
@@ -853,6 +1115,16 @@ export function buildOpenApiDocument(): Record<string, unknown> {
             "POST /portal/login; a wcicpa_ token is a single-use link issued by staff/an agent " +
             "(POST /clients/{clientId}/portal-invite, /change-orders/{id}/approval-link, " +
             "/selections/{id}/options/{id}/approval-link) for headless, no-login approvals.",
+        },
+        vendorPortal: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "wcivps_<tokenId>_<secret> (session) or wcivpa_<tokenId>_<secret> (one-time action token)",
+          description:
+            "Vendor Portal auth (src/lib/vendor-portal/auth.ts) — the Phase 4 mirror of clientPortal, a completely " +
+            "separate token namespace from both apiKey and clientPortal. A wcivps_ session comes from " +
+            "POST /vendor-portal/login; a wcivpa_ token is a single-use link issued by staff/an agent " +
+            "(POST /vendors/{vendorId}/portal-invite, /purchase-orders/{id}/approval-link) for headless PO acceptance.",
         },
       },
     },

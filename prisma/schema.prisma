@@ -106,6 +106,9 @@ model Organization {
   clientActionTokens   ClientActionToken[]
   allowances           Allowance[]
   selections           Selection[]
+  vendors              Vendor[]
+  vendorActionTokens   VendorActionToken[]
+  bidPackages          BidPackage[]
 }
 
 model User {
@@ -229,6 +232,8 @@ model Job {
   clientAccess     ClientJobAccess[]
   allowances       Allowance[]
   selections       Selection[]
+  vendorAccess     VendorJobAccess[]
+  bidPackages      BidPackage[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -313,6 +318,7 @@ model CostCode {
   purchaseOrderLineItems PurchaseOrderLineItem[]
   billLineItems          BillLineItem[]
   allowances             Allowance[]
+  bidPackageLineItems    BidPackageLineItem[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -548,8 +554,13 @@ model PurchaseOrder {
   /// Reconciliation suffix used when a PO is billed in parts (CLAUDE.md 2.3).
   poSuffix String?
 
-  /// Vendor is a string until the Vendor model lands in Phase 4.
+  /// Free-text vendor name — kept even once vendorId (Phase 4) is set, since a PO can
+  /// be cut to a vendor with no portal account at all.
   vendorName String
+  /// Set only when the vendor has a Vendor Portal account (Phase 4). Nullable rather
+  /// than required: not every PO's vendor is onboarded to the portal.
+  vendorId   String?
+  vendor     Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
   status PurchaseOrderStatus @default(DRAFT)
 
@@ -574,6 +585,7 @@ model PurchaseOrder {
 
   @@unique([organizationId, poNumber])
   @@index([jobId, status])
+  @@index([vendorId])
 }
 
 model PurchaseOrderLineItem {
@@ -607,6 +619,9 @@ model Bill {
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
 
   vendorName String
+  /// Set only when the vendor has a Vendor Portal account (Phase 4).
+  vendorId   String?
+  vendor     Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   billNumber String?
 
   approvalStatus BillApprovalStatus @default(IN_REVIEW)
@@ -626,6 +641,7 @@ model Bill {
   @@index([jobId, approvalStatus])
   @@index([organizationId])
   @@index([purchaseOrderId])
+  @@index([vendorId])
 }
 
 model BillLineItem {
@@ -1475,4 +1491,246 @@ model SelectionOption {
   files File[]
 
   @@index([selectionId, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Sub/Vendor Portal
+//
+// Same "external party is never a User" shape as Client (Phase 3): a Vendor
+// authenticates through its own token pair (VendorSession, VendorActionToken),
+// sharing only the crypto in src/lib/secure-tokens.ts.
+// ---------------------------------------------------------------------------
+
+model Vendor {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name      String
+  tradeType String?
+  email     String
+  phone     String?
+
+  addressLine1 String?
+  city         String?
+  state        String?
+  postalCode   String?
+
+  /// Set when a staff member/agent issues a portal invite; null until then.
+  invitedAt   DateTime?
+  /// Set on the vendor's first successful portal login (CLAUDE.md 2.3's
+  /// "activated" state — see the identical field on Client).
+  activatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobAccess      VendorJobAccess[]
+  sessions       VendorSession[]
+  actionTokens   VendorActionToken[]
+  certifications VendorCertification[]
+  purchaseOrders PurchaseOrder[]
+  bills          Bill[]
+  bidSubmissions BidSubmission[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+/// Certification/insurance expiry tracking (CLAUDE.md 3). No reminder delivery
+/// yet — see CLAUDE.md 7; GET /api/v1/certifications/expiring is the seam a
+/// scheduled job will eventually poll instead of a human checking by hand.
+model VendorCertification {
+  id       String @id @default(cuid())
+  vendorId String
+  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  title     String
+  expiresAt DateTime
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([expiresAt])
+}
+
+/// Permission Wizard equivalent for vendors (CLAUDE.md 2.4). Deliberately NOT
+/// required for Bid Board participation — a vendor can be invited to bid on a
+/// job with zero job access, and only gets one once awarded work (CLAUDE.md
+/// 3: "job access as a distinct state from invitation/activation").
+model VendorJobAccess {
+  id       String @id @default(cuid())
+  vendorId String
+  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  jobId    String
+  job      Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  scheduleScope         ScheduleScope @default(ASSIGNED_ONLY)
+  canViewDocuments      Boolean       @default(true)
+  canViewPurchaseOrders Boolean       @default(true)
+  canViewBills          Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([vendorId, jobId])
+  @@index([jobId])
+}
+
+/// A logged-in vendor portal session. Same token shape as ClientSession.
+model VendorSession {
+  id       String @id @default(cuid())
+  vendorId String
+  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  tokenId      String @unique
+  hashedSecret String
+
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([vendorId])
+}
+
+enum VendorActionTokenPurpose {
+  PORTAL_LOGIN
+  PO_ACCEPTANCE
+}
+
+/// One-shot signed link — same shape and purpose as ClientActionToken.
+model VendorActionToken {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendorId       String
+  vendor         Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  purpose    VendorActionTokenPurpose
+  resourceId String?
+
+  tokenId      String @unique
+  hashedSecret String
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([vendorId, purpose])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Bid Board
+// ---------------------------------------------------------------------------
+
+enum BidPackageStatus {
+  OPEN
+  CLOSED
+  AWARDED
+}
+
+model BidPackage {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  dueDate     DateTime?
+  status      BidPackageStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems   BidPackageLineItem[]
+  submissions BidSubmission[]
+
+  @@index([jobId, status])
+}
+
+model BidPackageLineItem {
+  id           String     @id @default(cuid())
+  bidPackageId String
+  bidPackage   BidPackage @relation(fields: [bidPackageId], references: [id], onDelete: Cascade)
+
+  costCodeId    String?
+  costCode      CostCode? @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+  title         String
+  description   String?
+  quantityMilli Int?
+  unit          String?
+  sortOrder     Int       @default(0)
+
+  submissionLineItems BidSubmissionLineItem[]
+
+  @@index([bidPackageId, sortOrder])
+}
+
+enum BidSubmissionStatus {
+  INVITED
+  DRAFT
+  SUBMITTED
+  ACCEPTED
+  DECLINED
+}
+
+/// "Multi-vendor accept" (CLAUDE.md 3): a package can have more than one
+/// ACCEPTED submission — awarding split scope across trades is normal, this
+/// is not a single-winner auction. editableBySubUntilLocked is `lockedAt`:
+/// null means the vendor can still edit even after submitting; once staff
+/// locks it (to freeze the field for comparison), no more edits from either
+/// side.
+model BidSubmission {
+  id           String     @id @default(cuid())
+  bidPackageId String
+  bidPackage   BidPackage @relation(fields: [bidPackageId], references: [id], onDelete: Cascade)
+  vendorId     String
+  vendor       Vendor     @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  status BidSubmissionStatus @default(INVITED)
+
+  /// Flat total when the vendor bids one number rather than itemizing.
+  totalCents Int?
+  notes      String?
+
+  /// True once a staff member/agent has edited this on the vendor's behalf
+  /// (CLAUDE.md 3's "builder-edit-on-behalf") — an audit signal, not a lock.
+  editedByStaff Boolean @default(false)
+
+  invitedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  decidedAt   DateTime?
+  lockedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems BidSubmissionLineItem[]
+
+  @@unique([bidPackageId, vendorId])
+  @@index([vendorId])
+}
+
+model BidSubmissionLineItem {
+  id              String        @id @default(cuid())
+  bidSubmissionId String
+  bidSubmission   BidSubmission @relation(fields: [bidSubmissionId], references: [id], onDelete: Cascade)
+
+  /// Nullable: a vendor may bid something not on the package's original list.
+  bidPackageLineItemId String?
+  bidPackageLineItem   BidPackageLineItem? @relation(fields: [bidPackageLineItemId], references: [id], onDelete: SetNull)
+
+  title         String
+  quantityMilli Int    @default(1000)
+  unitCostCents Int    @default(0)
+  sortOrder     Int    @default(0)
+
+  @@index([bidSubmissionId, sortOrder])
 }

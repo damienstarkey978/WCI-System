@@ -118,6 +118,8 @@ export const createPurchaseOrderSchema = z.object({
   poNumber: z.string().trim().min(1).max(64),
   poSuffix: z.string().trim().max(16).nullish(),
   vendorName: z.string().trim().min(1).max(255),
+  /// Set only when the vendor has a Vendor Portal account (Phase 4).
+  vendorId: z.string().cuid().nullish(),
   sourceType: z.enum(FinancialSourceType).optional().default(FinancialSourceType.SCRATCH),
   sourceId: z.string().trim().max(64).nullish(),
   lineItems: z
@@ -138,6 +140,8 @@ export const createBillSchema = z.object({
   jobId: z.string().cuid(),
   purchaseOrderId: z.string().cuid().nullish(),
   vendorName: z.string().trim().min(1).max(255),
+  /// Set only when the vendor has a Vendor Portal account (Phase 4).
+  vendorId: z.string().cuid().nullish(),
   billNumber: z.string().trim().max(64).nullish(),
   issuedOn: z.coerce.date().nullish(),
   dueOn: z.coerce.date().nullish(),
@@ -500,4 +504,83 @@ export const createSelectionSchema = z.object({
 
 export const requestApprovalLinkSchema = z.object({
   clientId: z.string().cuid(),
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Sub/Vendor Portal, Bid Board
+// ---------------------------------------------------------------------------
+
+export const createVendorSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  tradeType: z.string().trim().max(255).nullish(),
+  email: z.string().trim().toLowerCase().email().max(255),
+  phone: z.string().trim().max(32).nullish(),
+  addressLine1: nullableTrimmed,
+  city: nullableTrimmed,
+  state: z.string().trim().length(2).nullish(),
+  postalCode: z.string().trim().min(3).max(16).nullish(),
+});
+
+export const grantVendorJobAccessSchema = z.object({
+  jobId: z.string().cuid(),
+  scheduleScope: z.enum(["ASSIGNED_ONLY", "ALL_ITEMS"]).optional(),
+  canViewDocuments: z.boolean().optional(),
+  canViewPurchaseOrders: z.boolean().optional(),
+  canViewBills: z.boolean().optional(),
+});
+
+export const addCertificationSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  expiresAt: z.coerce.date(),
+  notes: z.string().trim().max(2_000).nullish(),
+});
+
+export const requestVendorApprovalLinkSchema = z.object({
+  vendorId: z.string().cuid(),
+});
+
+export const portalAcceptPurchaseOrderSchema = z.object({
+  signatureName: z.string().trim().min(1).max(255).optional(),
+});
+
+const createBidPackageLineItemSchema = z.object({
+  costCodeId: z.string().cuid().nullish(),
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(2_000).nullish(),
+  quantityMilli: z.number().int().positive().nullish(),
+  unit: z.string().trim().max(32).nullish(),
+});
+
+export const createBidPackageSchema = z.object({
+  jobId: z.string().cuid(),
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(5_000).nullish(),
+  dueDate: z.coerce.date().nullish(),
+  lineItems: z.array(createBidPackageLineItemSchema).max(200).optional(),
+});
+
+export const inviteVendorToBidSchema = z.object({
+  vendorId: z.string().cuid(),
+});
+
+const submitBidLineItemSchema = z.object({
+  bidPackageLineItemId: z.string().cuid().nullish(),
+  title: z.string().trim().min(1).max(255),
+  quantityMilli: z.number().int().positive(),
+  unitCostCents: z.number().int().nonnegative(),
+});
+
+export const submitBidSchema = z.object({
+  totalCents: z.number().int().nonnegative().optional(),
+  notes: z.string().trim().max(5_000).nullish(),
+  lineItems: z.array(submitBidLineItemSchema).max(200).optional(),
+});
+
+export const closeBidPackageSchema = z.object({
+  status: z.enum(["CLOSED", "AWARDED"]),
+});
+
+export const pushBidToPurchaseOrderSchema = z.object({
+  poNumber: z.string().trim().min(1).max(64),
+  fallbackCostCodeId: z.string().cuid().optional(),
 });

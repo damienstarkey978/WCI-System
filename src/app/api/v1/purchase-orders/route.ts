@@ -70,6 +70,13 @@ export const POST = withApiAuth(["purchase-orders:write"], async (request, auth)
   }
   const defaultCostTypeById = new Map(known.map((code) => [code.id, code.defaultCostType]));
 
+  if (input.vendorId) {
+    const vendor = await db.vendor.findFirst({ where: { id: input.vendorId, organizationId: auth.organizationId }, select: { id: true } });
+    if (!vendor) {
+      return apiError(422, "unknown_vendor", `No vendor ${input.vendorId} in this organization.`);
+    }
+  }
+
   try {
     const purchaseOrder = await db.purchaseOrder.create({
       data: {
@@ -78,6 +85,7 @@ export const POST = withApiAuth(["purchase-orders:write"], async (request, auth)
         poNumber: input.poNumber,
         poSuffix: input.poSuffix ?? null,
         vendorName: input.vendorName,
+        vendorId: input.vendorId ?? null,
         sourceType: input.sourceType,
         sourceId: input.sourceId ?? null,
         lineItems: {

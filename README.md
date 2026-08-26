@@ -3,8 +3,8 @@
 Construction management platform for **World Construction Inc** — built to reach
 Buildertrend feature parity and then exceed it with an open, agent-facing API.
 
-**Current state: Phases 0-2 complete (except QuickBooks sync); Phase 3 (Client
-Portal) landed.**
+**Current state: Phases 0-2 complete (except QuickBooks sync); Phases 3 (Client
+Portal) and 4 (Sub/Vendor Portal + Bidding) landed.**
 Phase 1 landed the financial core: the Estimate builder, the commitment funnel,
 Purchase Orders, Bills/AP with approval routing, Invoicing and draw schedules, Time
 Tracking with geofencing and overtime, the six standard reports, the webhook
@@ -32,6 +32,23 @@ are new: an Allowance is a budget placeholder booked against a cost code, and
 approving one of a Selection's Options posts the price variance onto the
 Budget, the same explicit-conversion-action pattern as Change Orders.
 
+Phase 4 (Sub/Vendor Portal + Bidding) has landed, mirroring Phase 3's shape for
+a different external party: a Vendor is its own auth path (`src/lib/
+vendor-portal/`), sharing only the token crypto with Client/ApiKey auth.
+Vendors get per-job visibility (`VendorJobAccess` — documents, purchase
+orders, bills) and can e-sign/accept a Purchase Order from a portal session or
+a headless one-time link, same no-login pattern as a client approving a
+Change Order. Bid participation is deliberately **independent** of
+`VendorJobAccess`: a vendor can be invited to bid on a job with zero job
+access, and only gets real access once awarded work. The Bid Board supports
+multi-vendor accept (a package can end with more than one ACCEPTED
+submission — split scope across trades is normal, not a single-winner
+auction), builder-edit-on-behalf (staff can submit/edit a vendor's bid, e.g.
+a phone bid), and an explicit "push to Purchase Order" conversion once a
+submission is accepted. Certification/insurance expiry tracking is in
+(`GET /certifications/expiring`) — no reminder delivery yet, since there's no
+email provider to send one with.
+
 Also added, pulled forward from the original Phase 8/5 schedule by explicit request:
 an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that turns
 rough field notes into a full line-item estimate against the org's real cost code
@@ -52,8 +69,8 @@ can disagree with another about a job's numbers.
 A published OpenAPI 3.1 spec is also in — see below.
 
 Still to come: the two-way QuickBooks sync (needs Intuit developer credentials
-from Damien), a full admin UI for the Phase 2/3 modules, and Phase 4 onward
-(Sub/Vendor Portal + Bidding, CRM/Sales, Warranty/Submittals/Surveys, Mobile PWA).
+from Damien), a full admin UI for the Phase 2-4 modules, and Phase 5 onward
+(CRM/Sales, Warranty/Submittals/Surveys, Mobile PWA).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -177,6 +194,33 @@ The one-time-token paths are what makes an approval **headless**: a client can
 approve a Change Order or a Selection straight from a signed link in an email,
 no portal login required (CLAUDE.md 2.3).
 
+Phase 4 (Sub/Vendor Portal + Bidding) staff/agent-side routes:
+
+| Method | Path | Scope |
+|---|---|---|
+| `GET` `POST` | `/api/v1/vendors` | `vendors:read` / `vendors:write` |
+| `POST` | `/api/v1/vendors/{id}/job-access` | `vendors:write` |
+| `POST` | `/api/v1/vendors/{id}/portal-invite` | `vendors:write` |
+| `GET` `POST` | `/api/v1/vendors/{id}/certifications` | `vendors:read` / `vendors:write` |
+| `GET` | `/api/v1/certifications/expiring` | `vendors:read` |
+| `POST` | `/api/v1/purchase-orders/{id}/approval-link` | `purchase-orders:write` |
+| `GET` `POST` | `/api/v1/bid-packages` | `bids:read` / `bids:write` |
+| `POST` | `/api/v1/bid-packages/{id}/invite` \| `/close` | `bids:write` |
+| `POST` | `/api/v1/bid-submissions/{id}/submit` \| `/lock` \| `/accept` \| `/decline` | `bids:write` |
+| `POST` | `/api/v1/bid-submissions/{id}/push-to-purchase-order` | `bids:write`, `purchase-orders:write` |
+
+**Vendor Portal** (`/api/v1/vendor-portal/*`) mirrors the Client Portal's auth shape
+with its own token namespace (`VendorSession` / `VendorActionToken`):
+
+| Method | Path | Auth |
+|---|---|---|
+| `POST` | `/api/v1/vendor-portal/login` | invite/login token (`Authorization: Bearer`) |
+| `GET` | `/api/v1/vendor-portal/jobs` | portal session |
+| `GET` | `/api/v1/vendor-portal/jobs/{id}/schedule` \| `/documents` \| `/purchase-orders` \| `/bills` | portal session, gated per-job by `VendorJobAccess` |
+| `POST` | `/api/v1/vendor-portal/purchase-orders/{id}/accept` | portal session **or** a `PO_ACCEPTANCE` one-time token |
+| `GET` | `/api/v1/vendor-portal/bid-packages` | portal session — packages this vendor is invited to, **not** gated by `VendorJobAccess` |
+| `POST` | `/api/v1/vendor-portal/bid-submissions/{id}/submit` | portal session, must own the submission |
+
 **Full API reference:** `GET /api/v1/openapi.json` — the one route under `/api/v1`
 that needs no API key, so you can read the contract before you have credentials.
 It's generated straight from the same Zod schemas the routes validate against
@@ -262,6 +306,24 @@ These are load-bearing. Breaking one is a bug even if the types still check.
   touches the Budget**, exactly like a Change Order: the variance between the
   chosen option's price and its Allowance posts to `BudgetLine.revised*`, and
   nothing before approval touches the Budget at all.
+- **A Vendor is never a User**, same as Client — `src/lib/vendor-portal/auth.ts`
+  is its own auth path sharing only the token crypto with Client/ApiKey auth.
+- **Bid Board participation is independent of `VendorJobAccess`.** A vendor
+  can be invited to bid — and see/submit against that one package — with zero
+  job access; only being awarded work grants the broader per-job visibility
+  (CLAUDE.md 3: "job access as a distinct state from invitation/activation").
+- **A Bid Package can end with more than one ACCEPTED submission.** Awarding
+  split scope across trades is normal — this is not a single-winner auction —
+  so `closeBidPackage(..., "AWARDED")` only requires *at least one* accepted
+  submission, not that every other one be declined.
+- **`db` (`src/lib/db.ts`) caches its PrismaClient unconditionally, including
+  in production.** An earlier version only cached outside production; since
+  the exported `db` is a Proxy that calls the client-getter on every property
+  access, that meant production created a brand-new PrismaClient — and its
+  own connection pool — on every single query, leaking Postgres connections
+  under any real load. Found via this phase's live verification when enough
+  distinct routes got hit in quick succession to actually exhaust
+  `max_connections`. Never reintroduce an environment-conditional branch here.
 
 ## Stack
 
