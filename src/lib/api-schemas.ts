@@ -185,6 +185,17 @@ export const aiDraftEstimateSchema = z.object({
   notes: z.string().trim().min(10).max(10_000),
 });
 
+const base64Pattern = /^[A-Za-z0-9+/]+=*$/;
+
+export const aiOcrBillSchema = z.object({
+  jobId: z.string().cuid(),
+  vendorId: z.string().cuid().nullish(),
+  document: z.object({
+    mediaType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]),
+    data: z.string().trim().min(1).max(30_000_000).regex(base64Pattern, "data must be base64-encoded"),
+  }),
+});
+
 // ---------------------------------------------------------------------------
 // Invoicing, draw schedules, payments
 // ---------------------------------------------------------------------------
@@ -704,4 +715,16 @@ export const issueSurveyResponseLinkSchema = z.object({
 
 export const submitSurveyResponseSchema = z.object({
   answers: z.record(z.string(), z.string().trim().max(5_000)),
+});
+
+// ---------------------------------------------------------------------------
+// AI layer (Phase 8) — weekly client-update summaries, agent-facing job summary.
+// Receipt/bill OCR's schema (aiOcrBillSchema) lives next to createBillSchema above.
+// ---------------------------------------------------------------------------
+
+export const generateWeeklySummarySchema = z.object({
+  jobId: z.string().cuid(),
+  /** Both optional — default to the last 7 days when omitted. */
+  periodStart: z.coerce.date().optional(),
+  periodEnd: z.coerce.date().optional(),
 });

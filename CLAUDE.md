@@ -353,7 +353,9 @@ phase is independently useful.
   installable PWA at `/field`, offline queue + auto-sync-on-reconnect for both tools.
 - **Phase 8 — AI layer.** Weekly client-update summaries, receipt/bill OCR capture, agent-
   facing summarization — built as a read/write layer over the canonical entities (2.3), not
-  a new subsystem.
+  a new subsystem. Landed: all three, plus extracting `createBill()` into its own service
+  so OCR and hand-entry share one validation path. This closes out every phase in the
+  roadmap that doesn't need something from Damien.
 
 **Between phases: actually use the feature on a real WCI job before moving on.** Don't
 build Phase 4 on an unvalidated Phase 1.
@@ -587,3 +589,41 @@ Record every architectural decision that departs from the above, with the reason
   data or, worse, a stale encrypted Server Action reference from a previous
   deploy. Offline *mutations* are handled entirely by the localStorage queue
   instead, which always calls the live action.
+- **`createBill()` was extracted from the `/bills` route into `src/lib/
+  bills/service.ts` (Phase 8):** Bills/POs were the one Phase-1-era module
+  that had never gotten a dedicated `service.ts` — validation logic lived
+  directly in the route file, which was fine while there was exactly one
+  caller. Receipt/bill OCR needed the exact same job/PO/cost-code/vendor
+  validation a second time, so the choice was duplicate ~40 lines of
+  validation or extract it; extracting it is the smaller, more honest
+  change, and it's a pure refactor — same checks, same order, same error
+  codes, verified by the full existing bills test coverage staying green.
+- **The weekly client-update summary never sees budget/cost data, full
+  stop (Phase 8):** unlike Specification/Submittal reuse-an-existing-flag
+  decisions, this isn't about gating a UI element — `weekly-summary-
+  service.ts` simply never queries `Bill`/`PurchaseOrder`/`BudgetLine` at
+  all when building the digest's input, regardless of whether the specific
+  client's `ClientJobAccess.canViewBudget` is true. A digest that only ever
+  reads `clientVisible` DailyLogs/ScheduleItems cannot leak a dollar figure
+  it never fetched — a stronger guarantee than filtering the model's output
+  after the fact would give.
+- **Receipt/bill OCR creates a real `Bill`, not a staging draft (Phase 8):**
+  same pattern as AI estimate drafting (Phase 1) — `fromOcr: true` and the
+  normal `IN_REVIEW` default are the review gate; there is no parallel
+  "pending OCR result" table to keep in sync with the real `Bill`/
+  `BillLineItem` rows. `costCodeId` is a Zod enum built from the org's real
+  catalog (`src/lib/ai/bill-ocr-draft.ts`), the same structural
+  hallucination-proofing as the estimate drafter.
+- **The agent-facing job summary is the one AI feature with no schema-
+  validated structured output (Phase 8):** it's free text for a chat reply,
+  never parsed into a database write, so there's no hallucination-proofing
+  property to buy by constraining it with Zod — unlike the other two AI
+  features, which all persist a schema-validated result.
+- **No live verification against the real Anthropic API for any Phase 8
+  feature:** this sandbox has no `ANTHROPIC_API_KEY` (and no `ant auth
+  login` profile either) — the same constraint AI estimate drafting shipped
+  under in Phase 1. Verified instead: (1) live HTTP checks that every route
+  correctly validates its input and reaches the `AiNotConfiguredError` gate
+  — proving the job/cost-code/schedule/budget wiring is correct up to the
+  model call — and (2) unit tests against a fake Anthropic client for the
+  actual prompt construction, response normalization, and error handling.

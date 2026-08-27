@@ -85,36 +85,37 @@ model Organization {
   apiKeys      ApiKey[]
   oauthClients OAuthClient[]
 
-  estimates            Estimate[]
-  purchaseOrders       PurchaseOrder[]
-  bills                Bill[]
-  webhookSubscriptions WebhookSubscription[]
-  invoices             Invoice[]
-  drawSchedules        DrawSchedule[]
-  payments             Payment[]
-  timeClockEntries     TimeClockEntry[]
-  nonWorkingDays       NonWorkingDay[]
-  schedules            Schedule[]
-  changeOrders         ChangeOrder[]
-  dailyLogs            DailyLog[]
-  todos                Todo[]
-  rfis                 Rfi[]
-  files                File[]
-  comments             Comment[]
-  notifications        Notification[]
-  clients              Client[]
-  clientActionTokens   ClientActionToken[]
-  allowances           Allowance[]
-  selections           Selection[]
-  vendors              Vendor[]
-  vendorActionTokens   VendorActionToken[]
-  bidPackages          BidPackage[]
-  leads                Lead[]
-  proposals            Proposal[]
-  specifications       Specification[]
-  submittals           Submittal[]
-  warrantyClaims       WarrantyClaim[]
-  surveys              Survey[]
+  estimates             Estimate[]
+  purchaseOrders        PurchaseOrder[]
+  bills                 Bill[]
+  webhookSubscriptions  WebhookSubscription[]
+  invoices              Invoice[]
+  drawSchedules         DrawSchedule[]
+  payments              Payment[]
+  timeClockEntries      TimeClockEntry[]
+  nonWorkingDays        NonWorkingDay[]
+  schedules             Schedule[]
+  changeOrders          ChangeOrder[]
+  dailyLogs             DailyLog[]
+  todos                 Todo[]
+  rfis                  Rfi[]
+  files                 File[]
+  comments              Comment[]
+  notifications         Notification[]
+  clients               Client[]
+  clientActionTokens    ClientActionToken[]
+  allowances            Allowance[]
+  selections            Selection[]
+  vendors               Vendor[]
+  vendorActionTokens    VendorActionToken[]
+  bidPackages           BidPackage[]
+  leads                 Lead[]
+  proposals             Proposal[]
+  specifications        Specification[]
+  submittals            Submittal[]
+  warrantyClaims        WarrantyClaim[]
+  surveys               Survey[]
+  clientUpdateSummaries ClientUpdateSummary[]
 }
 
 model User {
@@ -223,32 +224,33 @@ model Job {
   statusEvents JobStatusEvent[]
   accessGrants JobAccessGrant[]
 
-  estimates         Estimate[]
-  budgetLines       BudgetLine[]
-  purchaseOrders    PurchaseOrder[]
-  bills             Bill[]
-  invoices          Invoice[]
-  drawSchedules     DrawSchedule[]
-  timeClockEntries  TimeClockEntry[]
-  schedules         Schedule[]
-  changeOrders      ChangeOrder[]
-  dailyLogs         DailyLog[]
-  todos             Todo[]
-  rfis              Rfi[]
-  files             File[]
-  clientAccess      ClientJobAccess[]
-  allowances        Allowance[]
-  selections        Selection[]
-  vendorAccess      VendorJobAccess[]
-  bidPackages       BidPackage[]
+  estimates             Estimate[]
+  budgetLines           BudgetLine[]
+  purchaseOrders        PurchaseOrder[]
+  bills                 Bill[]
+  invoices              Invoice[]
+  drawSchedules         DrawSchedule[]
+  timeClockEntries      TimeClockEntry[]
+  schedules             Schedule[]
+  changeOrders          ChangeOrder[]
+  dailyLogs             DailyLog[]
+  todos                 Todo[]
+  rfis                  Rfi[]
+  files                 File[]
+  clientAccess          ClientJobAccess[]
+  allowances            Allowance[]
+  selections            Selection[]
+  vendorAccess          VendorJobAccess[]
+  bidPackages           BidPackage[]
   /// Set only when this Job was created by the explicit Lead -> Job conversion
   /// action (src/lib/crm/service.ts) — null for a job created any other way.
-  convertedFromLead Lead?
-  proposals         Proposal[]
-  specifications    Specification[]
-  submittals        Submittal[]
-  warrantyClaims    WarrantyClaim[]
-  surveys           Survey[]
+  convertedFromLead     Lead?
+  proposals             Proposal[]
+  specifications        Specification[]
+  submittals            Submittal[]
+  warrantyClaims        WarrantyClaim[]
+  surveys               Survey[]
+  clientUpdateSummaries ClientUpdateSummary[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -2083,4 +2085,33 @@ model SurveyResponseLink {
   createdAt DateTime @default(now())
 
   @@index([surveyId])
+}
+
+// ---------------------------------------------------------------------------
+// AI layer (Phase 8) — a read/write layer over the entities above, not a new
+// data model of its own. The one genuinely new persisted thing is this digest
+// itself, since a client needs to see past weekly updates, not just the latest.
+// ---------------------------------------------------------------------------
+
+/// A staff/agent-generated, client-safe narrative summary of a job's week.
+/// Built ONLY from clientVisible DailyLogs/ScheduleItems — never budget/cost
+/// data — so a leak here is structurally impossible, not just unprompted.
+model ClientUpdateSummary {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  headline   String
+  body       String
+  highlights String[]
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId, periodEnd])
+  @@index([organizationId])
 }

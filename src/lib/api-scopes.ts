@@ -70,6 +70,9 @@ export const SCOPES = [
   "warranty:write",
   "surveys:read",
   "surveys:write",
+  // Phase 8 — AI layer
+  "weekly-summaries:read",
+  "weekly-summaries:write",
 ] as const;
 
 export type Scope = (typeof SCOPES)[number];
@@ -164,6 +167,8 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "warranty:write",
     "surveys:read",
     "surveys:write",
+    "weekly-summaries:read",
+    "weekly-summaries:write",
   ],
   vince: ["jobs:read", "jobs:write", "leads:read", "leads:write", "proposals:read", "proposals:write"],
   neil: ["jobs:read", "cost-codes:read", "estimates:read", "estimates:write", "budgets:read"],

@@ -16,6 +16,7 @@ import {
   addCertificationSchema,
   addSubmittalRevisionSchema,
   aiDraftEstimateSchema,
+  aiOcrBillSchema,
   bulkClockInSchema,
   clockInSchema,
   clockOutSchema,
@@ -42,6 +43,7 @@ import {
   createWebhookSubscriptionSchema,
   emitEventSchema,
   generateSpecificationFromEstimateSchema,
+  generateWeeklySummarySchema,
   grantJobAccessSchema,
   grantVendorJobAccessSchema,
   inviteVendorToBidSchema,
@@ -310,6 +312,17 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["bills:write"],
     pathParams: ["billId"],
     requestSchema: updateBillStatusSchema,
+  },
+  {
+    method: "post",
+    path: "/bills/ai-ocr",
+    summary: "Draft a bill from a photographed/scanned receipt or invoice with AI",
+    description:
+      "Extracts vendor, date, and line items against the org's real cost code catalog and creates a real Bill (fromOcr: true), starting IN_REVIEW like any other bill — never auto-approved. document.data is base64; mediaType may be an image type or application/pdf. Returns 503 if ANTHROPIC_API_KEY is not configured.",
+    tags: ["Bills", "AI"],
+    scopes: ["bills:write"],
+    requestSchema: aiOcrBillSchema,
+    successStatus: 201,
   },
 
   // --- Invoicing ------------------------------------------------------------
@@ -1367,6 +1380,53 @@ const ENDPOINTS: readonly EndpointDef[] = [
     authKind: "public",
     scopes: [],
     requestSchema: submitSurveyResponseSchema,
+  },
+
+  // --- AI layer (Phase 8) -----------------------------------------------------
+  {
+    method: "get",
+    path: "/weekly-summaries",
+    summary: "List AI weekly client-update digests",
+    description: "Optionally filter by jobId.",
+    tags: ["AI"],
+    scopes: ["weekly-summaries:read"],
+    queryParams: [{ name: "jobId", description: "Filter to one job." }],
+  },
+  {
+    method: "post",
+    path: "/weekly-summaries",
+    summary: "Generate a weekly client-update digest with AI",
+    description:
+      "Built ONLY from DailyLogs/ScheduleItems already flagged clientVisible — never budget, cost, or profit data, " +
+      "regardless of what's true for the job. periodStart/periodEnd default to the last 7 days. Returns 503 if " +
+      "ANTHROPIC_API_KEY is not configured.",
+    tags: ["AI", "Client Portal"],
+    scopes: ["weekly-summaries:write"],
+    requestSchema: generateWeeklySummarySchema,
+    successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/portal/jobs/{jobId}/weekly-summaries",
+    summary: "List this client's weekly-update digests",
+    description: "Gated by ClientJobAccess.canViewDailyLogs, reused rather than a new per-entity flag.",
+    tags: ["AI", "Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "post",
+    path: "/jobs/{jobId}/ai-summary",
+    summary: "Get a free-text AI status summary of a job, for staff/agents",
+    description:
+      "Unlike the weekly client digest, this includes real cost/profit figures — it is for staff/agents (Jarvis, " +
+      "Hank, ...), never a client. Not persisted: a point-in-time read meant for a chat reply or Slack message. " +
+      "Scoped under jobs:read since it's fundamentally a read of data already readable individually. Returns 503 " +
+      "if ANTHROPIC_API_KEY is not configured.",
+    tags: ["AI"],
+    scopes: ["jobs:read"],
+    pathParams: ["jobId"],
   },
 ];
 

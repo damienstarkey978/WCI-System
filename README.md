@@ -5,7 +5,8 @@ Buildertrend feature parity and then exceed it with an open, agent-facing API.
 
 **Current state: Phases 0-2 complete (except QuickBooks sync); Phases 3 (Client
 Portal), 4 (Sub/Vendor Portal + Bidding), 5 (CRM/Sales), 6 (Specifications,
-Submittals, Warranty, Surveys), and 7 (Mobile/Field PWA) landed.**
+Submittals, Warranty, Surveys), 7 (Mobile/Field PWA), and 8 (AI layer) landed —
+every phase in the original roadmap that doesn't need something from Damien.**
 Phase 1 landed the financial core: the Estimate builder, the commitment funnel,
 Purchase Orders, Bills/AP with approval routing, Invoicing and draw schedules, Time
 Tracking with geofencing and overtime, the six standard reports, the webhook
@@ -106,6 +107,26 @@ the server — the field UI blocks starting a second action until the first
 syncs, rather than pretending to support conflict resolution it doesn't
 have.
 
+Phase 8 (AI layer) has landed: three narrowly-scoped features, all built as a
+read/write layer over the entities above rather than a parallel data model.
+**Receipt/bill OCR** (`POST /bills/ai-ocr`) extracts vendor, date, and line
+items from a photographed or scanned receipt/invoice — same structural safety
+as AI estimate drafting (`costCodeId` is a Zod enum built from the org's real
+catalog, so a hallucinated code can't pass validation) — and creates a real
+`Bill` with `fromOcr: true`, starting `IN_REVIEW` like any hand-entered bill,
+never auto-approved. `createBill()` was extracted out of the `/bills` route
+into `src/lib/bills/service.ts` so both callers share one validation path.
+**AI weekly client-update summaries** (`POST /weekly-summaries`) write a
+short, friendly digest of a job's week for the Client Portal, built from
+*only* `clientVisible` DailyLogs/ScheduleItems — no budget, cost, or profit
+figure is ever queried for this feature, let alone sent to the model, the
+same "structurally incapable of leaking" principle as
+`getClientBudgetView()`. **Agent-facing job summaries**
+(`POST /jobs/{jobId}/ai-summary`) are the opposite case: free text for
+staff/agents (Jarvis, Hank, ...) that's allowed to say the real budget
+numbers, and is deliberately never persisted — a point-in-time read for a
+chat reply, not a record.
+
 Also added, pulled forward from the original Phase 8/5 schedule by explicit request:
 an AI estimate-drafting assistant (`/admin/ai-estimate`, handoff.ai-style) that turns
 rough field notes into a full line-item estimate against the org's real cost code
@@ -126,10 +147,9 @@ can disagree with another about a job's numbers.
 A published OpenAPI 3.1 spec is also in — see below.
 
 Still to come: the two-way QuickBooks sync (needs Intuit developer credentials
-from Damien), a full admin UI for the Phase 2-6 modules, the Airtable
-migration + cutover (needs Damien's Airtable export), Job Group/multi-family
-rollup views, and Phase 8 (the AI layer — weekly client-update summaries,
-receipt/bill OCR).
+from Damien), the Airtable migration + cutover (needs Damien's Airtable export),
+and — with no external blocker, just not yet built — Job Group/multi-family
+rollup views and a full admin UI for the Phase 2-8 modules.
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full architecture spec and build roadmap.
 
@@ -321,6 +341,22 @@ survey respondent) has no account or standing relationship with the job:
 | `POST` | `/api/v1/submittal-reviews` | single-use review-link token (`Authorization: Bearer`) |
 | `POST` | `/api/v1/survey-responses` | single-use response-link token (`Authorization: Bearer`) |
 
+Phase 8 (AI layer) routes:
+
+| Method | Path | Scope |
+|---|---|---|
+| `POST` | `/api/v1/bills/ai-ocr` | `bills:write` (same scope as hand-entering a bill) |
+| `GET` `POST` | `/api/v1/weekly-summaries` | `weekly-summaries:read` / `weekly-summaries:write` |
+| `POST` | `/api/v1/jobs/{id}/ai-summary` | `jobs:read` |
+
+| Method | Path | Auth |
+|---|---|---|
+| `GET` | `/api/v1/portal/jobs/{id}/weekly-summaries` | portal session, gated by `ClientJobAccess.canViewDailyLogs` |
+
+All three generation endpoints return `503 ai_not_configured` if
+`ANTHROPIC_API_KEY` isn't set — same graceful-degradation contract as
+`/estimates/ai-draft`.
+
 **Full API reference:** `GET /api/v1/openapi.json` — the one route under `/api/v1`
 that needs no API key, so you can read the contract before you have credentials.
 It's generated straight from the same Zod schemas the routes validate against
@@ -481,6 +517,21 @@ These are load-bearing. Breaking one is a bug even if the types still check.
   that id doesn't exist until the clock-in reaches the server — so the field
   UI blocks starting a second time-clock action until the first syncs.
   Offline daily logs have no such dependency and queue without limit.
+- **The AI weekly client-update summary is structurally incapable of
+  containing budget/cost data, not just prompted not to.** `weekly-summary-
+  service.ts` only ever queries `clientVisible` DailyLogs/ScheduleItems — no
+  Bill/PO/Budget table is queried at all when building its input, the same
+  "can't leak what it never fetched" principle as `getClientBudgetView()`.
+- **AI-drafted records are never auto-approved.** A bill from OCR is a real
+  `Bill` with `fromOcr: true`, starting the same `IN_REVIEW` every hand-
+  entered bill starts at; an AI-drafted estimate is a real `Estimate` with
+  `aiGenerated: true`, always `DRAFT`. Both go through the exact human
+  review path as their hand-entered equivalent — there is no separate
+  "AI draft" staging table to keep in sync with the real one.
+- **The agent-facing job AI summary is the one AI output that is never
+  persisted.** It's a point-in-time read for a chat reply, not a record —
+  the underlying Budget/Schedule/RFI data it summarizes already is the
+  record.
 
 ## Stack
 
