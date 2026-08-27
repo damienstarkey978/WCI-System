@@ -26,9 +26,6 @@ export default async function LeadsPage() {
   } catch (error) {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
-  if (!user) {
-    return <SetupNotice detail="No organization found. Seed the database, then reload." />;
-  }
 
   const [jobs, leads] = await Promise.all([
     sidebarJobsForOrg(user.organizationId),

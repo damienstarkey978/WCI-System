@@ -71,11 +71,28 @@ export async function currentAppUser(): Promise<AppUser | null> {
  * signed-out visit to a staff page never silently falls through to
  * "no organization found" — that message stays reserved for its original
  * meaning, an actually-unseeded local/dev database (Clerk not configured).
+ *
+ * Deliberately checks Clerk's own session first rather than just
+ * `!(await currentAppUser())`: a visitor who IS signed in to Clerk but has no
+ * matching User row (never invited) must see that as an error, not get
+ * redirected back to /sign-in — Clerk would recognize their existing session
+ * there and could bounce them straight back to this page, looping forever.
  */
-export async function currentAppUserOrRedirect(): Promise<AppUser | null> {
+export async function currentAppUserOrRedirect(): Promise<AppUser> {
+  if (isClerkConfigured()) {
+    const { userId } = await clerkAuth();
+    if (!userId) {
+      redirect("/sign-in");
+    }
+  }
+
   const user = await currentAppUser();
-  if (!user && isClerkConfigured()) {
-    redirect("/sign-in");
+  if (!user) {
+    throw new AuthConfigurationError(
+      isClerkConfigured()
+        ? "Signed in, but no staff account is set up for this email yet. Ask an admin to add you as a User."
+        : "No organization found. Seed the database, then reload.",
+    );
   }
   return user;
 }

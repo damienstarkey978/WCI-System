@@ -17,9 +17,6 @@ export default async function JobLayout({ children, params }: LayoutProps<"/jobs
   } catch (error) {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
-  if (!user) {
-    return <SetupNotice detail="No organization found. Seed the database, then reload." />;
-  }
 
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
