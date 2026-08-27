@@ -93,3 +93,21 @@ export function stripeSecretKey(): string | undefined {
 export function stripeWebhookSecret(): string | undefined {
   return optional("STRIPE_WEBHOOK_SECRET");
 }
+
+/**
+ * Supabase Storage (job files — photos/documents/videos) is optional, same pattern
+ * as every other integration here: without it, upload endpoints return a clear
+ * "not configured" error rather than the app failing to build. The service-role key
+ * is server-only — never read from a client component or exposed to the bundle.
+ */
+export function isSupabaseStorageConfigured(): boolean {
+  return optional("SUPABASE_URL") !== undefined && optional("SUPABASE_SERVICE_ROLE_KEY") !== undefined;
+}
+
+export function supabaseUrl(): string {
+  return required("SUPABASE_URL");
+}
+
+export function supabaseServiceRoleKey(): string {
+  return required("SUPABASE_SERVICE_ROLE_KEY");
+}

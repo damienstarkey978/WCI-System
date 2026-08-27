@@ -2,6 +2,7 @@
 
 import { authenticatePortalJobRequest, portalAuthErrorResponse } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
+import { resolveFileUrl } from "@/lib/files/service";
 
 type Context = { params: Promise<{ jobId: string }> };
 
@@ -17,7 +18,9 @@ export async function GET(request: Request, context: Context) {
       take: 200,
     });
 
-    return Response.json({ data: files });
+    const withUrls = await Promise.all(files.map(async (file) => ({ ...file, url: await resolveFileUrl(file.url) })));
+
+    return Response.json({ data: withUrls });
   } catch (error) {
     const response = portalAuthErrorResponse(error);
     if (response) return response;

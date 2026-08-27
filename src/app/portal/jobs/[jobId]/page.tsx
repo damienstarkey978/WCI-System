@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { currentPortalSession } from "@/lib/client-portal/browser-session";
 import { db } from "@/lib/db";
+import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 import { getClientBudgetView } from "@/lib/client-portal/service";
@@ -57,6 +58,9 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
 
   const schedule = scheduleRow ? await getComputedSchedule(session.organizationId, scheduleRow.id) : null;
   const budget = access.canViewBudget ? await getClientBudgetView(session.organizationId, jobId) : null;
+  const filesWithUrls = files
+    ? await Promise.all(files.map(async (file) => ({ ...file, url: await resolveFileUrl(file.url) })))
+    : null;
 
   const address = [job.addressLine1, job.city, job.state].filter(Boolean).join(", ");
 
@@ -175,13 +179,13 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
           </Card>
         ) : null}
 
-        {files ? (
+        {filesWithUrls ? (
           <Card title="Documents">
             <div className="divide-y" style={{ borderColor: "var(--bt-border)" }}>
-              {files.length === 0 ? (
+              {filesWithUrls.length === 0 ? (
                 <p className="px-4 py-4 text-sm text-[var(--bt-muted)]">No documents yet.</p>
               ) : (
-                files.map((file) => (
+                filesWithUrls.map((file) => (
                   <a
                     key={file.id}
                     href={file.url}

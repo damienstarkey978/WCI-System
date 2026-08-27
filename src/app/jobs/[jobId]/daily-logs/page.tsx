@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { PhotoStrip } from "@/components/files/PhotoStrip";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate } from "@/lib/format";
 
 import { DailyLogForm } from "./daily-log-form";
@@ -36,8 +38,17 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
   const logs = await db.dailyLog.findMany({
     where: { jobId: job.id },
     orderBy: { createdAt: "desc" },
-    include: { authorUser: true },
+    include: { authorUser: true, files: true },
   });
+
+  const logsWithPhotos = await Promise.all(
+    logs.map(async (log) => ({
+      ...log,
+      photos: await Promise.all(
+        log.files.map(async (file) => ({ id: file.id, fileName: file.fileName, category: file.category, url: await resolveFileUrl(file.url) })),
+      ),
+    })),
+  );
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
@@ -51,7 +62,7 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
             No daily logs yet — add the first one above.
           </p>
         ) : (
-          logs.map((log) => {
+          logsWithPhotos.map((log) => {
             const weather = weatherSummary(log.weather);
             return (
               <article key={log.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
@@ -63,6 +74,7 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
                   </div>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{log.note}</p>
+                <PhotoStrip files={log.photos} />
                 <div className="mt-2 flex gap-2 text-[10px] font-semibold uppercase tracking-wide">
                   {log.clientVisible ? (
                     <span className="rounded px-1.5 py-0.5" style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}>

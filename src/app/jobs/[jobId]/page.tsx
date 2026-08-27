@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { contractTypePolicy } from "@/lib/contract-type";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { InfoIcon } from "@/components/shell/icons";
+import { PhotoStrip } from "@/components/files/PhotoStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +46,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
       where: { jobId: job.id },
       orderBy: { createdAt: "desc" },
       take: 5,
-      include: { authorUser: true },
+      include: { authorUser: true, files: true },
     }),
     db.todo.findMany({
       where: { jobId: job.id, status: { in: ["OPEN", "IN_PROGRESS"] } },
@@ -58,6 +60,15 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
       take: 5,
     }),
   ]);
+
+  const recentLogsWithPhotos = await Promise.all(
+    recentLogs.map(async (log) => ({
+      ...log,
+      photos: await Promise.all(
+        log.files.map(async (file) => ({ id: file.id, fileName: file.fileName, category: file.category, url: await resolveFileUrl(file.url) })),
+      ),
+    })),
+  );
 
   const address = [job.addressLine1, job.city, job.state].filter(Boolean).join(", ");
 
@@ -111,16 +122,17 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
               </Link>
             </header>
             <div className="divide-y" style={{ borderColor: "var(--bt-border)" }}>
-              {recentLogs.length === 0 ? (
+              {recentLogsWithPhotos.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-[var(--bt-muted)]">No daily logs yet.</p>
               ) : (
-                recentLogs.map((log) => (
+                recentLogsWithPhotos.map((log) => (
                   <div key={log.id} className="px-4 py-3">
                     <div className="flex items-center justify-between text-xs text-[var(--bt-muted)]">
                       <span>{log.authorUser.email}</span>
                       <span>{formatDate(log.createdAt)}</span>
                     </div>
                     <p className="mt-1 truncate text-sm text-[var(--bt-text)]">{log.note}</p>
+                    <PhotoStrip files={log.photos} />
                   </div>
                 ))
               )}
