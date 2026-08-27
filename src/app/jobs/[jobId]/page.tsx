@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { contractTypePolicy } from "@/lib/contract-type";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { formatDate, formatMoney } from "@/lib/format";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { InfoIcon } from "@/components/shell/icons";
 
@@ -15,15 +16,6 @@ const STATUS_LABEL: Record<string, string> = {
   WARRANTY: "Warranty",
   CLOSED: "Closed",
 };
-
-function formatDate(date: Date | null): string {
-  if (!date) return "—";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function formatMoney(cents: number): string {
-  return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-}
 
 export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobId]">) {
   const { jobId } = await params;

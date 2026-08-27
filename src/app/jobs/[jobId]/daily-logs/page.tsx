@@ -3,14 +3,11 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { formatDate } from "@/lib/format";
 
 import { DailyLogForm } from "./daily-log-form";
 
 export const dynamic = "force-dynamic";
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-}
 
 function weatherSummary(weather: unknown): string | null {
   if (!weather || typeof weather !== "object") return null;
