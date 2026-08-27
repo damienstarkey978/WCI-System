@@ -3,6 +3,22 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Buildertrend-match palette (src/components/shell) — a deliberately separate
+     token set from the app's original admin/field screens, which stay on the
+     plain black/white palette above. */
+  --bt-nav: #2c6975;
+  --bt-nav-hover: #23545e;
+  --bt-primary: #1a56db;
+  --bt-primary-hover: #1745ad;
+  --bt-sidebar-bg: #ffffff;
+  --bt-border: #e5e7eb;
+  --bt-muted: #6b7280;
+  --bt-text: #111827;
+  --bt-status-open-bg: #e0f2fe;
+  --bt-status-open-text: #075985;
+  --bt-badge-qb-bg: #16a34a;
+  --bt-active-bar: #d97706;
 }
 
 @theme inline {
