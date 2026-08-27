@@ -1,14 +1,34 @@
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
+
+import { isClerkConfigured } from "@/lib/env";
 
 export default function Home() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-8 px-6 py-16">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">WCI OS</h1>
-        <p className="mt-2 text-sm text-black/60 dark:text-white/60">
-          Construction management for World Construction Inc. Phase 0 — foundation only: organizations,
-          roles, the Job lifecycle, the cost code catalog, and the machine-facing API.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">WCI OS</h1>
+          <p className="mt-2 text-sm text-black/60 dark:text-white/60">
+            Construction management for World Construction Inc. Phase 0 — foundation only: organizations,
+            roles, the Job lifecycle, the cost code catalog, and the machine-facing API.
+          </p>
+        </div>
+        {isClerkConfigured() ? (
+          <>
+            <SignedOut>
+              <Link
+                href="/sign-in"
+                className="shrink-0 rounded-md bg-black px-3 py-2 text-xs font-medium text-white dark:bg-white dark:text-black"
+              >
+                Sign in
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </>
+        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
