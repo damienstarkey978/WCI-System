@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { currentAppUser } from "@/lib/auth";
+import { currentAppUserOrRedirect } from "@/lib/auth";
 import { formatMoney, formatPercent } from "@/lib/format";
 import {
   getBudgetedVsProjectedReport,
@@ -43,7 +43,7 @@ function Td({ children, right, warn }: { children: ReactNode; right?: boolean; w
 export default async function ReportsPage({ searchParams }: PageProps<"/reports">) {
   let user;
   try {
-    user = await currentAppUser();
+    user = await currentAppUserOrRedirect();
   } catch (error) {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }

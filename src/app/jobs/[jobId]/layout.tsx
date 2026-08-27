@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { currentAppUser } from "@/lib/auth";
+import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export default async function JobLayout({ children, params }: LayoutProps<"/jobs
 
   let user;
   try {
-    user = await currentAppUser();
+    user = await currentAppUserOrRedirect();
   } catch (error) {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }

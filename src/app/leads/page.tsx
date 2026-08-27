@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/shell/AppShell";
 import { sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { currentAppUser } from "@/lib/auth";
+import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 import { ConvertToJobButton } from "./convert-form";
@@ -22,7 +22,7 @@ const STAGES = [
 export default async function LeadsPage() {
   let user;
   try {
-    user = await currentAppUser();
+    user = await currentAppUserOrRedirect();
   } catch (error) {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }

@@ -13,6 +13,7 @@
  */
 
 import { auth as clerkAuth, currentUser as clerkCurrentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
 import type { UserModel } from "@/generated/prisma/models";
 import { UserRole } from "@/generated/prisma/enums";
@@ -59,6 +60,24 @@ export async function currentAppUser(): Promise<AppUser | null> {
     where: { id: invited.id },
     data: { clerkUserId: userId },
   });
+}
+
+/**
+ * The signed-in staff user for a page, redirecting a signed-out visitor to
+ * /sign-in when Clerk is configured — the page-level backstop for
+ * src/proxy.ts's route protection. Middleware is the first line of defense,
+ * but this covers the same visitor if a deploy platform's Next.js adapter
+ * doesn't yet run src/proxy.ts (a very new Next.js 16 filename), so a
+ * signed-out visit to a staff page never silently falls through to
+ * "no organization found" — that message stays reserved for its original
+ * meaning, an actually-unseeded local/dev database (Clerk not configured).
+ */
+export async function currentAppUserOrRedirect(): Promise<AppUser | null> {
+  const user = await currentAppUser();
+  if (!user && isClerkConfigured()) {
+    redirect("/sign-in");
+  }
+  return user;
 }
 
 /** The signed-in staff user, or throws. Use in routes that require a session. */

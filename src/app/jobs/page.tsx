@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/shell/AppShell";
 import { sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { currentAppUser } from "@/lib/auth";
+import { currentAppUserOrRedirect } from "@/lib/auth";
 
 // Reads live data on every request — never prerendered at build time.
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function JobsIndexPage() {
   let user;
   try {
-    user = await currentAppUser();
+    user = await currentAppUserOrRedirect();
   } catch (error) {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
