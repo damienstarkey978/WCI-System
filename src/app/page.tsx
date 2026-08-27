@@ -1,4 +1,4 @@
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { Show, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 
 import { isClerkConfigured } from "@/lib/env";
@@ -16,17 +16,17 @@ export default function Home() {
         </div>
         {isClerkConfigured() ? (
           <>
-            <SignedOut>
+            <Show when="signed-out">
               <Link
                 href="/sign-in"
                 className="shrink-0 rounded-md bg-black px-3 py-2 text-xs font-medium text-white dark:bg-white dark:text-black"
               >
                 Sign in
               </Link>
-            </SignedOut>
-            <SignedIn>
+            </Show>
+            <Show when="signed-in">
               <UserButton />
-            </SignedIn>
+            </Show>
           </>
         ) : null}
       </div>

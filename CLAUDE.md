@@ -627,3 +627,19 @@ Record every architectural decision that departs from the above, with the reason
   — proving the job/cost-code/schedule/budget wiring is correct up to the
   model call — and (2) unit tests against a fake Anthropic client for the
   actual prompt construction, response normalization, and error handling.
+- **`<SignedIn>`/`<SignedOut>` were removed in `@clerk/nextjs` Core 3 —
+  use `<Show when="signed-in">`/`<Show when="signed-out">` instead:**
+  discovered the hard way on the first real deploy (Netlify build failed
+  prerendering `/` with "Clerk: `<SignedOut>` is not available in
+  `@clerk/nextjs` Core 3"). This sandbox's dev-fallback auth path
+  (`isClerkConfigured() === false`) never actually renders these
+  components, so `npm run build` here is blind to any bug that only shows
+  up with real Clerk keys present — the local build passed while the real
+  deploy failed. Caught and fixed by temporarily setting a validly-shaped
+  fake `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`/`CLERK_SECRET_KEY` pair locally
+  to force Clerk to actually initialize during `next build`, which
+  reproduces the failure. Do this again before trusting a local build for
+  any future Clerk-UI change — `npm run check` alone won't catch it.
+  `<Protect>` was removed the same way (replaced by the same `<Show>`
+  component); neither is used anywhere in this codebase, but avoid both in
+  new code.
