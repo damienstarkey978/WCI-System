@@ -1,5 +1,7 @@
 import { SignIn } from "@clerk/nextjs";
 
+import { AuthShell, CLERK_APPEARANCE } from "@/components/shell/AuthShell";
+
 /**
  * WCI OS's own sign-in page, rather than relying on Clerk's hosted Account
  * Portal (a separate accounts.dev domain) — keeps the whole auth flow on one
@@ -10,8 +12,8 @@ import { SignIn } from "@clerk/nextjs";
  */
 export default function SignInPage() {
   return (
-    <div className="flex flex-1 items-center justify-center px-6 py-16">
-      <SignIn />
-    </div>
+    <AuthShell>
+      <SignIn appearance={CLERK_APPEARANCE} />
+    </AuthShell>
   );
 }

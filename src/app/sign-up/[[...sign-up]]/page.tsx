@@ -1,5 +1,7 @@
 import { SignUp } from "@clerk/nextjs";
 
+import { AuthShell, CLERK_APPEARANCE } from "@/components/shell/AuthShell";
+
 /**
  * Creates a Clerk identity only — it grants no app access by itself. Every
  * page still gates on currentAppUser() (src/lib/auth.ts) finding a matching
@@ -10,8 +12,8 @@ import { SignUp } from "@clerk/nextjs";
  */
 export default function SignUpPage() {
   return (
-    <div className="flex flex-1 items-center justify-center px-6 py-16">
-      <SignUp />
-    </div>
+    <AuthShell>
+      <SignUp appearance={CLERK_APPEARANCE} />
+    </AuthShell>
   );
 }

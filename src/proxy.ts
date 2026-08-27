@@ -12,13 +12,27 @@
  * Server Actions POST to the route they live on.
  */
 
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 
 import { isClerkConfigured } from "@/lib/env";
 
-const clerk = isClerkConfigured() ? clerkMiddleware() : null;
+/**
+ * The Buildertrend-match staff shell (src/components/shell) and everything under
+ * it. Unauthenticated, these pages' own currentAppUser() null-check would render
+ * a "database not seeded" message even to a real visitor who simply isn't signed
+ * in yet — so gate them here instead, before any page code runs.
+ */
+const isProtectedStaffRoute = createRouteMatcher(["/jobs(.*)", "/leads(.*)", "/reports(.*)", "/admin(.*)"]);
+
+const clerk = isClerkConfigured()
+  ? clerkMiddleware(async (auth, request) => {
+      if (isProtectedStaffRoute(request)) {
+        await auth.protect({ unauthenticatedUrl: new URL("/sign-in", request.url).toString() });
+      }
+    })
+  : null;
 
 /**
  * Routes reachable without an API key or x-api-key header:
