@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAppUser } from "@/lib/auth";
-import { addScheduleItem, createSchedule, JobNotFoundError, ScheduleNotFoundError } from "@/lib/scheduling/service";
+import { addScheduleItem, createSchedule, JobNotFoundError, ScheduleNotFoundError, snapshotBaseline } from "@/lib/scheduling/service";
 
 export interface ActionState {
   readonly error?: string;
@@ -19,6 +19,23 @@ export async function createScheduleAction(_previous: ActionState, formData: For
     await createSchedule({ organizationId: user.organizationId, jobId });
   } catch (error) {
     if (error instanceof JobNotFoundError) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/schedule`);
+  return { ok: true };
+}
+
+export async function snapshotBaselineAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const scheduleId = String(formData.get("scheduleId") ?? "");
+
+  try {
+    await snapshotBaseline(user.organizationId, scheduleId);
+  } catch (error) {
+    if (error instanceof ScheduleNotFoundError) return { error: error.message };
     throw error;
   }
 
