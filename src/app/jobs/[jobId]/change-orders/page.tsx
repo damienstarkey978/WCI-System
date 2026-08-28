@@ -7,6 +7,9 @@ import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { formatDate, formatMoney } from "@/lib/format";
 
+import { approveChangeOrderAction, declineChangeOrderAction } from "./actions";
+import { CreateChangeOrderForm } from "./create-change-order-form";
+
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
@@ -44,15 +47,24 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const changeOrders = await db.changeOrder.findMany({
-    where: { jobId: job.id },
-    orderBy: { createdAt: "desc" },
-    include: { lineItems: true },
-  });
+  const [changeOrders, costCodes] = await Promise.all([
+    db.changeOrder.findMany({
+      where: { jobId: job.id },
+      orderBy: { createdAt: "desc" },
+      include: { lineItems: true },
+    }),
+    db.costCode.findMany({
+      where: { organizationId: user.organizationId, isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, code: true, name: true },
+    }),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Change orders — {job.name}</h1>
+
+      <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
 
       {changeOrders.length === 0 ? (
         <EmptyState title="No change orders yet" description="Change orders created for this job will appear here." />
@@ -66,11 +78,13 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Created</th>
                 <th className="px-4 py-3 text-right">Client price</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {changeOrders.map((co) => {
                 const style = STATUS_STYLE[co.status] ?? STATUS_STYLE.DRAFT;
+                const canDecide = co.status === "DRAFT" || co.status === "PENDING_APPROVAL";
                 return (
                   <tr key={co.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
                     <td className="px-4 py-3 font-medium text-[var(--bt-text)]">{co.title}</td>
@@ -82,6 +96,26 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
                     </td>
                     <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(co.createdAt)}</td>
                     <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(clientPriceCents(co))}</td>
+                    <td className="px-4 py-3">
+                      {canDecide ? (
+                        <div className="flex gap-2">
+                          <form action={approveChangeOrderAction}>
+                            <input type="hidden" name="jobId" value={job.id} />
+                            <input type="hidden" name="changeOrderId" value={co.id} />
+                            <button type="submit" className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
+                              Approve
+                            </button>
+                          </form>
+                          <form action={declineChangeOrderAction}>
+                            <input type="hidden" name="jobId" value={job.id} />
+                            <input type="hidden" name="changeOrderId" value={co.id} />
+                            <button type="submit" className="text-xs text-[var(--bt-muted)] hover:text-red-600 hover:underline">
+                              Decline
+                            </button>
+                          </form>
+                        </div>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}
