@@ -32,6 +32,7 @@ export const SALES_NAV = [
   { label: "Lead Opportunities", href: "/leads" },
   { label: "Lead Activities", href: "/leads/activities" },
   { label: "Lead Proposals", href: "/leads/proposals" },
+  { label: "Materials Catalog", href: "/materials" },
 ] as const;
 
 /** The "Project Management" dropdown — every one of these is scoped to whichever job is selected. */

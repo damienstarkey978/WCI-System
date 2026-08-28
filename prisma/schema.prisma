@@ -70,13 +70,25 @@ enum ScheduleScope {
 // ---------------------------------------------------------------------------
 
 model Organization {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   name       String
-  slug       String   @unique
+  slug       String  @unique
   /// Clerk organization id, once the org is linked to Clerk. Null in local/dev.
-  clerkOrgId String?  @unique
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  clerkOrgId String? @unique
+
+  /// Company letterhead for Estimate/Proposal PDFs (CLAUDE.md's handoff.ai-style
+  /// proposal builder). logoPath is a private Storage path resolved to a signed
+  /// URL on read, same convention as File.url (src/lib/files/service.ts).
+  logoPath     String?
+  addressLine1 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  contactEmail String?
+  contactPhone String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   users        User[]
   jobs         Job[]
@@ -117,6 +129,7 @@ model Organization {
   warrantyClaims        WarrantyClaim[]
   surveys               Survey[]
   clientUpdateSummaries ClientUpdateSummary[]
+  materialCatalogItems  MaterialCatalogItem[]
 }
 
 model User {
@@ -1894,9 +1907,85 @@ model Proposal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  sections ProposalSection[]
+
   @@index([jobId])
   @@index([leadId])
   @@index([organizationId, status])
+}
+
+/// The client-facing scope-of-work narrative shown on the Proposal side of the
+/// Estimate/Proposal split (handoff.ai-style — CLAUDE.md's AI proposal
+/// builder). Deliberately NOT derived live from EstimateLineItem: a section
+/// starts as a plain-language summary of one estimate groupLabel, generated
+/// once at proposal-creation time, but is then edited independently — the
+/// same "estimate numbers changed but the client message text still reflects
+/// the prior version" divergence a proposal tool has to support.
+model ProposalSection {
+  id         String   @id @default(cuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  /// Usually mirrors an EstimateLineItem.groupLabel from the source estimate,
+  /// but not FK-linked — a section can be renamed, merged, or added by hand.
+  title     String
+  sortOrder Int    @default(0)
+
+  bullets ProposalSectionBullet[]
+
+  @@index([proposalId, sortOrder])
+}
+
+model ProposalSectionBullet {
+  id        String          @id @default(cuid())
+  sectionId String
+  section   ProposalSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  text      String
+  sortOrder Int    @default(0)
+
+  @@index([sectionId, sortOrder])
+}
+
+enum MaterialVendor {
+  LOWES
+  HOME_DEPOT
+  OTHER
+}
+
+enum MaterialPriceSource {
+  MANUAL
+  WEB_SEARCH
+}
+
+/// Staff-maintained material pricing (CLAUDE.md's AI estimating layer wants
+/// "real data from Lowe's and Home Depot" — neither retailer has a public
+/// pricing API, so until one is integrated, staff enter/update prices here
+/// and the AI estimate assistant treats this catalog as its first-choice
+/// price source, falling back to a web-search-sourced estimate (flagged with
+/// sourceUrl for a human to verify) only when nothing here matches.
+model MaterialCatalogItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  vendor        MaterialVendor
+  sku           String?
+  description   String
+  unit          String
+  unitCostCents Int
+  category      String?
+
+  source     MaterialPriceSource @default(MANUAL)
+  /// Set when source = WEB_SEARCH, so a human can verify the AI's find.
+  sourceUrl  String?
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, vendor])
+  @@index([organizationId, category])
 }
 
 // ---------------------------------------------------------------------------
