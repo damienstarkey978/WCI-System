@@ -8,6 +8,7 @@ import { requireAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { JobStatusTransitionError } from "@/lib/job-status";
 import { JobNotFoundError, transitionJobStatus } from "@/lib/jobs";
+import { emitEvent } from "@/lib/webhooks";
 
 export interface ActionState {
   readonly error?: string;
@@ -50,6 +51,8 @@ export async function createJobAction(_previous: ActionState, formData: FormData
     await db.jobStatusEvent.create({
       data: { jobId: job.id, from: null, to: JobStatus.PRE_SALE, actorUserId: user.id },
     });
+
+    await emitEvent(user.organizationId, "job.created", { jobId: job.id, prefix: job.prefix, name: job.name });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return { error: `A job with prefix "${prefix}" already exists.` };

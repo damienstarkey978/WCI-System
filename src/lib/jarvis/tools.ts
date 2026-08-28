@@ -57,6 +57,7 @@ import { workedHours } from "@/lib/time-clock/hours";
 import { createTodo } from "@/lib/todos/service";
 import { createWarrantyClaim, scheduleAppointment } from "@/lib/warranty/service";
 import { createWeeklySummary } from "@/lib/ai/weekly-summary-service";
+import { emitEvent } from "@/lib/webhooks";
 
 export interface JarvisToolContext {
   readonly organizationId: string;
@@ -884,6 +885,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       }
 
       await db.jobStatusEvent.create({ data: { jobId: job.id, from: null, to: JobStatus.PRE_SALE, actorUserId: ctx.userId } });
+      await emitEvent(ctx.organizationId, "job.created", { jobId: job.id, prefix: job.prefix, name: job.name });
       return `Created job "${job.name}" (${job.id}), status PRE_SALE.`;
     },
   });

@@ -10,6 +10,7 @@ import { JobStatus } from "@/generated/prisma/enums";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createJobSchema, formatZodIssues, listJobsQuerySchema } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
+import { emitEvent } from "@/lib/webhooks";
 
 export const GET = withApiAuth(["jobs:read"], async (request, auth) => {
   const url = new URL(request.url);
@@ -86,7 +87,7 @@ export const POST = withApiAuth(["jobs:write"], async (request, auth) => {
       data: { jobId: job.id, from: null, to: JobStatus.PRE_SALE, actorApiKeyId: auth.apiKeyId },
     });
 
-    // TODO(Phase 1): emit the `job.created` webhook here, once the dispatcher exists.
+    await emitEvent(auth.organizationId, "job.created", { jobId: job.id, prefix: job.prefix, name: job.name });
     return Response.json({ data: job }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

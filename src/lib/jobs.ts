@@ -10,6 +10,7 @@ import type { JobModel } from "@/generated/prisma/models";
 import { JobStatus, type UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { assertJobStatusTransition, JobStatusTransitionError } from "@/lib/job-status";
+import { emitEvent } from "@/lib/webhooks";
 
 /** Who made a change: a signed-in human, or an agent's API key. Never both. */
 export type Actor =
@@ -50,7 +51,7 @@ export interface TransitionJobStatusInput {
 export async function transitionJobStatus(input: TransitionJobStatusInput): Promise<JobModel> {
   const { jobId, organizationId, to, actor, reason } = input;
 
-  return db.$transaction(async (tx) => {
+  const { updated, from } = await db.$transaction(async (tx) => {
     const job = await tx.job.findFirst({ where: { id: jobId, organizationId } });
     if (!job) {
       throw new JobNotFoundError(jobId);
@@ -60,7 +61,7 @@ export async function transitionJobStatus(input: TransitionJobStatusInput): Prom
     // checked only for human actors.
     assertJobStatusTransition(job.status, to, actor?.kind === "user" ? actor.role : undefined);
 
-    const updated = await tx.job.update({
+    const updatedJob = await tx.job.update({
       where: { id: job.id },
       data: {
         status: to,
@@ -84,8 +85,15 @@ export async function transitionJobStatus(input: TransitionJobStatusInput): Prom
       },
     });
 
-    return updated;
+    return { updated: updatedJob, from: job.status };
   });
+
+  // Emitted here, after commit, so every caller (this route, Jarvis, proposal
+  // e-signature auto-transitions, the admin UI) reports consistently — this is
+  // the one supported place a status change is persisted, per the module doc above.
+  await emitEvent(organizationId, "job.status_changed", { jobId: updated.id, from, to });
+
+  return updated;
 }
 
 export { JobStatusTransitionError };

@@ -10,6 +10,7 @@ import { ClockNotClosedError, OpenBreakError, workedHours } from "@/lib/time-clo
 import { computeWeeklyOvertime, type DailyHours } from "@/lib/time-clock/overtime";
 import { acceptsNewCommitments } from "@/lib/job-status";
 import type { Cents } from "@/lib/money";
+import { emitEvent } from "@/lib/webhooks";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -135,7 +136,7 @@ export async function clockIn(input: ClockInInput) {
 
   const geofenceStatus = checkGeofence(job, input.gps ?? null);
 
-  return db.timeClockEntry.create({
+  const entry = await db.timeClockEntry.create({
     data: {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -150,6 +151,16 @@ export async function clockIn(input: ClockInInput) {
       clockedInByUserId: input.clockedInByUserId ?? null,
     },
   });
+
+  if (geofenceStatus === "OUTSIDE") {
+    await emitEvent(input.organizationId, "time_clock.out_of_bounds", {
+      entryId: entry.id,
+      jobId: entry.jobId,
+      userId: entry.userId,
+    });
+  }
+
+  return entry;
 }
 
 export interface BulkClockInInput {

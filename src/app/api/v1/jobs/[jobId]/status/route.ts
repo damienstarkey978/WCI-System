@@ -37,7 +37,6 @@ export const POST = withApiAuth<Context>(["jobs:write"], async (request, auth, c
       reason: parsed.data.reason,
     });
 
-    // TODO(Phase 1): emit a `job.status_changed` webhook here.
     return Response.json({
       data: job,
       meta: { allowedNextStatuses: allowedNextStatuses(job.status) },
