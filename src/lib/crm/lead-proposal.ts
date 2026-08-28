@@ -12,14 +12,23 @@
  */
 
 import { ContractType } from "@/generated/prisma/enums";
+import { AiNotConfiguredError, DraftGenerationError, draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
+import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
 import { convertLeadToJob, LeadNotFoundError } from "@/lib/crm/service";
 import { createEstimate, type CreateEstimateLineItemInput } from "@/lib/estimates/service";
 import { db } from "@/lib/db";
 import type { BasisPoints } from "@/lib/money";
-import { createProposal } from "@/lib/proposals/service";
+import { createProposal, type CreateProposalSectionInput } from "@/lib/proposals/service";
 import type { RateMode } from "@/generated/prisma/enums";
 
-export { LeadNotFoundError };
+export { LeadNotFoundError, AiNotConfiguredError, DraftGenerationError };
+
+export class NoCostCodesError extends Error {
+  constructor() {
+    super("This organization has no active cost codes to draft against. Seed the catalog first.");
+    this.name = "NoCostCodesError";
+  }
+}
 
 export class LeadMissingContactError extends Error {
   constructor(leadId: string) {
@@ -39,6 +48,9 @@ export interface CreateLeadProposalInput {
   readonly rateMode?: RateMode;
   readonly defaultRateBasisPoints?: BasisPoints;
   readonly lineItems: readonly CreateEstimateLineItemInput[];
+  readonly proposalSections?: readonly CreateProposalSectionInput[];
+  readonly aiGenerated?: boolean;
+  readonly aiPromptNotes?: string | null;
 }
 
 export async function createLeadProposal(input: CreateLeadProposalInput) {
@@ -95,6 +107,8 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
     rateMode: input.rateMode,
     defaultRateBasisPoints: input.defaultRateBasisPoints,
     lineItems: input.lineItems,
+    aiGenerated: input.aiGenerated,
+    aiPromptNotes: input.aiPromptNotes,
   });
 
   return createProposal({
@@ -105,5 +119,75 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
     clientId: client.id,
     title: input.title,
     coverMessage: input.coverMessage,
+    sections: input.proposalSections,
+  });
+}
+
+export interface DraftLeadProposalInput {
+  readonly organizationId: string;
+  readonly leadId: string;
+  readonly notes: string;
+  readonly images?: readonly DraftEstimateImageInput[];
+  readonly clientEmail?: string | null;
+  readonly clientPhone?: string | null;
+}
+
+/**
+ * The Jarvis-style entry point: sales gives Jarvis the scope of work, measurements,
+ * and photos for a lead, and it drafts both sides of the estimate/proposal split in
+ * one shot (src/lib/ai/estimate-assistant.ts) — then this persists it exactly like a
+ * hand-built one via createLeadProposal, so it lands as an ordinary DRAFT proposal a
+ * salesperson reviews, edits, and sends. Nothing here is ever auto-sent to a client.
+ */
+export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) {
+  const lead = await db.lead.findFirst({ where: { id: input.leadId, organizationId: input.organizationId } });
+  if (!lead) throw new LeadNotFoundError(input.leadId);
+
+  const [costCodeRows, materialRows] = await Promise.all([
+    db.costCode.findMany({
+      where: { organizationId: input.organizationId, isActive: true },
+      select: { id: true, code: true, name: true, defaultCostType: true },
+    }),
+    db.materialCatalogItem.findMany({
+      where: { organizationId: input.organizationId },
+      select: { vendor: true, description: true, unit: true, unitCostCents: true },
+    }),
+  ]);
+  if (costCodeRows.length === 0) throw new NoCostCodesError();
+
+  const costCodes: readonly CostCodeOption[] = costCodeRows;
+  const materialCatalog: readonly MaterialCatalogOption[] = materialRows;
+
+  const draft = await draftEstimateFromNotes({
+    jobName: lead.name,
+    notes: input.notes,
+    costCodes,
+    materialCatalog,
+    images: input.images,
+  });
+
+  const lineItems: readonly CreateEstimateLineItemInput[] = draft.lineItems.map((line) => ({
+    costCodeId: line.costCodeId,
+    title: line.title,
+    description: line.description,
+    quantityMilli: line.quantityMilli,
+    unitCostCents: line.unitCostCents,
+    rateMode: line.rateMode,
+    rateBasisPoints: line.rateBasisPoints,
+    internalNote: `AI confidence: ${line.confidence} · price source: ${line.priceSource}`,
+    groupLabel: line.groupLabel,
+  }));
+
+  return createLeadProposal({
+    organizationId: input.organizationId,
+    leadId: input.leadId,
+    title: draft.title,
+    coverMessage: draft.projectDescription,
+    clientEmail: input.clientEmail,
+    clientPhone: input.clientPhone,
+    lineItems,
+    proposalSections: draft.proposalSections,
+    aiGenerated: true,
+    aiPromptNotes: input.notes,
   });
 }

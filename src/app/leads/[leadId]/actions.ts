@@ -6,9 +6,30 @@ import { LeadActivityType, RateMode } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { createLeadActivity, LeadNotFoundError, setLeadActivityCompleted } from "@/lib/crm/service";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
-import { LeadMissingContactError, createLeadProposal } from "@/lib/crm/lead-proposal";
+import {
+  AiNotConfiguredError,
+  DraftGenerationError,
+  LeadMissingContactError,
+  NoCostCodesError,
+  createLeadProposal,
+  draftLeadProposalFromNotes,
+} from "@/lib/crm/lead-proposal";
+import type { DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
 import { parsePercentToBasisPoints } from "@/lib/money";
 import { declineProposal, ProposalNotDraftError, ProposalNotFoundError, ProposalNotPendingError, sendProposal } from "@/lib/proposals/service";
+
+const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+async function filesToImageInputs(formData: FormData, field: string): Promise<DraftEstimateImageInput[]> {
+  const files = formData.getAll(field).filter((value): value is File => value instanceof File && value.size > 0);
+  const images: DraftEstimateImageInput[] = [];
+  for (const file of files) {
+    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) continue;
+    const buffer = Buffer.from(await file.arrayBuffer());
+    images.push({ base64Data: buffer.toString("base64"), mediaType: file.type as DraftEstimateImageInput["mediaType"] });
+  }
+  return images;
+}
 
 export interface ActionState {
   readonly error?: string;
@@ -89,6 +110,43 @@ export async function createLeadProposalAction(_previous: ActionState, formData:
   } catch (error) {
     if (error instanceof LeadNotFoundError || error instanceof LeadMissingContactError) return { error: error.message };
     if (error instanceof Error && error.message.includes("Cannot parse")) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true };
+}
+
+export async function draftLeadProposalAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const leadId = String(formData.get("leadId") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim();
+  const clientEmail = String(formData.get("clientEmail") ?? "").trim();
+  const clientPhone = String(formData.get("clientPhone") ?? "").trim();
+
+  if (notes.length < 10) return { error: "Add a bit more detail — scope of work, measurements, anything relevant (at least 10 characters)." };
+
+  try {
+    const images = await filesToImageInputs(formData, "photos");
+    await draftLeadProposalFromNotes({
+      organizationId: user.organizationId,
+      leadId,
+      notes,
+      images,
+      clientEmail: clientEmail || null,
+      clientPhone: clientPhone || null,
+    });
+  } catch (error) {
+    if (error instanceof AiNotConfiguredError) return { error: "The AI assistant isn't configured yet — set ANTHROPIC_API_KEY in .env." };
+    if (
+      error instanceof LeadNotFoundError ||
+      error instanceof LeadMissingContactError ||
+      error instanceof NoCostCodesError ||
+      error instanceof DraftGenerationError
+    ) {
+      return { error: error.message };
+    }
     throw error;
   }
 

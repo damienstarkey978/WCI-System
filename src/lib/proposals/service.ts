@@ -76,6 +76,11 @@ export class ProposalClientMismatchError extends Error {
   }
 }
 
+export interface CreateProposalSectionInput {
+  readonly title: string;
+  readonly bullets: readonly string[];
+}
+
 export interface CreateProposalInput {
   readonly organizationId: string;
   readonly jobId: string;
@@ -84,6 +89,10 @@ export interface CreateProposalInput {
   readonly clientId: string;
   readonly title: string;
   readonly coverMessage?: string | null;
+  /// The client-facing narrative side of the estimate/proposal split (handoff.ai-style).
+  /// Not FK-derived from the estimate's line items — generated together, then editable
+  /// independently, so they can drift apart after a human edits either side.
+  readonly sections?: readonly CreateProposalSectionInput[];
 }
 
 export async function createProposal(input: CreateProposalInput) {
@@ -109,7 +118,19 @@ export async function createProposal(input: CreateProposalInput) {
       clientId: input.clientId,
       title: input.title,
       coverMessage: input.coverMessage ?? null,
+      sections: input.sections?.length
+        ? {
+            create: input.sections.map((section, sectionIndex) => ({
+              title: section.title,
+              sortOrder: sectionIndex,
+              bullets: {
+                create: section.bullets.map((text, bulletIndex) => ({ text, sortOrder: bulletIndex })),
+              },
+            })),
+          }
+        : undefined,
     },
+    include: { sections: { include: { bullets: true } } },
   });
 }
 

@@ -44,6 +44,8 @@ export interface CreateEstimateInput {
   readonly rateMode?: RateMode;
   readonly defaultRateBasisPoints?: BasisPoints;
   readonly lineItems: readonly CreateEstimateLineItemInput[];
+  readonly aiGenerated?: boolean;
+  readonly aiPromptNotes?: string | null;
 }
 
 export async function createEstimate(input: CreateEstimateInput) {
@@ -71,6 +73,8 @@ export async function createEstimate(input: CreateEstimateInput) {
       title: input.title,
       rateMode,
       defaultRateBasisPoints,
+      aiGenerated: input.aiGenerated ?? false,
+      aiPromptNotes: input.aiPromptNotes ?? null,
       lineItems: {
         create: input.lineItems.map((item, index) => ({
           costCodeId: item.costCodeId,

@@ -6,10 +6,12 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { isAnthropicConfigured } from "@/lib/env";
 
 import { ConvertToJobButton } from "../convert-form";
 import { StageSelect } from "../stage-select";
 import { CreateLeadProposalForm } from "./create-lead-proposal-form";
+import { DraftLeadProposalForm } from "./draft-lead-proposal-form";
 import { LeadActivityForm } from "./lead-activity-form";
 import { declineProposalAction, sendProposalAction } from "./actions";
 import { ToggleActivityButton } from "./toggle-activity-button";
@@ -66,7 +68,10 @@ export default async function LeadDetailPage({
     db.proposal.findMany({
       where: { leadId: lead.id },
       orderBy: { createdAt: "desc" },
-      include: { estimate: { include: { lineItems: true } } },
+      include: {
+        estimate: { include: { lineItems: true } },
+        sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
+      },
     }),
     db.costCode.findMany({
       where: { organizationId: user.organizationId, isActive: true },
@@ -145,6 +150,14 @@ export default async function LeadDetailPage({
         </div>
       ) : tab === "proposals" ? (
         <div className="flex flex-col gap-3">
+          {isAnthropicConfigured() ? (
+            <DraftLeadProposalForm
+              leadId={lead.id}
+              defaultEmail={lead.email ?? ""}
+              defaultPhone={lead.phone ?? ""}
+              needsContact={!lead.email}
+            />
+          ) : null}
           <CreateLeadProposalForm
             leadId={lead.id}
             costCodes={costCodes}
@@ -168,7 +181,17 @@ export default async function LeadDetailPage({
                   <div key={proposal.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <div className="font-medium text-[var(--bt-text)]">{proposal.title}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-[var(--bt-text)]">{proposal.title}</span>
+                          {proposal.estimate.aiGenerated ? (
+                            <span
+                              className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                              style={{ background: "#ede9fe", color: "#5b21b6" }}
+                            >
+                              Drafted by Jarvis
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="mt-0.5 text-xs text-[var(--bt-muted)]">{formatDate(proposal.createdAt)}</div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -178,6 +201,23 @@ export default async function LeadDetailPage({
                         </span>
                       </div>
                     </div>
+                    {proposal.coverMessage ? (
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{proposal.coverMessage}</p>
+                    ) : null}
+                    {proposal.sections.length > 0 ? (
+                      <div className="mt-3 flex flex-col gap-2 border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>
+                        {proposal.sections.map((section) => (
+                          <div key={section.id}>
+                            <div className="text-xs font-semibold text-[var(--bt-text)]">{section.title}</div>
+                            <ul className="mt-1 list-disc pl-4 text-sm text-[var(--bt-muted)]">
+                              {section.bullets.map((bullet) => (
+                                <li key={bullet.id}>{bullet.text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {proposal.status === "DRAFT" || proposal.status === "SENT" ? (
                       <div className="mt-3 flex gap-3">
                         {proposal.status === "DRAFT" ? (
