@@ -26,16 +26,21 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
-import { ChangeOrderMode, ChangeOrderStatus, InvoiceStatus, ProposalStatus, WarrantyClaimStatus } from "@/generated/prisma/enums";
+import { Prisma } from "@/generated/prisma/client";
+import { ChangeOrderMode, ChangeOrderStatus, ContractType, InvoiceStatus, JobStatus, ProposalStatus, WarrantyClaimStatus } from "@/generated/prisma/enums";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
 import type { JarvisTool } from "@/lib/jarvis/assistant";
 import { createBidPackage, lockBidSubmission } from "@/lib/bids/service";
 import { createBill } from "@/lib/bills/service";
 import { createChangeOrder } from "@/lib/change-orders/service";
+import { createClient, grantJobAccess } from "@/lib/client-portal/service";
+import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/service";
+import { draftLeadProposalFromNotes } from "@/lib/crm/lead-proposal";
 import { db } from "@/lib/db";
 import { createDailyLog } from "@/lib/daily-logs/service";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
+import { transitionJobStatus } from "@/lib/jobs";
 import { createPendingAction } from "@/lib/jarvis/pending-actions";
 import { parseDollarsToCents } from "@/lib/money";
 import { createPurchaseOrder } from "@/lib/purchase-orders/service";
@@ -43,8 +48,10 @@ import { createRfi } from "@/lib/rfis/service";
 import { addScheduleItem, createSchedule, getComputedSchedule } from "@/lib/scheduling/service";
 import { createAllowance, createSelection } from "@/lib/selections/service";
 import { createSubmittal } from "@/lib/submittals/service";
+import { workedHours } from "@/lib/time-clock/hours";
 import { createTodo } from "@/lib/todos/service";
 import { createWarrantyClaim, scheduleAppointment } from "@/lib/warranty/service";
+import { createWeeklySummary } from "@/lib/ai/weekly-summary-service";
 
 export interface JarvisToolContext {
   readonly organizationId: string;
@@ -716,6 +723,279 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  // --- AUTO: Leads & CRM ---------------------------------------------------------
+
+  const listLeads = betaZodTool({
+    name: "list_leads",
+    description: "List this organization's leads with their id, name, and stage.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const leads = await db.lead.findMany({
+        where: { organizationId: ctx.organizationId },
+        select: { id: true, name: true, stage: true, convertedJobId: true },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      });
+      if (leads.length === 0) return "This organization has no leads yet.";
+      return leads.map((lead) => `${lead.id} | ${lead.name} | ${lead.stage}${lead.convertedJobId ? " | already converted to a job" : ""}`).join("\n");
+    },
+  });
+
+  const createLeadTool = betaZodTool({
+    name: "create_lead",
+    description: "Create a new lead (sales opportunity).",
+    inputSchema: z.object({
+      name: z.string().describe("The lead's name or the prospect's name"),
+      email: z.string().optional(),
+      phone: z.string().optional(),
+      source: z.string().optional().describe("Where the lead came from, e.g. 'Referral', 'Website'"),
+      notes: z.string().optional(),
+    }),
+    run: async (input) => {
+      const lead = await createLead({
+        organizationId: ctx.organizationId,
+        name: input.name,
+        email: input.email ?? null,
+        phone: input.phone ?? null,
+        source: input.source ?? null,
+        notes: input.notes ?? null,
+      });
+      return `Created lead "${lead.name}", stage NEW.`;
+    },
+  });
+
+  const logLeadActivityTool = betaZodTool({
+    name: "log_lead_activity",
+    description: "Log an activity (call, email, meeting, note, or task) against a lead. Pass the lead's id from list_leads.",
+    inputSchema: z.object({
+      leadId: z.string().describe("The lead's id, from list_leads"),
+      type: z.enum(["CALL", "EMAIL", "MEETING", "NOTE", "TASK"]),
+      note: z.string().describe("What happened or what needs to happen"),
+      dueDate: z.string().optional().describe("For a TASK, when it's due, as an ISO date string"),
+    }),
+    run: async (input) => {
+      await createLeadActivity({
+        organizationId: ctx.organizationId,
+        leadId: input.leadId,
+        type: input.type,
+        note: input.note,
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        createdByUserId: ctx.userId,
+      });
+      return `Logged a ${input.type.toLowerCase()} on the lead.`;
+    },
+  });
+
+  const convertLeadToJobTool = betaZodTool({
+    name: "convert_lead_to_job",
+    description:
+      "Convert a lead into a real job (PRE_SALE status) — no client-facing or money effect by itself. If the lead is already converted, returns the existing job. Pass the lead's id from list_leads.",
+    inputSchema: z.object({
+      leadId: z.string().describe("The lead's id, from list_leads"),
+      jobName: z.string().describe("The new job's name"),
+      contractType: z.enum(["FIXED_PRICE", "OPEN_BOOK"]).default("FIXED_PRICE"),
+    }),
+    run: async (input) => {
+      const { job } = await convertLeadToJob(ctx.organizationId, input.leadId, {
+        name: input.jobName,
+        contractType: input.contractType as ContractType,
+      });
+      return `Converted the lead to job "${job.name}" (${job.id}), status PRE_SALE.`;
+    },
+  });
+
+  const draftLeadProposalTool = betaZodTool({
+    name: "draft_lead_proposal",
+    description:
+      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a full estimate + client-facing proposal narrative — created as DRAFT, never sent. Converts the lead to a job if not already converted, and creates/links a Client record with portal permissions provisioned (the client still can't log in until someone separately sends them a portal invite — this does not do that). Pass the lead's id from list_leads.",
+    inputSchema: z.object({
+      leadId: z.string().describe("The lead's id, from list_leads"),
+      notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),
+      clientEmail: z.string().optional().describe("Falls back to the lead's own email if omitted"),
+      clientPhone: z.string().optional(),
+    }),
+    run: async (input) => {
+      const proposal = await draftLeadProposalFromNotes({
+        organizationId: ctx.organizationId,
+        leadId: input.leadId,
+        notes: input.notes,
+        clientEmail: input.clientEmail ?? null,
+        clientPhone: input.clientPhone ?? null,
+      });
+      return `Drafted proposal "${proposal.title}" for the lead — status DRAFT. A human needs to review and send it.`;
+    },
+  });
+
+  // --- AUTO: Jobs & Clients --------------------------------------------------------
+
+  const createJobTool = betaZodTool({
+    name: "create_job",
+    description: "Start a brand-new job from scratch (not from a lead). Created as PRE_SALE.",
+    inputSchema: z.object({
+      name: z.string().describe("The job's name"),
+      contractType: z.enum(["FIXED_PRICE", "OPEN_BOOK"]).default("FIXED_PRICE"),
+      addressLine1: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      postalCode: z.string().optional(),
+      sqft: z.number().int().positive().optional(),
+    }),
+    run: async (input) => {
+      let job;
+      try {
+        job = await db.job.create({
+          data: {
+            organizationId: ctx.organizationId,
+            name: input.name,
+            contractType: input.contractType as ContractType,
+            addressLine1: input.addressLine1 ?? null,
+            city: input.city ?? null,
+            state: input.state ?? null,
+            postalCode: input.postalCode ?? null,
+            sqft: input.sqft ?? null,
+            status: JobStatus.PRE_SALE,
+          },
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          return `Couldn't create the job — a job with that prefix already exists.`;
+        }
+        throw error;
+      }
+
+      await db.jobStatusEvent.create({ data: { jobId: job.id, from: null, to: JobStatus.PRE_SALE, actorUserId: ctx.userId } });
+      return `Created job "${job.name}" (${job.id}), status PRE_SALE.`;
+    },
+  });
+
+  const transitionJobStatusTool = betaZodTool({
+    name: "transition_job_status",
+    description:
+      "Move a job to a new status: PRE_SALE -> OPEN or CLOSED; OPEN -> WARRANTY or CLOSED; WARRANTY -> OPEN or CLOSED; CLOSED -> OPEN. Reopening from WARRANTY or CLOSED requires the user to be an admin or PM — enforced the same way it would be for a human. Pass the job's id from list_jobs.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      to: z.enum(["PRE_SALE", "OPEN", "WARRANTY", "CLOSED"]),
+      reason: z.string().optional(),
+    }),
+    run: async (input) => {
+      const user = await db.user.findFirst({ where: { id: ctx.userId, organizationId: ctx.organizationId }, select: { role: true } });
+      if (!user) return "Couldn't find the current user to authorize this.";
+
+      const job = await transitionJobStatus({
+        jobId: input.jobId,
+        organizationId: ctx.organizationId,
+        to: input.to as JobStatus,
+        actor: { kind: "user", userId: ctx.userId, role: user.role },
+        reason: input.reason,
+      });
+      return `Moved job ${job.name} to ${job.status}.`;
+    },
+  });
+
+  const listClientsTool = betaZodTool({
+    name: "list_clients",
+    description: "List this organization's clients.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const clients = await db.client.findMany({
+        where: { organizationId: ctx.organizationId },
+        select: { id: true, name: true, email: true },
+        orderBy: { name: "asc" },
+        take: 50,
+      });
+      if (clients.length === 0) return "This organization has no clients yet.";
+      return clients.map((client) => `${client.id} | ${client.name} | ${client.email}`).join("\n");
+    },
+  });
+
+  const createClientTool = betaZodTool({
+    name: "create_client",
+    description: "Create a new client record. This does NOT invite them to the client portal or notify them — it's just the record.",
+    inputSchema: z.object({
+      name: z.string(),
+      email: z.string().describe("Must be unique within this organization"),
+      phone: z.string().optional(),
+    }),
+    run: async (input) => {
+      const client = await createClient({ organizationId: ctx.organizationId, name: input.name, email: input.email, phone: input.phone ?? null });
+      return `Created client "${client.name}" (${client.email}).`;
+    },
+  });
+
+  const grantClientJobAccessTool = betaZodTool({
+    name: "grant_client_job_access",
+    description:
+      "Give a client visibility/approval permissions on a job (daily logs, schedule, documents, budget, invoices, selections, change orders). This does NOT invite them to log in or notify them — access only becomes reachable once someone separately sends a portal invite. Pass ids from list_clients and list_jobs.",
+    inputSchema: z.object({
+      clientId: z.string().describe("The client's id, from list_clients"),
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      canMakePayments: z.boolean().optional(),
+      canApproveChangeOrders: z.boolean().optional(),
+      canApproveSelections: z.boolean().optional(),
+    }),
+    run: async (input) => {
+      await grantJobAccess({
+        organizationId: ctx.organizationId,
+        clientId: input.clientId,
+        jobId: input.jobId,
+        canViewDailyLogs: true,
+        canViewSchedule: true,
+        canViewDocuments: true,
+        canViewBudget: true,
+        canViewInvoices: true,
+        canViewSelections: true,
+        canViewChangeOrders: true,
+        canMakePayments: input.canMakePayments ?? false,
+        canApproveChangeOrders: input.canApproveChangeOrders ?? false,
+        canApproveSelections: input.canApproveSelections ?? false,
+      });
+      return "Granted job access to the client. They still can't log in until someone sends a portal invite.";
+    },
+  });
+
+  const getJobTimeSummary = betaZodTool({
+    name: "get_job_time_summary",
+    description: "Get total hours logged on a job, broken down by who logged them. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const entries = await db.timeClockEntry.findMany({
+        where: { jobId: job.id, organizationId: ctx.organizationId, clockOutAt: { not: null } },
+        select: { clockInAt: true, clockOutAt: true, approvalStatus: true, user: { select: { name: true, email: true } }, breaks: true },
+      });
+      if (entries.length === 0) return `No completed time entries for ${job.name} yet.`;
+
+      const hoursByUser = new Map<string, number>();
+      for (const entry of entries) {
+        const hours = workedHours(entry.clockInAt, entry.clockOutAt, entry.breaks);
+        const label = entry.user.name ?? entry.user.email;
+        hoursByUser.set(label, (hoursByUser.get(label) ?? 0) + hours);
+      }
+      const totalHours = [...hoursByUser.values()].reduce((sum, hours) => sum + hours, 0);
+
+      return [
+        `Total hours on ${job.name}: ${totalHours.toFixed(1)}`,
+        ...[...hoursByUser.entries()].map(([name, hours]) => `  - ${name}: ${hours.toFixed(1)}h`),
+      ].join("\n");
+    },
+  });
+
+  const generateWeeklyClientUpdateTool = betaZodTool({
+    name: "generate_weekly_client_update",
+    description:
+      "Generate an AI-written weekly progress summary for a job from its daily logs and schedule, for staff to review before sharing with the client (the client portal doesn't currently display these). Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const summary = await createWeeklySummary({ organizationId: ctx.organizationId, jobId: job.id });
+      return `${summary.headline}\n\n${summary.body}`;
+    },
+  });
+
   // --- CONFIRM: client-facing or money-moving — queue only, never execute -----
 
   const sendInvoiceTool = betaZodTool({
@@ -968,5 +1248,17 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     declineBidSubmissionTool,
     awardBidPackageTool,
     pushBidToPurchaseOrderTool,
+    listLeads,
+    createLeadTool,
+    logLeadActivityTool,
+    convertLeadToJobTool,
+    draftLeadProposalTool,
+    createJobTool,
+    transitionJobStatusTool,
+    listClientsTool,
+    createClientTool,
+    grantClientJobAccessTool,
+    getJobTimeSummary,
+    generateWeeklyClientUpdateTool,
   ];
 }
