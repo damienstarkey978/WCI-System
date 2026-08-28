@@ -12,6 +12,7 @@ import {
   MESSAGING_HREF,
   PROJECT_MANAGEMENT_NAV,
   REPORTS_HREF,
+  SALES_NAV,
   TOP_LEVEL_NAV,
   type JobNavLink,
 } from "@/lib/buildertrend-nav";
@@ -67,6 +68,35 @@ function JobNavDropdown({ label, items, activeJobId }: { label: string; items: r
   );
 }
 
+/** A dropdown of plain (non job-scoped) links, e.g. the "Sales" menu. */
+function FlatNavDropdown({ label, items }: { label: string; items: readonly { label: string; href: string }[] }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="flex items-center gap-1 rounded px-3 py-2 transition hover:bg-white/10"
+        aria-expanded={open}
+      >
+        {label}
+        <ChevronDownIcon className="h-3.5 w-3.5" />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-black/10 bg-white py-1 text-sm text-[var(--bt-text)] shadow-lg">
+          {items.map((item) => (
+            <Link key={item.href} href={item.href} className="block px-3 py-2 hover:bg-black/5">
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * Buildertrend's dark-teal top bar: brand mark, primary nav, the job-scoped
  * mega-dropdowns (Project Management, Files, Financial — meaningful only once
@@ -99,6 +129,8 @@ export function TopNav({
         </Link>
 
         <nav className="flex items-center gap-1 text-sm font-medium">
+          <FlatNavDropdown label="Sales" items={SALES_NAV} />
+
           {TOP_LEVEL_NAV.map((item) => (
             <Link
               key={item.href}

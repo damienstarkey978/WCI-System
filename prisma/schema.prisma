@@ -110,6 +110,7 @@ model Organization {
   vendorActionTokens    VendorActionToken[]
   bidPackages           BidPackage[]
   leads                 Lead[]
+  leadActivities        LeadActivity[]
   proposals             Proposal[]
   specifications        Specification[]
   submittals            Submittal[]
@@ -148,6 +149,7 @@ model User {
   authoredComments          Comment[]
   notifications             Notification[]
   assignedLeads             Lead[]
+  leadActivities            LeadActivity[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1811,9 +1813,47 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  proposals Proposal[]
+  proposals  Proposal[]
+  activities LeadActivity[]
 
   @@index([organizationId, stage])
+}
+
+enum LeadActivityType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+  TASK
+}
+
+/// Buildertrend's Lead Activities log: a free-form timeline entry against a
+/// Lead (call notes, a scheduled meeting, a follow-up task) — distinct from
+/// the unified Comment/Activity layer (CLAUDE.md 2.4), which only attaches to
+/// entities that already belong to a Job. A Lead is the one entity that
+/// legitimately predates a Job (see src/lib/crm/service.ts), so it needs its
+/// own lightweight activity log rather than borrowing that one.
+model LeadActivity {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadId         String
+  lead           Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  type        LeadActivityType @default(NOTE)
+  note        String
+  occurredAt  DateTime         @default(now())
+  /// Set for TASK-type activities that represent a follow-up to complete, not a log entry.
+  dueDate     DateTime?
+  completedAt DateTime?
+
+  createdByUserId String?
+  createdByUser   User?   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, occurredAt])
+  @@index([leadId, occurredAt])
 }
 
 enum ProposalStatus {

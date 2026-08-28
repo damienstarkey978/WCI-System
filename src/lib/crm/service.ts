@@ -8,7 +8,7 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
-import { JobStatus, type LeadStage } from "@/generated/prisma/enums";
+import { JobStatus, type LeadActivityType, type LeadStage } from "@/generated/prisma/enums";
 import type { CreateJobInput } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
 import { emitEvent } from "@/lib/webhooks";
@@ -117,4 +117,49 @@ export async function convertLeadToJob(
   await emitEvent(organizationId, "lead.converted", { leadId, jobId: result.job.id });
 
   return result;
+}
+
+export interface CreateLeadActivityInput {
+  readonly organizationId: string;
+  readonly leadId: string;
+  readonly type: LeadActivityType;
+  readonly note: string;
+  readonly occurredAt?: Date;
+  readonly dueDate?: Date | null;
+  readonly createdByUserId?: string | null;
+}
+
+export async function createLeadActivity(input: CreateLeadActivityInput) {
+  const lead = await db.lead.findFirst({ where: { id: input.leadId, organizationId: input.organizationId }, select: { id: true } });
+  if (!lead) throw new LeadNotFoundError(input.leadId);
+
+  return db.leadActivity.create({
+    data: {
+      organizationId: input.organizationId,
+      leadId: input.leadId,
+      type: input.type,
+      note: input.note,
+      occurredAt: input.occurredAt ?? new Date(),
+      dueDate: input.dueDate ?? null,
+      createdByUserId: input.createdByUserId ?? null,
+    },
+  });
+}
+
+export class LeadActivityNotFoundError extends Error {
+  constructor(leadActivityId: string) {
+    super(`Lead activity ${leadActivityId} not found`);
+    this.name = "LeadActivityNotFoundError";
+  }
+}
+
+/** Mark a TASK-type activity done (or reopen it, passing completed: false). Idempotent either way. */
+export async function setLeadActivityCompleted(organizationId: string, leadActivityId: string, completed: boolean) {
+  const activity = await db.leadActivity.findFirst({ where: { id: leadActivityId, organizationId } });
+  if (!activity) throw new LeadActivityNotFoundError(leadActivityId);
+
+  return db.leadActivity.update({
+    where: { id: activity.id },
+    data: { completedAt: completed ? (activity.completedAt ?? new Date()) : null },
+  });
 }

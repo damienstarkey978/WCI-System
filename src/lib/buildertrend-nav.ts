@@ -14,9 +14,13 @@ export interface JobNavLink {
 }
 
 /** Top-level nav items that don't depend on which job is selected. */
-export const TOP_LEVEL_NAV = [
-  { label: "Sales", href: "/leads" },
-  { label: "Jobs", href: "/jobs" },
+export const TOP_LEVEL_NAV = [{ label: "Jobs", href: "/jobs" }] as const;
+
+/** The "Sales" dropdown — Buildertrend's CRM surface, none of it scoped to a selected job. */
+export const SALES_NAV = [
+  { label: "Lead Opportunities", href: "/leads" },
+  { label: "Lead Activities", href: "/leads/activities" },
+  { label: "Lead Proposals", href: "/leads/proposals" },
 ] as const;
 
 /** The "Project Management" dropdown — every one of these is scoped to whichever job is selected. */

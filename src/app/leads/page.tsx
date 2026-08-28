@@ -1,5 +1,5 @@
-import { AppShell } from "@/components/shell/AppShell";
-import { sidebarJobsForOrg } from "@/components/shell/data";
+import Link from "next/link";
+
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -27,15 +27,11 @@ export default async function LeadsPage() {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
 
-  const [jobs, leads] = await Promise.all([
-    sidebarJobsForOrg(user.organizationId),
-    db.lead.findMany({ where: { organizationId: user.organizationId }, orderBy: { createdAt: "desc" } }),
-  ]);
+  const leads = await db.lead.findMany({ where: { organizationId: user.organizationId }, orderBy: { createdAt: "desc" } });
 
   return (
-    <AppShell jobs={jobs}>
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 p-6">
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Sales</h1>
+    <div className="mx-auto flex max-w-7xl flex-col gap-4 p-6">
+      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead opportunities</h1>
 
         <LeadForm />
 
@@ -51,7 +47,9 @@ export default async function LeadsPage() {
                 <div className="flex flex-col gap-2">
                   {stageLeads.map((lead) => (
                     <div key={lead.id} className="rounded border p-2" style={{ borderColor: "var(--bt-border)" }}>
-                      <div className="text-sm font-medium text-[var(--bt-text)]">{lead.name}</div>
+                      <Link href={`/leads/${lead.id}`} className="text-sm font-medium text-[var(--bt-text)] hover:underline">
+                        {lead.name}
+                      </Link>
                       {lead.email ? <div className="truncate text-xs text-[var(--bt-muted)]">{lead.email}</div> : null}
                       {lead.phone ? <div className="text-xs text-[var(--bt-muted)]">{lead.phone}</div> : null}
                       {lead.source ? <div className="text-xs text-[var(--bt-muted)]">via {lead.source}</div> : null}
@@ -71,8 +69,7 @@ export default async function LeadsPage() {
               </div>
             );
           })}
-        </div>
       </div>
-    </AppShell>
+    </div>
   );
 }
