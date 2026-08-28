@@ -13,8 +13,19 @@ export interface JobNavLink {
   readonly isNew?: boolean;
 }
 
-/** Top-level nav items that don't depend on which job is selected. */
-export const TOP_LEVEL_NAV = [{ label: "Jobs", href: "/jobs" }] as const;
+/**
+ * The "Jobs" dropdown. Buildertrend also lists "Summary", "Job Info", and
+ * "Jobs Map" here — skipped for now: the first two are per-job tabs already
+ * covered by the job Overview page reached from the sidebar, and a map view
+ * needs a geocoding/maps integration that doesn't exist yet. "New Job From
+ * Template" is skipped too — there's no job-template concept in the schema
+ * yet, so it would be a new feature, not just a nav link.
+ */
+export const JOBS_NAV = [
+  { label: "Jobs List", href: "/jobs" },
+  { label: "Job Price Summary", href: "/reports?report=profitability" },
+  { label: "New Job From Scratch", href: "/admin/jobs" },
+] as const;
 
 /** The "Sales" dropdown — Buildertrend's CRM surface, none of it scoped to a selected job. */
 export const SALES_NAV = [

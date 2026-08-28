@@ -9,11 +9,11 @@ import { UserButton } from "@clerk/nextjs";
 import {
   FILES_NAV,
   FINANCIAL_NAV,
+  JOBS_NAV,
   MESSAGING_HREF,
   PROJECT_MANAGEMENT_NAV,
   REPORTS_HREF,
   SALES_NAV,
-  TOP_LEVEL_NAV,
   type JobNavLink,
 } from "@/lib/buildertrend-nav";
 
@@ -130,17 +130,7 @@ export function TopNav({
 
         <nav className="flex items-center gap-1 text-sm font-medium">
           <FlatNavDropdown label="Sales" items={SALES_NAV} />
-
-          {TOP_LEVEL_NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded px-3 py-2 transition hover:bg-white/10"
-              style={pathname?.startsWith(item.href) ? { background: "var(--bt-nav-hover)" } : undefined}
-            >
-              {item.label}
-            </Link>
-          ))}
+          <FlatNavDropdown label="Jobs" items={JOBS_NAV} />
 
           <JobNavDropdown label="Project Management" items={PROJECT_MANAGEMENT_NAV} activeJobId={activeJobId} />
           <JobNavDropdown label="Files" items={FILES_NAV} activeJobId={activeJobId} />

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -99,7 +100,11 @@ export default async function InvoicesPage({ params }: PageProps<"/jobs/[jobId]/
                 const canAct = invoice.status !== "VOID" && invoice.status !== "PAID";
                 return (
                   <tr key={invoice.id} className="border-b align-top last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                    <td className="px-4 py-3 font-medium text-[var(--bt-text)]">{invoice.invoiceNumber}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
+                        {invoice.invoiceNumber}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3">
                       <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
                         {invoice.status.replace(/_/g, " ")}
