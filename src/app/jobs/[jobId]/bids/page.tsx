@@ -8,6 +8,8 @@ import { formatDate, formatMoney } from "@/lib/format";
 
 import { acceptBidSubmissionAction, declineBidSubmissionAction } from "./actions";
 import { CreateBidPackageForm } from "./create-bid-package-form";
+import { InviteVendorForm } from "./invite-vendor-form";
+import { SubmitBidOnBehalfForm } from "./submit-bid-on-behalf-form";
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +43,14 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const bidPackages = await db.bidPackage.findMany({
-    where: { jobId: job.id },
-    orderBy: { createdAt: "desc" },
-    include: { submissions: { include: { vendor: true } } },
-  });
+  const [bidPackages, vendors] = await Promise.all([
+    db.bidPackage.findMany({
+      where: { jobId: job.id },
+      orderBy: { createdAt: "desc" },
+      include: { submissions: { include: { vendor: true } } },
+    }),
+    db.vendor.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
@@ -79,6 +84,7 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
                     {pkg.submissions.map((submission) => {
                       const subStyle = SUBMISSION_STATUS_STYLE[submission.status] ?? SUBMISSION_STATUS_STYLE.INVITED;
                       const canDecide = submission.status === "SUBMITTED";
+                      const canEnterOnBehalf = submission.status === "INVITED" || submission.status === "DRAFT";
                       return (
                         <li key={submission.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                           <div className="flex items-center gap-2">
@@ -89,6 +95,7 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
                           </div>
                           <div className="flex items-center gap-3">
                             {submission.totalCents !== null ? <span className="text-[var(--bt-text)]">{formatMoney(submission.totalCents)}</span> : null}
+                            {canEnterOnBehalf ? <SubmitBidOnBehalfForm jobId={job.id} bidSubmissionId={submission.id} /> : null}
                             {canDecide ? (
                               <div className="flex gap-2">
                                 <form action={acceptBidSubmissionAction}>
@@ -113,6 +120,16 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
                     })}
                   </ul>
                 )}
+
+                {pkg.status === "OPEN" ? (
+                  <div className="mt-3">
+                    <InviteVendorForm
+                      jobId={job.id}
+                      bidPackageId={pkg.id}
+                      vendors={vendors.filter((vendor) => !pkg.submissions.some((s) => s.vendorId === vendor.id))}
+                    />
+                  </div>
+                ) : null}
               </div>
             );
           })}
