@@ -25,6 +25,83 @@ import {
   PeopleIcon,
   SearchIcon,
 } from "./icons";
+import { markAllNotificationsReadAction, markNotificationReadAction } from "./notification-actions";
+
+export interface BellNotification {
+  readonly id: string;
+  readonly payload: Record<string, unknown>;
+  readonly readAt: string | null;
+  readonly createdAt: string;
+}
+
+function notificationText(payload: Record<string, unknown>): string {
+  if (payload.type === "comment_mention") {
+    const preview = typeof payload.bodyPreview === "string" ? payload.bodyPreview : "";
+    const featureType = typeof payload.featureType === "string" ? payload.featureType.replace(/_/g, " ").toLowerCase() : "an item";
+    return `You were mentioned on ${featureType}: "${preview}"`;
+  }
+  return typeof payload.type === "string" ? payload.type.replace(/_/g, " ") : "New notification";
+}
+
+/** The Bell icon's dropdown: recent in-app notifications, with mark-read actions. */
+function NotificationBell({ notifications, unreadCount }: { notifications: readonly BellNotification[]; unreadCount: number }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="relative rounded p-2 transition hover:bg-white/10"
+        aria-label="Notifications"
+        aria-expanded={open}
+      >
+        <BellIcon className="h-4.5 w-4.5" />
+        {unreadCount > 0 ? (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-full z-30 mt-1 w-80 rounded-md border border-black/10 bg-white text-sm text-[var(--bt-text)] shadow-lg">
+          <div className="flex items-center justify-between border-b px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
+            <span className="font-semibold">Notifications</span>
+            {unreadCount > 0 ? (
+              <form action={markAllNotificationsReadAction}>
+                <button type="submit" className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
+                  Mark all read
+                </button>
+              </form>
+            ) : null}
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <p className="px-3 py-6 text-center text-xs text-[var(--bt-muted)]">You&apos;re all caught up.</p>
+            ) : (
+              notifications.map((notification) => (
+                <div key={notification.id} className="flex items-start justify-between gap-2 border-b px-3 py-2 last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                  <p className={notification.readAt ? "text-[var(--bt-muted)]" : "font-medium text-[var(--bt-text)]"}>
+                    {notificationText(notification.payload)}
+                  </p>
+                  {!notification.readAt ? (
+                    <form action={markNotificationReadAction}>
+                      <input type="hidden" name="notificationId" value={notification.id} />
+                      <button type="submit" className="shrink-0 text-xs text-[var(--bt-primary)] hover:underline">
+                        Mark read
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /** One of Buildertrend's job-scoped mega-dropdowns (Project Management, Files, Financial). */
 function JobNavDropdown({ label, items, activeJobId }: { label: string; items: readonly JobNavLink[]; activeJobId?: string }) {
@@ -109,11 +186,15 @@ function FlatNavDropdown({ label, items }: { label: string; items: readonly { la
 export function TopNav({
   activeJobId,
   clerkConfigured,
+  notifications = [],
+  unreadCount = 0,
 }: {
   activeJobId?: string;
   /** Computed server-side (CLERK_SECRET_KEY isn't inlined into the client bundle, so this
    *  component can't call isClerkConfigured() itself and get the right answer in the browser). */
   clerkConfigured: boolean;
+  notifications?: readonly BellNotification[];
+  unreadCount?: number;
 }) {
   const pathname = usePathname();
   const messagingHref = activeJobId ? `/jobs/${activeJobId}${MESSAGING_HREF}` : undefined;
@@ -163,15 +244,13 @@ export function TopNav({
         <button type="button" className="rounded p-2 transition hover:bg-white/10" aria-label="Search">
           <SearchIcon className="h-4.5 w-4.5" />
         </button>
-        <button type="button" className="rounded p-2 transition hover:bg-white/10" aria-label="Notifications">
-          <BellIcon className="h-4.5 w-4.5" />
-        </button>
+        <NotificationBell notifications={notifications} unreadCount={unreadCount} />
         <button type="button" className="rounded p-2 transition hover:bg-white/10" aria-label="Messages">
           <ChatIcon className="h-4.5 w-4.5" />
         </button>
-        <button type="button" className="rounded p-2 transition hover:bg-white/10" aria-label="People">
+        <Link href="/people" className="rounded p-2 transition hover:bg-white/10" aria-label="People">
           <PeopleIcon className="h-4.5 w-4.5" />
-        </button>
+        </Link>
         <button type="button" className="rounded p-2 transition hover:bg-white/10" aria-label="Help">
           <HelpIcon className="h-4.5 w-4.5" />
         </button>

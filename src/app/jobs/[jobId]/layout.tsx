@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 
-import { AppShell } from "@/components/shell/AppShell";
-import { sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { StaffShell } from "@/components/shell/StaffShell";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -21,11 +20,5 @@ export default async function JobLayout({ children, params }: LayoutProps<"/jobs
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const jobs = await sidebarJobsForOrg(user.organizationId);
-
-  return (
-    <AppShell jobs={jobs} activeJobId={job.id}>
-      {children}
-    </AppShell>
-  );
+  return <StaffShell activeJobId={job.id}>{children}</StaffShell>;
 }

@@ -65,3 +65,25 @@ export async function markNotificationRead(organizationId: string, notificationI
   if (!notification) throw new NotificationNotFoundError(notificationId);
   return db.notification.update({ where: { id: notification.id }, data: { readAt: new Date() } });
 }
+
+/** The Bell icon's feed: a user's own IN_APP notifications, most recent first. */
+export async function listNotificationsForUser(organizationId: string, userId: string, limit = 20) {
+  return db.notification.findMany({
+    where: { organizationId, userId, channel: NotificationChannel.IN_APP },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
+export async function countUnreadNotifications(organizationId: string, userId: string) {
+  return db.notification.count({
+    where: { organizationId, userId, channel: NotificationChannel.IN_APP, readAt: null },
+  });
+}
+
+export async function markAllNotificationsRead(organizationId: string, userId: string) {
+  await db.notification.updateMany({
+    where: { organizationId, userId, channel: NotificationChannel.IN_APP, readAt: null },
+    data: { readAt: new Date() },
+  });
+}

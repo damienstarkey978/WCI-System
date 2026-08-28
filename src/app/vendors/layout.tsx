@@ -2,6 +2,6 @@ import { StaffShell } from "@/components/shell/StaffShell";
 
 export const dynamic = "force-dynamic";
 
-export default function LeadsLayout({ children }: LayoutProps<"/leads">) {
+export default function VendorsLayout({ children }: LayoutProps<"/vendors">) {
   return <StaffShell>{children}</StaffShell>;
 }

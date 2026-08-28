@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { AppShell } from "@/components/shell/AppShell";
-import { sidebarJobsForOrg } from "@/components/shell/data";
+import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 
@@ -23,10 +23,13 @@ export default async function JobsIndexPage() {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
 
-  const jobs = await sidebarJobsForOrg(user.organizationId);
+  const [jobs, bell] = await Promise.all([
+    sidebarJobsForOrg(user.organizationId),
+    notificationBellDataForUser(user.organizationId, user.id),
+  ]);
 
   return (
-    <AppShell jobs={jobs}>
+    <AppShell jobs={jobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-[var(--bt-text)]">Jobs</h1>

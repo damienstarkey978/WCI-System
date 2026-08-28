@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/shell/AppShell";
-import { sidebarJobsForOrg } from "@/components/shell/data";
+import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { formatMoney, formatPercent } from "@/lib/format";
@@ -48,13 +48,16 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
 
-  const jobs = await sidebarJobsForOrg(user.organizationId);
+  const [jobs, bell] = await Promise.all([
+    sidebarJobsForOrg(user.organizationId),
+    notificationBellDataForUser(user.organizationId, user.id),
+  ]);
 
   const { report } = await searchParams;
   const active: ReportKey = REPORTS.some((r) => r.key === report) ? (report as ReportKey) : "wip";
 
   return (
-    <AppShell jobs={jobs}>
+    <AppShell jobs={jobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Reports</h1>
 
