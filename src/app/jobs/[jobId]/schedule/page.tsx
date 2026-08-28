@@ -6,6 +6,9 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 
+import { AddItemForm } from "./add-item-form";
+import { CreateScheduleButton } from "./create-schedule-button";
+
 export const dynamic = "force-dynamic";
 
 const MS_PER_DAY = 86_400_000;
@@ -35,9 +38,10 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
     return (
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Schedule — {job.name}</h1>
-        <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-          No schedule yet.
-        </p>
+        <div className="rounded-lg border bg-white px-4 py-6 text-center" style={{ borderColor: "var(--bt-border)" }}>
+          <p className="mb-3 text-sm text-[var(--bt-muted)]">No schedule yet.</p>
+          <CreateScheduleButton jobId={job.id} />
+        </div>
       </div>
     );
   }
@@ -48,6 +52,7 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
     return (
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Schedule — {job.name}</h1>
+        <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={[]} />
         <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
           No schedule items yet.
         </p>
@@ -67,6 +72,8 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
           <span className="text-sm text-[var(--bt-muted)]">Projected finish: {formatDate(projectFinishDate)}</span>
         ) : null}
       </div>
+
+      <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={items.map((item) => ({ id: item.id, title: item.title }))} />
 
       <div className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
