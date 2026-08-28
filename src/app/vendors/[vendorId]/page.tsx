@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CommentThread } from "@/components/comments/CommentThread";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -98,6 +99,8 @@ export default async function VendorDetailPage({ params }: PageProps<"/vendors/[
           <AddCertificationForm vendorId={vendor.id} />
         </div>
       </section>
+
+      <CommentThread organizationId={user.organizationId} featureType="Vendor" featureId={vendor.id} revalidate={`/vendors/${vendor.id}`} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CommentThread } from "@/components/comments/CommentThread";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -246,6 +247,14 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
           {editable ? <AddSectionForm proposalId={proposal.id} /> : null}
         </div>
       </div>
+
+      <CommentThread
+        organizationId={user.organizationId}
+        featureType="Proposal"
+        featureId={proposal.id}
+        revalidate={`/leads/proposals/${proposal.id}`}
+        title="Internal notes (staff only — never visible to the client)"
+      />
     </div>
   );
 }

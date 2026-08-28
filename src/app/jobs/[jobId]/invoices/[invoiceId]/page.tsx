@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CommentThread } from "@/components/comments/CommentThread";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -169,6 +170,13 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
         )}
         {hasOnlinePayment ? <p className="mt-1 text-xs text-[var(--bt-muted)]">This invoice has an online (Stripe) payment recorded.</p> : null}
       </section>
+
+      <CommentThread
+        organizationId={user.organizationId}
+        featureType="Invoice"
+        featureId={invoice.id}
+        revalidate={`/jobs/${job.id}/invoices/${invoice.id}`}
+      />
     </div>
   );
 }

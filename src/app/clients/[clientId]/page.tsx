@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CommentThread } from "@/components/comments/CommentThread";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -68,6 +69,14 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
           <GrantJobAccessForm clientId={client.id} jobs={jobs} />
         </div>
       </section>
+
+      <CommentThread
+        organizationId={user.organizationId}
+        featureType="Client"
+        featureId={client.id}
+        revalidate={`/clients/${client.id}`}
+        title="Internal notes (staff only — never visible to the client)"
+      />
     </div>
   );
 }
