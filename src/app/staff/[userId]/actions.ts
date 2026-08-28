@@ -2,10 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 
-import { UserRole } from "@/generated/prisma/enums";
+import { ScheduleScope, UserRole } from "@/generated/prisma/enums";
 import { requireRole } from "@/lib/auth";
 import { ASSIGNABLE_STAFF_ROLES } from "@/lib/staff/role-descriptions";
-import { LastAdminError, StaffMemberNotFoundError, setStaffActive, updateStaffProfile, updateStaffRole } from "@/lib/staff/service";
+import {
+  grantStaffJobAccess,
+  LastAdminError,
+  revokeStaffJobAccess,
+  setStaffActive,
+  StaffJobNotFoundError,
+  StaffMemberNotFoundError,
+  updateStaffProfile,
+  updateStaffRole,
+} from "@/lib/staff/service";
 
 export interface ActionState {
   readonly error?: string;
@@ -71,4 +80,46 @@ export async function updateStaffProfileAction(_previous: ActionState, formData:
   revalidatePath(`/staff/${userId}`);
   revalidatePath("/staff");
   return { ok: true };
+}
+
+export async function grantJobAccessAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const admin = await requireRole(UserRole.ADMIN);
+
+  const userId = String(formData.get("userId") ?? "");
+  const jobId = String(formData.get("jobId") ?? "");
+  if (!jobId) return { error: "Choose a job." };
+
+  const scheduleScope = String(formData.get("scheduleScope") ?? "ASSIGNED_ONLY") === "ALL_ITEMS" ? ScheduleScope.ALL_ITEMS : ScheduleScope.ASSIGNED_ONLY;
+
+  try {
+    await grantStaffJobAccess({
+      organizationId: admin.organizationId,
+      userId,
+      jobId,
+      scheduleScope,
+      canViewPricing: formData.get("canViewPricing") === "on",
+      canViewCostDetail: formData.get("canViewCostDetail") === "on",
+      canManageSchedule: formData.get("canManageSchedule") === "on",
+      canApproveChangeOrders: formData.get("canApproveChangeOrders") === "on",
+      canViewDocuments: formData.get("canViewDocuments") === "on",
+      canCommunicateWithClient: formData.get("canCommunicateWithClient") === "on",
+    });
+  } catch (error) {
+    if (error instanceof StaffMemberNotFoundError || error instanceof StaffJobNotFoundError) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/staff/${userId}`);
+  return { ok: true };
+}
+
+export async function revokeJobAccessAction(formData: FormData): Promise<void> {
+  const admin = await requireRole(UserRole.ADMIN);
+
+  const userId = String(formData.get("userId") ?? "");
+  const jobId = String(formData.get("jobId") ?? "");
+
+  await revokeStaffJobAccess(admin.organizationId, userId, jobId);
+
+  revalidatePath(`/staff/${userId}`);
 }

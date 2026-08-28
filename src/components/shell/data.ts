@@ -1,13 +1,23 @@
+import { UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { countUnreadNotifications, listNotificationsForUser } from "@/lib/notifications/service";
 
 import type { SidebarJob } from "./JobSidebar";
 import type { BellNotification } from "./TopNav";
 
-/** Every job in the org, grouped for the sidebar exactly the way JobGroup models it. */
-export async function sidebarJobsForOrg(organizationId: string): Promise<SidebarJob[]> {
+/**
+ * Every job the given user can actually open, grouped for the sidebar exactly
+ * the way JobGroup models it. ADMIN/PM/OFFICE see every job in the org (their
+ * roles have org-wide visibility by design, see src/lib/job-access.ts);
+ * FIELD only sees jobs they hold an explicit JobAccessGrant for, so the
+ * sidebar never lists a job that clicking into would just deny.
+ */
+export async function sidebarJobsForOrg(organizationId: string, user: { readonly id: string; readonly role: UserRole }): Promise<SidebarJob[]> {
   const jobs = await db.job.findMany({
-    where: { organizationId },
+    where: {
+      organizationId,
+      ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
+    },
     orderBy: { createdAt: "desc" },
     include: { jobGroup: true },
   });

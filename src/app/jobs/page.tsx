@@ -24,7 +24,7 @@ export default async function JobsIndexPage() {
   }
 
   const [jobs, bell] = await Promise.all([
-    sidebarJobsForOrg(user.organizationId),
+    sidebarJobsForOrg(user.organizationId, user),
     notificationBellDataForUser(user.organizationId, user.id),
   ]);
 

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { formatMoney, formatPercent } from "@/lib/format";
 import {
@@ -47,9 +48,21 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   } catch (error) {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
+  if (user.role === UserRole.FIELD) {
+    return (
+      <div className="mx-auto max-w-2xl p-6">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          Reports show company-wide financials, which your role doesn&apos;t have access to.{" "}
+          <Link href="/jobs" className="font-semibold underline">
+            Back to your jobs
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const [jobs, bell] = await Promise.all([
-    sidebarJobsForOrg(user.organizationId),
+    sidebarJobsForOrg(user.organizationId, user),
     notificationBellDataForUser(user.organizationId, user.id),
   ]);
 

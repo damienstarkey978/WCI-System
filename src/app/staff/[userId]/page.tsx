@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { ROLE_DESCRIPTIONS } from "@/lib/staff/role-descriptions";
 
+import { revokeJobAccessAction } from "./actions";
+import { JobAccessForm } from "./job-access-form";
 import { ProfileForm } from "./profile-form";
 import { RoleForm } from "./role-form";
 import { SecurityForm } from "./security-form";
@@ -35,13 +37,17 @@ export default async function StaffMemberPage({ params }: PageProps<"/staff/[use
     );
   }
 
-  const member = await db.user.findFirst({
-    where: { id: userId, organizationId: viewer.organizationId },
-    include: { jobGrants: { include: { job: { select: { id: true, name: true } } } } },
-  });
+  const [member, jobs] = await Promise.all([
+    db.user.findFirst({
+      where: { id: userId, organizationId: viewer.organizationId },
+      include: { jobGrants: { include: { job: { select: { id: true, name: true } } } } },
+    }),
+    db.job.findMany({ where: { organizationId: viewer.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ]);
   if (!member) notFound();
 
   const roleInfo = ROLE_DESCRIPTIONS[member.role];
+  const grantsAreConsulted = member.role === UserRole.FIELD;
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
@@ -79,20 +85,42 @@ export default async function StaffMemberPage({ params }: PageProps<"/staff/[use
 
       <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Job Access ({member.jobGrants.length})</h2>
+        <p className="mt-1 text-xs text-[var(--bt-muted)]">
+          {grantsAreConsulted
+            ? "Field crew only see jobs they're granted access to below — this is what actually controls it."
+            : `${roleInfo.label} already has org-wide visibility by role, so grants below aren't consulted unless their role changes to Field Crew.`}
+        </p>
         {member.jobGrants.length === 0 ? (
-          <p className="mt-2 text-sm text-[var(--bt-muted)]">
-            No per-job access grants — {roleInfo.label.toLowerCase()} visibility is governed by their role above, not a per-job list.
-          </p>
+          <p className="mt-2 text-sm text-[var(--bt-muted)]">Not granted access to any specific job yet.</p>
         ) : (
           <ul className="mt-2 divide-y" style={{ borderColor: "var(--bt-border)" }}>
             {member.jobGrants.map((grant) => (
               <li key={grant.id} className="flex items-center justify-between py-2 text-sm">
-                <span className="font-medium text-[var(--bt-text)]">{grant.job.name}</span>
-                <span className="text-xs text-[var(--bt-muted)]">{grant.scheduleScope === "ALL_ITEMS" ? "All schedule items" : "Assigned items only"}</span>
+                <div>
+                  <span className="font-medium text-[var(--bt-text)]">{grant.job.name}</span>
+                  <div className="text-xs text-[var(--bt-muted)]">
+                    {grant.scheduleScope === "ALL_ITEMS" ? "All schedule items" : "Assigned items only"}
+                    {grant.canViewPricing ? " · Pricing" : ""}
+                    {grant.canViewCostDetail ? " · Cost detail" : ""}
+                    {grant.canManageSchedule ? " · Manage schedule" : ""}
+                    {grant.canApproveChangeOrders ? " · Approve change orders" : ""}
+                    {grant.canCommunicateWithClient ? " · Communicate with client" : ""}
+                  </div>
+                </div>
+                <form action={revokeJobAccessAction}>
+                  <input type="hidden" name="userId" value={member.id} />
+                  <input type="hidden" name="jobId" value={grant.job.id} />
+                  <button type="submit" className="text-xs font-semibold text-red-600 hover:underline">
+                    Revoke
+                  </button>
+                </form>
               </li>
             ))}
           </ul>
         )}
+        <div className="mt-3">
+          <JobAccessForm userId={member.id} jobs={jobs} />
+        </div>
       </section>
 
       <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>

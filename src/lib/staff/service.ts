@@ -9,7 +9,7 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
-import { UserRole } from "@/generated/prisma/enums";
+import { ScheduleScope, UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 
 export class DuplicateStaffEmailError extends Error {
@@ -23,6 +23,13 @@ export class StaffMemberNotFoundError extends Error {
   constructor(userId: string) {
     super(`Staff member ${userId} not found`);
     this.name = "StaffMemberNotFoundError";
+  }
+}
+
+export class StaffJobNotFoundError extends Error {
+  constructor(jobId: string) {
+    super(`Job ${jobId} not found`);
+    this.name = "StaffJobNotFoundError";
   }
 }
 
@@ -127,4 +134,53 @@ export async function setStaffActive(organizationId: string, userId: string, isA
   }
 
   return db.user.update({ where: { id: user.id }, data: { isActive } });
+}
+
+/**
+ * Job-level access grants (src/lib/job-access.ts). Only meaningful for FIELD —
+ * ADMIN/PM/OFFICE already have org-wide visibility and ignore grants entirely
+ * — but nothing here stops one from being created for another role; it would
+ * just never be consulted.
+ */
+export interface GrantStaffJobAccessInput {
+  readonly organizationId: string;
+  readonly userId: string;
+  readonly jobId: string;
+  readonly scheduleScope: ScheduleScope;
+  readonly canViewPricing: boolean;
+  readonly canViewCostDetail: boolean;
+  readonly canManageSchedule: boolean;
+  readonly canApproveChangeOrders: boolean;
+  readonly canViewDocuments: boolean;
+  readonly canCommunicateWithClient: boolean;
+}
+
+export async function grantStaffJobAccess(input: GrantStaffJobAccessInput) {
+  const [user, job] = await Promise.all([
+    db.user.findFirst({ where: { id: input.userId, organizationId: input.organizationId }, select: { id: true } }),
+    db.job.findFirst({ where: { id: input.jobId, organizationId: input.organizationId }, select: { id: true } }),
+  ]);
+  if (!user) throw new StaffMemberNotFoundError(input.userId);
+  if (!job) throw new StaffJobNotFoundError(input.jobId);
+
+  const flags = {
+    scheduleScope: input.scheduleScope,
+    canViewPricing: input.canViewPricing,
+    canViewCostDetail: input.canViewCostDetail,
+    canManageSchedule: input.canManageSchedule,
+    canApproveChangeOrders: input.canApproveChangeOrders,
+    canViewDocuments: input.canViewDocuments,
+    canCommunicateWithClient: input.canCommunicateWithClient,
+  };
+
+  return db.jobAccessGrant.upsert({
+    where: { jobId_userId: { jobId: input.jobId, userId: input.userId } },
+    create: { jobId: input.jobId, userId: input.userId, ...flags },
+    update: flags,
+  });
+}
+
+/** Idempotent — revoking a grant that's already gone is a no-op, not an error. */
+export async function revokeStaffJobAccess(organizationId: string, userId: string, jobId: string): Promise<void> {
+  await db.jobAccessGrant.deleteMany({ where: { jobId, userId, job: { organizationId } } });
 }

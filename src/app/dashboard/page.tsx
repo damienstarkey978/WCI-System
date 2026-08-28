@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { AppShell } from "@/components/shell/AppShell";
 import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
+import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { formatMoney, formatPercent } from "@/lib/format";
 import {
@@ -46,9 +48,15 @@ export default async function DashboardPage() {
   } catch (error) {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
+  // This dashboard is company-wide financials — FIELD's role has no visibility into
+  // that (src/lib/job-access.ts), so send them to the jobs they're actually granted
+  // instead of a dead-end denial page.
+  if (user.role === UserRole.FIELD) {
+    redirect("/jobs");
+  }
 
   const [jobs, bell, wip, profitability, budgetVariance, invoicing, cashFlow] = await Promise.all([
-    sidebarJobsForOrg(user.organizationId),
+    sidebarJobsForOrg(user.organizationId, user),
     notificationBellDataForUser(user.organizationId, user.id),
     getWipReport(user.organizationId),
     getProfitabilityReport(user.organizationId),

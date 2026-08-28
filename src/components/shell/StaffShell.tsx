@@ -22,7 +22,7 @@ export async function StaffShell({ activeJobId, children }: { activeJobId?: stri
   }
 
   const [jobs, bell] = await Promise.all([
-    sidebarJobsForOrg(user.organizationId),
+    sidebarJobsForOrg(user.organizationId, user),
     notificationBellDataForUser(user.organizationId, user.id),
   ]);
 
