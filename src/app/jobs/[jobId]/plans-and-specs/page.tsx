@@ -5,6 +5,8 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
+import { GenerateSpecForm } from "./generate-spec-form";
+
 export const dynamic = "force-dynamic";
 
 export default async function PlansAndSpecsPage({ params }: PageProps<"/jobs/[jobId]/plans-and-specs">) {
@@ -23,15 +25,20 @@ export default async function PlansAndSpecsPage({ params }: PageProps<"/jobs/[jo
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const specifications = await db.specification.findMany({
-    where: { jobId: job.id },
-    orderBy: { createdAt: "desc" },
-    include: { sections: { orderBy: { sortOrder: "asc" } } },
-  });
+  const [specifications, estimates] = await Promise.all([
+    db.specification.findMany({
+      where: { jobId: job.id },
+      orderBy: { createdAt: "desc" },
+      include: { sections: { orderBy: { sortOrder: "asc" } } },
+    }),
+    db.estimate.findMany({ where: { jobId: job.id }, orderBy: { createdAt: "desc" }, select: { id: true, title: true } }),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Plans and specs — {job.name}</h1>
+
+      <GenerateSpecForm jobId={job.id} estimates={estimates} />
 
       {specifications.length === 0 ? (
         <EmptyState title="No specifications yet" description="Specification books generated for this job will appear here." />

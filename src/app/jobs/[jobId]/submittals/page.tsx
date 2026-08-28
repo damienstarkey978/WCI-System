@@ -6,6 +6,8 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 
+import { CreateSubmittalForm } from "./create-submittal-form";
+
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
@@ -45,6 +47,8 @@ export default async function SubmittalsPage({ params }: PageProps<"/jobs/[jobId
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Submittals — {job.name}</h1>
+
+      <CreateSubmittalForm jobId={job.id} />
 
       {submittals.length === 0 ? (
         <EmptyState title="No submittals yet" description="Material specs and shop drawings for this job will appear here." />

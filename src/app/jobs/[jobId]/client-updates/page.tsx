@@ -6,6 +6,8 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 
+import { GenerateSummaryButton } from "./generate-summary-button";
+
 export const dynamic = "force-dynamic";
 
 export default async function ClientUpdatesPage({ params }: PageProps<"/jobs/[jobId]/client-updates">) {
@@ -31,7 +33,10 @@ export default async function ClientUpdatesPage({ params }: PageProps<"/jobs/[jo
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Client updates — {job.name}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Client updates — {job.name}</h1>
+        <GenerateSummaryButton jobId={job.id} />
+      </div>
 
       {summaries.length === 0 ? (
         <EmptyState title="No client updates yet" description="Weekly AI-generated client update summaries for this job will appear here." />

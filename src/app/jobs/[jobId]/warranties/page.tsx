@@ -6,6 +6,9 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 
+import { CreateClaimForm } from "./create-claim-form";
+import { ScheduleAppointmentForm } from "./schedule-appointment-form";
+
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
@@ -32,15 +35,21 @@ export default async function WarrantiesPage({ params }: PageProps<"/jobs/[jobId
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const claims = await db.warrantyClaim.findMany({
-    where: { jobId: job.id },
-    orderBy: { createdAt: "desc" },
-    include: { assignedVendor: true },
-  });
+  const [claims, clients, vendors] = await Promise.all([
+    db.warrantyClaim.findMany({
+      where: { jobId: job.id },
+      orderBy: { createdAt: "desc" },
+      include: { assignedVendor: true },
+    }),
+    db.client.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.vendor.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Warranties — {job.name}</h1>
+
+      <CreateClaimForm jobId={job.id} clients={clients} />
 
       {claims.length === 0 ? (
         <EmptyState title="No warranty claims yet" description="Claims submitted for this job will appear here." />
@@ -64,6 +73,11 @@ export default async function WarrantiesPage({ params }: PageProps<"/jobs/[jobId
                   {claim.assignedVendor ? <span>Assigned to {claim.assignedVendor.name}</span> : null}
                   {claim.appointmentAt ? <span>Appointment {formatDate(claim.appointmentAt)}</span> : null}
                 </div>
+                {claim.status === "SUBMITTED" ? (
+                  <div className="mt-2">
+                    <ScheduleAppointmentForm jobId={job.id} claimId={claim.id} vendors={vendors} />
+                  </div>
+                ) : null}
               </article>
             );
           })}
