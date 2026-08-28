@@ -113,6 +113,14 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
           <div className="flex flex-col items-end gap-2">
             <span className="text-lg font-semibold text-[var(--bt-text)]">{formatMoney(grandTotalCents)}</span>
             <div className="flex gap-2">
+              <Link
+                href={`/proposals/${proposal.id}/pdf`}
+                target="_blank"
+                className="rounded border px-3 py-1.5 text-xs font-medium text-[var(--bt-text)]"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                View as PDF
+              </Link>
               {proposal.status === "DRAFT" ? (
                 <form action={sendProposalPageAction}>
                   <input type="hidden" name="proposalId" value={proposal.id} />
