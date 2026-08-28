@@ -8,7 +8,24 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
-import { BillApprovalStatus, JarvisActionStatus } from "@/generated/prisma/enums";
+import { BidPackageStatus, BillApprovalStatus, JarvisActionStatus } from "@/generated/prisma/enums";
+import {
+  acceptBidSubmission,
+  AlreadyInvitedError,
+  BidPackageNotFoundError,
+  BidPackageNotOpenError,
+  BidSubmissionAlreadyDecidedError,
+  BidSubmissionNotAcceptedError,
+  BidSubmissionNotFoundError,
+  BidSubmissionNotSubmittedError,
+  closeBidPackage,
+  declineBidSubmission,
+  inviteVendorToBid,
+  MissingCostCodeError,
+  NoAcceptedSubmissionsError,
+  pushBidSubmissionToPurchaseOrder,
+  VendorNotFoundError,
+} from "@/lib/bids/service";
 import {
   BillNotFoundError,
   IllegalBillTransitionError,
@@ -109,6 +126,35 @@ async function executePendingAction(organizationId: string, toolName: string, in
       const totalCents = result.lineItems.reduce((total, item) => total + item.amountCents, 0);
       return `Moved the bill (${formatMoney(totalCents)}) to ${targetStatus}.`;
     }
+    case "invite_vendor_to_bid": {
+      const { bidPackageId, vendorId } = input as { bidPackageId: string; vendorId: string };
+      await inviteVendorToBid(organizationId, bidPackageId, vendorId);
+      return "Invited the vendor to bid on the package.";
+    }
+    case "accept_bid_submission": {
+      const { bidSubmissionId } = input as { bidSubmissionId: string };
+      await acceptBidSubmission(organizationId, bidSubmissionId);
+      return "Accepted the bid submission.";
+    }
+    case "decline_bid_submission": {
+      const { bidSubmissionId } = input as { bidSubmissionId: string };
+      await declineBidSubmission(organizationId, bidSubmissionId);
+      return "Declined the bid submission.";
+    }
+    case "award_bid_package": {
+      const { bidPackageId } = input as { bidPackageId: string };
+      await closeBidPackage({ organizationId, bidPackageId, status: BidPackageStatus.AWARDED });
+      return "Awarded and closed the bid package.";
+    }
+    case "push_bid_submission_to_purchase_order": {
+      const { bidSubmissionId, poNumber, fallbackCostCodeId } = input as {
+        bidSubmissionId: string;
+        poNumber: string;
+        fallbackCostCodeId?: string;
+      };
+      const po = await pushBidSubmissionToPurchaseOrder(organizationId, bidSubmissionId, poNumber, fallbackCostCodeId);
+      return `Created purchase order ${po.poNumber} from the accepted bid.`;
+    }
     default:
       throw new UnknownPendingActionToolError(toolName);
   }
@@ -131,7 +177,17 @@ export async function confirmPendingAction(organizationId: string, actionId: str
       error instanceof SelectionAlreadyDecidedError ||
       error instanceof JobNotOpenError ||
       error instanceof BillNotFoundError ||
-      error instanceof IllegalBillTransitionError
+      error instanceof IllegalBillTransitionError ||
+      error instanceof BidPackageNotFoundError ||
+      error instanceof BidPackageNotOpenError ||
+      error instanceof VendorNotFoundError ||
+      error instanceof AlreadyInvitedError ||
+      error instanceof BidSubmissionNotFoundError ||
+      error instanceof BidSubmissionAlreadyDecidedError ||
+      error instanceof BidSubmissionNotSubmittedError ||
+      error instanceof NoAcceptedSubmissionsError ||
+      error instanceof MissingCostCodeError ||
+      error instanceof BidSubmissionNotAcceptedError
     ) {
       resultSummary = `Couldn't complete this: ${error.message}`;
     } else {

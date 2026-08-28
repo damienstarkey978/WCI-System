@@ -29,6 +29,7 @@ import { z } from "zod";
 import { ChangeOrderMode, ChangeOrderStatus, InvoiceStatus, ProposalStatus, WarrantyClaimStatus } from "@/generated/prisma/enums";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
 import type { JarvisTool } from "@/lib/jarvis/assistant";
+import { createBidPackage, lockBidSubmission } from "@/lib/bids/service";
 import { createBill } from "@/lib/bills/service";
 import { createChangeOrder } from "@/lib/change-orders/service";
 import { db } from "@/lib/db";
@@ -631,6 +632,90 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  // --- AUTO: Vendors & Bid Board ------------------------------------------------
+
+  const listVendors = betaZodTool({
+    name: "list_vendors",
+    description: "List this organization's vendors with their id, name, and trade. Needed before inviting a vendor to bid.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const vendors = await db.vendor.findMany({
+        where: { organizationId: ctx.organizationId },
+        select: { id: true, name: true, tradeType: true },
+        orderBy: { name: "asc" },
+      });
+      if (vendors.length === 0) return "This organization has no vendors yet.";
+      return vendors.map((vendor) => `${vendor.id} | ${vendor.name} | ${vendor.tradeType ?? "no trade listed"}`).join("\n");
+    },
+  });
+
+  const listBidPackagesForJob = betaZodTool({
+    name: "list_bid_packages_for_job",
+    description: "List a job's bid packages and their submissions. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const packages = await db.bidPackage.findMany({
+        where: { jobId: job.id },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          submissions: { select: { id: true, status: true, totalCents: true, vendor: { select: { name: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (packages.length === 0) return `${job.name} has no bid packages yet.`;
+      return packages
+        .map(
+          (pkg) =>
+            `${pkg.id} | ${pkg.title} | ${pkg.status}\n` +
+            (pkg.submissions.length === 0
+              ? "  (no submissions yet)"
+              : pkg.submissions
+                  .map((sub) => `  - ${sub.id} | ${sub.vendor.name} | ${sub.status}${sub.totalCents ? ` | ${formatMoney(sub.totalCents)}` : ""}`)
+                  .join("\n")),
+        )
+        .join("\n");
+    },
+  });
+
+  const createBidPackageTool = betaZodTool({
+    name: "create_bid_package",
+    description: "Create a new bid package for a job — invisible to vendors until you invite one with invite_vendor_to_bid.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      title: z.string().describe("What the package covers, e.g. 'Electrical rough-in'"),
+      description: z.string().optional(),
+      dueDate: z.string().optional().describe("Bid due date as an ISO date string"),
+    }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const bidPackage = await createBidPackage({
+        organizationId: ctx.organizationId,
+        jobId: job.id,
+        title: input.title,
+        description: input.description ?? null,
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+      });
+      return `Created bid package "${bidPackage.title}" for ${job.name}, status OPEN. Nothing is visible to a vendor until you invite one.`;
+    },
+  });
+
+  const lockBidSubmissionTool = betaZodTool({
+    name: "lock_bid_submission",
+    description: "Freeze a vendor's bid submission so it can no longer be edited. Pass the submission's id from list_bid_packages_for_job.",
+    inputSchema: z.object({ bidSubmissionId: z.string().describe("The bid submission's id, from list_bid_packages_for_job") }),
+    run: async (input) => {
+      await lockBidSubmission(ctx.organizationId, input.bidSubmissionId);
+      return "Locked the bid submission from further edits.";
+    },
+  });
+
   // --- CONFIRM: client-facing or money-moving — queue only, never execute -----
 
   const sendInvoiceTool = betaZodTool({
@@ -731,6 +816,120 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  const inviteVendorToBidTool = betaZodTool({
+    name: "invite_vendor_to_bid",
+    description:
+      "Queue inviting a vendor to bid on a package. This does NOT execute immediately — once invited, the vendor can see the package and submit a bid, so it's a real external-facing action that queues for the user's explicit confirmation. Pass ids from list_bid_packages_for_job and list_vendors.",
+    inputSchema: z.object({
+      bidPackageId: z.string().describe("The bid package's id, from list_bid_packages_for_job"),
+      vendorId: z.string().describe("The vendor's id, from list_vendors"),
+    }),
+    run: async (input) => {
+      const [bidPackage, vendor] = await Promise.all([
+        db.bidPackage.findFirst({ where: { id: input.bidPackageId, organizationId: ctx.organizationId }, select: { title: true } }),
+        db.vendor.findFirst({ where: { id: input.vendorId, organizationId: ctx.organizationId }, select: { name: true } }),
+      ]);
+      if (!bidPackage) return `No bid package found with id ${input.bidPackageId} in this organization.`;
+      if (!vendor) return `No vendor found with id ${input.vendorId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "invite_vendor_to_bid",
+        input: { bidPackageId: input.bidPackageId, vendorId: input.vendorId },
+        summary: `Invite ${vendor.name} to bid on "${bidPackage.title}"`,
+      });
+      return `Queued inviting ${vendor.name} to bid on "${bidPackage.title}" for the user's confirmation. They haven't been invited yet.`;
+    },
+  });
+
+  const acceptBidSubmissionTool = betaZodTool({
+    name: "accept_bid_submission",
+    description:
+      "Queue accepting a vendor's bid submission — the awarding decision on a subcontract. This does NOT execute immediately, and the decision is final once made. Pass the submission's id from list_bid_packages_for_job.",
+    inputSchema: z.object({ bidSubmissionId: z.string().describe("The bid submission's id, from list_bid_packages_for_job") }),
+    run: async (input) => {
+      const submission = await db.bidSubmission.findFirst({
+        where: { id: input.bidSubmissionId, bidPackage: { organizationId: ctx.organizationId } },
+        select: { totalCents: true, vendor: { select: { name: true } }, bidPackage: { select: { title: true } } },
+      });
+      if (!submission) return `No bid submission found with id ${input.bidSubmissionId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "accept_bid_submission",
+        input: { bidSubmissionId: input.bidSubmissionId },
+        summary: `Accept ${submission.vendor.name}'s bid on "${submission.bidPackage.title}"${submission.totalCents ? ` (${formatMoney(submission.totalCents)})` : ""}`,
+      });
+      return `Queued accepting ${submission.vendor.name}'s bid for the user's confirmation. It has NOT been accepted yet.`;
+    },
+  });
+
+  const declineBidSubmissionTool = betaZodTool({
+    name: "decline_bid_submission",
+    description:
+      "Queue declining a vendor's bid submission — final once made. This does NOT execute immediately. Pass the submission's id from list_bid_packages_for_job.",
+    inputSchema: z.object({ bidSubmissionId: z.string().describe("The bid submission's id, from list_bid_packages_for_job") }),
+    run: async (input) => {
+      const submission = await db.bidSubmission.findFirst({
+        where: { id: input.bidSubmissionId, bidPackage: { organizationId: ctx.organizationId } },
+        select: { vendor: { select: { name: true } }, bidPackage: { select: { title: true } } },
+      });
+      if (!submission) return `No bid submission found with id ${input.bidSubmissionId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "decline_bid_submission",
+        input: { bidSubmissionId: input.bidSubmissionId },
+        summary: `Decline ${submission.vendor.name}'s bid on "${submission.bidPackage.title}"`,
+      });
+      return `Queued declining ${submission.vendor.name}'s bid for the user's confirmation. It has NOT been declined yet.`;
+    },
+  });
+
+  const awardBidPackageTool = betaZodTool({
+    name: "award_bid_package",
+    description:
+      "Queue closing a bid package as AWARDED — marks the scope finalized. Requires at least one already-accepted submission. This does NOT execute immediately. Pass the package's id from list_bid_packages_for_job.",
+    inputSchema: z.object({ bidPackageId: z.string().describe("The bid package's id, from list_bid_packages_for_job") }),
+    run: async (input) => {
+      const bidPackage = await db.bidPackage.findFirst({ where: { id: input.bidPackageId, organizationId: ctx.organizationId }, select: { title: true } });
+      if (!bidPackage) return `No bid package found with id ${input.bidPackageId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "award_bid_package",
+        input: { bidPackageId: input.bidPackageId },
+        summary: `Award and close bid package "${bidPackage.title}"`,
+      });
+      return `Queued awarding "${bidPackage.title}" for the user's confirmation. It has NOT been awarded yet.`;
+    },
+  });
+
+  const pushBidToPurchaseOrderTool = betaZodTool({
+    name: "push_bid_submission_to_purchase_order",
+    description:
+      "Queue creating a real purchase order from an ACCEPTED bid submission. This does NOT execute immediately — it creates a committed financial record, so it queues for the user's explicit confirmation. Pass the submission's id from list_bid_packages_for_job.",
+    inputSchema: z.object({
+      bidSubmissionId: z.string().describe("The bid submission's id, from list_bid_packages_for_job — must be ACCEPTED"),
+      fallbackCostCodeId: z.string().optional().describe("A cost code id from list_cost_codes, used for any bid line item that doesn't already have one"),
+    }),
+    run: async (input) => {
+      const submission = await db.bidSubmission.findFirst({
+        where: { id: input.bidSubmissionId, bidPackage: { organizationId: ctx.organizationId } },
+        select: { totalCents: true, vendor: { select: { name: true } }, bidPackage: { select: { title: true } } },
+      });
+      if (!submission) return `No bid submission found with id ${input.bidSubmissionId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "push_bid_submission_to_purchase_order",
+        input: { bidSubmissionId: input.bidSubmissionId, poNumber: generateReferenceNumber("PO"), fallbackCostCodeId: input.fallbackCostCodeId },
+        summary: `Create a purchase order from ${submission.vendor.name}'s accepted bid on "${submission.bidPackage.title}"${submission.totalCents ? ` (${formatMoney(submission.totalCents)})` : ""}`,
+      });
+      return `Queued creating a purchase order from ${submission.vendor.name}'s bid for the user's confirmation. Nothing has been created yet.`;
+    },
+  });
+
   return [
     listJobs,
     listCostCodes,
@@ -756,9 +955,18 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     listWarrantyClaimsForJob,
     createWarrantyClaimTool,
     scheduleWarrantyAppointmentTool,
+    listVendors,
+    listBidPackagesForJob,
+    createBidPackageTool,
+    lockBidSubmissionTool,
     sendInvoiceTool,
     sendProposalTool,
     approveSelectionOptionTool,
     advanceBillStatusTool,
+    inviteVendorToBidTool,
+    acceptBidSubmissionTool,
+    declineBidSubmissionTool,
+    awardBidPackageTool,
+    pushBidToPurchaseOrderTool,
   ];
 }
