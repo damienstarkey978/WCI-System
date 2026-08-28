@@ -31,6 +31,7 @@ import {
   IllegalBillTransitionError,
   updateBillStatus,
 } from "@/lib/bills/service";
+import { ClientNotFoundError, issuePortalLoginInvite as issueClientPortalInvite } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
 import { InvoiceNotFoundError, InvoiceNotSendableError, sendInvoice } from "@/lib/invoicing/service";
@@ -42,6 +43,7 @@ import {
   SelectionNotFoundError,
   SelectionOptionNotFoundError,
 } from "@/lib/selections/service";
+import { issuePortalLoginInvite as issueVendorPortalInvite, VendorNotFoundError as VendorPortalVendorNotFoundError } from "@/lib/vendor-portal/auth";
 
 export class PendingActionNotFoundError extends Error {
   constructor(actionId: string) {
@@ -155,6 +157,16 @@ async function executePendingAction(organizationId: string, toolName: string, in
       const po = await pushBidSubmissionToPurchaseOrder(organizationId, bidSubmissionId, poNumber, fallbackCostCodeId);
       return `Created purchase order ${po.poNumber} from the accepted bid.`;
     }
+    case "invite_client_to_portal": {
+      const { clientId } = input as { clientId: string };
+      await issueClientPortalInvite(organizationId, clientId);
+      return "Invited the client to the portal.";
+    }
+    case "invite_vendor_to_portal": {
+      const { vendorId } = input as { vendorId: string };
+      await issueVendorPortalInvite(organizationId, vendorId);
+      return "Invited the vendor to the portal.";
+    }
     default:
       throw new UnknownPendingActionToolError(toolName);
   }
@@ -187,7 +199,9 @@ export async function confirmPendingAction(organizationId: string, actionId: str
       error instanceof BidSubmissionNotSubmittedError ||
       error instanceof NoAcceptedSubmissionsError ||
       error instanceof MissingCostCodeError ||
-      error instanceof BidSubmissionNotAcceptedError
+      error instanceof BidSubmissionNotAcceptedError ||
+      error instanceof ClientNotFoundError ||
+      error instanceof VendorPortalVendorNotFoundError
     ) {
       resultSummary = `Couldn't complete this: ${error.message}`;
     } else {

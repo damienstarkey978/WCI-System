@@ -27,7 +27,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma/client";
-import { ChangeOrderMode, ChangeOrderStatus, ContractType, InvoiceStatus, JobStatus, ProposalStatus, WarrantyClaimStatus } from "@/generated/prisma/enums";
+import { ChangeOrderMode, ChangeOrderStatus, ContractType, InvoiceStatus, JobStatus, MaterialVendor, ProposalStatus, WarrantyClaimStatus } from "@/generated/prisma/enums";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
 import type { JarvisTool } from "@/lib/jarvis/assistant";
 import { createBidPackage, lockBidSubmission } from "@/lib/bids/service";
@@ -39,15 +39,19 @@ import { draftLeadProposalFromNotes } from "@/lib/crm/lead-proposal";
 import { db } from "@/lib/db";
 import { createDailyLog } from "@/lib/daily-logs/service";
 import { resolveFileUrl } from "@/lib/files/service";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { transitionJobStatus } from "@/lib/jobs";
 import { createPendingAction } from "@/lib/jarvis/pending-actions";
+import { createMaterialCatalogItem, listMaterialCatalogItems, searchAndSaveWebPrice } from "@/lib/materials/service";
 import { parseDollarsToCents } from "@/lib/money";
 import { createPurchaseOrder } from "@/lib/purchase-orders/service";
+import { getProfitabilityReport, getWipReport } from "@/lib/reports/service";
 import { createRfi } from "@/lib/rfis/service";
 import { addScheduleItem, createSchedule, getComputedSchedule } from "@/lib/scheduling/service";
 import { createAllowance, createSelection } from "@/lib/selections/service";
+import { generateSpecificationFromEstimate } from "@/lib/specifications/service";
 import { createSubmittal } from "@/lib/submittals/service";
+import { createSurvey } from "@/lib/surveys/service";
 import { workedHours } from "@/lib/time-clock/hours";
 import { createTodo } from "@/lib/todos/service";
 import { createWarrantyClaim, scheduleAppointment } from "@/lib/warranty/service";
@@ -996,6 +1000,127 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  // --- AUTO: Materials Catalog -----------------------------------------------------
+
+  const listMaterials = betaZodTool({
+    name: "list_materials",
+    description: "List this organization's materials catalog — the AI estimate assistant's first-choice price source.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const items = await listMaterialCatalogItems(ctx.organizationId);
+      if (items.length === 0) return "This organization has no materials catalog entries yet.";
+      return items
+        .map((item) => `${item.id} | ${item.vendor} | ${item.description} | ${formatMoney(item.unitCostCents)}/${item.unit} | ${item.source}`)
+        .join("\n");
+    },
+  });
+
+  const addMaterialTool = betaZodTool({
+    name: "add_material",
+    description: "Add a staff-verified material to the catalog with a known price.",
+    inputSchema: z.object({
+      description: z.string().describe("e.g. '2x6x8 SPF stud'"),
+      vendor: z.enum(["LOWES", "HOME_DEPOT", "OTHER"]),
+      unit: z.string().describe("e.g. EA, LF, SQFT, BAG"),
+      unitCostDollars: z.number().positive(),
+      category: z.string().optional(),
+    }),
+    run: async (input) => {
+      const item = await createMaterialCatalogItem({
+        organizationId: ctx.organizationId,
+        vendor: input.vendor as MaterialVendor,
+        description: input.description,
+        unit: input.unit,
+        unitCostCents: parseDollarsToCents(input.unitCostDollars),
+        category: input.category ?? null,
+      });
+      return `Added "${item.description}" (${formatMoney(item.unitCostCents)}/${item.unit}) to the materials catalog, verified.`;
+    },
+  });
+
+  const searchMaterialPriceOnlineTool = betaZodTool({
+    name: "search_material_price_online",
+    description:
+      "Search the open web for a current price for a material not in the catalog (neither Lowe's nor Home Depot has a pricing API). Saves the result as an unverified entry for a human to confirm — never overwrites a staff-verified price.",
+    inputSchema: z.object({
+      description: z.string().describe("What to search for, e.g. '2x6x8 SPF stud'"),
+      category: z.string().optional(),
+    }),
+    run: async (input) => {
+      const item = await searchAndSaveWebPrice(ctx.organizationId, input.description, input.category ?? null);
+      return `Found ${formatMoney(item.unitCostCents)}/${item.unit} from ${item.vendor} — saved as unverified. A human should confirm it before it's relied on.`;
+    },
+  });
+
+  // --- AUTO: Reports -----------------------------------------------------------
+
+  const getProfitabilityReportTool = betaZodTool({
+    name: "get_profitability_report",
+    description: "Get projected profit and margin across every active job, sorted worst-margin-first.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const rows = await getProfitabilityReport(ctx.organizationId);
+      if (rows.length === 0) return "No active jobs to report on.";
+      return rows
+        .map((row) => `${row.jobName} | price ${formatMoney(row.revisedClientPriceCents)} | projected profit ${formatMoney(row.projectedProfitCents)} | margin ${formatPercent(row.projectedMarginBasisPoints)}`)
+        .join("\n");
+    },
+  });
+
+  const getWipReportTool = betaZodTool({
+    name: "get_wip_report",
+    description: "Get the work-in-progress (over/under billing) report across every active job.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const rows = await getWipReport(ctx.organizationId);
+      if (rows.length === 0) return "No active jobs to report on.";
+      return rows
+        .map(
+          (row) =>
+            `${row.jobName} | ${formatPercent(row.percentCompleteBasisPoints)} complete | invoiced ${formatMoney(row.amountInvoicedCents)} | ${row.overUnderBillingCents >= 0 ? "overbilled" : "underbilled"} ${formatMoney(Math.abs(row.overUnderBillingCents))}`,
+        )
+        .join("\n");
+    },
+  });
+
+  // --- AUTO: Specifications & Surveys -----------------------------------------------
+
+  const generateSpecFromEstimateTool = betaZodTool({
+    name: "generate_specification_from_estimate",
+    description:
+      "Auto-generate a specification document for a job from one of its estimates, one section per construction phase. Note: unlike daily logs/todos, a specification has no separate client-visibility toggle — if the client already has document access and is logged into the portal, they can see it as soon as it's created.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      estimateId: z.string().describe("The estimate's id to generate from"),
+      title: z.string().describe("The specification's title"),
+    }),
+    run: async (input) => {
+      const spec = await generateSpecificationFromEstimate(ctx.organizationId, input.jobId, input.estimateId, input.title);
+      return `Generated specification "${spec.title}" with ${spec.sections.length} sections.`;
+    },
+  });
+
+  const createSurveyTool = betaZodTool({
+    name: "create_survey",
+    description: "Create a feedback survey for a job (pre-project, mid-project, or post-completion touchpoint) — internal until a human issues a response link to send out.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      title: z.string(),
+      touchpoint: z.enum(["PRE_PROJECT", "MID_PROJECT", "POST_COMPLETION"]),
+      questions: z.array(z.string()).min(1).describe("The survey questions, in order"),
+    }),
+    run: async (input) => {
+      const survey = await createSurvey({
+        organizationId: ctx.organizationId,
+        jobId: input.jobId,
+        title: input.title,
+        touchpoint: input.touchpoint,
+        questions: input.questions.map((prompt) => ({ prompt })),
+      });
+      return `Created survey "${survey.title}" with ${survey.questions.length} questions. A human still needs to issue a response link to send it out.`;
+    },
+  });
+
   // --- CONFIRM: client-facing or money-moving — queue only, never execute -----
 
   const sendInvoiceTool = betaZodTool({
@@ -1210,6 +1335,44 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  const inviteClientToPortalTool = betaZodTool({
+    name: "invite_client_to_portal",
+    description:
+      "Queue inviting a client to log into the client portal — this actually activates a working login for them, unlike grant_client_job_access which only sets permissions. This does NOT execute immediately; it queues for the user's explicit confirmation. Pass the client's id from list_clients.",
+    inputSchema: z.object({ clientId: z.string().describe("The client's id, from list_clients") }),
+    run: async (input) => {
+      const client = await db.client.findFirst({ where: { id: input.clientId, organizationId: ctx.organizationId }, select: { name: true, email: true } });
+      if (!client) return `No client found with id ${input.clientId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "invite_client_to_portal",
+        input: { clientId: input.clientId },
+        summary: `Invite ${client.name} (${client.email}) to log into the client portal`,
+      });
+      return `Queued inviting ${client.name} to the client portal for the user's confirmation. They haven't been invited yet.`;
+    },
+  });
+
+  const inviteVendorToPortalTool = betaZodTool({
+    name: "invite_vendor_to_portal",
+    description:
+      "Queue inviting a vendor to log into the vendor portal — this actually activates a working login for them. This does NOT execute immediately; it queues for the user's explicit confirmation. Pass the vendor's id from list_vendors.",
+    inputSchema: z.object({ vendorId: z.string().describe("The vendor's id, from list_vendors") }),
+    run: async (input) => {
+      const vendor = await db.vendor.findFirst({ where: { id: input.vendorId, organizationId: ctx.organizationId }, select: { name: true, email: true } });
+      if (!vendor) return `No vendor found with id ${input.vendorId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "invite_vendor_to_portal",
+        input: { vendorId: input.vendorId },
+        summary: `Invite ${vendor.name} (${vendor.email}) to log into the vendor portal`,
+      });
+      return `Queued inviting ${vendor.name} to the vendor portal for the user's confirmation. They haven't been invited yet.`;
+    },
+  });
+
   return [
     listJobs,
     listCostCodes,
@@ -1260,5 +1423,14 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     grantClientJobAccessTool,
     getJobTimeSummary,
     generateWeeklyClientUpdateTool,
+    listMaterials,
+    addMaterialTool,
+    searchMaterialPriceOnlineTool,
+    getProfitabilityReportTool,
+    getWipReportTool,
+    generateSpecFromEstimateTool,
+    createSurveyTool,
+    inviteClientToPortalTool,
+    inviteVendorToPortalTool,
   ];
 }
