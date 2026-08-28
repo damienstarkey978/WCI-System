@@ -95,6 +95,34 @@ export class InvalidResponseLinkError extends Error {
   }
 }
 
+/**
+ * Resolve a response link token to the survey it's for, without consuming it —
+ * the read side of the same guard submitResponse() applies, so the response
+ * page can render the right questions (or a clear expired/used message)
+ * before the recipient submits anything.
+ */
+export async function getSurveyForResponseToken(token: string) {
+  const parsed = parseSecureToken(RESPONSE_LINK_PREFIX, token);
+  if (!parsed) throw new InvalidResponseLinkError();
+
+  const link = await db.surveyResponseLink.findUnique({ where: { tokenId: parsed.tokenId } });
+  if (
+    !link ||
+    !secretMatches(parsed.secret, link.hashedSecret) ||
+    link.submittedAt !== null ||
+    link.expiresAt.getTime() <= Date.now()
+  ) {
+    throw new InvalidResponseLinkError();
+  }
+
+  const survey = await db.survey.findUniqueOrThrow({
+    where: { id: link.surveyId },
+    include: { questions: { orderBy: { sortOrder: "asc" } } },
+  });
+
+  return { survey, recipientName: link.recipientName };
+}
+
 /** Redeem a response link with the recipient's answers (questionId -> text), single-use. */
 export async function submitResponse(token: string, answers: Record<string, string>) {
   const parsed = parseSecureToken(RESPONSE_LINK_PREFIX, token);
