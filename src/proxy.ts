@@ -24,7 +24,7 @@ import { isClerkConfigured } from "@/lib/env";
  * a "database not seeded" message even to a real visitor who simply isn't signed
  * in yet — so gate them here instead, before any page code runs.
  */
-const isProtectedStaffRoute = createRouteMatcher(["/jobs(.*)", "/leads(.*)", "/reports(.*)", "/admin(.*)"]);
+const isProtectedStaffRoute = createRouteMatcher(["/dashboard(.*)", "/jobs(.*)", "/leads(.*)", "/reports(.*)", "/admin(.*)"]);
 
 const clerk = isClerkConfigured()
   ? clerkMiddleware(async (auth, request) => {

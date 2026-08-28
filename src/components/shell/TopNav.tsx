@@ -205,7 +205,7 @@ export function TopNav({
       style={{ background: "var(--bt-nav)" }}
     >
       <div className="flex items-center gap-6">
-        <Link href="/jobs" className="text-lg font-bold tracking-tight">
+        <Link href="/dashboard" className="text-lg font-bold tracking-tight">
           WCI OS
         </Link>
 
