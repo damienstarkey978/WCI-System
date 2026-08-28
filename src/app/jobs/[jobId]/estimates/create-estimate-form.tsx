@@ -2,13 +2,21 @@
 
 import { useActionState } from "react";
 
-import { CostCodeLineItems, type CostCodeOption } from "@/components/financial/CostCodeLineItems";
+import { CostCodeLineItems, type CostCodeOption, type MaterialOption } from "@/components/financial/CostCodeLineItems";
 
 import { createEstimateAction, type ActionState } from "./actions";
 
 const INITIAL: ActionState = {};
 
-export function CreateEstimateForm({ jobId, costCodes }: { jobId: string; costCodes: readonly CostCodeOption[] }) {
+export function CreateEstimateForm({
+  jobId,
+  costCodes,
+  materials,
+}: {
+  jobId: string;
+  costCodes: readonly CostCodeOption[];
+  materials?: readonly MaterialOption[];
+}) {
   const [state, formAction, pending] = useActionState(createEstimateAction, INITIAL);
 
   return (
@@ -51,7 +59,7 @@ export function CreateEstimateForm({ jobId, costCodes }: { jobId: string; costCo
       </div>
 
       <div className="mt-3">
-        <CostCodeLineItems costCodes={costCodes} />
+        <CostCodeLineItems costCodes={costCodes} materials={materials} />
       </div>
 
       {state.error ? (

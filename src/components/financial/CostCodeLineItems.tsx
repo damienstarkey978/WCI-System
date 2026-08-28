@@ -1,11 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export interface CostCodeOption {
   readonly id: string;
   readonly code: string;
   readonly name: string;
+}
+
+/** A Materials Catalog item (src/lib/materials/service.ts), trimmed to what a line item needs. */
+export interface MaterialOption {
+  readonly id: string;
+  readonly description: string;
+  readonly unit: string;
+  readonly unitCostCents: number;
+  readonly vendor: string;
 }
 
 interface Row {
@@ -17,16 +26,41 @@ interface Row {
  * Estimate creation forms — all three price a job against the same CostCode
  * catalog. Submits as parallel arrays (lineCostCodeId[], lineTitle[],
  * lineQuantity[], lineUnitCost[]) that the server action zips back together.
+ *
+ * When `materials` is passed (currently just Estimate creation), each row
+ * gets a "Pick from catalog" select — the cost-catalog entry method CLAUDE.md
+ * 3 calls for. Picking one autofills that row's title/unit cost inputs
+ * directly via the DOM rather than lifting them into React state, since the
+ * rest of this component is deliberately uncontrolled.
  */
-export function CostCodeLineItems({ costCodes }: { costCodes: readonly CostCodeOption[] }) {
+export function CostCodeLineItems({ costCodes, materials = [] }: { costCodes: readonly CostCodeOption[]; materials?: readonly MaterialOption[] }) {
   const [rows, setRows] = useState<Row[]>([{ key: 0 }]);
   const [nextKey, setNextKey] = useState(1);
+  const rowRefs = useRef(new Map<number, HTMLDivElement>());
+
+  function applyMaterial(rowKey: number, materialId: string) {
+    const material = materials.find((m) => m.id === materialId);
+    const container = rowRefs.current.get(rowKey);
+    if (!material || !container) return;
+
+    const titleInput = container.querySelector<HTMLInputElement>('input[name="lineTitle"]');
+    const unitCostInput = container.querySelector<HTMLInputElement>('input[name="lineUnitCost"]');
+    if (titleInput) titleInput.value = material.description;
+    if (unitCostInput) unitCostInput.value = (material.unitCostCents / 100).toFixed(2);
+  }
 
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium text-[var(--bt-muted)]">Line items</span>
       {rows.map((row) => (
-        <div key={row.key} className="flex flex-wrap gap-2">
+        <div
+          key={row.key}
+          ref={(el) => {
+            if (el) rowRefs.current.set(row.key, el);
+            else rowRefs.current.delete(row.key);
+          }}
+          className="flex flex-wrap gap-2"
+        >
           <select
             name="lineCostCodeId"
             required
@@ -43,6 +77,26 @@ export function CostCodeLineItems({ costCodes }: { costCodes: readonly CostCodeO
               </option>
             ))}
           </select>
+          {materials.length > 0 ? (
+            <select
+              className="rounded border px-2 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+              style={{ borderColor: "var(--bt-border)" }}
+              defaultValue=""
+              onChange={(event) => {
+                if (event.target.value) applyMaterial(row.key, event.target.value);
+                event.target.value = "";
+              }}
+            >
+              <option value="" disabled>
+                Pick from catalog…
+              </option>
+              {materials.map((material) => (
+                <option key={material.id} value={material.id}>
+                  {material.description} ({material.vendor}, {(material.unitCostCents / 100).toFixed(2)}/{material.unit})
+                </option>
+              ))}
+            </select>
+          ) : null}
           <input
             name="lineTitle"
             placeholder="Description"

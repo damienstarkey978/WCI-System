@@ -6,6 +6,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { formatDate, formatMoney } from "@/lib/format";
+import { listMaterialCatalogItems } from "@/lib/materials/service";
 
 import { CreateEstimateForm } from "./create-estimate-form";
 
@@ -34,7 +35,7 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const [estimates, costCodes] = await Promise.all([
+  const [estimates, costCodes, materials] = await Promise.all([
     db.estimate.findMany({
       where: { jobId: job.id },
       orderBy: { createdAt: "desc" },
@@ -45,13 +46,14 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
       orderBy: { sortOrder: "asc" },
       select: { id: true, code: true, name: true },
     }),
+    listMaterialCatalogItems(user.organizationId),
   ]);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Estimates — {job.name}</h1>
 
-      <CreateEstimateForm jobId={job.id} costCodes={costCodes} />
+      <CreateEstimateForm jobId={job.id} costCodes={costCodes} materials={materials} />
 
       {estimates.length === 0 ? (
         <EmptyState title="No estimates yet" description="Estimates created for this job will appear here." />
