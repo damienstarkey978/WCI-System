@@ -8,11 +8,23 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
-import { JarvisActionStatus } from "@/generated/prisma/enums";
+import { BillApprovalStatus, JarvisActionStatus } from "@/generated/prisma/enums";
+import {
+  BillNotFoundError,
+  IllegalBillTransitionError,
+  updateBillStatus,
+} from "@/lib/bills/service";
 import { db } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
 import { InvoiceNotFoundError, InvoiceNotSendableError, sendInvoice } from "@/lib/invoicing/service";
 import { ProposalNotDraftError, ProposalNotFoundError, sendProposal } from "@/lib/proposals/service";
+import {
+  approveSelectionOption,
+  JobNotOpenError,
+  SelectionAlreadyDecidedError,
+  SelectionNotFoundError,
+  SelectionOptionNotFoundError,
+} from "@/lib/selections/service";
 
 export class PendingActionNotFoundError extends Error {
   constructor(actionId: string) {
@@ -85,6 +97,18 @@ async function executePendingAction(organizationId: string, toolName: string, in
       const proposal = await sendProposal(organizationId, proposalId);
       return `Sent proposal "${proposal.title}" to the client.`;
     }
+    case "approve_selection_option": {
+      const { selectionId, optionId } = input as { selectionId: string; optionId: string };
+      await approveSelectionOption({ organizationId, selectionId, optionId });
+      return "Approved the selection and posted the price difference to the budget.";
+    }
+    case "advance_bill_status": {
+      const { billId, targetStatus } = input as { billId: string; targetStatus: BillApprovalStatus };
+      const result = await updateBillStatus(organizationId, billId, targetStatus);
+      if (result.unchanged) return `The bill was already ${targetStatus}.`;
+      const totalCents = result.lineItems.reduce((total, item) => total + item.amountCents, 0);
+      return `Moved the bill (${formatMoney(totalCents)}) to ${targetStatus}.`;
+    }
     default:
       throw new UnknownPendingActionToolError(toolName);
   }
@@ -101,7 +125,13 @@ export async function confirmPendingAction(organizationId: string, actionId: str
       error instanceof InvoiceNotFoundError ||
       error instanceof InvoiceNotSendableError ||
       error instanceof ProposalNotFoundError ||
-      error instanceof ProposalNotDraftError
+      error instanceof ProposalNotDraftError ||
+      error instanceof SelectionNotFoundError ||
+      error instanceof SelectionOptionNotFoundError ||
+      error instanceof SelectionAlreadyDecidedError ||
+      error instanceof JobNotOpenError ||
+      error instanceof BillNotFoundError ||
+      error instanceof IllegalBillTransitionError
     ) {
       resultSummary = `Couldn't complete this: ${error.message}`;
     } else {

@@ -26,9 +26,10 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
-import { ChangeOrderMode, ChangeOrderStatus, InvoiceStatus, ProposalStatus } from "@/generated/prisma/enums";
+import { ChangeOrderMode, ChangeOrderStatus, InvoiceStatus, ProposalStatus, WarrantyClaimStatus } from "@/generated/prisma/enums";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
 import type { JarvisTool } from "@/lib/jarvis/assistant";
+import { createBill } from "@/lib/bills/service";
 import { createChangeOrder } from "@/lib/change-orders/service";
 import { db } from "@/lib/db";
 import { createDailyLog } from "@/lib/daily-logs/service";
@@ -36,8 +37,13 @@ import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { createPendingAction } from "@/lib/jarvis/pending-actions";
 import { parseDollarsToCents } from "@/lib/money";
+import { createPurchaseOrder } from "@/lib/purchase-orders/service";
 import { createRfi } from "@/lib/rfis/service";
+import { addScheduleItem, createSchedule, getComputedSchedule } from "@/lib/scheduling/service";
+import { createAllowance, createSelection } from "@/lib/selections/service";
+import { createSubmittal } from "@/lib/submittals/service";
 import { createTodo } from "@/lib/todos/service";
+import { createWarrantyClaim, scheduleAppointment } from "@/lib/warranty/service";
 
 export interface JarvisToolContext {
   readonly organizationId: string;
@@ -47,6 +53,17 @@ export interface JarvisToolContext {
 
 async function requireJob(organizationId: string, jobId: string) {
   return db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true, name: true, status: true } });
+}
+
+/** A short, human-readable reference number for records Jarvis creates that need one (PO/bill/claim numbers). */
+function generateReferenceNumber(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+}
+
+async function getOrCreateSchedule(organizationId: string, jobId: string) {
+  const existing = await db.schedule.findFirst({ where: { jobId }, select: { id: true } });
+  if (existing) return existing;
+  return createSchedule({ organizationId, jobId });
 }
 
 export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
@@ -270,6 +287,350 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  // --- AUTO: Selections & Allowances -------------------------------------------
+
+  const listSelectionsForJob = betaZodTool({
+    name: "list_selections_for_job",
+    description: "List a job's selections and their options with pricing and decision status. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const selections = await db.selection.findMany({
+        where: { jobId: job.id },
+        select: { id: true, title: true, options: { select: { id: true, title: true, clientPriceCents: true, status: true } } },
+        orderBy: { createdAt: "desc" },
+      });
+      if (selections.length === 0) return `${job.name} has no selections yet.`;
+      return selections
+        .map(
+          (selection) =>
+            `${selection.id} | ${selection.title}\n` +
+            selection.options.map((option) => `  - ${option.id} | ${option.title} | ${formatMoney(option.clientPriceCents)} | ${option.status}`).join("\n"),
+        )
+        .join("\n");
+    },
+  });
+
+  const createAllowanceTool = betaZodTool({
+    name: "create_allowance",
+    description: "Create a budget allowance for a job (e.g. a $2,000 lighting fixtures allowance). Call list_cost_codes first to get a valid costCodeId.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      title: z.string().describe("What the allowance is for, e.g. 'Lighting fixtures allowance'"),
+      costCodeId: z.string().describe("A cost code id from list_cost_codes"),
+      costDollars: z.number().positive().describe("WCI's budgeted cost for the allowance, in dollars"),
+      clientPriceDollars: z.number().positive().describe("The price charged to the client for the allowance, in dollars"),
+    }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      await createAllowance({
+        organizationId: ctx.organizationId,
+        jobId: job.id,
+        costCodeId: input.costCodeId,
+        title: input.title,
+        amountCents: parseDollarsToCents(input.costDollars),
+        clientPriceCents: parseDollarsToCents(input.clientPriceDollars),
+      });
+      return `Created allowance "${input.title}" (${formatMoney(input.clientPriceDollars * 100)}) for ${job.name}.`;
+    },
+  });
+
+  const createSelectionTool = betaZodTool({
+    name: "create_selection",
+    description:
+      "Create a selection for a job with 2 or more options for the client to choose between (e.g. three tile options for a bathroom floor). Optionally link it to an allowance from create_allowance.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      title: z.string().describe("What the client is selecting, e.g. 'Kitchen backsplash tile'"),
+      allowanceId: z.string().optional().describe("An allowance id to link this selection to, if any"),
+      options: z
+        .array(
+          z.object({
+            title: z.string().describe("The option's name, e.g. 'Subway tile, white'"),
+            priceDollars: z.number().nonnegative().describe("WCI's cost for this option, in dollars"),
+            clientPriceDollars: z.number().nonnegative().describe("The price shown to the client for this option, in dollars"),
+          }),
+        )
+        .min(2)
+        .describe("At least two options for the client to choose between"),
+    }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const selection = await createSelection({
+        organizationId: ctx.organizationId,
+        jobId: job.id,
+        allowanceId: input.allowanceId ?? null,
+        title: input.title,
+        options: input.options.map((option) => ({
+          title: option.title,
+          priceCents: parseDollarsToCents(option.priceDollars),
+          clientPriceCents: parseDollarsToCents(option.clientPriceDollars),
+        })),
+      });
+      return `Created selection "${selection.title}" for ${job.name} with ${input.options.length} options.`;
+    },
+  });
+
+  // --- AUTO: Purchase Orders & Bills --------------------------------------------
+
+  const listPurchaseOrdersForJob = betaZodTool({
+    name: "list_purchase_orders_for_job",
+    description: "List a job's purchase orders. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const pos = await db.purchaseOrder.findMany({
+        where: { jobId: job.id },
+        select: { id: true, poNumber: true, vendorName: true, status: true },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+      if (pos.length === 0) return `${job.name} has no purchase orders yet.`;
+      return pos.map((po) => `${po.id} | ${po.poNumber} | ${po.vendorName} | ${po.status}`).join("\n");
+    },
+  });
+
+  const createPurchaseOrderDraft = betaZodTool({
+    name: "create_purchase_order_draft",
+    description:
+      "Create a new DRAFT purchase order for a job with one line item — not yet approved or committed. Call list_cost_codes first to get a valid costCodeId.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      vendorName: z.string().describe("The vendor's name"),
+      title: z.string().describe("What this line item covers, e.g. 'Framing lumber package'"),
+      costCodeId: z.string().describe("A cost code id from list_cost_codes"),
+      quantity: z.number().positive().describe("Quantity of units"),
+      unitCostDollars: z.number().positive().describe("Cost per unit, in dollars"),
+    }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const po = await createPurchaseOrder({
+        organizationId: ctx.organizationId,
+        jobId: job.id,
+        poNumber: generateReferenceNumber("PO"),
+        vendorName: input.vendorName,
+        lineItems: [
+          {
+            costCodeId: input.costCodeId,
+            title: input.title,
+            quantityMilli: Math.round(input.quantity * 1_000),
+            unitCostCents: parseDollarsToCents(input.unitCostDollars),
+          },
+        ],
+      });
+      return `Created DRAFT purchase order ${po.poNumber} (${formatMoney(po.totalCents)}) to ${input.vendorName} for ${job.name}.`;
+    },
+  });
+
+  const listBillsForJob = betaZodTool({
+    name: "list_bills_for_job",
+    description: "List a job's bills with their approval status. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const bills = await db.bill.findMany({
+        where: { jobId: job.id },
+        select: { id: true, billNumber: true, vendorName: true, approvalStatus: true },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+      if (bills.length === 0) return `${job.name} has no bills yet.`;
+      return bills.map((bill) => `${bill.id} | ${bill.billNumber ?? "(no number)"} | ${bill.vendorName} | ${bill.approvalStatus}`).join("\n");
+    },
+  });
+
+  const createBillTool = betaZodTool({
+    name: "create_bill",
+    description:
+      "Create a new bill for a job with one line item — created IN_REVIEW, not yet approved or paid. Call list_cost_codes first to get a valid costCodeId.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      vendorName: z.string().describe("The vendor's name"),
+      title: z.string().describe("What this line item is for"),
+      costCodeId: z.string().describe("A cost code id from list_cost_codes"),
+      amountDollars: z.number().positive().describe("The line item amount, in dollars"),
+    }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const bill = await createBill({
+        organizationId: ctx.organizationId,
+        jobId: job.id,
+        vendorName: input.vendorName,
+        lineItems: [{ costCodeId: input.costCodeId, title: input.title, amountCents: parseDollarsToCents(input.amountDollars) }],
+      });
+      return `Created bill (${formatMoney(bill.totalCents)}) from ${input.vendorName} for ${job.name}, status IN_REVIEW.`;
+    },
+  });
+
+  // --- AUTO: Schedule ------------------------------------------------------------
+
+  const getScheduleOverview = betaZodTool({
+    name: "get_schedule_overview",
+    description: "Get a job's schedule items with computed dates and the projected finish date. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const schedule = await db.schedule.findFirst({ where: { jobId: job.id }, select: { id: true } });
+      if (!schedule) return `${job.name} has no schedule yet.`;
+
+      const computed = await getComputedSchedule(ctx.organizationId, schedule.id);
+      if (computed.items.length === 0) return `${job.name}'s schedule has no items yet.`;
+      return [
+        ...computed.items.map(
+          (item) => `${item.id} | ${item.title} | ${formatDate(item.startDate)} to ${formatDate(item.endDate)}${item.isCriticalPath ? " | critical path" : ""}`,
+        ),
+        `Projected finish: ${formatDate(computed.projectFinishDate)}`,
+      ].join("\n");
+    },
+  });
+
+  const addScheduleItemTool = betaZodTool({
+    name: "add_schedule_item",
+    description: "Add a new item to a job's schedule. Created as NOT client-visible by default. Creates the schedule itself if the job doesn't have one yet.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      title: z.string().describe("The schedule item title, e.g. 'Rough electrical'"),
+      durationDays: z.number().int().positive().describe("How many days this task takes"),
+    }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const schedule = await getOrCreateSchedule(ctx.organizationId, job.id);
+      await addScheduleItem({
+        organizationId: ctx.organizationId,
+        scheduleId: schedule.id,
+        title: input.title,
+        durationDays: input.durationDays,
+        clientVisible: false,
+      });
+      return `Added "${input.title}" (${input.durationDays} day${input.durationDays === 1 ? "" : "s"}) to ${job.name}'s schedule, not client-visible yet.`;
+    },
+  });
+
+  // --- AUTO: Submittals ------------------------------------------------------------
+
+  const listSubmittalsForJob = betaZodTool({
+    name: "list_submittals_for_job",
+    description: "List a job's submittals and their review status. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const submittals = await db.submittal.findMany({
+        where: { jobId: job.id },
+        select: { id: true, title: true, type: true, status: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (submittals.length === 0) return `${job.name} has no submittals yet.`;
+      return submittals.map((s) => `${s.id} | ${s.title} | ${s.type} | ${s.status}`).join("\n");
+    },
+  });
+
+  const createSubmittalTool = betaZodTool({
+    name: "create_submittal",
+    description:
+      "Create a new submittal for a job for review (a material spec sheet or shop drawing). Needs a document URL — use find_job_files to get a real link to an existing file, or a URL the user gives you.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      title: z.string().describe("The submittal title"),
+      type: z.enum(["MATERIAL_SPEC", "SHOP_DRAWING"]),
+      documentUrl: z.string().describe("A URL to the document being submitted"),
+      notes: z.string().optional(),
+    }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      await createSubmittal({
+        organizationId: ctx.organizationId,
+        jobId: job.id,
+        title: input.title,
+        type: input.type,
+        documentUrl: input.documentUrl,
+        notes: input.notes ?? null,
+      });
+      return `Created submittal "${input.title}" (${input.type}) for ${job.name}, status PENDING.`;
+    },
+  });
+
+  // --- AUTO: Warranty Claims --------------------------------------------------------
+
+  const listWarrantyClaimsForJob = betaZodTool({
+    name: "list_warranty_claims_for_job",
+    description: "List a job's open (not CLOSED) warranty claims. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const claims = await db.warrantyClaim.findMany({
+        where: { jobId: job.id, status: { not: WarrantyClaimStatus.CLOSED } },
+        select: { id: true, claimNumber: true, title: true, status: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (claims.length === 0) return `${job.name} has no open warranty claims.`;
+      return claims.map((claim) => `${claim.id} | ${claim.claimNumber} | ${claim.title} | ${claim.status}`).join("\n");
+    },
+  });
+
+  const createWarrantyClaimTool = betaZodTool({
+    name: "create_warranty_claim",
+    description: "Log a new warranty claim for a job.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      title: z.string().describe("Short claim title, e.g. 'Leak under kitchen sink'"),
+      description: z.string().describe("What the client reported"),
+      submittedByName: z.string().optional(),
+      submittedByEmail: z.string().optional(),
+    }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+      const claim = await createWarrantyClaim({
+        organizationId: ctx.organizationId,
+        jobId: job.id,
+        claimNumber: generateReferenceNumber("WC"),
+        title: input.title,
+        description: input.description,
+        submittedByName: input.submittedByName ?? null,
+        submittedByEmail: input.submittedByEmail ?? null,
+      });
+      return `Logged warranty claim ${claim.claimNumber} — "${claim.title}" — for ${job.name}, status SUBMITTED.`;
+    },
+  });
+
+  const scheduleWarrantyAppointmentTool = betaZodTool({
+    name: "schedule_warranty_appointment",
+    description: "Schedule an appointment for an existing warranty claim. Pass the claim's id from list_warranty_claims_for_job.",
+    inputSchema: z.object({
+      claimId: z.string().describe("The warranty claim's id, from list_warranty_claims_for_job"),
+      appointmentAt: z.string().describe("The appointment date/time as an ISO string, e.g. 2026-09-15T14:00:00"),
+    }),
+    run: async (input) => {
+      await scheduleAppointment({ organizationId: ctx.organizationId, claimId: input.claimId, appointmentAt: new Date(input.appointmentAt) });
+      return `Scheduled the warranty appointment for ${formatDate(new Date(input.appointmentAt))}.`;
+    },
+  });
+
   // --- CONFIRM: client-facing or money-moving — queue only, never execute -----
 
   const sendInvoiceTool = betaZodTool({
@@ -320,6 +681,56 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  const approveSelectionOptionTool = betaZodTool({
+    name: "approve_selection_option",
+    description:
+      "Queue approving one option of a selection — the client's final choice. This posts the cost/price difference onto the job's budget and declines every other option, so it does NOT execute immediately; it queues for the user's explicit confirmation. Pass ids from list_selections_for_job.",
+    inputSchema: z.object({
+      selectionId: z.string().describe("The selection's id, from list_selections_for_job"),
+      optionId: z.string().describe("The chosen option's id, from list_selections_for_job"),
+    }),
+    run: async (input) => {
+      const option = await db.selectionOption.findFirst({
+        where: { id: input.optionId, selectionId: input.selectionId },
+        select: { title: true, clientPriceCents: true, selection: { select: { title: true, job: { select: { name: true } } } } },
+      });
+      if (!option) return `No option ${input.optionId} found on selection ${input.selectionId}.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "approve_selection_option",
+        input: { selectionId: input.selectionId, optionId: input.optionId },
+        summary: `Approve "${option.title}" (${formatMoney(option.clientPriceCents)}) for selection "${option.selection.title}" on ${option.selection.job.name}`,
+      });
+      return `Queued approving "${option.title}" for the user's confirmation. It has NOT been approved yet — tell the user to confirm it in the chat.`;
+    },
+  });
+
+  const advanceBillStatusTool = betaZodTool({
+    name: "advance_bill_status",
+    description:
+      "Queue moving a bill to a new approval status (APPROVED, READY_FOR_PAYMENT, PAID, or back to IN_REVIEW, or VOID). This does NOT execute immediately — every one of these moves money in the funnel, so it queues for the user's explicit confirmation. Pass the bill's id from list_bills_for_job.",
+    inputSchema: z.object({
+      billId: z.string().describe("The bill's id, from list_bills_for_job"),
+      targetStatus: z.enum(["IN_REVIEW", "APPROVED", "READY_FOR_PAYMENT", "PAID", "VOID"]),
+    }),
+    run: async (input) => {
+      const bill = await db.bill.findFirst({
+        where: { id: input.billId, organizationId: ctx.organizationId },
+        select: { billNumber: true, vendorName: true, approvalStatus: true, job: { select: { name: true } } },
+      });
+      if (!bill) return `No bill ${input.billId} found in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "advance_bill_status",
+        input: { billId: input.billId, targetStatus: input.targetStatus },
+        summary: `Move bill ${bill.billNumber ?? bill.vendorName} on ${bill.job.name} from ${bill.approvalStatus} to ${input.targetStatus}`,
+      });
+      return `Queued moving the bill to ${input.targetStatus} for the user's confirmation. It has NOT changed yet — tell the user to confirm it in the chat.`;
+    },
+  });
+
   return [
     listJobs,
     listCostCodes,
@@ -331,7 +742,23 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     logDailyLogNote,
     createRfiTool,
     createTodoTool,
+    listSelectionsForJob,
+    createAllowanceTool,
+    createSelectionTool,
+    listPurchaseOrdersForJob,
+    createPurchaseOrderDraft,
+    listBillsForJob,
+    createBillTool,
+    getScheduleOverview,
+    addScheduleItemTool,
+    listSubmittalsForJob,
+    createSubmittalTool,
+    listWarrantyClaimsForJob,
+    createWarrantyClaimTool,
+    scheduleWarrantyAppointmentTool,
     sendInvoiceTool,
     sendProposalTool,
+    approveSelectionOptionTool,
+    advanceBillStatusTool,
   ];
 }
