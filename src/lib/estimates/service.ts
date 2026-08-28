@@ -23,6 +23,28 @@ export class UnknownCostCodeError extends Error {
   }
 }
 
+export class EstimateNotFoundError extends Error {
+  constructor(estimateId: string) {
+    super(`Estimate ${estimateId} not found`);
+    this.name = "EstimateNotFoundError";
+  }
+}
+
+export class EstimateLineItemNotFoundError extends Error {
+  constructor(lineItemId: string) {
+    super(`Estimate line item ${lineItemId} not found`);
+    this.name = "EstimateLineItemNotFoundError";
+  }
+}
+
+/** An estimate stops being editable the moment it's sent to budget, locked, or accepted. */
+export class EstimateNotEditableError extends Error {
+  constructor(estimateId: string, status: string) {
+    super(`Estimate ${estimateId} is ${status} and can no longer be edited.`);
+    this.name = "EstimateNotEditableError";
+  }
+}
+
 export interface CreateEstimateLineItemInput {
   readonly costCodeId: string;
   readonly costType?: CostType;
@@ -94,4 +116,85 @@ export async function createEstimate(input: CreateEstimateInput) {
     },
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
+}
+
+async function requireEditableEstimate(organizationId: string, estimateId: string) {
+  const estimate = await db.estimate.findFirst({ where: { id: estimateId, organizationId } });
+  if (!estimate) throw new EstimateNotFoundError(estimateId);
+  if (estimate.status !== "DRAFT") throw new EstimateNotEditableError(estimateId, estimate.status);
+  return estimate;
+}
+
+export interface AddEstimateLineItemInput extends CreateEstimateLineItemInput {
+  readonly organizationId: string;
+  readonly estimateId: string;
+}
+
+export async function addEstimateLineItem(input: AddEstimateLineItemInput) {
+  const estimate = await requireEditableEstimate(input.organizationId, input.estimateId);
+
+  const costCode = await db.costCode.findFirst({
+    where: { id: input.costCodeId, organizationId: input.organizationId },
+    select: { id: true, defaultCostType: true },
+  });
+  if (!costCode) throw new UnknownCostCodeError([input.costCodeId]);
+
+  const last = await db.estimateLineItem.findFirst({ where: { estimateId: input.estimateId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+
+  return db.estimateLineItem.create({
+    data: {
+      estimateId: input.estimateId,
+      costCodeId: input.costCodeId,
+      costType: input.costType ?? costCode.defaultCostType,
+      title: input.title,
+      description: input.description ?? null,
+      quantityMilli: input.quantityMilli ?? 1_000,
+      unitCostCents: input.unitCostCents,
+      rateMode: input.rateMode ?? estimate.rateMode,
+      rateBasisPoints: input.rateBasisPoints ?? estimate.defaultRateBasisPoints,
+      taxable: input.taxable ?? false,
+      internalNote: input.internalNote ?? null,
+      groupLabel: input.groupLabel ?? null,
+      sortOrder: (last?.sortOrder ?? -1) + 1,
+    },
+  });
+}
+
+export interface UpdateEstimateLineItemInput {
+  readonly organizationId: string;
+  readonly estimateId: string;
+  readonly lineItemId: string;
+  readonly title?: string;
+  readonly description?: string | null;
+  readonly quantityMilli?: number;
+  readonly unitCostCents?: number;
+  readonly rateBasisPoints?: BasisPoints;
+  readonly groupLabel?: string | null;
+}
+
+export async function updateEstimateLineItem(input: UpdateEstimateLineItemInput) {
+  await requireEditableEstimate(input.organizationId, input.estimateId);
+
+  const lineItem = await db.estimateLineItem.findFirst({ where: { id: input.lineItemId, estimateId: input.estimateId } });
+  if (!lineItem) throw new EstimateLineItemNotFoundError(input.lineItemId);
+
+  return db.estimateLineItem.update({
+    where: { id: lineItem.id },
+    data: {
+      title: input.title ?? lineItem.title,
+      description: input.description === undefined ? lineItem.description : input.description,
+      quantityMilli: input.quantityMilli ?? lineItem.quantityMilli,
+      unitCostCents: input.unitCostCents ?? lineItem.unitCostCents,
+      rateBasisPoints: input.rateBasisPoints ?? lineItem.rateBasisPoints,
+      groupLabel: input.groupLabel === undefined ? lineItem.groupLabel : input.groupLabel,
+    },
+  });
+}
+
+export async function deleteEstimateLineItem(organizationId: string, estimateId: string, lineItemId: string) {
+  await requireEditableEstimate(organizationId, estimateId);
+
+  const lineItem = await db.estimateLineItem.findFirst({ where: { id: lineItemId, estimateId }, select: { id: true } });
+  if (!lineItem) return;
+  await db.estimateLineItem.delete({ where: { id: lineItem.id } });
 }

@@ -61,6 +61,27 @@ export class ProposalNotDraftError extends Error {
   }
 }
 
+export class ProposalNotEditableError extends Error {
+  constructor(proposalId: string, status: string) {
+    super(`Proposal ${proposalId} is ${status} and can no longer be edited.`);
+    this.name = "ProposalNotEditableError";
+  }
+}
+
+export class ProposalSectionNotFoundError extends Error {
+  constructor(sectionId: string) {
+    super(`Proposal section ${sectionId} not found`);
+    this.name = "ProposalSectionNotFoundError";
+  }
+}
+
+export class ProposalSectionBulletNotFoundError extends Error {
+  constructor(bulletId: string) {
+    super(`Proposal section bullet ${bulletId} not found`);
+    this.name = "ProposalSectionBulletNotFoundError";
+  }
+}
+
 export class ProposalNotPendingError extends Error {
   constructor(proposalId: string, status: string) {
     super(`Proposal ${proposalId} is ${status} and cannot be accepted or declined.`);
@@ -132,6 +153,74 @@ export async function createProposal(input: CreateProposalInput) {
     },
     include: { sections: { include: { bullets: true } } },
   });
+}
+
+/**
+ * A Proposal is only editable — cover message, sections, bullets — while it's still a
+ * DRAFT. Once sent, the client is looking at it; changing it silently underneath them
+ * would defeat the point of e-signing what they were actually shown.
+ */
+async function requireEditableProposal(organizationId: string, proposalId: string) {
+  const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId } });
+  if (!proposal) throw new ProposalNotFoundError(proposalId);
+  if (proposal.status !== ProposalStatus.DRAFT) throw new ProposalNotEditableError(proposalId, proposal.status);
+  return proposal;
+}
+
+export async function updateProposalCoverMessage(organizationId: string, proposalId: string, coverMessage: string | null) {
+  await requireEditableProposal(organizationId, proposalId);
+  return db.proposal.update({ where: { id: proposalId }, data: { coverMessage } });
+}
+
+export async function addProposalSection(organizationId: string, proposalId: string, title: string) {
+  await requireEditableProposal(organizationId, proposalId);
+  const last = await db.proposalSection.findFirst({ where: { proposalId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+  return db.proposalSection.create({ data: { proposalId, title, sortOrder: (last?.sortOrder ?? -1) + 1 } });
+}
+
+async function findSectionForOrg(organizationId: string, sectionId: string) {
+  const section = await db.proposalSection.findFirst({ where: { id: sectionId, proposal: { organizationId } }, include: { proposal: true } });
+  if (!section) throw new ProposalSectionNotFoundError(sectionId);
+  if (section.proposal.status !== ProposalStatus.DRAFT) throw new ProposalNotEditableError(section.proposal.id, section.proposal.status);
+  return section;
+}
+
+export async function updateProposalSectionTitle(organizationId: string, sectionId: string, title: string) {
+  await findSectionForOrg(organizationId, sectionId);
+  return db.proposalSection.update({ where: { id: sectionId }, data: { title } });
+}
+
+export async function deleteProposalSection(organizationId: string, sectionId: string) {
+  await findSectionForOrg(organizationId, sectionId);
+  await db.proposalSection.delete({ where: { id: sectionId } });
+}
+
+export async function addProposalSectionBullet(organizationId: string, sectionId: string, text: string) {
+  await findSectionForOrg(organizationId, sectionId);
+  const last = await db.proposalSectionBullet.findFirst({ where: { sectionId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+  return db.proposalSectionBullet.create({ data: { sectionId, text, sortOrder: (last?.sortOrder ?? -1) + 1 } });
+}
+
+async function findBulletForOrg(organizationId: string, bulletId: string) {
+  const bullet = await db.proposalSectionBullet.findFirst({
+    where: { id: bulletId, section: { proposal: { organizationId } } },
+    include: { section: { include: { proposal: true } } },
+  });
+  if (!bullet) throw new ProposalSectionBulletNotFoundError(bulletId);
+  if (bullet.section.proposal.status !== ProposalStatus.DRAFT) {
+    throw new ProposalNotEditableError(bullet.section.proposal.id, bullet.section.proposal.status);
+  }
+  return bullet;
+}
+
+export async function updateProposalSectionBullet(organizationId: string, bulletId: string, text: string) {
+  await findBulletForOrg(organizationId, bulletId);
+  return db.proposalSectionBullet.update({ where: { id: bulletId }, data: { text } });
+}
+
+export async function deleteProposalSectionBullet(organizationId: string, bulletId: string) {
+  await findBulletForOrg(organizationId, bulletId);
+  await db.proposalSectionBullet.delete({ where: { id: bulletId } });
 }
 
 export async function sendProposal(organizationId: string, proposalId: string) {

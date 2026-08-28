@@ -78,7 +78,11 @@ export default async function LeadProposalsPage() {
                         "—"
                       )}
                     </td>
-                    <td className="px-4 py-3 text-[var(--bt-text)]">{proposal.title}</td>
+                    <td className="px-4 py-3">
+                      <Link href={`/leads/proposals/${proposal.id}`} className="font-medium text-[var(--bt-text)] hover:underline">
+                        {proposal.title}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3">
                       <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
                         {proposal.status}

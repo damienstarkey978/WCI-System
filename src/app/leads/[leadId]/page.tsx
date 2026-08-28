@@ -182,7 +182,9 @@ export default async function LeadDetailPage({
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-[var(--bt-text)]">{proposal.title}</span>
+                          <Link href={`/leads/proposals/${proposal.id}`} className="font-medium text-[var(--bt-text)] hover:underline">
+                            {proposal.title}
+                          </Link>
                           {proposal.estimate.aiGenerated ? (
                             <span
                               className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
