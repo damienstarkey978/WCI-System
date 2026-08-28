@@ -33,10 +33,30 @@ export const PROJECT_MANAGEMENT_NAV: readonly JobNavLink[] = [
   { label: "Submittals", path: "/submittals", isNew: true },
 ];
 
-export const JOB_TOP_NAV: readonly JobNavLink[] = [
-  { label: "Files", path: "/files" },
-  { label: "Messaging", path: "/messages" },
-  { label: "Financial", path: "/budget" },
+/**
+ * "Files" is its own top-nav dropdown in Buildertrend, not a single link —
+ * all three route to the same Files tab (src/app/jobs/[jobId]/files), which
+ * already supports a `?category=` filter, so the dropdown just picks the filter.
+ */
+export const FILES_NAV: readonly JobNavLink[] = [
+  { label: "Documents", path: "/files?category=DOCUMENT" },
+  { label: "Photos", path: "/files?category=PHOTO" },
+  { label: "Videos", path: "/files?category=VIDEO" },
+];
+
+/** "Messaging" has no dropdown in Buildertrend — a single job-scoped link. */
+export const MESSAGING_HREF = "/messages";
+
+/** The "Financial" dropdown — every one of these is scoped to whichever job is selected. */
+export const FINANCIAL_NAV: readonly JobNavLink[] = [
+  { label: "Bids", path: "/bids" },
+  { label: "Estimate", path: "/estimates" },
+  { label: "Purchase Orders", path: "/purchase-orders" },
+  { label: "Bills", path: "/bills" },
+  { label: "Job Costing Budget", path: "/budget" },
+  { label: "Cost Inbox", path: "/cost-inbox" },
+  { label: "Invoices", path: "/invoices" },
+  { label: "Online Payment Report", path: "/online-payment-report" },
 ];
 
 export const REPORTS_HREF = "/reports";
