@@ -8,8 +8,11 @@ import {
   createMaterialCatalogItem,
   deleteMaterialCatalogItem,
   MaterialCatalogItemNotFoundError,
+  MaterialPriceNotFoundError,
+  searchAndSaveWebPrice,
   updateMaterialCatalogItem,
 } from "@/lib/materials/service";
+import { AiNotConfiguredError, WebPriceSearchError } from "@/lib/materials/web-search";
 import { parseDollarsToCents } from "@/lib/money";
 
 export interface ActionState {
@@ -78,6 +81,26 @@ export async function updateMaterialCatalogItemAction(_previous: ActionState, fo
   } catch (error) {
     if (error instanceof MaterialCatalogItemNotFoundError) return { error: error.message };
     if (error instanceof Error && error.message.includes("Cannot parse")) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath("/materials");
+  return { ok: true };
+}
+
+export async function searchWebPriceAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const description = String(formData.get("description") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim();
+
+  if (!description) return { error: "Enter what you're looking for, e.g. \"2x6x8 SPF stud\"." };
+
+  try {
+    await searchAndSaveWebPrice(user.organizationId, description, category || null);
+  } catch (error) {
+    if (error instanceof AiNotConfiguredError) return { error: "Web price lookup isn't configured yet — set ANTHROPIC_API_KEY in .env." };
+    if (error instanceof MaterialPriceNotFoundError || error instanceof WebPriceSearchError) return { error: error.message };
     throw error;
   }
 

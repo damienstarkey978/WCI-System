@@ -9,6 +9,7 @@
 
 import { MaterialPriceSource, MaterialVendor } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
+import { searchWebForMaterialPrice } from "@/lib/materials/web-search";
 import type { Cents } from "@/lib/money";
 
 export class MaterialCatalogItemNotFoundError extends Error {
@@ -127,5 +128,35 @@ export async function upsertWebSourcedMaterial(input: UpsertWebSourcedMaterialIn
       source: MaterialPriceSource.WEB_SEARCH,
       sourceUrl: input.sourceUrl,
     },
+  });
+}
+
+export class MaterialPriceNotFoundError extends Error {
+  constructor(description: string) {
+    super(`Couldn't find a current price for "${description}" online.`);
+    this.name = "MaterialPriceNotFoundError";
+  }
+}
+
+/**
+ * The live half of the two-tier pricing design: search the web for a current price
+ * and save it as an unverified WEB_SEARCH catalog entry — same status a staff member
+ * would see if they'd looked it up and hadn't confirmed it yet. Never overwrites a
+ * MANUAL (human-verified) entry for the same description; it only ever creates or
+ * updates the WEB_SEARCH-sourced row alongside it, so a verified price is never
+ * silently replaced by a web guess.
+ */
+export async function searchAndSaveWebPrice(organizationId: string, description: string, category?: string | null) {
+  const price = await searchWebForMaterialPrice(description);
+  if (!price) throw new MaterialPriceNotFoundError(description);
+
+  return upsertWebSourcedMaterial({
+    organizationId,
+    vendor: price.vendor,
+    description,
+    unit: price.unit,
+    unitCostCents: price.unitCostCents,
+    sourceUrl: price.sourceUrl,
+    category: category ?? null,
   });
 }

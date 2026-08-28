@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 
 import { CreateMaterialForm } from "./create-material-form";
 import { MaterialRow } from "./material-row";
+import { SearchWebPriceForm } from "./search-web-price-form";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function MaterialsPage() {
       </div>
 
       <CreateMaterialForm />
+      <SearchWebPriceForm />
 
       {items.length === 0 ? (
         <EmptyState title="No materials yet" description="Materials you add will be used to price AI-drafted estimates." />
