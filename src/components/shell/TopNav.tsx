@@ -17,12 +17,12 @@ import {
   type JobNavLink,
 } from "@/lib/buildertrend-nav";
 
+import { GlobalSearch } from "./GlobalSearch";
 import {
   BellIcon,
   ChevronDownIcon,
   HelpIcon,
   PeopleIcon,
-  SearchIcon,
   SparkleIcon,
 } from "./icons";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "./notification-actions";
@@ -241,9 +241,7 @@ export function TopNav({
       </div>
 
       <div className="flex items-center gap-2">
-        <button type="button" className="rounded p-2 transition hover:bg-white/10" aria-label="Search">
-          <SearchIcon className="h-4.5 w-4.5" />
-        </button>
+        <GlobalSearch />
         <NotificationBell notifications={notifications} unreadCount={unreadCount} />
         <Link
           href="/jarvis"
