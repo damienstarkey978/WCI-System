@@ -130,3 +130,12 @@ export function MailIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Jarvis's nav icon — a four-point sparkle, distinct from the plain chat bubble. */
+export function SparkleIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M10 2.5c.3 2.7 1.2 4.6 2.6 6 1.4 1.4 3.3 2.3 6 2.6-2.7.3-4.6 1.2-6 2.6-1.4 1.4-2.3 3.3-2.6 6-.3-2.7-1.2-4.6-2.6-6-1.4-1.4-3.3-2.3-6-2.6 2.7-.3 4.6-1.2 6-2.6 1.4-1.4 2.3-3.3 2.6-6Z" />
+    </svg>
+  );
+}

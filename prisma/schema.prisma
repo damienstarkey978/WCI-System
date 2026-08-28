@@ -130,6 +130,7 @@ model Organization {
   surveys               Survey[]
   clientUpdateSummaries ClientUpdateSummary[]
   materialCatalogItems  MaterialCatalogItem[]
+  jarvisConversations   JarvisConversation[]
 }
 
 model User {
@@ -150,11 +151,11 @@ model User {
   updatedAt DateTime @updatedAt
 
   jobGrants                 JobAccessGrant[]
-  createdApiKeys            ApiKey[]         @relation("ApiKeyCreatedBy")
+  createdApiKeys            ApiKey[]             @relation("ApiKeyCreatedBy")
   jobStatusEvents           JobStatusEvent[]
-  timeClockEntries          TimeClockEntry[] @relation("TimeClockEntryUser")
-  approvedTimeClockEntries  TimeClockEntry[] @relation("TimeClockEntryApprovedBy")
-  clockedInTimeClockEntries TimeClockEntry[] @relation("TimeClockEntryClockedInBy")
+  timeClockEntries          TimeClockEntry[]     @relation("TimeClockEntryUser")
+  approvedTimeClockEntries  TimeClockEntry[]     @relation("TimeClockEntryApprovedBy")
+  clockedInTimeClockEntries TimeClockEntry[]     @relation("TimeClockEntryClockedInBy")
   authoredDailyLogs         DailyLog[]
   assignedTodos             Todo[]
   assignedRfis              Rfi[]
@@ -163,6 +164,7 @@ model User {
   notifications             Notification[]
   assignedLeads             Lead[]
   leadActivities            LeadActivity[]
+  jarvisConversations       JarvisConversation[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -2243,4 +2245,51 @@ model ClientUpdateSummary {
 
   @@index([jobId, periodEnd])
   @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Jarvis (Phase 10) — the OS-embedded AI assistant. This first slice is the
+// conversational core: a persisted chat thread per staff user, so "keep
+// going with everything you can build" work can pick this up mid-thread
+// across visits. Tool-calling (drafting records, sending invoices/proposals
+// with the confirm-on-money-or-client-facing gate) is the next increment —
+// deliberately not modeled here yet, so this ships as a complete, working
+// chat rather than half-wired tool plumbing with nothing driving it.
+// ---------------------------------------------------------------------------
+
+enum JarvisMessageRole {
+  USER
+  ASSISTANT
+}
+
+model JarvisConversation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Set from the first user message once one exists, so the sidebar has something
+  /// to show besides a timestamp — same idea as a chat client's thread title.
+  title String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages JarvisMessage[]
+
+  @@index([organizationId, userId, updatedAt])
+}
+
+model JarvisMessage {
+  id             String             @id @default(cuid())
+  conversationId String
+  conversation   JarvisConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role    JarvisMessageRole
+  content String
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
 }

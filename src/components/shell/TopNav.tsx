@@ -19,11 +19,11 @@ import {
 
 import {
   BellIcon,
-  ChatIcon,
   ChevronDownIcon,
   HelpIcon,
   PeopleIcon,
   SearchIcon,
+  SparkleIcon,
 } from "./icons";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "./notification-actions";
 
@@ -245,9 +245,15 @@ export function TopNav({
           <SearchIcon className="h-4.5 w-4.5" />
         </button>
         <NotificationBell notifications={notifications} unreadCount={unreadCount} />
-        <button type="button" className="rounded p-2 transition hover:bg-white/10" aria-label="Messages">
-          <ChatIcon className="h-4.5 w-4.5" />
-        </button>
+        <Link
+          href="/jarvis"
+          className="rounded p-2 transition hover:bg-white/10"
+          style={pathname?.startsWith("/jarvis") ? { background: "var(--bt-nav-hover)" } : undefined}
+          aria-label="Jarvis"
+          title="Jarvis"
+        >
+          <SparkleIcon className="h-4.5 w-4.5" />
+        </Link>
         <Link href="/people" className="rounded p-2 transition hover:bg-white/10" aria-label="People">
           <PeopleIcon className="h-4.5 w-4.5" />
         </Link>
