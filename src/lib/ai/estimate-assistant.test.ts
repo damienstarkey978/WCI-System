@@ -15,18 +15,22 @@ const CODES: readonly CostCodeOption[] = [
 
 const VALID_PARSED_OUTPUT = {
   title: "Interior repaint",
+  projectDescription: "A full interior repaint of walls and trim.",
   assumptions: ["Assumes standard 8ft ceilings"],
   lineItems: [
     {
       costCodeId: "cc_paint_labor",
+      groupLabel: "Painting",
       title: "Paint labor",
       quantity: 40,
       unitCostDollars: 45,
       ratePercent: 20,
       rateMode: RateMode.MARKUP,
       confidence: "HIGH" as const,
+      priceSource: "MARKET_RATE" as const,
     },
   ],
+  proposalSections: [{ title: "Painting", bullets: ["Paint all interior walls and trim, two coats"] }],
 };
 
 function fakeClient(response: unknown) {

@@ -4,8 +4,8 @@
  */
 
 import { db } from "@/lib/db";
-import { draftEstimateFromNotes } from "@/lib/ai/estimate-assistant";
-import type { CostCodeOption } from "@/lib/ai/estimate-draft";
+import { draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
+import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -25,6 +25,7 @@ export interface CreateAiEstimateDraftInput {
   readonly organizationId: string;
   readonly jobId: string;
   readonly notes: string;
+  readonly images?: readonly DraftEstimateImageInput[];
 }
 
 export interface CreateAiEstimateDraftResult {
@@ -60,8 +61,25 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
   const costCodes: readonly CostCodeOption[] = costCodeRows;
   const defaultCostTypeById = new Map(costCodeRows.map((row) => [row.id, row.defaultCostType]));
 
-  const draft = await draftEstimateFromNotes({ jobName: job.name, notes: input.notes, costCodes });
+  const materialRows = await db.materialCatalogItem.findMany({
+    where: { organizationId: input.organizationId },
+    select: { vendor: true, description: true, unit: true, unitCostCents: true },
+  });
+  const materialCatalog: readonly MaterialCatalogOption[] = materialRows;
 
+  const draft = await draftEstimateFromNotes({
+    jobName: job.name,
+    notes: input.notes,
+    costCodes,
+    materialCatalog,
+    images: input.images,
+  });
+
+  // This admin-only tool has no client/lead context to attach a Proposal to, so
+  // draft.projectDescription and draft.proposalSections (the client-facing side of
+  // the split) are intentionally discarded here — only the Estimate is persisted.
+  // The AI-drafted proposal narrative is wired up separately in the Lead Proposal
+  // flow (src/lib/crm/lead-proposal.ts), where a real Proposal row can be created.
   const estimate = await db.estimate.create({
     data: {
       organizationId: input.organizationId,
@@ -75,11 +93,12 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
           costType: defaultCostTypeById.get(line.costCodeId) ?? "NONE",
           title: line.title,
           description: line.description,
+          groupLabel: line.groupLabel,
           quantityMilli: line.quantityMilli,
           unitCostCents: line.unitCostCents,
           rateMode: line.rateMode,
           rateBasisPoints: line.rateBasisPoints,
-          internalNote: `AI confidence: ${line.confidence}`,
+          internalNote: `AI confidence: ${line.confidence} · price source: ${line.priceSource}`,
           sortOrder: index,
         })),
       },

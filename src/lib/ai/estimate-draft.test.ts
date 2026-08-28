@@ -6,6 +6,7 @@ import {
   buildLineItemSchema,
   EmptyCostCodeCatalogError,
   formatCostCodeCatalog,
+  formatMaterialCatalog,
   normalizeEstimateDraft,
   type CostCodeOption,
   type RawEstimateDraft,
@@ -21,11 +22,13 @@ describe("buildLineItemSchema — the hallucination guard", () => {
     const schema = buildLineItemSchema(["cc_paint_labor", "cc_paint_mat"]);
     const result = schema.safeParse({
       costCodeId: "cc_paint_labor",
+      groupLabel: "Painting",
       title: "Paint labor",
       quantity: 40,
       unitCostDollars: 45,
       ratePercent: 20,
       confidence: "HIGH",
+      priceSource: "MARKET_RATE",
     });
     expect(result.success).toBe(true);
   });
@@ -34,11 +37,13 @@ describe("buildLineItemSchema — the hallucination guard", () => {
     const schema = buildLineItemSchema(["cc_paint_labor"]);
     const result = schema.safeParse({
       costCodeId: "cc_made_up_code",
+      groupLabel: "Painting",
       title: "Something",
       quantity: 1,
       unitCostDollars: 100,
       ratePercent: 10,
       confidence: "LOW",
+      priceSource: "MARKET_RATE",
     });
     expect(result.success).toBe(false);
   });
@@ -51,11 +56,13 @@ describe("buildLineItemSchema — the hallucination guard", () => {
     const schema = buildLineItemSchema(["cc_paint_labor"]);
     const result = schema.parse({
       costCodeId: "cc_paint_labor",
+      groupLabel: "Painting",
       title: "Paint labor",
       quantity: 1,
       unitCostDollars: 10,
       ratePercent: 10,
       confidence: "HIGH",
+      priceSource: "MARKET_RATE",
     });
     expect(result.rateMode).toBe(RateMode.MARKUP);
   });
@@ -65,11 +72,13 @@ describe("buildLineItemSchema — the hallucination guard", () => {
     expect(
       schema.safeParse({
         costCodeId: "cc_paint_labor",
+        groupLabel: "Painting",
         title: "x",
         quantity: -5,
         unitCostDollars: 10,
         ratePercent: 10,
         confidence: "HIGH",
+        priceSource: "MARKET_RATE",
       }).success,
     ).toBe(false);
   });
@@ -78,23 +87,35 @@ describe("buildLineItemSchema — the hallucination guard", () => {
 describe("buildEstimateDraftSchema", () => {
   it("requires at least one line item", () => {
     const schema = buildEstimateDraftSchema(["cc_paint_labor"]);
-    expect(schema.safeParse({ title: "Empty", lineItems: [], assumptions: [] }).success).toBe(false);
+    expect(
+      schema.safeParse({
+        title: "Empty",
+        projectDescription: "Nothing here",
+        lineItems: [],
+        proposalSections: [],
+        assumptions: [],
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts a full valid draft", () => {
     const schema = buildEstimateDraftSchema(["cc_paint_labor", "cc_paint_mat"]);
     const result = schema.safeParse({
       title: "Interior paint",
+      projectDescription: "A two-room interior repaint.",
       lineItems: [
         {
           costCodeId: "cc_paint_labor",
+          groupLabel: "Painting",
           title: "Paint labor",
           quantity: 40,
           unitCostDollars: 45,
           ratePercent: 20,
           confidence: "HIGH",
+          priceSource: "MARKET_RATE",
         },
       ],
+      proposalSections: [{ title: "Painting", bullets: ["Paint two rooms, walls and trim"] }],
       assumptions: ["Assumes standard 8ft ceilings"],
     });
     expect(result.success).toBe(true);
@@ -104,10 +125,12 @@ describe("buildEstimateDraftSchema", () => {
 describe("normalizeEstimateDraft — the float-to-integer boundary", () => {
   const raw: RawEstimateDraft = {
     title: "Interior paint",
+    projectDescription: "A two-room interior repaint.",
     assumptions: ["Assumes two coats"],
     lineItems: [
       {
         costCodeId: "cc_paint_labor",
+        groupLabel: "Painting",
         title: "Paint labor",
         description: "Two coats, walls and trim",
         quantity: 40,
@@ -116,17 +139,21 @@ describe("normalizeEstimateDraft — the float-to-integer boundary", () => {
         ratePercent: 20,
         rateMode: RateMode.MARKUP,
         confidence: "HIGH",
+        priceSource: "MARKET_RATE",
       },
       {
         costCodeId: "cc_paint_mat",
+        groupLabel: "Painting",
         title: "Paint materials",
         quantity: 12.5,
         unitCostDollars: 52.99,
         ratePercent: 10,
         rateMode: RateMode.MARKUP,
         confidence: "MEDIUM",
+        priceSource: "CATALOG",
       },
     ],
+    proposalSections: [{ title: "Painting", bullets: ["Paint two rooms, walls and trim, two coats"] }],
   };
 
   it("converts quantity to milli-units", () => {
@@ -152,12 +179,19 @@ describe("normalizeEstimateDraft — the float-to-integer boundary", () => {
     expect(draft.lineItems[1].description).toBeNull();
   });
 
-  it("carries the title, assumptions and per-line confidence through unchanged", () => {
+  it("carries the title, assumptions and per-line confidence/groupLabel/priceSource through unchanged", () => {
     const draft = normalizeEstimateDraft(raw);
     expect(draft.title).toBe("Interior paint");
+    expect(draft.projectDescription).toBe("A two-room interior repaint.");
     expect(draft.assumptions).toEqual(["Assumes two coats"]);
     expect(draft.lineItems[0].confidence).toBe("HIGH");
-    expect(draft.lineItems[1].confidence).toBe("MEDIUM");
+    expect(draft.lineItems[0].groupLabel).toBe("Painting");
+    expect(draft.lineItems[1].priceSource).toBe("CATALOG");
+  });
+
+  it("carries proposal sections through unchanged", () => {
+    const draft = normalizeEstimateDraft(raw);
+    expect(draft.proposalSections).toEqual([{ title: "Painting", bullets: ["Paint two rooms, walls and trim, two coats"] }]);
   });
 });
 
@@ -170,5 +204,16 @@ describe("formatCostCodeCatalog", () => {
 
   it("renders nothing for an empty catalog rather than throwing", () => {
     expect(formatCostCodeCatalog([])).toBe("");
+  });
+});
+
+describe("formatMaterialCatalog", () => {
+  it("renders one line per material with vendor, description, unit and price", () => {
+    const text = formatMaterialCatalog([{ vendor: "LOWES", description: "2x6x8 SPF stud", unit: "EA", unitCostCents: 899 }]);
+    expect(text).toBe("LOWES | 2x6x8 SPF stud | EA | $8.99");
+  });
+
+  it("renders a placeholder for an empty catalog rather than an empty string", () => {
+    expect(formatMaterialCatalog([])).toBe("(no materials catalog entries yet)");
   });
 });
