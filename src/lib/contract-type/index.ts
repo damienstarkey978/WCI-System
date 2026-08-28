@@ -165,6 +165,42 @@ export function allContractTypePolicies(): readonly ContractTypePolicy[] {
   return Object.values(POLICIES);
 }
 
+/**
+ * The four named Budget views (CLAUDE.md 3). Each is a curated subset of
+ * BudgetColumnId; the page intersects a view's columns with whatever the
+ * job's contract type actually exposes (contractTypePolicy(...).budgetColumns()),
+ * so e.g. Open Book's missing "original client price" column just never shows
+ * up rather than rendering empty.
+ */
+export const BUDGET_VIEWS = [
+  {
+    key: "standard",
+    label: "Standard",
+    columns: ["originalBudgetCost", "revisedBudgetCost", "committedCost", "actualCost", "projectedCost", "originalClientPrice", "revisedClientPrice"],
+  },
+  {
+    key: "job-costing",
+    label: "Job Costing",
+    columns: ["originalBudgetCost", "revisedBudgetCost", "pendingCost", "committedCost", "actualCost", "projectedCost", "costToComplete"],
+  },
+  {
+    key: "client-pricing",
+    label: "Client Pricing",
+    columns: ["originalClientPrice", "revisedClientPrice", "amountInvoiced", "remainingToInvoice"],
+  },
+  {
+    key: "profit",
+    label: "Profit",
+    columns: ["revisedBudgetCost", "actualCost", "revisedClientPrice", "projectedProfit", "projectedMarginPct"],
+  },
+] as const satisfies readonly { key: string; label: string; columns: readonly BudgetColumnId[] }[];
+
+export type BudgetViewKey = (typeof BUDGET_VIEWS)[number]["key"];
+
+export function budgetViewByKey(key: string): (typeof BUDGET_VIEWS)[number] {
+  return BUDGET_VIEWS.find((view) => view.key === key) ?? BUDGET_VIEWS[0];
+}
+
 export interface LineProfit {
   readonly clientPriceCents: Cents;
   readonly profitCents: Cents;

@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUser } from "@/lib/auth";
 import { getJobBudget, JobNotFoundError } from "@/lib/budget/service";
 import type { FunnelLine, FunnelTotals } from "@/lib/budget/funnel";
-import type { BudgetColumnId } from "@/lib/contract-type";
+import { BUDGET_VIEWS, budgetViewByKey, type BudgetColumnId } from "@/lib/contract-type";
 import { formatMoney, formatPercent } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +89,7 @@ function totalsCell(totals: FunnelTotals, columnId: BudgetColumnId): string {
   }
 }
 
-export default async function JobBudgetPage({ params }: PageProps<"/jobs/[jobId]/budget">) {
+export default async function JobBudgetPage({ params, searchParams }: PageProps<"/jobs/[jobId]/budget">) {
   const { jobId } = await params;
 
   let user;
@@ -111,7 +112,15 @@ export default async function JobBudgetPage({ params }: PageProps<"/jobs/[jobId]
 
   // JobBudgetView.columns is typed as `readonly string[]`, but it's always the
   // result of ContractTypePolicy.budgetColumns() — narrow it back for the lookup tables below.
-  const view = { ...rawView, columns: rawView.columns as readonly BudgetColumnId[] };
+  const contractTypeColumns = rawView.columns as readonly BudgetColumnId[];
+
+  const { view: viewParam } = await searchParams;
+  const selectedBudgetView = budgetViewByKey(typeof viewParam === "string" ? viewParam : "standard");
+  // Intersect with what this contract type actually exposes — e.g. Open Book has no
+  // "original client price" column, so Standard just renders without it here.
+  const columns = contractTypeColumns.filter((id) => (selectedBudgetView.columns as readonly BudgetColumnId[]).includes(id));
+
+  const view = { ...rawView, columns };
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -120,6 +129,23 @@ export default async function JobBudgetPage({ params }: PageProps<"/jobs/[jobId]
         <span className="text-xs text-[var(--bt-muted)]">
           {view.job.projectionReference === "GREATEST" ? "Projected at worst of budget/committed/actual" : view.job.projectionReference}
         </span>
+      </div>
+
+      <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: "var(--bt-border)" }}>
+        {BUDGET_VIEWS.map((budgetView) => (
+          <Link
+            key={budgetView.key}
+            href={`/jobs/${jobId}/budget?view=${budgetView.key}`}
+            className="rounded px-3 py-1.5 text-sm font-medium"
+            style={
+              selectedBudgetView.key === budgetView.key
+                ? { background: "var(--bt-primary)", color: "white" }
+                : { color: "var(--bt-muted)" }
+            }
+          >
+            {budgetView.label}
+          </Link>
+        ))}
       </div>
 
       <div className="overflow-x-auto rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
