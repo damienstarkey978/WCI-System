@@ -95,6 +95,21 @@ export function stripeWebhookSecret(): string | undefined {
 }
 
 /**
+ * Shared secret for the scheduled-task endpoint (/api/v1/webhooks/process) —
+ * there is no per-org API key to check since a scheduler call isn't scoped to
+ * one organization. Matches Vercel Cron's own convention of sending
+ * `Authorization: Bearer $CRON_SECRET`; any other scheduler works the same way
+ * as long as it sends that header.
+ */
+export function isCronConfigured(): boolean {
+  return optional("CRON_SECRET") !== undefined;
+}
+
+export function cronSecret(): string | undefined {
+  return optional("CRON_SECRET");
+}
+
+/**
  * Supabase Storage (job files — photos/documents/videos) is optional, same pattern
  * as every other integration here: without it, upload endpoints return a clear
  * "not configured" error rather than the app failing to build. The service-role key
