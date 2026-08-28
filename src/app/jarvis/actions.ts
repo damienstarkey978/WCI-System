@@ -45,7 +45,7 @@ export async function confirmPendingActionAction(formData: FormData): Promise<vo
   const actionId = String(formData.get("actionId") ?? "");
 
   try {
-    await confirmPendingAction(user.organizationId, actionId);
+    await confirmPendingAction(user.organizationId, actionId, user.role);
   } catch (error) {
     if (!(error instanceof PendingActionNotFoundError) && !(error instanceof PendingActionNotPendingError)) throw error;
   }

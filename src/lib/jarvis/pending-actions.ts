@@ -8,7 +8,7 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
-import { BidPackageStatus, BillApprovalStatus, JarvisActionStatus } from "@/generated/prisma/enums";
+import { BidPackageStatus, BillApprovalStatus, JarvisActionStatus, UserRole } from "@/generated/prisma/enums";
 import {
   acceptBidSubmission,
   AlreadyInvitedError,
@@ -43,6 +43,14 @@ import {
   SelectionNotFoundError,
   SelectionOptionNotFoundError,
 } from "@/lib/selections/service";
+import {
+  DuplicateStaffEmailError,
+  inviteStaffMember,
+  LastAdminError,
+  setStaffActive,
+  StaffMemberNotFoundError,
+  updateStaffRole,
+} from "@/lib/staff/service";
 import { issuePortalLoginInvite as issueVendorPortalInvite, VendorNotFoundError as VendorPortalVendorNotFoundError } from "@/lib/vendor-portal/auth";
 
 export class PendingActionNotFoundError extends Error {
@@ -102,7 +110,17 @@ async function findPendingActionForOrg(organizationId: string, actionId: string)
  * function a human clicking the real "Send" button in that feature would call — this
  * is not a parallel code path with its own logic, just a dispatch table.
  */
-async function executePendingAction(organizationId: string, toolName: string, input: unknown): Promise<string> {
+const STAFF_MANAGEMENT_TOOLS = new Set(["invite_staff_member", "update_staff_role", "deactivate_staff_member", "reactivate_staff_member"]);
+
+async function executePendingAction(organizationId: string, toolName: string, input: unknown, actorRole: UserRole): Promise<string> {
+  // Defense in depth: tools.ts already refuses to queue a staff-management action for a
+  // non-admin, but the person clicking Confirm is re-checked here too, at the moment the
+  // real effect happens — never trust a decision made earlier in the flow for something
+  // this sensitive.
+  if (STAFF_MANAGEMENT_TOOLS.has(toolName) && actorRole !== UserRole.ADMIN) {
+    return "Only an admin can confirm this — it was not completed.";
+  }
+
   switch (toolName) {
     case "send_invoice": {
       const { invoiceId } = input as { invoiceId: string };
@@ -167,17 +185,37 @@ async function executePendingAction(organizationId: string, toolName: string, in
       await issueVendorPortalInvite(organizationId, vendorId);
       return "Invited the vendor to the portal.";
     }
+    case "invite_staff_member": {
+      const { email, name, role } = input as { email: string; name: string | null; role: UserRole };
+      const staff = await inviteStaffMember({ organizationId, email, name, role });
+      return `Pre-authorized ${staff.email} as ${staff.role}. They'll get access as soon as they sign in with that email — no invitation email was sent, since WCI OS doesn't send email yet.`;
+    }
+    case "update_staff_role": {
+      const { userId, role } = input as { userId: string; role: UserRole };
+      const staff = await updateStaffRole(organizationId, userId, role);
+      return `Changed ${staff.email}'s role to ${staff.role}.`;
+    }
+    case "deactivate_staff_member": {
+      const { userId } = input as { userId: string };
+      const staff = await setStaffActive(organizationId, userId, false);
+      return `Deactivated ${staff.email}. They can no longer sign in.`;
+    }
+    case "reactivate_staff_member": {
+      const { userId } = input as { userId: string };
+      const staff = await setStaffActive(organizationId, userId, true);
+      return `Reactivated ${staff.email}.`;
+    }
     default:
       throw new UnknownPendingActionToolError(toolName);
   }
 }
 
-export async function confirmPendingAction(organizationId: string, actionId: string) {
+export async function confirmPendingAction(organizationId: string, actionId: string, actorRole: UserRole) {
   const action = await findPendingActionForOrg(organizationId, actionId);
 
   let resultSummary: string;
   try {
-    resultSummary = await executePendingAction(organizationId, action.toolName, action.input);
+    resultSummary = await executePendingAction(organizationId, action.toolName, action.input, actorRole);
   } catch (error) {
     if (
       error instanceof InvoiceNotFoundError ||
@@ -201,7 +239,10 @@ export async function confirmPendingAction(organizationId: string, actionId: str
       error instanceof MissingCostCodeError ||
       error instanceof BidSubmissionNotAcceptedError ||
       error instanceof ClientNotFoundError ||
-      error instanceof VendorPortalVendorNotFoundError
+      error instanceof VendorPortalVendorNotFoundError ||
+      error instanceof DuplicateStaffEmailError ||
+      error instanceof StaffMemberNotFoundError ||
+      error instanceof LastAdminError
     ) {
       resultSummary = `Couldn't complete this: ${error.message}`;
     } else {

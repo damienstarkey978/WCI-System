@@ -27,7 +27,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma/client";
-import { ChangeOrderMode, ChangeOrderStatus, ContractType, InvoiceStatus, JobStatus, MaterialVendor, ProposalStatus, WarrantyClaimStatus } from "@/generated/prisma/enums";
+import { ChangeOrderMode, ChangeOrderStatus, ContractType, InvoiceStatus, JobStatus, MaterialVendor, ProposalStatus, UserRole, WarrantyClaimStatus } from "@/generated/prisma/enums";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
 import type { JarvisTool } from "@/lib/jarvis/assistant";
 import { createBidPackage, lockBidSubmission } from "@/lib/bids/service";
@@ -52,6 +52,7 @@ import { createAllowance, createSelection } from "@/lib/selections/service";
 import { generateSpecificationFromEstimate } from "@/lib/specifications/service";
 import { createSubmittal } from "@/lib/submittals/service";
 import { createSurvey } from "@/lib/surveys/service";
+import { listStaffMembers } from "@/lib/staff/service";
 import { workedHours } from "@/lib/time-clock/hours";
 import { createTodo } from "@/lib/todos/service";
 import { createWarrantyClaim, scheduleAppointment } from "@/lib/warranty/service";
@@ -65,6 +66,21 @@ export interface JarvisToolContext {
 
 async function requireJob(organizationId: string, jobId: string) {
   return db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true, name: true, status: true } });
+}
+
+/**
+ * Staff account management (invite/role-change/deactivate) is restricted to admins,
+ * the same as the one other role-gated action in this codebase
+ * (requireRole(UserRole.ADMIN) on the batch-import route) — never trust the chat
+ * session alone. Returns a decline message if the calling user isn't an admin, or
+ * null to proceed. Re-checked again at confirm time in pending-actions.ts.
+ */
+async function requireAdminUser(ctx: JarvisToolContext): Promise<string | null> {
+  const user = await db.user.findFirst({ where: { id: ctx.userId, organizationId: ctx.organizationId }, select: { role: true } });
+  if (!user || user.role !== UserRole.ADMIN) {
+    return "Only an admin can manage staff accounts — this wasn't queued.";
+  }
+  return null;
 }
 
 /** A short, human-readable reference number for records Jarvis creates that need one (PO/bill/claim numbers). */
@@ -896,6 +912,19 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  const listStaffTool = betaZodTool({
+    name: "list_staff",
+    description: "List this organization's staff — id, name, email, role, and whether they're active.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const staff = await listStaffMembers(ctx.organizationId);
+      if (staff.length === 0) return "This organization has no staff yet.";
+      return staff
+        .map((member) => `${member.id} | ${member.name ?? "(no name)"} | ${member.email} | ${member.role}${member.isActive ? "" : " | INACTIVE"}`)
+        .join("\n");
+    },
+  });
+
   const listClientsTool = betaZodTool({
     name: "list_clients",
     description: "List this organization's clients.",
@@ -1373,6 +1402,98 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  const inviteStaffMemberTool = betaZodTool({
+    name: "invite_staff_member",
+    description:
+      "Queue pre-authorizing a new staff member's email with a role — they get real access to this organization's data as soon as they sign in with that email, so this queues for the user's explicit confirmation rather than executing immediately. Admin-only. No invitation email is sent (WCI OS has no outbound email integration) — someone needs to tell them to sign in.",
+    inputSchema: z.object({
+      email: z.string().describe("Their email — must match what they sign in with"),
+      name: z.string().optional(),
+      role: z.enum(["ADMIN", "PM", "OFFICE", "FIELD"]),
+    }),
+    run: async (input) => {
+      const denial = await requireAdminUser(ctx);
+      if (denial) return denial;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "invite_staff_member",
+        input: { email: input.email, name: input.name ?? null, role: input.role },
+        summary: `Pre-authorize ${input.email} as ${input.role}`,
+      });
+      return `Queued pre-authorizing ${input.email} as ${input.role} for the user's confirmation. Nothing has changed yet.`;
+    },
+  });
+
+  const updateStaffRoleTool = betaZodTool({
+    name: "update_staff_role",
+    description:
+      "Queue changing a staff member's role/permissions. This does NOT execute immediately — it queues for the user's explicit confirmation, since it changes what someone can access. Admin-only. Pass the staff member's id from list_staff.",
+    inputSchema: z.object({
+      userId: z.string().describe("The staff member's id, from list_staff"),
+      role: z.enum(["ADMIN", "PM", "OFFICE", "FIELD"]),
+    }),
+    run: async (input) => {
+      const denial = await requireAdminUser(ctx);
+      if (denial) return denial;
+
+      const staff = await db.user.findFirst({ where: { id: input.userId, organizationId: ctx.organizationId }, select: { email: true, role: true } });
+      if (!staff) return `No staff member found with id ${input.userId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "update_staff_role",
+        input: { userId: input.userId, role: input.role },
+        summary: `Change ${staff.email}'s role from ${staff.role} to ${input.role}`,
+      });
+      return `Queued changing ${staff.email}'s role to ${input.role} for the user's confirmation. Nothing has changed yet.`;
+    },
+  });
+
+  const deactivateStaffMemberTool = betaZodTool({
+    name: "deactivate_staff_member",
+    description:
+      "Queue deactivating a staff member — they immediately lose all access once this is confirmed. This does NOT execute immediately. Admin-only. Pass the staff member's id from list_staff.",
+    inputSchema: z.object({ userId: z.string().describe("The staff member's id, from list_staff") }),
+    run: async (input) => {
+      const denial = await requireAdminUser(ctx);
+      if (denial) return denial;
+
+      const staff = await db.user.findFirst({ where: { id: input.userId, organizationId: ctx.organizationId }, select: { email: true } });
+      if (!staff) return `No staff member found with id ${input.userId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "deactivate_staff_member",
+        input: { userId: input.userId },
+        summary: `Deactivate ${staff.email} — they'll lose access immediately`,
+      });
+      return `Queued deactivating ${staff.email} for the user's confirmation. They still have access until it's confirmed.`;
+    },
+  });
+
+  const reactivateStaffMemberTool = betaZodTool({
+    name: "reactivate_staff_member",
+    description:
+      "Queue reactivating a deactivated staff member's access. This does NOT execute immediately. Admin-only. Pass the staff member's id from list_staff.",
+    inputSchema: z.object({ userId: z.string().describe("The staff member's id, from list_staff") }),
+    run: async (input) => {
+      const denial = await requireAdminUser(ctx);
+      if (denial) return denial;
+
+      const staff = await db.user.findFirst({ where: { id: input.userId, organizationId: ctx.organizationId }, select: { email: true } });
+      if (!staff) return `No staff member found with id ${input.userId} in this organization.`;
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "reactivate_staff_member",
+        input: { userId: input.userId },
+        summary: `Reactivate ${staff.email}'s access`,
+      });
+      return `Queued reactivating ${staff.email} for the user's confirmation.`;
+    },
+  });
+
   return [
     listJobs,
     listCostCodes,
@@ -1418,6 +1539,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     draftLeadProposalTool,
     createJobTool,
     transitionJobStatusTool,
+    listStaffTool,
     listClientsTool,
     createClientTool,
     grantClientJobAccessTool,
@@ -1432,5 +1554,9 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     createSurveyTool,
     inviteClientToPortalTool,
     inviteVendorToPortalTool,
+    inviteStaffMemberTool,
+    updateStaffRoleTool,
+    deactivateStaffMemberTool,
+    reactivateStaffMemberTool,
   ];
 }
