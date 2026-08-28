@@ -1409,6 +1409,10 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     inputSchema: z.object({
       email: z.string().describe("Their email — must match what they sign in with"),
       name: z.string().optional(),
+      title: z
+        .string()
+        .optional()
+        .describe('Cosmetic display title, e.g. "Sales Rep" or "Org Owner" — purely for the staff directory, doesn\'t affect permissions'),
       role: z.enum(["ADMIN", "PM", "OFFICE", "FIELD"]),
     }),
     run: async (input) => {
@@ -1418,7 +1422,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       await createPendingAction({
         conversationId: ctx.conversationId,
         toolName: "invite_staff_member",
-        input: { email: input.email, name: input.name ?? null, role: input.role },
+        input: { email: input.email, name: input.name ?? null, title: input.title ?? null, role: input.role },
         summary: `Pre-authorize ${input.email} as ${input.role}`,
       });
       return `Queued pre-authorizing ${input.email} as ${input.role} for the user's confirmation. Nothing has changed yet.`;

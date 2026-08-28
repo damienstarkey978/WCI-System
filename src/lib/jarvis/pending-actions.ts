@@ -186,8 +186,8 @@ async function executePendingAction(organizationId: string, toolName: string, in
       return "Invited the vendor to the portal.";
     }
     case "invite_staff_member": {
-      const { email, name, role } = input as { email: string; name: string | null; role: UserRole };
-      const staff = await inviteStaffMember({ organizationId, email, name, role });
+      const { email, name, title, role } = input as { email: string; name: string | null; title?: string | null; role: UserRole };
+      const staff = await inviteStaffMember({ organizationId, email, name, title: title ?? null, role });
       return `Pre-authorized ${staff.email} as ${staff.role}. They'll get access as soon as they sign in with that email — no invitation email was sent, since WCI OS doesn't send email yet.`;
     }
     case "update_staff_role": {

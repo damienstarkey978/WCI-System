@@ -39,13 +39,23 @@ export interface InviteStaffMemberInput {
   readonly email: string;
   readonly name?: string | null;
   readonly role: UserRole;
+  /** Cosmetic display label (e.g. "Sales Rep", "Org Owner") — see the schema comment on User.title. */
+  readonly title?: string | null;
+  readonly phone?: string | null;
 }
 
 export async function inviteStaffMember(input: InviteStaffMemberInput) {
   const email = input.email.trim().toLowerCase();
   try {
     return await db.user.create({
-      data: { organizationId: input.organizationId, email, name: input.name ?? null, role: input.role },
+      data: {
+        organizationId: input.organizationId,
+        email,
+        name: input.name ?? null,
+        role: input.role,
+        title: input.title ?? null,
+        phone: input.phone ?? null,
+      },
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -59,6 +69,33 @@ export async function listStaffMembers(organizationId: string) {
   return db.user.findMany({
     where: { organizationId },
     orderBy: [{ isActive: "desc" }, { email: "asc" }],
+  });
+}
+
+export async function getStaffMember(organizationId: string, userId: string) {
+  const user = await db.user.findFirst({ where: { id: userId, organizationId } });
+  if (!user) throw new StaffMemberNotFoundError(userId);
+  return user;
+}
+
+export interface UpdateStaffProfileInput {
+  readonly title?: string | null;
+  readonly phone?: string | null;
+  readonly name?: string | null;
+}
+
+/** Updates cosmetic profile fields only — never touches role or isActive. */
+export async function updateStaffProfile(organizationId: string, userId: string, input: UpdateStaffProfileInput) {
+  const user = await db.user.findFirst({ where: { id: userId, organizationId } });
+  if (!user) throw new StaffMemberNotFoundError(userId);
+
+  return db.user.update({
+    where: { id: user.id },
+    data: {
+      title: input.title !== undefined ? input.title : undefined,
+      phone: input.phone !== undefined ? input.phone : undefined,
+      name: input.name !== undefined ? input.name : undefined,
+    },
   });
 }
 

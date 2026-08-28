@@ -142,6 +142,11 @@ model User {
   clerkUserId String?    @unique
   email       String
   name        String?
+  /// Free-text display label for the staff directory (e.g. "Sales Rep", "Org
+  /// Owner", "Assistant PM") — purely cosmetic. `role` below is what actually
+  /// drives authorization everywhere in the app; this field never gates anything.
+  title       String?
+  phone       String?
   role        UserRole   @default(FIELD)
   /// Set only when role = AGENT.
   agentKind   AgentKind?
