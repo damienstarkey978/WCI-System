@@ -31,6 +31,7 @@ export const WEBHOOK_EVENT_TYPES = [
   /// Raised by Duke when a bank/card transaction cannot be matched to a job.
   "bill.unmatched_transaction",
   "invoice.created",
+  "invoice.sent",
   "invoice.paid",
   "change_order.approved",
   "daily_log.created",

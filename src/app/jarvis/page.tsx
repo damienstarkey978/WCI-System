@@ -29,7 +29,7 @@ export default async function JarvisNewChatPage() {
             enable Jarvis.
           </div>
         ) : null}
-        <MessageList messages={[]} />
+        <MessageList conversationId="" messages={[]} pendingActions={[]} />
         <ChatInputForm />
       </div>
     </div>

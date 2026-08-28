@@ -38,6 +38,13 @@ export class InvoiceVoidedError extends Error {
   }
 }
 
+export class InvoiceNotSendableError extends Error {
+  constructor(invoiceId: string, status: string) {
+    super(`A ${status} invoice cannot be sent.`);
+    this.name = "InvoiceNotSendableError";
+  }
+}
+
 export class DrawNotFoundError extends Error {
   constructor(drawId: string) {
     super(`Draw ${drawId} not found`);
@@ -130,6 +137,28 @@ export async function createInvoice(input: CreateInvoiceInput) {
   });
 
   return invoice;
+}
+
+/**
+ * Marks a DRAFT invoice SENT — the transition that makes it count toward
+ * `amountInvoiced` in the funnel (CLAUDE.md 2.3). Extracted from the
+ * /api/v1/invoices/{id}/send route so Jarvis's confirm-gated "send this invoice"
+ * tool calls the exact same path a human clicking Send does, not a parallel copy.
+ */
+export async function sendInvoice(organizationId: string, invoiceId: string) {
+  const invoice = await db.invoice.findFirst({ where: { id: invoiceId, organizationId } });
+  if (!invoice) throw new InvoiceNotFoundError(invoiceId);
+  if (invoice.status === InvoiceStatus.SENT) return { invoice, alreadySent: true };
+  if (invoice.status !== InvoiceStatus.DRAFT) throw new InvoiceNotSendableError(invoiceId, invoice.status);
+
+  const updated = await db.invoice.update({
+    where: { id: invoice.id },
+    data: { status: InvoiceStatus.SENT, issuedOn: invoice.issuedOn ?? new Date() },
+  });
+
+  await emitEvent(organizationId, "invoice.sent", { invoiceId: updated.id, jobId: updated.jobId });
+
+  return { invoice: updated, alreadySent: false };
 }
 
 export interface CreateDrawInput {

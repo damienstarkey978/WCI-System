@@ -2,10 +2,12 @@
 
 import { useActionState, useRef } from "react";
 
-import { sendJarvisMessageAction, initialJarvisActionState } from "./actions";
+import { sendJarvisMessageAction, type ActionState } from "./actions";
+
+const INITIAL: ActionState = {};
 
 export function ChatInputForm({ conversationId }: { conversationId?: string }) {
-  const [state, formAction, pending] = useActionState(sendJarvisMessageAction, initialJarvisActionState);
+  const [state, formAction, pending] = useActionState(sendJarvisMessageAction, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
 
   return (

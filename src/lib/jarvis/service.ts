@@ -5,7 +5,8 @@
  */
 
 import { db } from "@/lib/db";
-import { replyToConversation, type JarvisChatMessage } from "@/lib/jarvis/assistant";
+import { runJarvisTurn, type JarvisChatMessage } from "@/lib/jarvis/assistant";
+import { buildJarvisTools } from "@/lib/jarvis/tools";
 
 export class ConversationNotFoundError extends Error {
   constructor(conversationId: string) {
@@ -25,7 +26,10 @@ export async function listConversations(organizationId: string, userId: string) 
 export async function getConversation(organizationId: string, userId: string, conversationId: string) {
   const conversation = await db.jarvisConversation.findFirst({
     where: { id: conversationId, organizationId, userId },
-    include: { messages: { orderBy: { createdAt: "asc" } } },
+    include: {
+      messages: { orderBy: { createdAt: "asc" } },
+      pendingActions: { orderBy: { createdAt: "asc" } },
+    },
   });
   if (!conversation) throw new ConversationNotFoundError(conversationId);
   return conversation;
@@ -69,7 +73,8 @@ export async function sendJarvisMessage(input: SendJarvisMessageInput) {
   await db.jarvisMessage.create({ data: { conversationId, role: "USER", content: input.text } });
 
   const history: JarvisChatMessage[] = [...(conversation?.messages ?? []), { role: "USER", content: input.text }];
-  const reply = await replyToConversation(history);
+  const tools = buildJarvisTools({ organizationId: input.organizationId, conversationId, userId: input.userId });
+  const reply = await runJarvisTurn(history, tools);
 
   await db.jarvisMessage.create({ data: { conversationId, role: "ASSISTANT", content: reply } });
   await db.jarvisConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });

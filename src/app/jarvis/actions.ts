@@ -1,18 +1,21 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 import { requireAppUser } from "@/lib/auth";
 import { AiNotConfiguredError, JarvisReplyError } from "@/lib/jarvis/assistant";
+import {
+  PendingActionNotFoundError,
+  PendingActionNotPendingError,
+  confirmPendingAction,
+  declinePendingAction,
+} from "@/lib/jarvis/pending-actions";
 import { ConversationNotFoundError, sendJarvisMessage } from "@/lib/jarvis/service";
 
 export interface ActionState {
   readonly error?: string;
 }
-
-const INITIAL: ActionState = {};
-
-export { INITIAL as initialJarvisActionState };
 
 export async function sendJarvisMessageAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();
@@ -33,4 +36,34 @@ export async function sendJarvisMessageAction(_previous: ActionState, formData: 
   }
 
   redirect(`/jarvis/${resultConversationId}`);
+}
+
+export async function confirmPendingActionAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+
+  const conversationId = String(formData.get("conversationId") ?? "");
+  const actionId = String(formData.get("actionId") ?? "");
+
+  try {
+    await confirmPendingAction(user.organizationId, actionId);
+  } catch (error) {
+    if (!(error instanceof PendingActionNotFoundError) && !(error instanceof PendingActionNotPendingError)) throw error;
+  }
+
+  revalidatePath(`/jarvis/${conversationId}`);
+}
+
+export async function declinePendingActionAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+
+  const conversationId = String(formData.get("conversationId") ?? "");
+  const actionId = String(formData.get("actionId") ?? "");
+
+  try {
+    await declinePendingAction(user.organizationId, actionId);
+  } catch (error) {
+    if (!(error instanceof PendingActionNotFoundError) && !(error instanceof PendingActionNotPendingError)) throw error;
+  }
+
+  revalidatePath(`/jarvis/${conversationId}`);
 }

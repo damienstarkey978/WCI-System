@@ -2248,13 +2248,14 @@ model ClientUpdateSummary {
 }
 
 // ---------------------------------------------------------------------------
-// Jarvis (Phase 10) — the OS-embedded AI assistant. This first slice is the
-// conversational core: a persisted chat thread per staff user, so "keep
-// going with everything you can build" work can pick this up mid-thread
-// across visits. Tool-calling (drafting records, sending invoices/proposals
-// with the confirm-on-money-or-client-facing gate) is the next increment —
-// deliberately not modeled here yet, so this ships as a complete, working
-// chat rather than half-wired tool plumbing with nothing driving it.
+// Jarvis (Phase 10) — the OS-embedded AI assistant. Phase 10a was the
+// conversational core: a persisted chat thread per staff user. Phase 10b adds
+// tool-calling: Jarvis can look up real data freely (JarvisPendingAction is
+// never created for a read-only tool), but a tool with a client-facing or
+// money-moving effect (sending an invoice, sending a proposal, recording a
+// payment) never executes directly — it only creates a JarvisPendingAction,
+// which sits there until a human clicks Confirm in the chat UI. Jarvis itself
+// has no code path that can flip a JarvisPendingAction to CONFIRMED.
 // ---------------------------------------------------------------------------
 
 enum JarvisMessageRole {
@@ -2276,7 +2277,8 @@ model JarvisConversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  messages JarvisMessage[]
+  messages       JarvisMessage[]
+  pendingActions JarvisPendingAction[]
 
   @@index([organizationId, userId, updatedAt])
 }
@@ -2290,6 +2292,36 @@ model JarvisMessage {
   content String
 
   createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+enum JarvisActionStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
+/// A tool call Jarvis queued but did not execute, because it's client-facing or
+/// money-moving. `input` is the exact tool input Jarvis produced; `summary` is the
+/// plain-language description shown in the confirm card. Only confirmPendingAction()
+/// (src/lib/jarvis/pending-actions.ts), which runs from a real user click, ever
+/// transitions this to CONFIRMED and performs the underlying action.
+model JarvisPendingAction {
+  id             String             @id @default(cuid())
+  conversationId String
+  conversation   JarvisConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  toolName String
+  input    Json
+  summary  String
+
+  status        JarvisActionStatus @default(PENDING)
+  /// Set once resolved — what actually happened, shown in the chat thread.
+  resultSummary String?
+
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
 
   @@index([conversationId, createdAt])
 }
