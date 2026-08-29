@@ -98,6 +98,7 @@ model Organization {
   oauthClients OAuthClient[]
 
   estimates             Estimate[]
+  estimateTemplates     EstimateTemplate[]
   purchaseOrders        PurchaseOrder[]
   bills                 Bill[]
   webhookSubscriptions  WebhookSubscription[]
@@ -358,6 +359,7 @@ model CostCode {
   billLineItems          BillLineItem[]
   allowances             Allowance[]
   bidPackageLineItems    BidPackageLineItem[]
+  estimateTemplateLineItems EstimateTemplateLineItem[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -553,6 +555,47 @@ model EstimateLineItem {
   updatedAt DateTime @updatedAt
 
   @@index([estimateId, sortOrder])
+  @@index([costCodeId])
+}
+
+/// A reusable, org-wide set of line items (CLAUDE.md 3's "template" Estimate entry
+/// method) — deliberately not job-scoped like Estimate itself, since the point is to
+/// reuse the same lines across many jobs (e.g. "Kitchen Remodel Template"). "Use
+/// template" copies its line items into a fresh Estimate for a chosen job; the
+/// template itself never appears in a job's estimate list.
+model EstimateTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name String
+
+  rateMode               RateMode @default(MARKUP)
+  defaultRateBasisPoints Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems EstimateTemplateLineItem[]
+
+  @@index([organizationId])
+}
+
+model EstimateTemplateLineItem {
+  id         String           @id @default(cuid())
+  templateId String
+  template   EstimateTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  costCodeId String
+  costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+
+  title         String
+  /// Quantity × 1000. 2.5 units is stored as 2500.
+  quantityMilli Int @default(1000)
+  unitCostCents Int @default(0)
+  sortOrder     Int @default(0)
+
+  @@index([templateId, sortOrder])
   @@index([costCodeId])
 }
 

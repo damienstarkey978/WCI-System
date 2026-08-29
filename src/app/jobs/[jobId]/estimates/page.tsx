@@ -5,10 +5,14 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { listEstimateTemplates } from "@/lib/estimates/templates";
 import { formatDate, formatMoney } from "@/lib/format";
 import { listMaterialCatalogItems } from "@/lib/materials/service";
 
 import { CreateEstimateForm } from "./create-estimate-form";
+import { CsvImportForm } from "./csv-import-form";
+import { SaveAsTemplateForm } from "./save-as-template-form";
+import { UseTemplateForm } from "./use-template-form";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +39,7 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const [estimates, costCodes, materials] = await Promise.all([
+  const [estimates, costCodes, materials, templates] = await Promise.all([
     db.estimate.findMany({
       where: { jobId: job.id },
       orderBy: { createdAt: "desc" },
@@ -47,6 +51,7 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
       select: { id: true, code: true, name: true },
     }),
     listMaterialCatalogItems(user.organizationId),
+    listEstimateTemplates(user.organizationId),
   ]);
 
   return (
@@ -54,6 +59,10 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Estimates — {job.name}</h1>
 
       <CreateEstimateForm jobId={job.id} costCodes={costCodes} materials={materials} />
+
+      <UseTemplateForm jobId={job.id} templates={templates.map((t) => ({ id: t.id, name: t.name, lineItemCount: t.lineItems.length }))} />
+
+      <CsvImportForm jobId={job.id} />
 
       {estimates.length === 0 ? (
         <EmptyState title="No estimates yet" description="Estimates created for this job will appear here." />
@@ -69,6 +78,7 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Created</th>
                 <th className="px-4 py-3 text-right">Client price</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -88,6 +98,9 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
                     </td>
                     <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(estimate.createdAt)}</td>
                     <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(clientPriceCents)}</td>
+                    <td className="px-4 py-3">
+                      <SaveAsTemplateForm jobId={job.id} estimateId={estimate.id} />
+                    </td>
                   </tr>
                 );
               })}
