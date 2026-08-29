@@ -36,7 +36,7 @@ export default async function JarvisConversationPage({ params }: PageProps<"/jar
       <ConversationSidebar organizationId={user.organizationId} userId={user.id} activeConversationId={conversation.id} />
       <div className="flex flex-1 flex-col">
         <MessageList conversationId={conversation.id} messages={conversation.messages} pendingActions={conversation.pendingActions} />
-        <ChatInputForm conversationId={conversation.id} />
+        <ChatInputForm conversationId={conversation.id} showSuggestions={conversation.messages.length === 0} />
       </div>
     </div>
   );

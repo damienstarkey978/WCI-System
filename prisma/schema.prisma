@@ -2371,6 +2371,13 @@ model JarvisMessage {
   role    JarvisMessageRole
   content String
 
+  /// Set on a USER message sent from the docked launcher (src/components/jarvis/
+  /// JarvisLauncher.tsx) — what page/record was on screen when it was sent, e.g.
+  /// {"page":"job_detail","jobId":"..."}. Null for messages sent from the full
+  /// /jarvis page, which has no ambient page to describe. Shown in the transcript
+  /// so a reviewer can see what Jarvis was told without being asked.
+  context Json?
+
   createdAt DateTime @default(now())
 
   @@index([conversationId, createdAt])

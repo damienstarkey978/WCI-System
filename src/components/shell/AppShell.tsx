@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import { isClerkConfigured } from "@/lib/env";
+import { JarvisLauncher } from "@/components/jarvis/JarvisLauncher";
+import { isAnthropicConfigured, isClerkConfigured } from "@/lib/env";
 
 import { JobSidebar, type SidebarJob } from "./JobSidebar";
 import { TopNav, type BellNotification } from "./TopNav";
@@ -36,6 +37,7 @@ export function AppShell({
         <JobSidebar jobs={jobs} activeJobId={activeJobId} />
         <main className="flex-1 overflow-y-auto bg-[#f7f8fa]">{children}</main>
       </div>
+      {isAnthropicConfigured() ? <JarvisLauncher /> : null}
     </div>
   );
 }

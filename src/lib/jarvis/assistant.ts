@@ -102,17 +102,23 @@ export async function runJarvisTurn(
   messages: readonly JarvisChatMessage[],
   tools: readonly JarvisTool[],
   runToolTurn: JarvisToolRunnerFn = defaultToolRunner,
+  /** A one-line note on what page/record the user was looking at when they sent the
+   *  latest message (from the docked launcher — src/components/jarvis/JarvisLauncher.tsx).
+   *  Appended to the system prompt for this turn only; never stored as part of it. */
+  contextNote?: string,
 ): Promise<string> {
   if (!isAnthropicConfigured()) {
     throw new AiNotConfiguredError();
   }
+
+  const system = contextNote ? `${SYSTEM_PROMPT}\n\n${contextNote}` : SYSTEM_PROMPT;
 
   let finalMessage: Anthropic.Beta.Messages.BetaMessage;
   try {
     finalMessage = await runToolTurn({
       model: "claude-opus-5",
       max_tokens: 4_096,
-      system: SYSTEM_PROMPT,
+      system,
       tools: [...tools],
       messages: messages.map((message) => ({
         role: message.role === "USER" ? ("user" as const) : ("assistant" as const),

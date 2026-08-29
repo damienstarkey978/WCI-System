@@ -4,6 +4,7 @@
  * src/lib/ai/service.ts and src/lib/ai/estimate-assistant.ts.
  */
 
+import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { runJarvisTurn, type JarvisChatMessage } from "@/lib/jarvis/assistant";
 import { buildJarvisTools } from "@/lib/jarvis/tools";
@@ -46,6 +47,21 @@ export interface SendJarvisMessageInput {
   /** Omit to start a new conversation. */
   readonly conversationId?: string;
   readonly text: string;
+  /**
+   * What page/record the user was looking at when they sent this from the docked
+   * launcher (src/components/jarvis/JarvisLauncher.tsx) — e.g.
+   * {"page":"job_detail","jobId":"...","jobName":"..."}. Stored on the message for
+   * the audit trail and folded into the system prompt for this one turn so "draft a
+   * change order for this" resolves without the user naming the job. Omit for
+   * messages sent from the full /jarvis page, which has no ambient page to describe.
+   */
+  readonly context?: unknown;
+}
+
+/** A short natural-language note Claude can use to resolve "this"/"here" — never stored. */
+function formatContextNote(context: unknown): string | undefined {
+  if (!context || typeof context !== "object") return undefined;
+  return `The user sent this from the docked launcher while looking at: ${JSON.stringify(context)}. Use it only to resolve which record they mean (e.g. "this job") — don't mention it unless it's relevant to your reply.`;
 }
 
 /**
@@ -70,11 +86,18 @@ export async function sendJarvisMessage(input: SendJarvisMessageInput) {
       })
     ).id;
 
-  await db.jarvisMessage.create({ data: { conversationId, role: "USER", content: input.text } });
+  await db.jarvisMessage.create({
+    data: {
+      conversationId,
+      role: "USER",
+      content: input.text,
+      context: input.context ? (input.context as Prisma.InputJsonValue) : undefined,
+    },
+  });
 
   const history: JarvisChatMessage[] = [...(conversation?.messages ?? []), { role: "USER", content: input.text }];
   const tools = buildJarvisTools({ organizationId: input.organizationId, conversationId, userId: input.userId });
-  const reply = await runJarvisTurn(history, tools);
+  const reply = await runJarvisTurn(history, tools, undefined, formatContextNote(input.context));
 
   await db.jarvisMessage.create({ data: { conversationId, role: "ASSISTANT", content: reply } });
   await db.jarvisConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });

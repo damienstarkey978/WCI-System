@@ -2,13 +2,23 @@
 
 import { useActionState, useRef } from "react";
 
+import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
+
 import { sendJarvisMessageAction, type ActionState } from "./actions";
 
 const INITIAL: ActionState = {};
 
-export function ChatInputForm({ conversationId }: { conversationId?: string }) {
+export function ChatInputForm({ conversationId, showSuggestions }: { conversationId?: string; showSuggestions?: boolean }) {
   const [state, formAction, pending] = useActionState(sendJarvisMessageAction, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
+
+  function fillSuggestion(suggestion: string) {
+    const textarea = formRef.current?.elements.namedItem("text");
+    if (textarea instanceof HTMLTextAreaElement) {
+      textarea.value = suggestion;
+      textarea.focus();
+    }
+  }
 
   return (
     <form
@@ -21,6 +31,21 @@ export function ChatInputForm({ conversationId }: { conversationId?: string }) {
       style={{ borderColor: "var(--bt-border)" }}
     >
       {conversationId ? <input type="hidden" name="conversationId" value={conversationId} /> : null}
+      {showSuggestions ? (
+        <div className="flex flex-wrap gap-1.5">
+          {JARVIS_SUGGESTIONS.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => fillSuggestion(suggestion)}
+              className="rounded-full border px-3 py-1 text-xs text-[var(--bt-text)] hover:bg-black/5"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="flex items-end gap-2">
         <textarea
           name="text"

@@ -38,6 +38,67 @@ export async function sendJarvisMessageAction(_previous: ActionState, formData: 
   redirect(`/jarvis/${resultConversationId}`);
 }
 
+export interface LauncherMessageData {
+  readonly id: string;
+  readonly role: "USER" | "ASSISTANT";
+  readonly content: string;
+  readonly createdAt: string;
+}
+
+export interface LauncherActionState {
+  readonly error?: string;
+  readonly conversationId?: string;
+  readonly messages?: readonly LauncherMessageData[];
+  readonly pendingCount?: number;
+}
+
+/**
+ * The docked-launcher counterpart to sendJarvisMessageAction (src/components/jarvis/
+ * JarvisLauncher.tsx) — same underlying sendJarvisMessage call, but returns the
+ * conversation as data instead of redirecting, since the launcher is a panel over
+ * whatever page the user was already on, not a destination. Confirming/declining a
+ * queued action still only happens on the full /jarvis/[conversationId] page — this
+ * only reports how many are waiting.
+ */
+export async function sendJarvisLauncherMessageAction(_previous: LauncherActionState, formData: FormData): Promise<LauncherActionState> {
+  const user = await requireAppUser();
+
+  const text = String(formData.get("text") ?? "").trim();
+  const conversationId = String(formData.get("conversationId") ?? "") || undefined;
+  const contextRaw = String(formData.get("context") ?? "");
+
+  if (!text) return { error: "Type a message first.", conversationId };
+
+  let context: unknown;
+  if (contextRaw) {
+    try {
+      context = JSON.parse(contextRaw);
+    } catch {
+      context = undefined;
+    }
+  }
+
+  try {
+    const conversation = await sendJarvisMessage({ organizationId: user.organizationId, userId: user.id, conversationId, text, context });
+    revalidatePath("/jarvis");
+    revalidatePath(`/jarvis/${conversation.id}`);
+    return {
+      conversationId: conversation.id,
+      messages: conversation.messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        createdAt: message.createdAt.toISOString(),
+      })),
+      pendingCount: conversation.pendingActions.filter((action) => action.status === "PENDING").length,
+    };
+  } catch (error) {
+    if (error instanceof AiNotConfiguredError) return { error: "Jarvis isn't configured yet — set ANTHROPIC_API_KEY in .env.", conversationId };
+    if (error instanceof ConversationNotFoundError || error instanceof JarvisReplyError) return { error: error.message, conversationId };
+    throw error;
+  }
+}
+
 export async function confirmPendingActionAction(formData: FormData): Promise<void> {
   const user = await requireAppUser();
 
