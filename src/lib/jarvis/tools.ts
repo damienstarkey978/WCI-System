@@ -28,8 +28,16 @@ import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma/client";
 import { ChangeOrderMode, ChangeOrderStatus, ContractType, InvoiceStatus, JobStatus, MaterialVendor, ProposalStatus, UserRole, WarrantyClaimStatus } from "@/generated/prisma/enums";
+import { AiNotConfiguredError, DraftGenerationError } from "@/lib/ai/estimate-assistant";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
-import type { JarvisTool } from "@/lib/jarvis/assistant";
+import {
+  createAiChangeOrderDraft,
+  createAiEstimateDraft,
+  JobNotFoundError as AiDraftJobNotFoundError,
+  JobNotOpenError as AiDraftJobNotOpenError,
+  NoCostCodesError as AiDraftNoCostCodesError,
+} from "@/lib/ai/service";
+import type { JarvisImageInput, JarvisTool } from "@/lib/jarvis/assistant";
 import { createBidPackage, lockBidSubmission } from "@/lib/bids/service";
 import { createBill } from "@/lib/bills/service";
 import { createChangeOrder } from "@/lib/change-orders/service";
@@ -63,6 +71,11 @@ export interface JarvisToolContext {
   readonly organizationId: string;
   readonly conversationId: string;
   readonly userId: string;
+  /** Photos attached to the *current* turn (same ones given to the model as vision
+   *  input — see runJarvisTurn) — so a tool like draft_lead_proposal can forward them
+   *  into the actual estimate-drafting AI call for real photo grounding, not just let
+   *  the chat model describe them secondhand in its "notes" argument. */
+  readonly images?: readonly JarvisImageInput[];
 }
 
 async function requireJob(organizationId: string, jobId: string) {
@@ -246,6 +259,62 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         flatClientPriceCents: parseDollarsToCents(input.clientPriceDollars),
       });
       return `Created DRAFT change order "${changeOrder.title}" (${formatMoney(input.clientPriceDollars * 100)}) for ${job.name}. It's internal only — a human needs to send it for client approval before it goes anywhere.`;
+    },
+  });
+
+  const draftEstimateWithAiTool = betaZodTool({
+    name: "draft_estimate_with_ai",
+    description:
+      "Give Jarvis the scope of work, measurements, and notes for a job, and it drafts a full cost-coded estimate against the job's real cost code and materials catalog — created as DRAFT, never locked and never sent to Budget. Reuses the same estimate-drafting pipeline as the Estimates page and the Lead Proposal flow. Pass the job's id from list_jobs.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),
+    }),
+    run: async (input) => {
+      try {
+        const result = await createAiEstimateDraft({
+          organizationId: ctx.organizationId,
+          jobId: input.jobId,
+          notes: input.notes,
+          images: ctx.images,
+        });
+        return `Drafted estimate "${result.title}" with ${result.lineItemCount} line item${result.lineItemCount === 1 ? "" : "s"} — status DRAFT, view it in the job's Estimates tab. A human needs to review it before it's sent to Budget.`;
+      } catch (error) {
+        if (error instanceof AiNotConfiguredError) return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
+        if (error instanceof AiDraftJobNotFoundError) return `No job found with id ${input.jobId} in this organization.`;
+        if (error instanceof AiDraftNoCostCodesError || error instanceof DraftGenerationError) return error.message;
+        throw error;
+      }
+    },
+  });
+
+  const draftChangeOrderWithAiTool = betaZodTool({
+    name: "draft_change_order_with_ai",
+    description:
+      "Give Jarvis a description of what changed — added scope, a client request, a field condition — for a job, and it drafts a full ITEMIZED change order against the job's real cost code catalog, reusing the same estimate-drafting pipeline. Created as DRAFT — approving it (the step that actually touches the Budget) is still a separate human action. Pass the job's id from list_jobs.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      title: z.string().describe("What the change order is for, e.g. 'Add egress window to basement bedroom'"),
+      notes: z.string().describe("What changed and why — measurements, materials, anything relevant"),
+    }),
+    run: async (input) => {
+      try {
+        const result = await createAiChangeOrderDraft({
+          organizationId: ctx.organizationId,
+          jobId: input.jobId,
+          title: input.title,
+          notes: input.notes,
+          images: ctx.images,
+        });
+        return `Drafted change order "${result.title}" with ${result.lineItemCount} line item${result.lineItemCount === 1 ? "" : "s"} — status DRAFT, view it in the job's Change Orders tab. A human needs to review and approve it before it touches the Budget.`;
+      } catch (error) {
+        if (error instanceof AiNotConfiguredError) return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
+        if (error instanceof AiDraftJobNotFoundError) return `No job found with id ${input.jobId} in this organization.`;
+        if (error instanceof AiDraftJobNotOpenError || error instanceof AiDraftNoCostCodesError || error instanceof DraftGenerationError) {
+          return error.message;
+        }
+        throw error;
+      }
     },
   });
 
@@ -841,10 +910,11 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         leadId: input.leadId,
         userId: ctx.userId,
         notes: input.notes,
+        images: ctx.images,
         clientEmail: input.clientEmail ?? null,
         clientPhone: input.clientPhone ?? null,
       });
-      return `Drafted proposal "${proposal.title}" for the lead — status DRAFT. A human needs to review and send it.`;
+      return `Drafted proposal "${proposal.title}" for the lead — status DRAFT, view it at /leads/proposals/${proposal.id}. A human needs to review and send it.`;
     },
   });
 
@@ -1509,6 +1579,8 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     listOpenChangeOrders,
     findJobFiles,
     createChangeOrderDraft,
+    draftEstimateWithAiTool,
+    draftChangeOrderWithAiTool,
     logDailyLogNote,
     createRfiTool,
     createTodoTool,

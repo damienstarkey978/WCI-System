@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
@@ -10,7 +11,6 @@ import { formatDate, formatMoney } from "@/lib/format";
 
 import { approveChangeOrderAction, declineChangeOrderAction } from "./actions";
 import { CreateChangeOrderForm } from "./create-change-order-form";
-import { DraftChangeOrderWithAiForm } from "./draft-change-order-with-ai-form";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +66,14 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Change orders — {job.name}</h1>
 
-      {isAnthropicConfigured() ? <DraftChangeOrderWithAiForm jobId={job.id} /> : null}
+      {isAnthropicConfigured() ? (
+        <JarvisChatPanel
+          context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "change_orders" }}
+          storageKey={`job-change-orders:${job.id}`}
+          emptyStateHint="Describe what changed — added scope, a client request, a field condition — and Jarvis drafts a full itemized change order against this job's catalog. Attach photos and it'll factor those in too."
+          heightClassName="h-96"
+        />
+      ) : null}
 
       <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
 

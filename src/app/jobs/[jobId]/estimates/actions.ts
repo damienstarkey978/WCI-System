@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 
-import { AiNotConfiguredError, DraftGenerationError, type DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
-import { createAiEstimateDraft, JobNotFoundError as AiJobNotFoundError, NoCostCodesError } from "@/lib/ai/service";
 import { RateMode } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { InvalidCsvError, parseEstimateCsv, UnknownCostCodesInCsvError } from "@/lib/estimates/csv-import";
@@ -20,58 +18,6 @@ import { parsePercentToBasisPoints } from "@/lib/money";
 export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
-}
-
-const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-
-async function filesToImageInputs(formData: FormData, field: string): Promise<DraftEstimateImageInput[]> {
-  const files = formData.getAll(field).filter((value): value is File => value instanceof File && value.size > 0);
-  const images: DraftEstimateImageInput[] = [];
-  for (const file of files) {
-    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) continue;
-    const buffer = Buffer.from(await file.arrayBuffer());
-    images.push({ base64Data: buffer.toString("base64"), mediaType: file.type as DraftEstimateImageInput["mediaType"] });
-  }
-  return images;
-}
-
-export interface DraftEstimateActionState {
-  readonly error?: string;
-  readonly result?: {
-    readonly title: string;
-    readonly lineItemCount: number;
-    readonly assumptions: readonly string[];
-  };
-}
-
-/**
- * "Draft with AI" (handoff-ai-analysis-and-jarvis-deep-integration-spec.md Part
- * 3.3b) — the same createAiEstimateDraft pipeline behind /admin/ai-estimate, but
- * embedded directly on the job's own Estimates page instead of only reachable
- * through a separate admin utility (jobId comes from the route, not a picker).
- * Always creates a real DRAFT Estimate — never locked, never sent to Budget — that
- * shows up in the list below like any hand-entered one.
- */
-export async function draftJobEstimateAction(_previous: DraftEstimateActionState, formData: FormData): Promise<DraftEstimateActionState> {
-  const user = await requireAppUser();
-
-  const jobId = String(formData.get("jobId") ?? "");
-  const notes = String(formData.get("notes") ?? "").trim();
-  if (notes.length < 10) return { error: "Add a bit more detail — scope of work, measurements, anything relevant (at least 10 characters)." };
-
-  const images = await filesToImageInputs(formData, "photos");
-
-  try {
-    const result = await createAiEstimateDraft({ organizationId: user.organizationId, jobId, notes, images });
-    revalidatePath(`/jobs/${jobId}/estimates`);
-    return { result: { title: result.title, lineItemCount: result.lineItemCount, assumptions: result.assumptions } };
-  } catch (error) {
-    if (error instanceof AiNotConfiguredError) return { error: "The AI assistant isn't configured yet — set ANTHROPIC_API_KEY in .env." };
-    if (error instanceof AiJobNotFoundError || error instanceof NoCostCodesError || error instanceof DraftGenerationError) {
-      return { error: error.message };
-    }
-    throw error;
-  }
 }
 
 export async function createEstimateAction(_previous: ActionState, formData: FormData): Promise<ActionState> {

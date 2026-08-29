@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { resolveFileUrl } from "@/lib/files/service";
@@ -12,7 +13,6 @@ import { isAnthropicConfigured } from "@/lib/env";
 import { ConvertToJobButton } from "../convert-form";
 import { StageSelect } from "../stage-select";
 import { CreateLeadProposalForm } from "./create-lead-proposal-form";
-import { DraftLeadProposalForm } from "./draft-lead-proposal-form";
 import { LeadActivityForm } from "./lead-activity-form";
 import { LeadDetailsForm } from "./lead-details-form";
 import { declineProposalAction, sendProposalAction } from "./actions";
@@ -196,11 +196,11 @@ export default async function LeadDetailPage({
             </div>
           ) : null}
           {isAnthropicConfigured() ? (
-            <DraftLeadProposalForm
-              leadId={lead.id}
-              defaultEmail={lead.email ?? ""}
-              defaultPhone={lead.phone ?? ""}
-              needsContact={!lead.email}
+            <JarvisChatPanel
+              context={{ page: "lead_detail", leadId: lead.id, leadName: lead.name, tab: "proposals" }}
+              storageKey={`lead-proposal:${lead.id}`}
+              emptyStateHint="Give Jarvis the scope of work, measurements, and any photos — it drafts a full line-item estimate and the client-facing proposal that goes with it, always as a DRAFT for you to review before anything is sent."
+              heightClassName="h-96"
             />
           ) : null}
           <CreateLeadProposalForm

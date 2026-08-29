@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
@@ -12,7 +13,6 @@ import { listMaterialCatalogItems } from "@/lib/materials/service";
 
 import { CreateEstimateForm } from "./create-estimate-form";
 import { CsvImportForm } from "./csv-import-form";
-import { DraftEstimateWithAiForm } from "./draft-estimate-with-ai-form";
 import { SaveAsTemplateForm } from "./save-as-template-form";
 import { UseTemplateForm } from "./use-template-form";
 
@@ -60,7 +60,14 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Estimates — {job.name}</h1>
 
-      {isAnthropicConfigured() ? <DraftEstimateWithAiForm jobId={job.id} /> : null}
+      {isAnthropicConfigured() ? (
+        <JarvisChatPanel
+          context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "estimates" }}
+          storageKey={`job-estimates:${job.id}`}
+          emptyStateHint="Describe the scope of work — measurements, materials, anything relevant — and Jarvis drafts a full cost-coded estimate against this job's catalog. Attach photos and it'll factor those in too."
+          heightClassName="h-96"
+        />
+      ) : null}
 
       <CreateEstimateForm jobId={job.id} costCodes={costCodes} materials={materials} />
 
