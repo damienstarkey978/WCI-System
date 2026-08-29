@@ -537,7 +537,7 @@ model Estimate {
   updatedAt DateTime @updatedAt
 
   lineItems               EstimateLineItem[]
-  proposals               Proposal[]
+  proposalOptions         ProposalOption[]
   generatedSpecifications Specification[]
 
   @@index([organizationId])
@@ -1990,10 +1990,14 @@ enum ProposalStatus {
   DECLINED
 }
 
-/// Wraps an Estimate with the client-facing e-sign layer (CLAUDE.md 3:
-/// "Proposal builder with e-signature that converts to a Job on acceptance").
-/// Pricing is never duplicated here — it lives entirely on the linked
-/// Estimate, same "one place computes the numbers" principle as the Budget.
+/// Wraps up to 5 Estimate-backed options with the client-facing e-sign layer
+/// (CLAUDE.md 3: "Proposal builder with e-signature that converts to a Job
+/// on acceptance"; task #116's multi-option support — a "Good/Better/Best"
+/// style proposal). Pricing is never duplicated here — it lives entirely on
+/// each option's own Estimate, same "one place computes the numbers"
+/// principle as the Budget. selectedOptionId is set once (by the client
+/// choosing, or automatically when there's only ever been one option) and
+/// is what acceptProposal() sends to the Budget — never assume options[0].
 model Proposal {
   id             String       @id @default(cuid())
   organizationId String
@@ -2002,8 +2006,6 @@ model Proposal {
   job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
   leadId         String?
   lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  estimateId     String
-  estimate       Estimate     @relation(fields: [estimateId], references: [id], onDelete: Restrict)
   clientId       String
   client         Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
 
@@ -2011,7 +2013,22 @@ model Proposal {
   coverMessage String?
   status       ProposalStatus @default(DRAFT)
 
+  /// Branding customization for the client-facing review page/PDF — kept
+  /// deliberately minimal (a color and a logo), not a full theme system.
+  accentColor String?
+  logoUrl     String?
+
+  /// Free-text feedback a client can leave from the review page before (or
+  /// instead of) accepting — e.g. "like Option B but swap the fixtures".
+  /// Collectible independent of acceptance, so it doesn't consume the
+  /// single-use approval link the way accepting does.
+  clientFeedback   String?
+  clientFeedbackAt DateTime?
+
   sentAt DateTime?
+
+  selectedOptionId String?         @unique
+  selectedOption   ProposalOption? @relation("ProposalSelectedOption", fields: [selectedOptionId], references: [id], onDelete: SetNull)
 
   clientSignatureName String?
   clientSignedAt      DateTime?
@@ -2021,11 +2038,35 @@ model Proposal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  options  ProposalOption[]  @relation("ProposalOptions")
   sections ProposalSection[]
 
   @@index([jobId])
   @@index([leadId])
   @@index([organizationId, status])
+}
+
+/// One priced option within a Proposal (CLAUDE.md 3/task #116: up to 5 per
+/// proposal for side-by-side client comparison, e.g. "Good/Better/Best").
+/// Each option wraps its own Estimate — pricing still lives entirely there,
+/// this just labels and orders it within the proposal.
+model ProposalOption {
+  id         String   @id @default(cuid())
+  proposalId String
+  proposal   Proposal @relation("ProposalOptions", fields: [proposalId], references: [id], onDelete: Cascade)
+  estimateId String
+  estimate   Estimate @relation(fields: [estimateId], references: [id], onDelete: Restrict)
+
+  label     String
+  sortOrder Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Opposite side of Proposal.selectedOption — no FK here, it lives on Proposal.
+  selectedForProposal Proposal? @relation("ProposalSelectedOption")
+
+  @@index([proposalId, sortOrder])
 }
 
 /// The client-facing scope-of-work narrative shown on the Proposal side of the

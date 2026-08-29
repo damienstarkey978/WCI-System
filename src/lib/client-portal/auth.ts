@@ -143,6 +143,49 @@ export async function redeemActionToken<T>(
   return result;
 }
 
+/**
+ * Validate a ClientActionToken without consuming it — for a public page that reads
+ * (proposal review) or a client action that isn't a one-time decision (proposal
+ * feedback), where the client may come back to the same link more than once before
+ * finally accepting. Accepting still goes through redeemActionToken.
+ *
+ * `expectedResourceId` is checked only when given: a caller that already knows the
+ * resource from its URL (the feedback route, scoped to a proposalId) passes it to
+ * confirm the token matches; a caller that only has the token (the review page's
+ * public URL carries nothing else) omits it and reads `resourceId` off the result
+ * to know which proposal the link is for.
+ *
+ * `allowUsed` lets a page keep reading a link after its one-time action already
+ * spent it — e.g. the proposal review page re-rendering right after acceptance
+ * (which calls redeemActionToken and sets usedAt) should show "you accepted this"
+ * from the proposal's current status, not "link no longer valid". A caller taking
+ * a new action (feedback, or acceptance itself) must never pass this — a spent
+ * token has already made its one decision.
+ */
+export async function peekActionToken(
+  token: string,
+  expectedPurpose: (typeof ClientActionTokenPurpose)[keyof typeof ClientActionTokenPurpose],
+  expectedResourceId?: string | null,
+  options?: { readonly allowUsed?: boolean },
+): Promise<{ clientId: string; resourceId: string | null }> {
+  const parsed = parseSecureToken(ACTION_TOKEN_PREFIX, token);
+  if (!parsed) throw new InvalidActionTokenError();
+
+  const record = await db.clientActionToken.findUnique({ where: { tokenId: parsed.tokenId } });
+  if (
+    !record ||
+    !secretMatches(parsed.secret, record.hashedSecret) ||
+    record.purpose !== expectedPurpose ||
+    (expectedResourceId !== undefined && record.resourceId !== expectedResourceId) ||
+    (record.usedAt !== null && !options?.allowUsed) ||
+    record.expiresAt.getTime() <= Date.now()
+  ) {
+    throw new InvalidActionTokenError();
+  }
+
+  return { clientId: record.clientId, resourceId: record.resourceId };
+}
+
 export interface ClientSessionContext {
   readonly clientId: string;
   readonly organizationId: string;

@@ -15,9 +15,11 @@ import { formatZodIssues, portalAcceptProposalSchema } from "@/lib/api-schemas";
 import { authenticateClientSession, InvalidActionTokenError, redeemActionToken } from "@/lib/client-portal/auth";
 import {
   acceptProposal,
+  OptionSelectionRequiredError,
   ProposalClientMismatchError,
   ProposalNotFoundError,
   ProposalNotPendingError,
+  ProposalOptionNotFoundError,
 } from "@/lib/proposals/service";
 import { db } from "@/lib/db";
 
@@ -61,6 +63,7 @@ export async function POST(request: Request, context: Context) {
       result = await acceptProposal({
         organizationId: proposal.organizationId,
         proposalId,
+        optionId: parsed.data.optionId,
         clientSignatureName: parsed.data.clientSignatureName,
         clientSignatureIp: clientIp(request),
       });
@@ -72,6 +75,7 @@ export async function POST(request: Request, context: Context) {
         return acceptProposal({
           organizationId: proposal.organizationId,
           proposalId,
+          optionId: parsed.data.optionId,
           clientSignatureName: parsed.data.clientSignatureName,
           clientSignatureIp: clientIp(request),
         });
@@ -84,6 +88,8 @@ export async function POST(request: Request, context: Context) {
     if (error instanceof ProposalNotFoundError) return apiError(404, "not_found", error.message);
     if (error instanceof ProposalNotPendingError) return apiError(409, "not_pending", error.message);
     if (error instanceof ProposalClientMismatchError) return apiError(404, "not_found", `Proposal ${proposalId} not found`);
+    if (error instanceof OptionSelectionRequiredError) return apiError(422, "option_selection_required", error.message);
+    if (error instanceof ProposalOptionNotFoundError) return apiError(422, "unknown_option", error.message);
     throw error;
   }
 }

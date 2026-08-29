@@ -338,6 +338,18 @@ export function extendedCostCents(quantityMilli: number, unitCostCents: Cents): 
   return roundHalfAwayFromZero((quantityMilli * unitCostCents) / 1000);
 }
 
+/**
+ * An Estimate's client-facing grand total: each line's extended cost, priced with its
+ * own rate. Shared by every place that shows an estimate/proposal-option total
+ * (Lead Proposals list, the Proposal editor and PDF export, the client review page)
+ * so they can't drift into computing it slightly differently.
+ */
+export function estimateTotalCents(
+  lineItems: readonly { readonly quantityMilli: number; readonly unitCostCents: Cents; readonly rateMode: RateMode; readonly rateBasisPoints: BasisPoints }[],
+): Cents {
+  return lineItems.reduce((total, item) => total + priceWithRate(extendedCostCents(item.quantityMilli, item.unitCostCents), item.rateMode, item.rateBasisPoints), 0);
+}
+
 /** Cost types that count as labor, for the labor-actuals report and OT logic. */
 export function isLaborCostType(costType: CostType): boolean {
   return costType === "LABOR";

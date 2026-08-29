@@ -2,31 +2,45 @@
 
 import { revalidatePath } from "next/cache";
 
+import { ClientActionTokenPurpose } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
+import { ClientNotFoundError as ReviewLinkClientNotFoundError, issueApprovalLink } from "@/lib/client-portal/auth";
+import { db } from "@/lib/db";
 import {
   UnknownCostCodeError,
   EstimateLineItemNotFoundError,
   EstimateNotEditableError,
   EstimateNotFoundError,
+  JobNotFoundError as EstimateJobNotFoundError,
   addEstimateLineItem,
+  createEstimate,
   deleteEstimateLineItem,
   updateEstimateLineItem,
 } from "@/lib/estimates/service";
 import { MoneyError, parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
 import {
+  EstimateJobMismatchError as ProposalOptionEstimateJobMismatchError,
+  EstimateNotFoundError as ProposalOptionEstimateNotFoundError,
+  LastOptionError,
   ProposalNotDraftError,
   ProposalNotEditableError,
   ProposalNotFoundError,
   ProposalNotPendingError,
+  ProposalOptionNotFoundError,
   ProposalSectionBulletNotFoundError,
   ProposalSectionNotFoundError,
+  TooManyOptionsError,
+  addProposalOption,
   addProposalSection,
   addProposalSectionBullet,
   declineProposal,
   deleteProposalSection,
   deleteProposalSectionBullet,
+  removeProposalOption,
   sendProposal,
+  updateProposalBranding,
   updateProposalCoverMessage,
+  updateProposalOptionLabel,
   updateProposalSectionBullet,
   updateProposalSectionTitle,
 } from "@/lib/proposals/service";
@@ -34,17 +48,24 @@ import {
 export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
+  readonly reviewUrl?: string;
 }
 
 const KNOWN_ERRORS = [
   EstimateNotFoundError,
   EstimateNotEditableError,
   EstimateLineItemNotFoundError,
+  EstimateJobNotFoundError,
   UnknownCostCodeError,
   ProposalNotFoundError,
   ProposalNotEditableError,
   ProposalSectionNotFoundError,
   ProposalSectionBulletNotFoundError,
+  ProposalOptionNotFoundError,
+  ProposalOptionEstimateNotFoundError,
+  ProposalOptionEstimateJobMismatchError,
+  TooManyOptionsError,
+  LastOptionError,
   MoneyError,
 ];
 
@@ -287,4 +308,113 @@ export async function declineProposalPageAction(formData: FormData): Promise<voi
   }
 
   revalidate(proposalId);
+}
+
+export async function addOptionAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Option label is required." };
+
+  const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId: user.organizationId }, select: { jobId: true, title: true } });
+  if (!proposal) return { error: `Proposal ${proposalId} not found` };
+
+  try {
+    const estimate = await createEstimate({
+      organizationId: user.organizationId,
+      jobId: proposal.jobId,
+      title: `${proposal.title} — ${label}`,
+      lineItems: [],
+    });
+    await addProposalOption(user.organizationId, proposalId, { estimateId: estimate.id, label });
+  } catch (error) {
+    const message = handled(error);
+    if (message) return { error: message };
+    throw error;
+  }
+
+  revalidate(proposalId);
+  return { ok: true };
+}
+
+export async function updateOptionLabelAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  const optionId = String(formData.get("optionId") ?? "");
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) return { error: "Option label is required." };
+
+  try {
+    await updateProposalOptionLabel(user.organizationId, optionId, label);
+  } catch (error) {
+    const message = handled(error);
+    if (message) return { error: message };
+    throw error;
+  }
+
+  revalidate(proposalId);
+  return { ok: true };
+}
+
+export async function removeOptionAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  const optionId = String(formData.get("optionId") ?? "");
+
+  try {
+    await removeProposalOption(user.organizationId, optionId);
+  } catch (error) {
+    if (!handled(error)) throw error;
+  }
+
+  revalidate(proposalId);
+}
+
+export async function updateBrandingAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  const accentColor = String(formData.get("accentColor") ?? "").trim();
+  const logoUrl = String(formData.get("logoUrl") ?? "").trim();
+
+  if (accentColor && !/^#[0-9a-fA-F]{6}$/.test(accentColor)) {
+    return { error: "Accent color must be a 6-digit hex color, e.g. #0f4c81." };
+  }
+
+  try {
+    await updateProposalBranding(user.organizationId, proposalId, { accentColor: accentColor || null, logoUrl: logoUrl || null });
+  } catch (error) {
+    const message = handled(error);
+    if (message) return { error: message };
+    throw error;
+  }
+
+  revalidate(proposalId);
+  return { ok: true };
+}
+
+/**
+ * Issue a headless review link for the client (src/lib/client-portal/auth.ts's
+ * PROPOSAL_ACCEPTANCE token) — no email provider configured yet, so the raw link
+ * is shown once for the salesperson to copy and send manually, same as
+ * src/app/clients/[clientId]/invite-button.tsx's portal invite.
+ */
+export async function issueReviewLinkAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+
+  const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId: user.organizationId }, select: { clientId: true } });
+  if (!proposal) return { error: `Proposal ${proposalId} not found` };
+
+  try {
+    const { token } = await issueApprovalLink({
+      organizationId: user.organizationId,
+      clientId: proposal.clientId,
+      purpose: ClientActionTokenPurpose.PROPOSAL_ACCEPTANCE,
+      resourceId: proposalId,
+    });
+    return { ok: true, reviewUrl: `/proposals/review/${token}` };
+  } catch (error) {
+    if (error instanceof ReviewLinkClientNotFoundError) return { error: error.message };
+    throw error;
+  }
 }

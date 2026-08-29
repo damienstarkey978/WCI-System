@@ -5,6 +5,7 @@ import {
   clientPriceForLine,
   computeFunnelLine,
   computeJobFunnel,
+  estimateTotalCents,
   extendedCostCents,
   priceWithRate,
   selectProjectedCost,
@@ -336,5 +337,21 @@ describe("amount invoiced and remaining to invoice", () => {
     const funnel = computeJobFunnel([PAINT], [], [], []);
     expect(funnel.totals.amountInvoicedCents).toBe(0);
     expect(funnel.totals.remainingToInvoiceCents).toBe(120_000);
+  });
+});
+
+describe("estimateTotalCents", () => {
+  it("sums each line's extended cost priced with its own rate", () => {
+    const total = estimateTotalCents([
+      { quantityMilli: 40_000, unitCostCents: 5_000, rateMode: "MARKUP", rateBasisPoints: 2_000 },
+      { quantityMilli: 1_000, unitCostCents: 200_000, rateMode: "MARGIN", rateBasisPoints: 2_000 },
+    ]);
+    // Line 1: 40 * $50 = $2,000 cost, +20% markup = $2,400.
+    // Line 2: 1 * $2,000 = $2,000 cost, 20% margin = $2,000 / 0.8 = $2,500.
+    expect(total).toBe(240_000 + 250_000);
+  });
+
+  it("returns zero for an estimate with no line items", () => {
+    expect(estimateTotalCents([])).toBe(0);
   });
 });

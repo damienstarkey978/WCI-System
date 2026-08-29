@@ -7,7 +7,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
-import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { estimateTotalCents } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
 
 import { ConvertToJobButton } from "../convert-form";
@@ -71,7 +71,7 @@ export default async function LeadDetailPage({
       where: { leadId: lead.id },
       orderBy: { createdAt: "desc" },
       include: {
-        estimate: { include: { lineItems: true } },
+        options: { orderBy: { sortOrder: "asc" }, include: { estimate: { include: { lineItems: true } } } },
         sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
       },
     }),
@@ -218,10 +218,14 @@ export default async function LeadDetailPage({
             <div className="flex flex-col gap-2">
               {proposals.map((proposal) => {
                 const style = PROPOSAL_STATUS_STYLE[proposal.status] ?? PROPOSAL_STATUS_STYLE.DRAFT;
-                const totalCents = proposal.estimate.lineItems.reduce((total, item) => {
-                  const cost = extendedCostCents(item.quantityMilli, item.unitCostCents);
-                  return total + priceWithRate(cost, item.rateMode, item.rateBasisPoints);
-                }, 0);
+                const optionTotals = proposal.options.map((option) => estimateTotalCents(option.estimate.lineItems));
+                const totalLabel =
+                  optionTotals.length <= 1
+                    ? formatMoney(optionTotals[0] ?? 0)
+                    : proposal.selectedOptionId
+                      ? formatMoney(estimateTotalCents(proposal.options.find((o) => o.id === proposal.selectedOptionId)!.estimate.lineItems))
+                      : `${formatMoney(Math.min(...optionTotals))} – ${formatMoney(Math.max(...optionTotals))}`;
+                const aiGenerated = proposal.options.some((option) => option.estimate.aiGenerated);
                 return (
                   <div key={proposal.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -230,7 +234,12 @@ export default async function LeadDetailPage({
                           <Link href={`/leads/proposals/${proposal.id}`} className="font-medium text-[var(--bt-text)] hover:underline">
                             {proposal.title}
                           </Link>
-                          {proposal.estimate.aiGenerated ? (
+                          {proposal.options.length > 1 ? (
+                            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#dbeafe", color: "#1e40af" }}>
+                              {proposal.options.length} options
+                            </span>
+                          ) : null}
+                          {aiGenerated ? (
                             <span
                               className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
                               style={{ background: "#ede9fe", color: "#5b21b6" }}
@@ -242,7 +251,7 @@ export default async function LeadDetailPage({
                         <div className="mt-0.5 text-xs text-[var(--bt-muted)]">{formatDate(proposal.createdAt)}</div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[var(--bt-text)]">{formatMoney(totalCents)}</span>
+                        <span className="text-sm font-semibold text-[var(--bt-text)]">{totalLabel}</span>
                         <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
                           {proposal.status}
                         </span>

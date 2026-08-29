@@ -163,10 +163,10 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
     organizationId: input.organizationId,
     jobId,
     leadId: input.leadId,
-    estimateId: estimate.id,
     clientId: client.id,
     title: input.title,
     coverMessage: input.coverMessage,
+    options: [{ estimateId: estimate.id, label: "Option 1" }],
     sections: input.proposalSections,
   });
 }

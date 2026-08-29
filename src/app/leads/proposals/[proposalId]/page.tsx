@@ -3,17 +3,21 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CommentThread } from "@/components/comments/CommentThread";
-import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
+import { MAX_PROPOSAL_OPTIONS } from "@/lib/proposals/service";
 
 import { AddLineItemForm } from "./add-line-item-form";
 import { AddSectionForm } from "./add-section-form";
+import { BrandingForm } from "./branding-form";
 import { CoverMessageEditor } from "./cover-message-editor";
 import { EstimateLineItemRow } from "./estimate-line-item-row";
+import { OptionTabs } from "./option-tabs";
 import { ProposalSectionEditor } from "./proposal-section-editor";
+import { ReviewLinkButton } from "./review-link-button";
 import { declineProposalPageAction, sendProposalPageAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -33,8 +37,9 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
  * same as the reference tool — editing either side only works while still DRAFT,
  * since a SENT proposal is what the client already has in front of them.
  */
-export default async function ProposalEditorPage({ params }: PageProps<"/leads/proposals/[proposalId]">) {
+export default async function ProposalEditorPage({ params, searchParams }: PageProps<"/leads/proposals/[proposalId]">) {
   const { proposalId } = await params;
+  const { option: optionParam } = await searchParams;
 
   let user;
   try {
@@ -52,7 +57,10 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
       include: {
         client: { select: { name: true, email: true, phone: true } },
         lead: { select: { id: true, name: true } },
-        estimate: { include: { lineItems: { include: { costCode: true }, orderBy: { sortOrder: "asc" } } } },
+        options: {
+          orderBy: { sortOrder: "asc" },
+          include: { estimate: { include: { lineItems: { include: { costCode: true }, orderBy: { sortOrder: "asc" } } } } },
+        },
         sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
       },
     }),
@@ -84,18 +92,26 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
   const editable = proposal.status === "DRAFT";
   const style = STATUS_STYLE[proposal.status] ?? STATUS_STYLE.DRAFT;
 
-  const groups = new Map<string, typeof proposal.estimate.lineItems>();
-  for (const item of proposal.estimate.lineItems) {
+  const activeOption = proposal.options.find((option) => option.id === optionParam) ?? proposal.options[0];
+  const activeEstimate = activeOption.estimate;
+
+  const groups = new Map<string, typeof activeEstimate.lineItems>();
+  for (const item of activeEstimate.lineItems) {
     const key = item.groupLabel ?? "Ungrouped";
     const existing = groups.get(key);
     if (existing) existing.push(item);
     else groups.set(key, [item]);
   }
 
-  const grandTotalCents = proposal.estimate.lineItems.reduce((total, item) => {
-    const cost = extendedCostCents(item.quantityMilli, item.unitCostCents);
-    return total + priceWithRate(cost, item.rateMode, item.rateBasisPoints);
-  }, 0);
+  const optionTabs = proposal.options.map((option) => ({ id: option.id, label: option.label, totalCents: estimateTotalCents(option.estimate.lineItems) }));
+  const activeTotalCents = optionTabs.find((tab) => tab.id === activeOption.id)?.totalCents ?? 0;
+  const headerTotalLabel =
+    optionTabs.length <= 1
+      ? formatMoney(optionTabs[0]?.totalCents ?? 0)
+      : proposal.selectedOptionId
+        ? `${formatMoney(optionTabs.find((tab) => tab.id === proposal.selectedOptionId)?.totalCents ?? 0)} (${proposal.options.find((o) => o.id === proposal.selectedOptionId)?.label})`
+        : `${formatMoney(Math.min(...optionTabs.map((t) => t.totalCents)))} – ${formatMoney(Math.max(...optionTabs.map((t) => t.totalCents)))}`;
+  const aiGenerated = proposal.options.some((option) => option.estimate.aiGenerated);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
@@ -110,7 +126,7 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold text-[var(--bt-text)]">{proposal.title}</h1>
-              {proposal.estimate.aiGenerated ? (
+              {aiGenerated ? (
                 <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#ede9fe", color: "#5b21b6" }}>
                   Drafted by Jarvis
                 </span>
@@ -126,7 +142,7 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
             <div className="mt-0.5 text-xs text-[var(--bt-muted)]">Created {formatDate(proposal.createdAt)}</div>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <span className="text-lg font-semibold text-[var(--bt-text)]">{formatMoney(grandTotalCents)}</span>
+            <span className="text-lg font-semibold text-[var(--bt-text)]">{headerTotalLabel}</span>
             <div className="flex gap-2">
               <Link
                 href={`/proposals/${proposal.id}/pdf`}
@@ -153,6 +169,7 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
                 </form>
               ) : null}
             </div>
+            {proposal.status === "SENT" ? <ReviewLinkButton proposalId={proposal.id} /> : null}
           </div>
         </div>
         {organization ? (
@@ -170,11 +187,29 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
             This proposal has been sent — the estimate and proposal narrative below are locked from further edits.
           </p>
         ) : null}
+        {proposal.clientFeedback ? (
+          <div className="mt-3 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+            <span className="font-semibold">Client feedback</span> ({formatDate(proposal.clientFeedbackAt)}): {proposal.clientFeedback}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <OptionTabs
+          proposalId={proposal.id}
+          options={optionTabs}
+          activeOptionId={activeOption.id}
+          editable={editable}
+          maxOptions={MAX_PROPOSAL_OPTIONS}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="flex flex-col gap-3 rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-          <h2 className="text-sm font-semibold text-[var(--bt-text)]">Estimate</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[var(--bt-text)]">Estimate — {activeOption.label}</h2>
+            <span className="text-sm font-semibold text-[var(--bt-text)]">{formatMoney(activeTotalCents)}</span>
+          </div>
           <p className="text-xs text-[var(--bt-muted)]">Internal cost breakdown — never shown to the client.</p>
 
           {[...groups.entries()].map(([groupLabel, items]) => {
@@ -197,7 +232,7 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
                         <EstimateLineItemRow
                           key={item.id}
                           proposalId={proposal.id}
-                          estimateId={proposal.estimateId}
+                          estimateId={activeEstimate.id}
                           editable={editable}
                           item={{
                             id: item.id,
@@ -218,7 +253,7 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
                 </table>
                 {editable ? (
                   <div className="px-3 pb-3">
-                    <AddLineItemForm proposalId={proposal.id} estimateId={proposal.estimateId} costCodes={costCodes} defaultGroupLabel={groupLabel} />
+                    <AddLineItemForm proposalId={proposal.id} estimateId={activeEstimate.id} costCodes={costCodes} defaultGroupLabel={groupLabel} />
                   </div>
                 ) : null}
               </div>
@@ -228,7 +263,7 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
           {editable ? (
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">New group</div>
-              <AddLineItemForm proposalId={proposal.id} estimateId={proposal.estimateId} costCodes={costCodes} />
+              <AddLineItemForm proposalId={proposal.id} estimateId={activeEstimate.id} costCodes={costCodes} />
             </div>
           ) : null}
         </div>
@@ -284,6 +319,14 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
           {editable ? <AddSectionForm proposalId={proposal.id} /> : null}
         </div>
       </div>
+
+      {editable ? (
+        <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+          <h2 className="text-sm font-semibold text-[var(--bt-text)]">Branding</h2>
+          <p className="mt-0.5 mb-3 text-xs text-[var(--bt-muted)]">Shown on the client review page and PDF export.</p>
+          <BrandingForm proposalId={proposal.id} accentColor={proposal.accentColor ?? ""} logoUrl={proposal.logoUrl ?? ""} />
+        </div>
+      ) : null}
 
       <CommentThread
         organizationId={user.organizationId}

@@ -5,7 +5,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
-import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { estimateTotalCents } from "@/lib/budget/funnel";
 
 import { PrintButton } from "./print-button";
 
@@ -36,7 +36,10 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
       where: { id: proposalId, organizationId: user.organizationId },
       include: {
         client: { select: { name: true, email: true, phone: true } },
-        estimate: { select: { lineItems: { select: { quantityMilli: true, unitCostCents: true, rateMode: true, rateBasisPoints: true } } } },
+        options: {
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, label: true, estimate: { select: { lineItems: { select: { quantityMilli: true, unitCostCents: true, rateMode: true, rateBasisPoints: true } } } } },
+        },
         sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
       },
     }),
@@ -60,10 +63,7 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
     })),
   );
 
-  const grandTotalCents = proposal.estimate.lineItems.reduce((total, item) => {
-    const cost = extendedCostCents(item.quantityMilli, item.unitCostCents);
-    return total + priceWithRate(cost, item.rateMode, item.rateBasisPoints);
-  }, 0);
+  const optionTotals = proposal.options.map((option) => ({ id: option.id, label: option.label, totalCents: estimateTotalCents(option.estimate.lineItems) }));
 
   const logoUrl = organization?.logoPath?.startsWith("http") ? organization.logoPath : null;
   const orgAddress = organization
@@ -145,10 +145,24 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
         </section>
       ) : null}
 
-      <section className="mt-10 flex items-center justify-between border-t-2 border-[#1a1a1a] pt-4">
-        <span className="text-sm font-semibold uppercase tracking-wide">Total investment</span>
-        <span className="text-xl font-bold">{formatMoney(grandTotalCents)}</span>
-      </section>
+      {optionTotals.length === 1 ? (
+        <section className="mt-10 flex items-center justify-between border-t-2 border-[#1a1a1a] pt-4">
+          <span className="text-sm font-semibold uppercase tracking-wide">Total investment</span>
+          <span className="text-xl font-bold">{formatMoney(optionTotals[0].totalCents)}</span>
+        </section>
+      ) : (
+        <section className="mt-10 border-t-2 border-[#1a1a1a] pt-4">
+          <span className="text-sm font-semibold uppercase tracking-wide">Choose your option</span>
+          <div className="mt-2 flex flex-col gap-2">
+            {optionTotals.map((option) => (
+              <div key={option.id} className="flex items-center justify-between border-b border-[#ddd] pb-2">
+                <span className="text-sm font-medium">{option.label}</span>
+                <span className="text-lg font-bold">{formatMoney(option.totalCents)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -8,6 +8,8 @@ import {
   EstimateJobMismatchError,
   EstimateNotFoundError,
   JobNotFoundError,
+  NoOptionsError,
+  TooManyOptionsError,
 } from "@/lib/proposals/service";
 import { db } from "@/lib/db";
 
@@ -50,6 +52,8 @@ export const POST = withApiAuth(["proposals:write"], async (request, auth) => {
     if (error instanceof EstimateNotFoundError) return apiError(422, "unknown_estimate", error.message);
     if (error instanceof EstimateJobMismatchError) return apiError(422, "estimate_job_mismatch", error.message);
     if (error instanceof ClientNotFoundError) return apiError(422, "unknown_client", error.message);
+    if (error instanceof NoOptionsError) return apiError(422, "no_options", error.message);
+    if (error instanceof TooManyOptionsError) return apiError(422, "too_many_options", error.message);
     throw error;
   }
 });

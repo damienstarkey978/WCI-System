@@ -627,17 +627,43 @@ export const updateLeadStageSchema = z.object({
 /** Same shape as createJobSchema — converting a Lead creates a job exactly like POST /jobs. */
 export const convertLeadToJobSchema = createJobSchema;
 
+const proposalOptionSchema = z.object({
+  estimateId: z.string().cuid(),
+  label: z.string().trim().min(1).max(100),
+});
+
 export const createProposalSchema = z.object({
   jobId: z.string().cuid(),
   leadId: z.string().cuid().nullish(),
-  estimateId: z.string().cuid(),
   clientId: z.string().cuid(),
   title: z.string().trim().min(1).max(255),
   coverMessage: z.string().trim().max(10_000).nullish(),
+  /** 1-5 priced options (task #116) — a single-option proposal auto-selects it. */
+  options: z.array(proposalOptionSchema).min(1).max(5),
+});
+
+export const addProposalOptionSchema = proposalOptionSchema;
+
+export const updateProposalOptionSchema = z.object({
+  label: z.string().trim().min(1).max(100),
+});
+
+export const updateProposalBrandingSchema = z.object({
+  accentColor: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "accentColor must be a 6-digit hex color, e.g. #0f4c81")
+    .nullish(),
+  logoUrl: z.string().trim().url().max(2_000).nullish(),
+});
+
+export const submitProposalFeedbackSchema = z.object({
+  feedback: z.string().trim().min(1).max(5_000),
 });
 
 export const portalAcceptProposalSchema = z.object({
   clientSignatureName: z.string().trim().min(1).max(255).optional(),
+  optionId: z.string().cuid().optional(),
 });
 
 // ---------------------------------------------------------------------------

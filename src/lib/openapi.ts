@@ -75,6 +75,7 @@ import {
   scheduleWarrantyAppointmentSchema,
   setChecklistItemDoneSchema,
   submitBidSchema,
+  submitProposalFeedbackSchema,
   submitSurveyResponseSchema,
   transitionJobStatusSchema,
   updateBillStatusSchema,
@@ -1434,7 +1435,10 @@ const ENDPOINTS: readonly EndpointDef[] = [
   {
     method: "post",
     path: "/proposals",
-    summary: "Create a proposal (the e-sign wrapper around an Estimate)",
+    summary: "Create a proposal — 1-5 priced options for client-side comparison",
+    description:
+      "Each option wraps its own Estimate (task #116's Good/Better/Best support). A single-option proposal " +
+      "auto-selects it, so acceptance behaves exactly like the old single-estimate flow.",
     tags: ["CRM"],
     scopes: ["proposals:write"],
     requestSchema: createProposalSchema,
@@ -1475,14 +1479,29 @@ const ENDPOINTS: readonly EndpointDef[] = [
     summary: "Accept a Proposal as the client",
     description:
       "Works with either a portal session or a single-use PROPOSAL_ACCEPTANCE token from " +
-      "POST /proposals/{id}/approval-link. Accepting chains three already-existing actions: e-signs the " +
-      "proposal, moves the Job from PRE_SALE to OPEN, and sends its Estimate to the Budget. Not gated by " +
+      "POST /proposals/{id}/approval-link. optionId picks which of the proposal's options won — required " +
+      "when more than one exists and none has been chosen yet, ignored on a single-option proposal (it's " +
+      "already auto-selected). Accepting chains three already-existing actions: e-signs the proposal, moves " +
+      "the Job from PRE_SALE to OPEN, and sends the chosen option's Estimate to the Budget. Not gated by " +
       "ClientJobAccess — at PRE_SALE the client typically has no job access yet.",
     tags: ["CRM", "Client Portal"],
     authKind: "clientPortal",
     scopes: [],
     pathParams: ["proposalId"],
     requestSchema: portalAcceptProposalSchema,
+  },
+  {
+    method: "post",
+    path: "/portal/proposals/{proposalId}/feedback",
+    summary: "Leave free-text feedback on a Proposal as the client",
+    description:
+      "Same dual-auth as accept, but the token path only validates the link — it does not consume it, so a " +
+      "client can leave feedback and still accept later with the same link. Only valid while SENT.",
+    tags: ["CRM", "Client Portal"],
+    authKind: "clientPortal",
+    scopes: [],
+    pathParams: ["proposalId"],
+    requestSchema: submitProposalFeedbackSchema,
   },
 
   // --- Specifications --------------------------------------------------------

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { estimateTotalCents } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -36,7 +36,7 @@ export default async function LeadProposalsPage() {
   const proposals = await db.proposal.findMany({
     where: { organizationId: user.organizationId, leadId: { not: null } },
     orderBy: { createdAt: "desc" },
-    include: { lead: { select: { id: true, name: true } }, estimate: { include: { lineItems: true } } },
+    include: { lead: { select: { id: true, name: true } }, options: { include: { estimate: { include: { lineItems: true } } } } },
   });
 
   return (
@@ -63,10 +63,13 @@ export default async function LeadProposalsPage() {
             <tbody>
               {proposals.map((proposal) => {
                 const style = STATUS_STYLE[proposal.status] ?? STATUS_STYLE.DRAFT;
-                const totalCents = proposal.estimate.lineItems.reduce((total, item) => {
-                  const cost = extendedCostCents(item.quantityMilli, item.unitCostCents);
-                  return total + priceWithRate(cost, item.rateMode, item.rateBasisPoints);
-                }, 0);
+                const optionTotals = proposal.options.map((option) => estimateTotalCents(option.estimate.lineItems));
+                const totalLabel =
+                  optionTotals.length <= 1
+                    ? formatMoney(optionTotals[0] ?? 0)
+                    : proposal.selectedOptionId
+                      ? formatMoney(estimateTotalCents(proposal.options.find((o) => o.id === proposal.selectedOptionId)!.estimate.lineItems))
+                      : `${formatMoney(Math.min(...optionTotals))} – ${formatMoney(Math.max(...optionTotals))}`;
                 return (
                   <tr key={proposal.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
                     <td className="px-4 py-3">
@@ -89,7 +92,7 @@ export default async function LeadProposalsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(proposal.createdAt)}</td>
-                    <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(totalCents)}</td>
+                    <td className="px-4 py-3 text-right text-[var(--bt-text)]">{totalLabel}</td>
                   </tr>
                 );
               })}
