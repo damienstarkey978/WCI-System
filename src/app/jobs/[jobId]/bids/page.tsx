@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -72,9 +73,16 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
                     {pkg.description ? <p className="mt-0.5 text-sm text-[var(--bt-muted)]">{pkg.description}</p> : null}
                     <div className="mt-1 text-xs text-[var(--bt-muted)]">Due {formatDate(pkg.dueDate)}</div>
                   </div>
-                  <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-                    {pkg.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
+                      {pkg.status}
+                    </span>
+                    {pkg.submissions.length > 0 ? (
+                      <Link href={`/jobs/${job.id}/bids/${pkg.id}/compare`} className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
+                        Compare bids →
+                      </Link>
+                    ) : null}
+                  </div>
                 </div>
 
                 {pkg.submissions.length === 0 ? (
