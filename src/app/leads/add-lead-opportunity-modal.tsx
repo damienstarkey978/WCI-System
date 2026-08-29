@@ -158,13 +158,13 @@ export function AddLeadOpportunityModal({ clients }: { clients: readonly Existin
           </div>
 
           {/* Tabs */}
-          <nav className="flex gap-1 border-b px-5 text-sm font-medium" style={{ borderColor: "var(--bt-border)" }}>
+          <nav className="flex gap-1 overflow-x-auto border-b px-5 text-sm font-medium" style={{ borderColor: "var(--bt-border)" }}>
             {TABS.map((t) => (
               <button
                 key={t.value}
                 type="button"
                 onClick={() => setTab(t.value)}
-                className="border-b-2 px-3 py-2.5"
+                className="shrink-0 border-b-2 px-3 py-2.5 whitespace-nowrap"
                 style={tab === t.value ? { borderColor: "var(--bt-active-bar)", color: "var(--bt-text)" } : { borderColor: "transparent", color: "var(--bt-muted)" }}
               >
                 {t.label}

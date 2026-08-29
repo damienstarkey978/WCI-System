@@ -97,11 +97,11 @@ export function GlobalSearch() {
           }}
           onBlur={() => setTimeout(close, 150)}
           placeholder="Search jobs, clients, vendors, leads…"
-          className="w-64 bg-transparent text-sm text-white placeholder-white/50 outline-none"
+          className="w-40 bg-transparent text-sm text-white placeholder-white/50 outline-none sm:w-64"
         />
       </div>
       {query.trim().length >= 2 ? (
-        <div className="absolute right-0 top-full z-30 mt-1 w-80 rounded-md border border-black/10 bg-[var(--bt-panel-bg)] text-sm text-[var(--bt-text)] shadow-lg">
+        <div className="absolute right-0 top-full z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-black/10 bg-[var(--bt-panel-bg)] text-sm text-[var(--bt-text)] shadow-lg">
           {loading ? (
             <p className="px-3 py-4 text-center text-xs text-[var(--bt-muted)]">Searching…</p>
           ) : !hasResults ? (

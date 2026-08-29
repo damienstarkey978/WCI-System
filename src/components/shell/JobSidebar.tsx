@@ -37,6 +37,10 @@ const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
  * Client component for the collapse toggle and the search/status filter over the
  * job list — everything else about which jobs to show still comes from the server
  * (sidebarJobsForOrg already scopes it to what this user can open).
+ *
+ * Hidden entirely below `md` (a permanent 256px — or even the collapsed 48px —
+ * column has no reasonable place on a phone-width screen): TopNav's hamburger
+ * opens MobileMenuDrawer instead, which has its own simpler job jump-list.
  */
 export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJobId?: string }) {
   const [collapsed, setCollapsed] = useState(() => {
@@ -86,7 +90,7 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
   if (collapsed) {
     return (
       <aside
-        className="flex w-12 shrink-0 flex-col items-center border-r bg-[var(--bt-sidebar-bg)] py-2"
+        className="hidden w-12 shrink-0 flex-col items-center border-r bg-[var(--bt-sidebar-bg)] py-2 md:flex"
         style={{ borderColor: "var(--bt-border)" }}
       >
         <button
@@ -104,7 +108,7 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
 
   return (
     <aside
-      className="flex w-64 shrink-0 flex-col border-r bg-[var(--bt-sidebar-bg)]"
+      className="hidden w-64 shrink-0 flex-col border-r bg-[var(--bt-sidebar-bg)] md:flex"
       style={{ borderColor: "var(--bt-border)" }}
     >
       <div className="flex items-start justify-between gap-2 border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>

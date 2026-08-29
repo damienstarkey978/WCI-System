@@ -155,6 +155,24 @@ export function GearIcon({ className }: IconProps) {
   );
 }
 
+/** The mobile top-nav's hamburger button (src/components/shell/MobileMenuDrawer.tsx). */
+export function MenuIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** The mobile menu drawer's close button. */
+export function CloseIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M5 5l10 10M15 5 5 15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** The UserButton custom menu's "Company settings" entry (admin only). */
 export function BuildingIcon({ className }: IconProps) {
   return (

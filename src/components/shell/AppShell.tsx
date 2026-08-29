@@ -42,6 +42,7 @@ export async function AppShell({
         isAdmin={user?.role === UserRole.ADMIN}
         notifications={notifications}
         unreadCount={unreadCount}
+        jobs={jobs}
       />
       <div className="flex flex-1 overflow-hidden">
         <JobSidebar jobs={jobs} activeJobId={activeJobId} />

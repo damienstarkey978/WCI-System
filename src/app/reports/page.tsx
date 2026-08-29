@@ -120,12 +120,12 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           <p className="text-sm text-[var(--bt-muted)]">Use reports to see job performance, spot issues early, and keep every project on track.</p>
         </div>
 
-        <div className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: "var(--bt-border)" }}>
           {CATEGORIES.map((c) => (
             <Link
               key={c}
               href={`/reports?category=${c}`}
-              className="border-b-2 px-3 py-2 text-sm font-medium"
+              className="shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap"
               style={category === c ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" } : { borderColor: "transparent", color: "var(--bt-muted)" }}
             >
               {c}

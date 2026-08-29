@@ -72,12 +72,12 @@ export default async function JobSettingsPage({ params, searchParams }: PageProp
         </h1>
       </div>
 
-      <div className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: "var(--bt-border)" }}>
         {TABS.map((t) => (
           <Link
             key={t.key}
             href={`/jobs/${job.id}/settings?tab=${t.key}`}
-            className="border-b-2 px-3 py-2 text-sm font-medium"
+            className="shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap"
             style={
               activeTab === t.key
                 ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" }

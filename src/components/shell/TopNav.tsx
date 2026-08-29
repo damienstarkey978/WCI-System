@@ -19,12 +19,15 @@ import {
 } from "@/lib/buildertrend-nav";
 
 import { GlobalSearch } from "./GlobalSearch";
+import type { SidebarJob } from "./JobSidebar";
+import { MobileMenuDrawer } from "./MobileMenuDrawer";
 import {
   BellIcon,
   BuildingIcon,
   ChevronDownIcon,
   GearIcon,
   HelpIcon,
+  MenuIcon,
   PeopleIcon,
   SparkleIcon,
 } from "./icons";
@@ -251,6 +254,7 @@ export function TopNav({
   isAdmin = false,
   notifications = [],
   unreadCount = 0,
+  jobs = [],
 }: {
   activeJobId?: string;
   /** Computed server-side (CLERK_SECRET_KEY isn't inlined into the client bundle, so this
@@ -260,8 +264,11 @@ export function TopNav({
   isAdmin?: boolean;
   notifications?: readonly BellNotification[];
   unreadCount?: number;
+  /** For the mobile menu drawer's job jump-list — the same list JobSidebar renders, which is hidden below `md`. */
+  jobs?: readonly SidebarJob[];
 }) {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <header
@@ -269,11 +276,21 @@ export function TopNav({
       style={{ background: "var(--bt-nav)" }}
     >
       <div className="flex items-center gap-6">
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="rounded p-2 transition hover:bg-white/10 lg:hidden"
+          aria-label="Open menu"
+          aria-expanded={mobileMenuOpen}
+        >
+          <MenuIcon className="h-5 w-5" />
+        </button>
+
         <Link href="/dashboard" className="text-lg font-bold tracking-tight">
           WCI OS
         </Link>
 
-        <nav className="flex items-center gap-1 text-sm font-medium">
+        <nav className="hidden items-center gap-1 text-sm font-medium lg:flex">
           <FlatNavDropdown label="Sales" items={SALES_NAV} />
           <MixedNavDropdown label="Jobs" items={JOBS_NAV} activeJobId={activeJobId} />
 
@@ -298,17 +315,17 @@ export function TopNav({
         <NotificationBell notifications={notifications} unreadCount={unreadCount} />
         <Link
           href="/jarvis"
-          className="rounded p-2 transition hover:bg-white/10"
+          className="hidden rounded p-2 transition hover:bg-white/10 sm:block"
           style={pathname?.startsWith("/jarvis") ? { background: "var(--bt-nav-hover)" } : undefined}
           aria-label="Jarvis"
           title="Jarvis"
         >
           <SparkleIcon className="h-4.5 w-4.5" />
         </Link>
-        <Link href="/people" className="rounded p-2 transition hover:bg-white/10" aria-label="People">
+        <Link href="/people" className="hidden rounded p-2 transition hover:bg-white/10 sm:block" aria-label="People">
           <PeopleIcon className="h-4.5 w-4.5" />
         </Link>
-        <button type="button" className="rounded p-2 transition hover:bg-white/10" aria-label="Help">
+        <button type="button" className="hidden rounded p-2 transition hover:bg-white/10 sm:block" aria-label="Help">
           <HelpIcon className="h-4.5 w-4.5" />
         </button>
         {clerkConfigured ? (
@@ -324,6 +341,8 @@ export function TopNav({
           </div>
         ) : null}
       </div>
+
+      <MobileMenuDrawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} jobs={jobs} activeJobId={activeJobId} />
     </header>
   );
 }

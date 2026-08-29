@@ -121,12 +121,12 @@ export default async function LeadDetailPage({
         </Link>
       </div>
 
-      <nav className="flex gap-1 border-b text-sm font-medium" style={{ borderColor: "var(--bt-border)" }}>
+      <nav className="flex gap-1 overflow-x-auto border-b text-sm font-medium" style={{ borderColor: "var(--bt-border)" }}>
         {TABS.map((t) => (
           <Link
             key={t.value}
             href={t.value === "general" ? `/leads/${lead.id}` : `/leads/${lead.id}?tab=${t.value}`}
-            className="border-b-2 px-3 py-2.5"
+            className="shrink-0 border-b-2 px-3 py-2.5 whitespace-nowrap"
             style={
               tab === t.value
                 ? { borderColor: "var(--bt-active-bar)", color: "var(--bt-text)" }
