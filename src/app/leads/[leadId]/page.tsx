@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
@@ -80,6 +81,21 @@ export default async function LeadDetailPage({
     }),
   ]);
 
+  const preSalePhotoFiles = lead.convertedJob
+    ? await db.file.findMany({
+        where: { jobId: lead.convertedJob.id, category: "PRESALE_PHOTO" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, fileName: true, url: true },
+      })
+    : [];
+  const preSalePhotos = await Promise.all(
+    preSalePhotoFiles.map(async (photo) => ({
+      id: photo.id,
+      fileName: photo.fileName,
+      url: await resolveFileUrl(photo.url).catch(() => null),
+    })),
+  );
+
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <div>
@@ -150,6 +166,28 @@ export default async function LeadDetailPage({
         </div>
       ) : tab === "proposals" ? (
         <div className="flex flex-col gap-3">
+          {preSalePhotos.length > 0 ? (
+            <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Pre-Sale Photos</span>
+                {lead.convertedJob ? (
+                  <Link href={`/jobs/${lead.convertedJob.id}/files?category=PRESALE_PHOTO`} className="text-xs text-[var(--bt-primary)] hover:underline">
+                    Manage in Files →
+                  </Link>
+                ) : null}
+              </div>
+              <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1">
+                {preSalePhotos.map((photo) =>
+                  photo.url ? (
+                    <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer" className="block h-20 w-20 shrink-0 overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching */}
+                      <img src={photo.url} alt={photo.fileName} className="h-full w-full object-cover" />
+                    </a>
+                  ) : null,
+                )}
+              </div>
+            </div>
+          ) : null}
           {isAnthropicConfigured() ? (
             <DraftLeadProposalForm
               leadId={lead.id}
