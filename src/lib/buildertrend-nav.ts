@@ -23,6 +23,7 @@ export interface JobNavLink {
  */
 export const JOBS_NAV = [
   { label: "Jobs List", href: "/jobs" },
+  { label: "Job Groups", href: "/job-groups" },
   { label: "Job Price Summary", href: "/reports?report=profitability" },
   { label: "New Job From Scratch", href: "/admin/jobs" },
 ] as const;

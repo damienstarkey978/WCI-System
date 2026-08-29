@@ -27,9 +27,9 @@ import { baseLaborCostCents, workedHours } from "@/lib/time-clock/hours";
  * transformation over this shared array, so a job appears identically across
  * reports — no report can silently disagree with another about a job's numbers.
  */
-async function loadActiveJobFunnels(organizationId: string) {
+async function loadActiveJobFunnels(organizationId: string, jobGroupId?: string) {
   const jobs = await db.job.findMany({
-    where: { organizationId, isTemplate: false, status: { in: [...ACTIVE_JOB_STATUSES] } },
+    where: { organizationId, isTemplate: false, status: { in: [...ACTIVE_JOB_STATUSES] }, ...(jobGroupId ? { jobGroupId } : {}) },
     include: {
       budgetLines: { include: { costCode: { select: { defaultCostType: true } } } },
       purchaseOrders: { include: { lineItems: true } },
@@ -81,8 +81,8 @@ async function loadActiveJobFunnels(organizationId: string) {
   });
 }
 
-export async function getWipReport(organizationId: string) {
-  const jobFunnels = await loadActiveJobFunnels(organizationId);
+export async function getWipReport(organizationId: string, jobGroupId?: string) {
+  const jobFunnels = await loadActiveJobFunnels(organizationId, jobGroupId);
   return jobFunnels.map(({ job, funnel }) =>
     computeWipRow({
       jobId: job.id,
@@ -108,8 +108,8 @@ export async function getBudgetedVsProjectedReport(organizationId: string) {
   );
 }
 
-export async function getProfitabilityReport(organizationId: string) {
-  const jobFunnels = await loadActiveJobFunnels(organizationId);
+export async function getProfitabilityReport(organizationId: string, jobGroupId?: string) {
+  const jobFunnels = await loadActiveJobFunnels(organizationId, jobGroupId);
   const rows = jobFunnels.map(({ job, funnel }) =>
     computeProfitabilityRow({
       jobId: job.id,
