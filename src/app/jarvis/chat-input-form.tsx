@@ -64,6 +64,10 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
           {pending ? "Thinking…" : "Send"}
         </button>
       </div>
+      <label className="flex items-center gap-1.5 text-xs text-[var(--bt-muted)]">
+        <span>Attach photos:</span>
+        <input type="file" name="attachments" multiple accept="image/jpeg,image/png,image/webp,image/gif" className="text-xs" />
+      </label>
       {state.error ? (
         <p role="alert" className="text-xs text-red-600">
           {state.error}

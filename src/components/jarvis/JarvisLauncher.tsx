@@ -156,27 +156,30 @@ function JarvisPanelBody({
           formAction(formData);
           formRef.current?.reset();
         }}
-        className="flex items-end gap-2 border-t p-2.5"
+        className="flex flex-col gap-1.5 border-t p-2.5"
         style={{ borderColor: "var(--bt-border)" }}
       >
         {conversationId ? <input type="hidden" name="conversationId" value={conversationId} /> : null}
         <input type="hidden" name="context" value={context ? JSON.stringify(context) : ""} />
-        <textarea
-          name="text"
-          required
-          rows={2}
-          placeholder="Ask Jarvis…"
-          className="flex-1 resize-none rounded border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--bt-primary)]"
-          style={{ borderColor: "var(--bt-border)" }}
-        />
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-          style={{ background: "var(--bt-primary)" }}
-        >
-          {pending ? "…" : "Send"}
-        </button>
+        <div className="flex items-end gap-2">
+          <textarea
+            name="text"
+            required
+            rows={2}
+            placeholder="Ask Jarvis…"
+            className="flex-1 resize-none rounded border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--bt-primary)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            style={{ background: "var(--bt-primary)" }}
+          >
+            {pending ? "…" : "Send"}
+          </button>
+        </div>
+        <input type="file" name="attachments" multiple accept="image/jpeg,image/png,image/webp,image/gif" className="text-xs" />
       </form>
       {state.error ? <p className="px-2.5 pb-2 text-xs text-red-600">{state.error}</p> : null}
     </div>

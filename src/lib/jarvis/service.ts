@@ -6,7 +6,7 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { runJarvisTurn, type JarvisChatMessage } from "@/lib/jarvis/assistant";
+import { runJarvisTurn, type JarvisChatMessage, type JarvisImageInput } from "@/lib/jarvis/assistant";
 import { buildJarvisTools } from "@/lib/jarvis/tools";
 
 export class ConversationNotFoundError extends Error {
@@ -56,6 +56,9 @@ export interface SendJarvisMessageInput {
    * messages sent from the full /jarvis page, which has no ambient page to describe.
    */
   readonly context?: unknown;
+  /** Photos/PDFs attached to this one message (Part 3.4's file-grounded Q&A) —
+   *  vision input for this turn only, never persisted or replayed on later turns. */
+  readonly images?: readonly JarvisImageInput[];
 }
 
 /** A short natural-language note Claude can use to resolve "this"/"here" — never stored. */
@@ -97,7 +100,7 @@ export async function sendJarvisMessage(input: SendJarvisMessageInput) {
 
   const history: JarvisChatMessage[] = [...(conversation?.messages ?? []), { role: "USER", content: input.text }];
   const tools = buildJarvisTools({ organizationId: input.organizationId, conversationId, userId: input.userId });
-  const reply = await runJarvisTurn(history, tools, undefined, formatContextNote(input.context));
+  const reply = await runJarvisTurn(history, tools, undefined, formatContextNote(input.context), input.images);
 
   await db.jarvisMessage.create({ data: { conversationId, role: "ASSISTANT", content: reply } });
   await db.jarvisConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });

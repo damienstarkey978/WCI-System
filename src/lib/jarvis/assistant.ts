@@ -62,6 +62,17 @@ export interface JarvisChatMessage {
   readonly content: string;
 }
 
+export type JarvisImageMediaType = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+
+/** A file attached to the *current* turn only (handoff-ai-analysis-and-jarvis-deep-
+ *  integration-spec.md Part 3.4) — never stored in JarvisMessage.content or replayed
+ *  on later turns, same "ephemeral vision input" treatment as the AI estimate/daily-
+ *  log drafting flows give their own photo uploads. */
+export interface JarvisImageInput {
+  readonly base64Data: string;
+  readonly mediaType: JarvisImageMediaType;
+}
+
 let cachedClient: Anthropic | null = null;
 
 function getClient(): Anthropic {
@@ -83,7 +94,7 @@ interface RunToolTurnParams {
   max_tokens: number;
   system: string;
   tools: JarvisTool[];
-  messages: { role: "user" | "assistant"; content: string }[];
+  messages: { role: "user" | "assistant"; content: string | Anthropic.Beta.Messages.BetaContentBlockParam[] }[];
 }
 
 /** A single non-overloaded function type, so a test fake can just be `vi.fn().mockResolvedValue(...)`. */
@@ -106,12 +117,16 @@ export async function runJarvisTurn(
    *  latest message (from the docked launcher — src/components/jarvis/JarvisLauncher.tsx).
    *  Appended to the system prompt for this turn only; never stored as part of it. */
   contextNote?: string,
+  /** Photos/images attached to the *latest* message only (Part 3.4's file-grounded
+   *  Q&A) — attached as image blocks alongside that message's text. */
+  images?: readonly JarvisImageInput[],
 ): Promise<string> {
   if (!isAnthropicConfigured()) {
     throw new AiNotConfiguredError();
   }
 
   const system = contextNote ? `${SYSTEM_PROMPT}\n\n${contextNote}` : SYSTEM_PROMPT;
+  const lastIndex = messages.length - 1;
 
   let finalMessage: Anthropic.Beta.Messages.BetaMessage;
   try {
@@ -120,10 +135,17 @@ export async function runJarvisTurn(
       max_tokens: 4_096,
       system,
       tools: [...tools],
-      messages: messages.map((message) => ({
-        role: message.role === "USER" ? ("user" as const) : ("assistant" as const),
-        content: message.content,
-      })),
+      messages: messages.map((message, index) => {
+        const role = message.role === "USER" ? ("user" as const) : ("assistant" as const);
+        if (index === lastIndex && role === "user" && images && images.length > 0) {
+          const imageBlocks: Anthropic.Beta.Messages.BetaContentBlockParam[] = images.map((image) => ({
+            type: "image",
+            source: { type: "base64", media_type: image.mediaType, data: image.base64Data },
+          }));
+          return { role, content: [...imageBlocks, { type: "text", text: message.content }] };
+        }
+        return { role, content: message.content };
+      }),
     });
   } catch (error) {
     if (error instanceof Anthropic.APIError) {

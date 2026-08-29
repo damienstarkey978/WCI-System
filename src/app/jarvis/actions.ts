@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { requireAppUser } from "@/lib/auth";
-import { AiNotConfiguredError, JarvisReplyError } from "@/lib/jarvis/assistant";
+import { AiNotConfiguredError, JarvisReplyError, type JarvisImageInput } from "@/lib/jarvis/assistant";
 import {
   PendingActionNotFoundError,
   PendingActionNotPendingError,
@@ -17,17 +17,33 @@ export interface ActionState {
   readonly error?: string;
 }
 
+const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+/** File-grounded Q&A (handoff-ai-analysis-and-jarvis-deep-integration-spec.md
+ *  Part 3.4) — photos/screenshots attached to one message, vision input only. */
+async function filesToImageInputs(formData: FormData, field: string): Promise<JarvisImageInput[]> {
+  const files = formData.getAll(field).filter((value): value is File => value instanceof File && value.size > 0);
+  const images: JarvisImageInput[] = [];
+  for (const file of files) {
+    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) continue;
+    const buffer = Buffer.from(await file.arrayBuffer());
+    images.push({ base64Data: buffer.toString("base64"), mediaType: file.type as JarvisImageInput["mediaType"] });
+  }
+  return images;
+}
+
 export async function sendJarvisMessageAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();
 
   const text = String(formData.get("text") ?? "").trim();
   const conversationId = String(formData.get("conversationId") ?? "") || undefined;
+  const images = await filesToImageInputs(formData, "attachments");
 
   if (!text) return { error: "Type a message first." };
 
   let resultConversationId: string;
   try {
-    const conversation = await sendJarvisMessage({ organizationId: user.organizationId, userId: user.id, conversationId, text });
+    const conversation = await sendJarvisMessage({ organizationId: user.organizationId, userId: user.id, conversationId, text, images });
     resultConversationId = conversation.id;
   } catch (error) {
     if (error instanceof AiNotConfiguredError) return { error: "Jarvis isn't configured yet — set ANTHROPIC_API_KEY in .env." };
@@ -66,6 +82,7 @@ export async function sendJarvisLauncherMessageAction(_previous: LauncherActionS
   const text = String(formData.get("text") ?? "").trim();
   const conversationId = String(formData.get("conversationId") ?? "") || undefined;
   const contextRaw = String(formData.get("context") ?? "");
+  const images = await filesToImageInputs(formData, "attachments");
 
   if (!text) return { error: "Type a message first.", conversationId };
 
@@ -79,7 +96,7 @@ export async function sendJarvisLauncherMessageAction(_previous: LauncherActionS
   }
 
   try {
-    const conversation = await sendJarvisMessage({ organizationId: user.organizationId, userId: user.id, conversationId, text, context });
+    const conversation = await sendJarvisMessage({ organizationId: user.organizationId, userId: user.id, conversationId, text, context, images });
     revalidatePath("/jarvis");
     revalidatePath(`/jarvis/${conversation.id}`);
     return {
