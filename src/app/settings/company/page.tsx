@@ -131,6 +131,10 @@ export default async function CompanySettingsPage() {
           <SettingsLink href="/clients" label="Client contacts" />
           <SettingsLink href="/vendors" label="Subs/vendors" />
         </SettingsGroup>
+
+        <SettingsGroup title="Developer">
+          <SettingsLink href="/settings/api-keys" label="API keys" />
+        </SettingsGroup>
       </div>
     </div>
   );
