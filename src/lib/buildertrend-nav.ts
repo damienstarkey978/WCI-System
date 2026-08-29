@@ -44,11 +44,18 @@ export const JOBS_NAV: readonly JobsMenuItem[] = [
   { label: "New Job From Template", kind: "soon" },
 ];
 
-/** The "Sales" dropdown — Buildertrend's CRM surface, none of it scoped to a selected job. */
+/**
+ * The "Sales" dropdown — Buildertrend's CRM surface, none of it scoped to a selected
+ * job. Activity Templates and Proposal Templates are real Buildertrend items with no
+ * WCI OS feature behind them yet — left off rather than linking somewhere dead,
+ * matching how "New Job From Template" is handled in JOBS_NAV above.
+ */
 export const SALES_NAV = [
   { label: "Lead Opportunities", href: "/leads" },
   { label: "Lead Activities", href: "/leads/activities" },
   { label: "Lead Proposals", href: "/leads/proposals" },
+  { label: "Lead Activity Calendar", href: "/leads/calendar" },
+  { label: "Lead Map", href: "/leads/map" },
   { label: "Materials Catalog", href: "/materials" },
 ] as const;
 
