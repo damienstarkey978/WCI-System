@@ -30,6 +30,22 @@ export class AuthConfigurationError extends Error {
 }
 
 /**
+ * TEMPORARY: User.title/phone (migration 20260828160000_phase_10h_staff_profile_fields)
+ * are in this schema but not yet applied to every deployed database. A plain
+ * db.user.* call selects every column the *schema* knows about, so without this
+ * omit, every single request through this file — the one hit on every page load —
+ * crashes with "column User.title does not exist" the moment that migration is
+ * pending. Omit them here and fill in null so callers still get a full AppUser
+ * shape. Remove PENDING_COLUMN_OMIT and withPendingColumnDefaults once the pending
+ * migrations are confirmed applied everywhere this code runs.
+ */
+const PENDING_COLUMN_OMIT = { title: true, phone: true } as const;
+
+function withPendingColumnDefaults(user: Omit<UserModel, "title" | "phone">): UserModel {
+  return { ...user, title: null, phone: null };
+}
+
+/**
  * The signed-in staff user, or null. Never throws for an unauthenticated visitor —
  * callers decide whether that is an error.
  */
@@ -41,9 +57,9 @@ export async function currentAppUser(): Promise<AppUser | null> {
   const { userId } = await clerkAuth();
   if (!userId) return null;
 
-  const existing = await db.user.findUnique({ where: { clerkUserId: userId } });
+  const existing = await db.user.findUnique({ where: { clerkUserId: userId }, omit: PENDING_COLUMN_OMIT });
   if (existing) {
-    return existing.isActive ? existing : null;
+    return existing.isActive ? withPendingColumnDefaults(existing) : null;
   }
 
   // First sign-in for an already-invited staff member: link the Clerk identity to the
@@ -53,13 +69,16 @@ export async function currentAppUser(): Promise<AppUser | null> {
   const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase();
   if (!email) return null;
 
-  const invited = await db.user.findFirst({ where: { email, clerkUserId: null, isActive: true } });
+  const invited = await db.user.findFirst({ where: { email, clerkUserId: null, isActive: true }, omit: PENDING_COLUMN_OMIT });
   if (!invited) return null;
 
-  return db.user.update({
-    where: { id: invited.id },
-    data: { clerkUserId: userId },
-  });
+  return withPendingColumnDefaults(
+    await db.user.update({
+      where: { id: invited.id },
+      data: { clerkUserId: userId },
+      omit: PENDING_COLUMN_OMIT,
+    }),
+  );
 }
 
 /**
@@ -134,15 +153,19 @@ async function devFallbackUser(): Promise<AppUser | null> {
 
   const existing = await db.user.findUnique({
     where: { organizationId_email: { organizationId: organization.id, email } },
+    omit: PENDING_COLUMN_OMIT,
   });
-  if (existing) return existing;
+  if (existing) return withPendingColumnDefaults(existing);
 
-  return db.user.create({
-    data: {
-      organizationId: organization.id,
-      email,
-      name: "Local Developer",
-      role: UserRole.ADMIN,
-    },
-  });
+  return withPendingColumnDefaults(
+    await db.user.create({
+      data: {
+        organizationId: organization.id,
+        email,
+        name: "Local Developer",
+        role: UserRole.ADMIN,
+      },
+      omit: PENDING_COLUMN_OMIT,
+    }),
+  );
 }
