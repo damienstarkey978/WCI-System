@@ -126,7 +126,7 @@ export default async function CompanySettingsPage() {
         </SettingsGroup>
 
         <SettingsGroup title="Directory">
-          <ComingSoon label="Role management" />
+          <SettingsLink href="/settings/roles" label="Role management" />
           <SettingsLink href="/staff" label="Internal users" />
           <SettingsLink href="/clients" label="Client contacts" />
           <SettingsLink href="/vendors" label="Subs/vendors" />
