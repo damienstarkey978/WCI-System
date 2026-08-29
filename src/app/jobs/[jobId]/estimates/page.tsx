@@ -5,12 +5,14 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { isAnthropicConfigured } from "@/lib/env";
 import { listEstimateTemplates } from "@/lib/estimates/templates";
 import { formatDate, formatMoney } from "@/lib/format";
 import { listMaterialCatalogItems } from "@/lib/materials/service";
 
 import { CreateEstimateForm } from "./create-estimate-form";
 import { CsvImportForm } from "./csv-import-form";
+import { DraftEstimateWithAiForm } from "./draft-estimate-with-ai-form";
 import { SaveAsTemplateForm } from "./save-as-template-form";
 import { UseTemplateForm } from "./use-template-form";
 
@@ -57,6 +59,8 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Estimates — {job.name}</h1>
+
+      {isAnthropicConfigured() ? <DraftEstimateWithAiForm jobId={job.id} /> : null}
 
       <CreateEstimateForm jobId={job.id} costCodes={costCodes} materials={materials} />
 
