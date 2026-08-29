@@ -214,3 +214,60 @@ export function buildCashFlowReport(
     projection,
   };
 }
+
+// ---------------------------------------------------------------------------
+// 7. Change Order Profit
+// ---------------------------------------------------------------------------
+
+export interface ChangeOrderProfitInput extends JobSummary {
+  readonly changeOrderCount: number;
+  readonly totalCostCents: Cents;
+  readonly totalClientPriceCents: Cents;
+}
+
+export interface ChangeOrderProfitRow extends ChangeOrderProfitInput {
+  readonly profitCents: Cents;
+}
+
+export function computeChangeOrderProfitRow(input: ChangeOrderProfitInput): ChangeOrderProfitRow {
+  return { ...input, profitCents: input.totalClientPriceCents - input.totalCostCents };
+}
+
+// ---------------------------------------------------------------------------
+// 8. Baseline vs Actual Duration
+// ---------------------------------------------------------------------------
+
+const MS_PER_DAY = 86_400_000;
+
+/** Whole days between two dates, rounded to the nearest day rather than floored. */
+function daysBetween(start: Date, end: Date): number {
+  return Math.round((end.getTime() - start.getTime()) / MS_PER_DAY);
+}
+
+export interface DurationInput extends JobSummary {
+  /** Earliest baselineStart / latest baselineEnd across the job's schedule items with a snapshot, or null if none was ever taken. */
+  readonly baselineStart: Date | null;
+  readonly baselineEnd: Date | null;
+  readonly actualStart: Date | null;
+  /** Null while the job is still in progress — actualDurationDays is then measured against `asOf`. */
+  readonly actualEnd: Date | null;
+  readonly asOf: Date;
+}
+
+export interface DurationRow extends JobSummary {
+  readonly baselineDurationDays: number | null;
+  readonly actualDurationDays: number | null;
+  readonly varianceDays: number | null;
+}
+
+export function computeDurationRow(input: DurationInput): DurationRow {
+  const baselineDurationDays = input.baselineStart && input.baselineEnd ? daysBetween(input.baselineStart, input.baselineEnd) : null;
+  const actualDurationDays = input.actualStart ? daysBetween(input.actualStart, input.actualEnd ?? input.asOf) : null;
+  return {
+    jobId: input.jobId,
+    jobName: input.jobName,
+    baselineDurationDays,
+    actualDurationDays,
+    varianceDays: baselineDurationDays !== null && actualDurationDays !== null ? actualDurationDays - baselineDurationDays : null,
+  };
+}

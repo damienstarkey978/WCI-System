@@ -4,6 +4,8 @@ import {
   bucketCashFlowByDay,
   buildCashFlowReport,
   computeBudgetedVsProjectedRow,
+  computeChangeOrderProfitRow,
+  computeDurationRow,
   computeInvoicingRow,
   computeLaborRow,
   computeProfitabilityRow,
@@ -192,5 +194,56 @@ describe("buildCashFlowReport", () => {
     expect(report.historicalNetCents).toBe(30_000);
     expect(report.projection.projectedCashInCents).toBe(500_000);
     expect(report.projection.projectedCashOutCents).toBe(300_000);
+  });
+});
+
+describe("computeChangeOrderProfitRow", () => {
+  it("computes profit as price minus cost", () => {
+    const row = computeChangeOrderProfitRow({ ...JOB, changeOrderCount: 3, totalCostCents: 100_000, totalClientPriceCents: 140_000 });
+    expect(row.profitCents).toBe(40_000);
+  });
+
+  it("handles a job with no approved change orders", () => {
+    const row = computeChangeOrderProfitRow({ ...JOB, changeOrderCount: 0, totalCostCents: 0, totalClientPriceCents: 0 });
+    expect(row.profitCents).toBe(0);
+  });
+});
+
+describe("computeDurationRow", () => {
+  const asOf = new Date("2026-06-01T00:00:00Z");
+
+  it("computes baseline and actual duration in days, and their variance", () => {
+    const row = computeDurationRow({
+      ...JOB,
+      baselineStart: new Date("2026-01-01T00:00:00Z"),
+      baselineEnd: new Date("2026-01-31T00:00:00Z"),
+      actualStart: new Date("2026-01-01T00:00:00Z"),
+      actualEnd: new Date("2026-02-10T00:00:00Z"),
+      asOf,
+    });
+    expect(row.baselineDurationDays).toBe(30);
+    expect(row.actualDurationDays).toBe(40);
+    expect(row.varianceDays).toBe(10); // 10 days over baseline
+  });
+
+  it("measures an in-progress job's actual duration against asOf rather than a missing end date", () => {
+    const row = computeDurationRow({
+      ...JOB,
+      baselineStart: null,
+      baselineEnd: null,
+      actualStart: new Date("2026-05-01T00:00:00Z"),
+      actualEnd: null,
+      asOf,
+    });
+    expect(row.baselineDurationDays).toBeNull();
+    expect(row.actualDurationDays).toBe(31);
+    expect(row.varianceDays).toBeNull(); // no baseline snapshot to compare against
+  });
+
+  it("returns nulls across the board for a job with no schedule baseline or actual start", () => {
+    const row = computeDurationRow({ ...JOB, baselineStart: null, baselineEnd: null, actualStart: null, actualEnd: null, asOf });
+    expect(row.baselineDurationDays).toBeNull();
+    expect(row.actualDurationDays).toBeNull();
+    expect(row.varianceDays).toBeNull();
   });
 });
