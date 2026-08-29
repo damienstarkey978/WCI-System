@@ -5,10 +5,12 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { isAnthropicConfigured } from "@/lib/env";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { approveChangeOrderAction, declineChangeOrderAction } from "./actions";
 import { CreateChangeOrderForm } from "./create-change-order-form";
+import { DraftChangeOrderWithAiForm } from "./draft-change-order-with-ai-form";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,8 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Change orders — {job.name}</h1>
+
+      {isAnthropicConfigured() ? <DraftChangeOrderWithAiForm jobId={job.id} /> : null}
 
       <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
 

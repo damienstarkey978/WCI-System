@@ -3,9 +3,11 @@
  * free of Prisma so its Claude-calling logic stays unit-testable with a fake client.
  */
 
+import { ChangeOrderMode } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
 import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
+import { createChangeOrder, JobNotFoundError as ChangeOrderJobNotFoundError, JobNotOpenError } from "@/lib/change-orders/service";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -35,6 +37,26 @@ export interface CreateAiEstimateDraftResult {
   readonly lineItemCount: number;
 }
 
+async function loadDraftingCatalogs(organizationId: string) {
+  const costCodeRows = await db.costCode.findMany({
+    where: { organizationId, isActive: true },
+    select: { id: true, code: true, name: true, defaultCostType: true },
+  });
+  if (costCodeRows.length === 0) {
+    throw new NoCostCodesError();
+  }
+  const costCodes: readonly CostCodeOption[] = costCodeRows;
+  const defaultCostTypeById = new Map(costCodeRows.map((row) => [row.id, row.defaultCostType]));
+
+  const materialRows = await db.materialCatalogItem.findMany({
+    where: { organizationId },
+    select: { vendor: true, description: true, unit: true, unitCostCents: true },
+  });
+  const materialCatalog: readonly MaterialCatalogOption[] = materialRows;
+
+  return { costCodes, defaultCostTypeById, materialCatalog };
+}
+
 /**
  * Draft an estimate from field notes and persist it.
  *
@@ -51,21 +73,7 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
     throw new JobNotFoundError(input.jobId);
   }
 
-  const costCodeRows = await db.costCode.findMany({
-    where: { organizationId: input.organizationId, isActive: true },
-    select: { id: true, code: true, name: true, defaultCostType: true },
-  });
-  if (costCodeRows.length === 0) {
-    throw new NoCostCodesError();
-  }
-  const costCodes: readonly CostCodeOption[] = costCodeRows;
-  const defaultCostTypeById = new Map(costCodeRows.map((row) => [row.id, row.defaultCostType]));
-
-  const materialRows = await db.materialCatalogItem.findMany({
-    where: { organizationId: input.organizationId },
-    select: { vendor: true, description: true, unit: true, unitCostCents: true },
-  });
-  const materialCatalog: readonly MaterialCatalogOption[] = materialRows;
+  const { costCodes, defaultCostTypeById, materialCatalog } = await loadDraftingCatalogs(input.organizationId);
 
   const draft = await draftEstimateFromNotes({
     jobName: job.name,
@@ -114,3 +122,78 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
     lineItemCount: estimate.lineItems.length,
   };
 }
+
+export interface CreateAiChangeOrderDraftInput {
+  readonly organizationId: string;
+  readonly jobId: string;
+  readonly title: string;
+  readonly notes: string;
+  readonly images?: readonly DraftEstimateImageInput[];
+}
+
+export interface CreateAiChangeOrderDraftResult {
+  readonly changeOrderId: string;
+  readonly title: string;
+  readonly assumptions: readonly string[];
+  readonly lineItemCount: number;
+}
+
+/**
+ * Draft an ITEMIZED change order from a description of what changed, reusing the
+ * same estimate-drafting pipeline (handoff-ai-analysis-and-jarvis-deep-integration-
+ * spec.md Part 3.3b) — a ChangeOrderLineItem and an EstimateLineItem share the same
+ * (costCodeId, quantityMilli, unitCostCents, rateMode, rateBasisPoints) shape
+ * (src/lib/change-orders/service.ts's own header comment), so the same normalized
+ * draft lines map directly onto either. Always created DRAFT — approving it (and so
+ * touching the Budget) is still a separate, explicit human action.
+ */
+export async function createAiChangeOrderDraft(input: CreateAiChangeOrderDraftInput): Promise<CreateAiChangeOrderDraftResult> {
+  const job = await db.job.findFirst({
+    where: { id: input.jobId, organizationId: input.organizationId },
+    select: { id: true, name: true },
+  });
+  if (!job) {
+    throw new JobNotFoundError(input.jobId);
+  }
+
+  const { costCodes, defaultCostTypeById, materialCatalog } = await loadDraftingCatalogs(input.organizationId);
+
+  const draft = await draftEstimateFromNotes({
+    jobName: job.name,
+    notes: input.notes,
+    costCodes,
+    materialCatalog,
+    images: input.images,
+  });
+
+  let changeOrder;
+  try {
+    changeOrder = await createChangeOrder({
+      organizationId: input.organizationId,
+      jobId: input.jobId,
+      title: input.title,
+      mode: ChangeOrderMode.ITEMIZED,
+      lineItems: draft.lineItems.map((line) => ({
+        costCodeId: line.costCodeId,
+        costType: defaultCostTypeById.get(line.costCodeId) ?? "NONE",
+        title: line.title,
+        quantityMilli: line.quantityMilli,
+        unitCostCents: line.unitCostCents,
+        rateMode: line.rateMode,
+        rateBasisPoints: line.rateBasisPoints,
+      })),
+    });
+  } catch (error) {
+    if (error instanceof ChangeOrderJobNotFoundError) throw new JobNotFoundError(input.jobId);
+    throw error;
+  }
+
+  return {
+    changeOrderId: changeOrder.id,
+    title: changeOrder.title,
+    assumptions: draft.assumptions,
+    lineItemCount: draft.lineItems.length,
+  };
+}
+
+export { JobNotOpenError };
