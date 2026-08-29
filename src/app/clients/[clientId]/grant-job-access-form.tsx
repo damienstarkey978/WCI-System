@@ -28,7 +28,7 @@ export function GrantJobAccessForm({ clientId, jobs }: { clientId: string; jobs:
   const [state, formAction, pending] = useActionState(grantClientJobAccessAction, INITIAL);
 
   return (
-    <form action={formAction} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <form action={formAction} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
       <input type="hidden" name="clientId" value={clientId} />
       <h3 className="text-sm font-semibold text-[var(--bt-text)]">Grant job access</h3>
       <label className="mt-3 grid max-w-xs gap-1 text-sm">

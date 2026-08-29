@@ -43,7 +43,7 @@ export default async function ClientUpdatesPage({ params }: PageProps<"/jobs/[jo
       ) : (
         <div className="flex flex-col gap-4">
           {summaries.map((summary) => (
-            <article key={summary.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+            <article key={summary.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-[var(--bt-text)]">{summary.headline}</h2>
                 <span className="text-xs text-[var(--bt-muted)]">

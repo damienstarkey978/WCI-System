@@ -148,11 +148,11 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <table className="w-full min-w-max text-sm">
           <thead>
             <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-              <th className="sticky left-0 bg-white px-4 py-3 text-left">Cost code</th>
+              <th className="sticky left-0 bg-[var(--bt-panel-bg)] px-4 py-3 text-left">Cost code</th>
               {view.columns.map((columnId) => (
                 <th key={columnId} className="whitespace-nowrap px-4 py-3 text-right">
                   {COLUMN_LABELS[columnId]}
@@ -165,7 +165,7 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
               const costCode = view.costCodes[line.costCodeId];
               return (
                 <tr key={line.costCodeId} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                  <td className="sticky left-0 whitespace-nowrap bg-white px-4 py-2">
+                  <td className="sticky left-0 whitespace-nowrap bg-[var(--bt-panel-bg)] px-4 py-2">
                     <span className="font-mono text-xs text-[var(--bt-muted)]">{costCode?.code}</span>{" "}
                     <span className="text-[var(--bt-text)]">{costCode?.name}</span>
                   </td>
@@ -192,7 +192,7 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
           {view.funnel.lines.length > 0 ? (
             <tfoot>
               <tr className="border-t-2 font-semibold" style={{ borderColor: "var(--bt-border)" }}>
-                <td className="sticky left-0 bg-white px-4 py-3 text-[var(--bt-text)]">Total</td>
+                <td className="sticky left-0 bg-[var(--bt-panel-bg)] px-4 py-3 text-[var(--bt-text)]">Total</td>
                 {view.columns.map((columnId) => (
                   <td key={columnId} className="whitespace-nowrap px-4 py-3 text-right text-[var(--bt-text)]">
                     {totalsCell(view.funnel.totals, columnId)}

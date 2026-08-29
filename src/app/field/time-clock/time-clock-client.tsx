@@ -150,7 +150,7 @@ export function TimeClockClient({
               type="button"
               disabled={busy || initialEntry.openBreak}
               onClick={handleClockOut}
-              className="rounded-md bg-black px-3 py-2 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+              className="rounded-md bg-black px-3 py-2 text-xs font-medium text-white disabled:opacity-50 dark:bg-[var(--bt-panel-bg)] dark:text-black"
             >
               Clock out
             </button>
@@ -193,7 +193,7 @@ export function TimeClockClient({
             type="button"
             disabled={busy || !jobId || !costCodeId}
             onClick={handleClockIn}
-            className="rounded-md bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            className="rounded-md bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-[var(--bt-panel-bg)] dark:text-black"
           >
             Clock in
           </button>

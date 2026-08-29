@@ -11,7 +11,7 @@ export function CreateSurveyForm({ jobId }: { jobId: string }) {
   const [state, formAction, pending] = useActionState(createSurveyAction, INITIAL);
 
   return (
-    <form action={formAction} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <form action={formAction} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
       <input type="hidden" name="jobId" value={jobId} />
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">New survey</h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">

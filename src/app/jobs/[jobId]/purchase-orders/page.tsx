@@ -58,7 +58,7 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
       {purchaseOrders.length === 0 ? (
         <EmptyState title="No purchase orders yet" description="Purchase orders created for this job will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr

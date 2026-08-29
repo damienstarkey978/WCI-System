@@ -45,8 +45,8 @@ export function FileCard({ jobId, file }: { jobId: string; file: FileCardData })
   const isPhoto = file.category === "PHOTO" || file.category === "PRESALE_PHOTO";
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
-      <a href={file.url} target="_blank" rel="noreferrer" className="block h-36 bg-[#f7f8fa]">
+    <div className="flex flex-col overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+      <a href={file.url} target="_blank" rel="noreferrer" className="block h-36 bg-[var(--bt-page-bg)]">
         {isPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching
           <img src={file.url} alt={file.fileName} className="h-full w-full object-cover" />

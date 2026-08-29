@@ -35,24 +35,24 @@ export default async function PeoplePage() {
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">People</h1>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Link href="/staff" className="rounded-lg border bg-white p-4 hover:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }}>
+        <Link href="/staff" className="rounded-lg border bg-[var(--bt-panel-bg)] p-4 hover:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Internal Users</h2>
           <p className="mt-1 text-2xl font-semibold text-[var(--bt-text)]">{team.length}</p>
           <p className="text-xs text-[var(--bt-muted)]">Your team&apos;s accounts &amp; roles</p>
         </Link>
-        <Link href="/vendors" className="rounded-lg border bg-white p-4 hover:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }}>
+        <Link href="/vendors" className="rounded-lg border bg-[var(--bt-panel-bg)] p-4 hover:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Vendors</h2>
           <p className="mt-1 text-2xl font-semibold text-[var(--bt-text)]">{vendorCount}</p>
           <p className="text-xs text-[var(--bt-muted)]">Subcontractors and suppliers</p>
         </Link>
-        <Link href="/clients" className="rounded-lg border bg-white p-4 hover:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }}>
+        <Link href="/clients" className="rounded-lg border bg-[var(--bt-panel-bg)] p-4 hover:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Clients</h2>
           <p className="mt-1 text-2xl font-semibold text-[var(--bt-text)]">{clientCount}</p>
           <p className="text-xs text-[var(--bt-muted)]">Homeowners with portal access</p>
         </Link>
       </div>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Team</h2>
           {user.role === UserRole.ADMIN ? (

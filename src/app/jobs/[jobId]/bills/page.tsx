@@ -57,7 +57,7 @@ export default async function BillsPage({ params }: PageProps<"/jobs/[jobId]/bil
       {bills.length === 0 ? (
         <EmptyState title="No bills yet" description="Bills entered for this job will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr

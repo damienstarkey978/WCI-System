@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { AuthProvider } from "@/components/auth-provider";
+import { ThemeScript } from "@/components/settings/ThemeScript";
 
 import "./globals.css";
 
@@ -36,7 +37,8 @@ export const maxDuration = 120;
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <AuthProvider>
-      <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+        <ThemeScript />
         <body className="min-h-full flex flex-col bg-background text-foreground">{children}</body>
       </html>
     </AuthProvider>

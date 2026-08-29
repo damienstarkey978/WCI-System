@@ -17,7 +17,7 @@ export function CreateInvoiceForm({ jobId }: { jobId: string }) {
   const [nextKey, setNextKey] = useState(1);
 
   return (
-    <form action={formAction} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <form action={formAction} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
       <input type="hidden" name="jobId" value={jobId} />
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">New invoice</h2>
 

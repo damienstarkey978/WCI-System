@@ -65,7 +65,7 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
           {bidPackages.map((pkg) => {
             const style = PACKAGE_STATUS_STYLE[pkg.status] ?? PACKAGE_STATUS_STYLE.OPEN;
             return (
-              <div key={pkg.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+              <div key={pkg.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <div className="font-medium text-[var(--bt-text)]">{pkg.title}</div>

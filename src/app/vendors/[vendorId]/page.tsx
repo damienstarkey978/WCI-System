@@ -51,7 +51,7 @@ export default async function VendorDetailPage({ params }: PageProps<"/vendors/[
         </p>
       </div>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Job access</h2>
         {vendor.jobAccess.length === 0 ? (
           <p className="mt-2 text-sm text-[var(--bt-muted)]">Not assigned to any jobs yet.</p>
@@ -72,7 +72,7 @@ export default async function VendorDetailPage({ params }: PageProps<"/vendors/[
         </div>
       </section>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Certifications</h2>
         {vendor.certifications.length === 0 ? (
           <p className="mt-2 text-sm text-[var(--bt-muted)]">No certifications on file.</p>

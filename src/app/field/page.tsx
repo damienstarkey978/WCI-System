@@ -46,7 +46,7 @@ export default async function FieldHomePage() {
         )}
         <Link
           href="/field/time-clock"
-          className="mt-3 inline-block rounded-md bg-black px-3 py-2 text-xs font-medium text-white dark:bg-white dark:text-black"
+          className="mt-3 inline-block rounded-md bg-black px-3 py-2 text-xs font-medium text-white dark:bg-[var(--bt-panel-bg)] dark:text-black"
         >
           {openEntry ? "Manage clock" : "Clock in"}
         </Link>
@@ -57,7 +57,7 @@ export default async function FieldHomePage() {
         <p className="mt-1 text-xs text-black/55 dark:text-white/55">Log today&apos;s progress, even with no signal.</p>
         <Link
           href="/field/daily-log"
-          className="mt-3 inline-block rounded-md bg-black px-3 py-2 text-xs font-medium text-white dark:bg-white dark:text-black"
+          className="mt-3 inline-block rounded-md bg-black px-3 py-2 text-xs font-medium text-white dark:bg-[var(--bt-panel-bg)] dark:text-black"
         >
           Write a log
         </Link>

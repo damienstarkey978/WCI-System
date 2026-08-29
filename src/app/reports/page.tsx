@@ -91,7 +91,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           ))}
         </div>
 
-        <div className="overflow-x-auto rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           {active === "wip" ? <WipTable organizationId={user.organizationId} /> : null}
           {active === "budget-variance" ? <BudgetVarianceTable organizationId={user.organizationId} /> : null}
           {active === "profitability" ? <ProfitabilityTable organizationId={user.organizationId} /> : null}

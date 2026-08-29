@@ -74,7 +74,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <div className="rounded-lg border bg-white p-5" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-5" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
@@ -111,7 +111,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
-          <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+          <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
             <header
               className="flex items-center justify-between border-b px-4 py-3"
               style={{ borderColor: "var(--bt-border)" }}
@@ -139,7 +139,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
             </div>
           </section>
 
-          <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+          <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
             <header
               className="flex items-center justify-between border-b px-4 py-3"
               style={{ borderColor: "var(--bt-border)" }}
@@ -165,7 +165,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
         </div>
 
         <div className="flex flex-col gap-4">
-          <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+          <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
             <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
               <h2 className="text-sm font-semibold text-[var(--bt-text)]">Action items</h2>
             </header>
@@ -183,7 +183,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
             </div>
           </section>
 
-          <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+          <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
             <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
               <h2 className="text-sm font-semibold text-[var(--bt-text)]">Clients</h2>
             </header>
@@ -201,7 +201,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
             </div>
           </section>
 
-          <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+          <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
             <header
               className="flex items-center justify-between border-b px-4 py-3"
               style={{ borderColor: "var(--bt-border)" }}

@@ -15,7 +15,7 @@ export async function ConversationSidebar({
   const conversations = await listConversations(organizationId, userId);
 
   return (
-    <div className="flex w-64 shrink-0 flex-col gap-1 border-r bg-white p-3" style={{ borderColor: "var(--bt-border)" }}>
+    <div className="flex w-64 shrink-0 flex-col gap-1 border-r bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
       <Link
         href="/jarvis"
         className="rounded px-3 py-2 text-sm font-semibold text-white"

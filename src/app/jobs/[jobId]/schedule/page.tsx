@@ -39,7 +39,7 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
     return (
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Schedule — {job.name}</h1>
-        <div className="rounded-lg border bg-white px-4 py-6 text-center" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center" style={{ borderColor: "var(--bt-border)" }}>
           <p className="mb-3 text-sm text-[var(--bt-muted)]">No schedule yet.</p>
           <CreateScheduleButton jobId={job.id} />
         </div>
@@ -54,7 +54,7 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Schedule — {job.name}</h1>
         <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={[]} />
-        <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+        <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
           No schedule items yet.
         </p>
       </div>
@@ -81,7 +81,7 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
 
       <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={items.map((item) => ({ id: item.id, title: item.title }))} />
 
-      <div className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
           <div className="w-64 shrink-0 px-4 py-3">Task</div>
           <div className="w-28 shrink-0 px-4 py-3">Dates</div>

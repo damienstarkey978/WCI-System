@@ -27,7 +27,7 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
         formAction(formData);
         formRef.current?.reset();
       }}
-      className="flex flex-col gap-2 border-t bg-white p-3"
+      className="flex flex-col gap-2 border-t bg-[var(--bt-panel-bg)] p-3"
       style={{ borderColor: "var(--bt-border)" }}
     >
       {conversationId ? <input type="hidden" name="conversationId" value={conversationId} /> : null}

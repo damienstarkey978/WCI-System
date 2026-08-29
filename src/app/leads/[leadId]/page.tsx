@@ -142,13 +142,13 @@ export default async function LeadDetailPage({
         <div className="flex flex-col gap-3">
           <LeadActivityForm leadId={lead.id} />
           {activities.length === 0 ? (
-            <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+            <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
               No activity logged yet.
             </p>
           ) : (
             <div className="flex flex-col gap-2">
               {activities.map((activity) => (
-                <div key={activity.id} className="rounded-lg border bg-white p-3" style={{ borderColor: "var(--bt-border)" }}>
+                <div key={activity.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--bt-muted)]">
                     <div className="flex items-center gap-2">
                       <span className="rounded bg-black/5 px-1.5 py-0.5 font-semibold text-[var(--bt-text)]">
@@ -174,7 +174,7 @@ export default async function LeadDetailPage({
       ) : tab === "proposals" ? (
         <div className="flex flex-col gap-3">
           {preSalePhotos.length > 0 ? (
-            <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+            <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Pre-Sale Photos</span>
                 {lead.convertedJob ? (
@@ -211,7 +211,7 @@ export default async function LeadDetailPage({
             needsContact={!lead.email}
           />
           {proposals.length === 0 ? (
-            <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+            <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
               No proposals yet.
             </p>
           ) : (
@@ -223,7 +223,7 @@ export default async function LeadDetailPage({
                   return total + priceWithRate(cost, item.rateMode, item.rateBasisPoints);
                 }, 0);
                 return (
-                  <div key={proposal.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+                  <div key={proposal.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-1.5">
@@ -294,7 +294,7 @@ export default async function LeadDetailPage({
           )}
         </div>
       ) : (
-        <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
           <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
             <div>
               <dt className="text-xs text-[var(--bt-muted)]">Stage</dt>

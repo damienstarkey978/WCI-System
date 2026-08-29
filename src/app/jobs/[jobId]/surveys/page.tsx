@@ -53,7 +53,7 @@ export default async function SurveysPage({ params }: PageProps<"/jobs/[jobId]/s
             const submitted = survey.responseLinks.filter((link) => link.submittedAt !== null);
             const pending = survey.responseLinks.filter((link) => link.submittedAt === null);
             return (
-              <article key={survey.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+              <article key={survey.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold text-[var(--bt-text)]">{survey.title}</h2>
                   <span className="rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--bt-muted)]">

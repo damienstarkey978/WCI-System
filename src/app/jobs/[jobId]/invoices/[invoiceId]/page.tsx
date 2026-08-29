@@ -74,7 +74,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
         </div>
       </div>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Details</h2>
         <dl className="mt-3 grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
           <div>
@@ -131,7 +131,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
         </div>
       </section>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Payments</h2>
           {canAct ? <RecordPaymentForm jobId={job.id} invoiceId={invoice.id} /> : null}
@@ -159,7 +159,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
         ) : null}
       </section>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">QuickBooks status</h2>
         {hasQboPayment ? (
           <p className="mt-2 text-sm text-[var(--bt-text)]">A payment on this invoice was recorded via QuickBooks sync.</p>

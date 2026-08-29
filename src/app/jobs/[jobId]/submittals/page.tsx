@@ -53,7 +53,7 @@ export default async function SubmittalsPage({ params }: PageProps<"/jobs/[jobId
       {submittals.length === 0 ? (
         <EmptyState title="No submittals yet" description="Material specs and shop drawings for this job will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>

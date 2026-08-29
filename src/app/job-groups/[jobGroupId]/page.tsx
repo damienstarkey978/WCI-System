@@ -57,25 +57,25 @@ export default async function JobGroupDetailPage({ params }: PageProps<"/job-gro
         </div>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+          <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
             <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Active jobs</div>
             <div className="mt-1 text-2xl font-semibold text-[var(--bt-text)]">{wipRows.length}</div>
           </div>
-          <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+          <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
             <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Total contract value</div>
             <div className="mt-1 text-2xl font-semibold text-[var(--bt-text)]">{formatMoney(totalContractValueCents)}</div>
           </div>
-          <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+          <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
             <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Earned revenue</div>
             <div className="mt-1 text-2xl font-semibold text-[var(--bt-text)]">{formatMoney(totalEarnedRevenueCents)}</div>
           </div>
-          <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+          <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
             <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Projected profit</div>
             <div className="mt-1 text-2xl font-semibold text-[var(--bt-text)]">{formatMoney(totalProjectedProfitCents)}</div>
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>

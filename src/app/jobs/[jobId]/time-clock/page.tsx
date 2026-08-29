@@ -53,7 +53,7 @@ export default async function TimeClockPage({ params }: PageProps<"/jobs/[jobId]
       {entries.length === 0 ? (
         <EmptyState title="No time clock entries yet" description="Clock-ins from the field app for this job will appear here." />
       ) : (
-        <div className="overflow-x-auto rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full min-w-max text-left text-sm">
             <thead>
               <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>

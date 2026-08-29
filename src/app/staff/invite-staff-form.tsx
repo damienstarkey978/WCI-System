@@ -19,7 +19,7 @@ export function InviteStaffForm() {
         await formAction(formData);
         formRef.current?.reset();
       }}
-      className="rounded-lg border bg-white p-4"
+      className="rounded-lg border bg-[var(--bt-panel-bg)] p-4"
       style={{ borderColor: "var(--bt-border)" }}
     >
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">+ Internal user</h2>

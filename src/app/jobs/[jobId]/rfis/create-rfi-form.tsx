@@ -22,7 +22,7 @@ export function CreateRfiForm({ jobId, users }: { jobId: string; users: readonly
         await formAction(formData);
         formRef.current?.reset();
       }}
-      className="rounded-lg border bg-white p-4"
+      className="rounded-lg border bg-[var(--bt-panel-bg)] p-4"
       style={{ borderColor: "var(--bt-border)" }}
     >
       <input type="hidden" name="jobId" value={jobId} />

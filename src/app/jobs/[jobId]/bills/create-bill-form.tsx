@@ -25,7 +25,7 @@ export function CreateBillForm({
   const [state, formAction, pending] = useActionState(createBillAction, INITIAL);
 
   return (
-    <form action={formAction} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <form action={formAction} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
       <input type="hidden" name="jobId" value={jobId} />
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">New bill</h2>
 

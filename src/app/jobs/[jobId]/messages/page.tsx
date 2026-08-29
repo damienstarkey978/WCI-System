@@ -37,7 +37,7 @@ export default async function MessagesPage({ params }: PageProps<"/jobs/[jobId]/
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Messaging — {job.name}</h1>
 
-      <div className="flex flex-col rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="flex flex-col rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex flex-col gap-3 p-4">
           {messages.length === 0 ? (
             <EmptyState title="No messages yet" description="Messages posted about this job will appear here." />

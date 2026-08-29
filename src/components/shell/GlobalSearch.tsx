@@ -101,7 +101,7 @@ export function GlobalSearch() {
         />
       </div>
       {query.trim().length >= 2 ? (
-        <div className="absolute right-0 top-full z-30 mt-1 w-80 rounded-md border border-black/10 bg-white text-sm text-[var(--bt-text)] shadow-lg">
+        <div className="absolute right-0 top-full z-30 mt-1 w-80 rounded-md border border-black/10 bg-[var(--bt-panel-bg)] text-sm text-[var(--bt-text)] shadow-lg">
           {loading ? (
             <p className="px-3 py-4 text-center text-xs text-[var(--bt-muted)]">Searching…</p>
           ) : !hasResults ? (

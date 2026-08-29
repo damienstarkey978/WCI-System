@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+    <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
       <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">{title}</h2>
       </header>
@@ -66,7 +66,7 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-      <div className="rounded-lg border bg-white p-5" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-5" style={{ borderColor: "var(--bt-border)" }}>
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">{job.name}</h1>
         {address ? <p className="mt-1 text-sm text-[var(--bt-muted)]">{address}</p> : null}
       </div>

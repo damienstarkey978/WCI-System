@@ -29,7 +29,7 @@ export async function CommentThread({
   });
 
   return (
-    <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+    <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
       <h2 className="px-4 pt-4 text-sm font-semibold text-[var(--bt-text)]">{title}</h2>
       <div className="flex flex-col gap-2 p-4">
         {comments.length === 0 ? (

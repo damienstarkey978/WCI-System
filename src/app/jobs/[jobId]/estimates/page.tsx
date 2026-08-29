@@ -78,7 +78,7 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
       {estimates.length === 0 ? (
         <EmptyState title="No estimates yet" description="Estimates created for this job will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr

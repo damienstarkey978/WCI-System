@@ -51,7 +51,7 @@ export default async function SurveyRespondPage({ params }: PageProps<"/surveys/
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">{survey.title}</h1>
         {recipientName ? <p className="mt-1 text-sm text-[var(--bt-muted)]">Hi {recipientName}, we&apos;d love your feedback.</p> : null}
       </div>
-      <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <SurveyResponseForm token={token} questions={survey.questions.map((q) => ({ id: q.id, prompt: q.prompt }))} />
       </div>
     </div>

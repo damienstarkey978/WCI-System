@@ -17,7 +17,7 @@ export function PhotoStrip({ files }: { files: readonly PhotoStripFile[] }) {
             // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching
             <img src={file.url} alt={file.fileName} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-[#f7f8fa] text-xl text-[var(--bt-muted)]">
+            <div className="flex h-full w-full items-center justify-center bg-[var(--bt-page-bg)] text-xl text-[var(--bt-muted)]">
               {file.category === "VIDEO" ? "🎬" : "📄"}
             </div>
           )}

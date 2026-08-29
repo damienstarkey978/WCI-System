@@ -58,7 +58,7 @@ export default async function WarrantiesPage({ params }: PageProps<"/jobs/[jobId
           {claims.map((claim) => {
             const style = STATUS_STYLE[claim.status] ?? STATUS_STYLE.SUBMITTED;
             return (
-              <article key={claim.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+              <article key={claim.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold text-[var(--bt-text)]">
                     {claim.claimNumber} — {claim.title}

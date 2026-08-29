@@ -66,14 +66,14 @@ export default async function StaffMemberPage({ params }: PageProps<"/staff/[use
         </p>
       </div>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Overview</h2>
         <div className="mt-3">
           <ProfileForm userId={member.id} name={member.name} title={member.title} phone={member.phone} />
         </div>
       </section>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Permissions</h2>
         <p className="mt-2 text-sm text-[var(--bt-muted)]">
           <strong className="text-[var(--bt-text)]">{roleInfo.label} permissions</strong> — {roleInfo.blurb}
@@ -83,7 +83,7 @@ export default async function StaffMemberPage({ params }: PageProps<"/staff/[use
         </div>
       </section>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Job Access ({member.jobGrants.length})</h2>
         <p className="mt-1 text-xs text-[var(--bt-muted)]">
           {grantsAreConsulted
@@ -123,7 +123,7 @@ export default async function StaffMemberPage({ params }: PageProps<"/staff/[use
         </div>
       </section>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Security & Login</h2>
         <div className="mt-3">
           <SecurityForm userId={member.id} isActive={member.isActive} />

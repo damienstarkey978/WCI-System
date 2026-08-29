@@ -51,7 +51,7 @@ export default async function CostInboxPage({ params }: PageProps<"/jobs/[jobId]
           {bills.map((bill) => {
             const totalCents = bill.lineItems.reduce((total, item) => total + item.amountCents, 0);
             return (
-              <div key={bill.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+              <div key={bill.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <div className="font-medium text-[var(--bt-text)]">{bill.vendorName}</div>

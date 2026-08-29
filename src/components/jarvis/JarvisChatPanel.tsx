@@ -78,7 +78,7 @@ function JarvisChatBody({
   }
 
   return (
-    <div className={`flex ${heightClassName} w-full flex-col overflow-hidden rounded-lg border bg-white`} style={{ borderColor: "var(--bt-border)" }}>
+    <div className={`flex ${heightClassName} w-full flex-col overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]`} style={{ borderColor: "var(--bt-border)" }}>
       <div className="flex items-center justify-between border-b px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
         <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]">
           <span>✦</span> Jarvis
@@ -128,7 +128,7 @@ function JarvisChatBody({
                 style={
                   message.role === "USER"
                     ? { background: "var(--bt-primary)", color: "white" }
-                    : { background: "#f3f4f6", color: "var(--bt-text)" }
+                    : { background: "var(--bt-panel-bg-muted)", color: "var(--bt-text)" }
                 }
               >
                 {message.content}
@@ -138,7 +138,7 @@ function JarvisChatBody({
         )}
         {pending ? (
           <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm text-[var(--bt-muted)]" style={{ background: "#f3f4f6" }}>
+            <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm text-[var(--bt-muted)]" style={{ background: "var(--bt-panel-bg-muted)" }}>
               Jarvis is thinking…
             </div>
           </div>

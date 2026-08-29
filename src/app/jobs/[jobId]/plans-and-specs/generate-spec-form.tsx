@@ -15,7 +15,7 @@ export function GenerateSpecForm({ jobId, estimates }: { jobId: string; estimate
   const [state, formAction, pending] = useActionState(generateSpecFromEstimateAction, INITIAL);
 
   return (
-    <form action={formAction} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <form action={formAction} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
       <input type="hidden" name="jobId" value={jobId} />
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">Generate from estimate</h2>
       <p className="mt-1 text-xs text-[var(--bt-muted)]">Builds one section per room/assembly group already on the estimate — nothing re-entered by hand.</p>

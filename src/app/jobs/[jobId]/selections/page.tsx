@@ -62,7 +62,7 @@ export default async function SelectionsPage({ params }: PageProps<"/jobs/[jobId
           {selections.map((selection) => {
             const decided = selection.options.some((option) => option.status !== "PENDING");
             return (
-              <section key={selection.id} className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+              <section key={selection.id} className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
                 <header className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
                   <div>
                     <h2 className="text-sm font-semibold text-[var(--bt-text)]">{selection.title}</h2>

@@ -56,7 +56,7 @@ export default async function RfisPage({ params }: PageProps<"/jobs/[jobId]/rfis
           {rfis.map((rfi) => {
             const style = STATUS_STYLE[rfi.status] ?? STATUS_STYLE.OPEN;
             return (
-              <article key={rfi.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+              <article key={rfi.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold text-[var(--bt-text)]">{rfi.title}</h2>
                   <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
@@ -70,7 +70,7 @@ export default async function RfisPage({ params }: PageProps<"/jobs/[jobId]/rfis
                   {rfi.assigneeUser ? <span>Assigned to {rfi.assigneeUser.email}</span> : null}
                 </div>
                 {rfi.answer ? (
-                  <div className="mt-2 rounded bg-[#f7f8fa] p-2 text-sm text-[var(--bt-text)]">
+                  <div className="mt-2 rounded bg-[var(--bt-page-bg)] p-2 text-sm text-[var(--bt-text)]">
                     <span className="text-xs font-semibold text-[var(--bt-muted)]">Answer: </span>
                     {rfi.answer}
                   </div>

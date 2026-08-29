@@ -1,16 +1,27 @@
 @import "tailwindcss";
 
+/* Repoints Tailwind's `dark:` variant (used by the original admin/field screens) at
+   our own manual toggle instead of the media-query default, so both the older plain
+   black/white screens and the --bt-* Buildertrend-match UI respond to the same
+   explicit choice — see src/components/settings/ThemeScript.tsx, which sets/removes
+   this attribute on <html> before paint (and ThemeToggle.tsx, which flips it live). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
 
-  /* Buildertrend-match palette (src/components/shell) — a deliberately separate
-     token set from the app's original admin/field screens, which stay on the
-     plain black/white palette above. */
+  /* Buildertrend-match palette (src/components/shell) — a separate token set from
+     the app's original admin/field screens, which use Tailwind's plain `dark:`
+     variant on the black/white palette above instead. Both respond to the same
+     [data-theme="dark"] attribute (see the @custom-variant above). */
   --bt-nav: #2c6975;
   --bt-nav-hover: #23545e;
   --bt-primary: #1a56db;
   --bt-primary-hover: #1745ad;
+  --bt-page-bg: #f7f8fa;
+  --bt-panel-bg: #ffffff;
+  --bt-panel-bg-muted: #f3f4f6;
   --bt-sidebar-bg: #ffffff;
   --bt-border: #e5e7eb;
   --bt-muted: #6b7280;
@@ -28,11 +39,21 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root[data-theme="dark"] {
+  --background: #0d1117;
+  --foreground: #e6edf3;
+
+  --bt-primary: #3b82f6;
+  --bt-primary-hover: #60a5fa;
+  --bt-page-bg: #0d1117;
+  --bt-panel-bg: #161b22;
+  --bt-panel-bg-muted: #1c2129;
+  --bt-sidebar-bg: #10141a;
+  --bt-border: #30363d;
+  --bt-muted: #9aa4b2;
+  --bt-text: #e6edf3;
+  --bt-status-open-bg: #0c4a6e;
+  --bt-status-open-text: #7dd3fc;
 }
 
 body {
@@ -41,12 +62,10 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* The Buildertrend-match UI (src/components/shell and everything styled with --bt-*
-   tokens) is a fixed light theme — its panels are always bg-white, never following
-   prefers-color-scheme. Form controls otherwise inherit `color` from body, which DOES
-   flip to a light gray in dark mode (see --foreground above), so typed text in every
-   input/textarea/select was going near-invisible (light gray on white) for anyone
-   with a dark system/browser theme. Pin form text to the dark color always. */
+/* The Buildertrend-match UI's form controls otherwise inherit `color` from body,
+   which flips between --foreground's light/dark values — but every one of its own
+   panels stays keyed off --bt-text instead, so pin form text to that same token
+   rather than letting it drift out of sync with the panel it sits in. */
 input,
 textarea,
 select {

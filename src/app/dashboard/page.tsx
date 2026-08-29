@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 function Tile({ label, value, warn, href }: { label: string; value: string; warn?: boolean; href?: string }) {
   const body = (
-    <div className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
       <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{label}</div>
       <div className="mt-1 text-2xl font-semibold" style={{ color: warn ? "#b91c1c" : "var(--bt-text)" }}>
         {value}
@@ -98,7 +98,7 @@ export default async function DashboardPage() {
           <Tile label="Projected cash out" value={formatMoney(cashFlow.projection.projectedCashOutCents)} href="/reports?report=cash-flow" />
         </div>
 
-        <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[var(--bt-text)]">Jobs needing attention (lowest margin)</h2>
             <Link href="/reports?report=profitability" className="text-xs font-semibold text-[var(--bt-primary)] hover:underline">

@@ -22,7 +22,7 @@ export function InvitePortalButton({ clientId }: { clientId: string }) {
         </p>
       ) : null}
       {state.inviteToken ? (
-        <div className="mt-2 rounded border bg-[#f7f8fa] p-2 text-xs" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="mt-2 rounded border bg-[var(--bt-page-bg)] p-2 text-xs" style={{ borderColor: "var(--bt-border)" }}>
           <p className="text-[var(--bt-muted)]">
             Copy this link and send it to the client — it won&apos;t be shown again:
           </p>

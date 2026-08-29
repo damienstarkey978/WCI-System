@@ -20,7 +20,9 @@ import {
 import { GlobalSearch } from "./GlobalSearch";
 import {
   BellIcon,
+  BuildingIcon,
   ChevronDownIcon,
+  GearIcon,
   HelpIcon,
   PeopleIcon,
   SparkleIcon,
@@ -65,7 +67,7 @@ function NotificationBell({ notifications, unreadCount }: { notifications: reado
         ) : null}
       </button>
       {open ? (
-        <div className="absolute right-0 top-full z-30 mt-1 w-80 rounded-md border border-black/10 bg-white text-sm text-[var(--bt-text)] shadow-lg">
+        <div className="absolute right-0 top-full z-30 mt-1 w-80 rounded-md border border-black/10 bg-[var(--bt-panel-bg)] text-sm text-[var(--bt-text)] shadow-lg">
           <div className="flex items-center justify-between border-b px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
             <span className="font-semibold">Notifications</span>
             {unreadCount > 0 ? (
@@ -120,7 +122,7 @@ function JobNavDropdown({ label, items, activeJobId }: { label: string; items: r
         <ChevronDownIcon className="h-3.5 w-3.5" />
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-black/10 bg-white py-1 text-sm text-[var(--bt-text)] shadow-lg">
+        <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-black/10 bg-[var(--bt-panel-bg)] py-1 text-sm text-[var(--bt-text)] shadow-lg">
           {activeJobId ? (
             items.map((item) => (
               <Link
@@ -162,7 +164,7 @@ function FlatNavDropdown({ label, items }: { label: string; items: readonly { la
         <ChevronDownIcon className="h-3.5 w-3.5" />
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-black/10 bg-white py-1 text-sm text-[var(--bt-text)] shadow-lg">
+        <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-black/10 bg-[var(--bt-panel-bg)] py-1 text-sm text-[var(--bt-text)] shadow-lg">
           {items.map((item) => (
             <Link key={item.href} href={item.href} className="block px-3 py-2 hover:bg-black/5">
               {item.label}
@@ -186,6 +188,7 @@ function FlatNavDropdown({ label, items }: { label: string; items: readonly { la
 export function TopNav({
   activeJobId,
   clerkConfigured,
+  isAdmin = false,
   notifications = [],
   unreadCount = 0,
 }: {
@@ -193,6 +196,8 @@ export function TopNav({
   /** Computed server-side (CLERK_SECRET_KEY isn't inlined into the client bundle, so this
    *  component can't call isClerkConfigured() itself and get the right answer in the browser). */
   clerkConfigured: boolean;
+  /** Whether to show "Company settings" in the avatar menu below (AppShell.tsx resolves this). */
+  isAdmin?: boolean;
   notifications?: readonly BellNotification[];
   unreadCount?: number;
 }) {
@@ -260,7 +265,14 @@ export function TopNav({
         </button>
         {clerkConfigured ? (
           <div className="ml-2">
-            <UserButton />
+            <UserButton>
+              <UserButton.MenuItems>
+                <UserButton.Link label="Settings" href="/settings" labelIcon={<GearIcon className="h-4 w-4" />} />
+                {isAdmin ? (
+                  <UserButton.Link label="Company settings" href="/settings/company" labelIcon={<BuildingIcon className="h-4 w-4" />} />
+                ) : null}
+              </UserButton.MenuItems>
+            </UserButton>
           </div>
         ) : null}
       </div>

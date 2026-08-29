@@ -17,7 +17,7 @@ export function TodoForm({ jobId }: { jobId: string }) {
         await formAction(formData);
         formRef.current?.reset();
       }}
-      className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4"
+      className="flex flex-wrap items-end gap-3 rounded-lg border bg-[var(--bt-panel-bg)] p-4"
       style={{ borderColor: "var(--bt-border)" }}
     >
       <input type="hidden" name="jobId" value={jobId} />

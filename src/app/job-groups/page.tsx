@@ -64,11 +64,11 @@ export default async function JobGroupsPage() {
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Job Groups</h1>
 
         {rollups.length === 0 ? (
-          <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+          <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
             No job groups yet — group jobs (e.g. units in a multi-family build) from a job&apos;s settings.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+          <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>

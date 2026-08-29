@@ -45,7 +45,7 @@ export default async function PlansAndSpecsPage({ params }: PageProps<"/jobs/[jo
       ) : (
         <div className="flex flex-col gap-4">
           {specifications.map((spec) => (
-            <section key={spec.id} className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+            <section key={spec.id} className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
               <header className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
                 <h2 className="text-sm font-semibold text-[var(--bt-text)]">{spec.title}</h2>
                 <span className="text-xs text-[var(--bt-muted)]">{spec.sections.length} sections</span>

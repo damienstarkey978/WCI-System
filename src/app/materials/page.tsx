@@ -38,7 +38,7 @@ export default async function MaterialsPage() {
       {items.length === 0 ? (
         <EmptyState title="No materials yet" description="Materials you add will be used to price AI-drafted estimates." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>

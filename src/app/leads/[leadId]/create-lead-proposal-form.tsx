@@ -25,7 +25,7 @@ export function CreateLeadProposalForm({
   const [state, formAction, pending] = useActionState(createLeadProposalAction, INITIAL);
 
   return (
-    <form action={formAction} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <form action={formAction} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
       <input type="hidden" name="leadId" value={leadId} />
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">New proposal</h2>
       <p className="mt-1 text-xs text-[var(--bt-muted)]">

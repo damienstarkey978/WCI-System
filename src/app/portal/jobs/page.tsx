@@ -32,7 +32,7 @@ export default async function PortalJobsPage() {
           <Link
             key={job.id}
             href={`/portal/jobs/${job.id}`}
-            className="rounded-lg border bg-white p-4 transition hover:border-[var(--bt-primary)]"
+            className="rounded-lg border bg-[var(--bt-panel-bg)] p-4 transition hover:border-[var(--bt-primary)]"
             style={{ borderColor: "var(--bt-border)" }}
           >
             <div className="font-medium text-[var(--bt-text)]">{job.name}</div>

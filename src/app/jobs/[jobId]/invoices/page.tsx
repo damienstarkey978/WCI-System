@@ -76,7 +76,7 @@ export default async function InvoicesPage({ params }: PageProps<"/jobs/[jobId]/
       {invoices.length === 0 ? (
         <EmptyState title="No invoices yet" description="Invoices created for this job will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr

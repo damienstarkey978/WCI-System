@@ -59,14 +59,14 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
 
       <div className="flex flex-col gap-3">
         {logs.length === 0 ? (
-          <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+          <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
             No daily logs yet — add the first one above.
           </p>
         ) : (
           logsWithPhotos.map((log) => {
             const weather = weatherSummary(log.weather);
             return (
-              <article key={log.id} className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+              <article key={log.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--bt-muted)]">
                   <span className="font-medium text-[var(--bt-text)]">{formatDate(log.createdAt)}</span>
                   <div className="flex items-center gap-2">

@@ -63,7 +63,7 @@ export function AddLeadOpportunityModal({ clients }: { clients: readonly Existin
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-[var(--bt-panel-bg)] shadow-2xl">
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="text-lg font-semibold text-[var(--bt-text)]">Add Lead Opportunity</h2>
           <button type="button" onClick={close} aria-label="Close" className="text-xl text-[var(--bt-muted)] hover:text-[var(--bt-text)]">

@@ -46,7 +46,7 @@ export default async function LeadActivitiesPage() {
       {activities.length === 0 ? (
         <EmptyState title="No activity yet" description="Calls, emails, meetings, and follow-up tasks logged against leads will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr

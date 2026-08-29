@@ -46,7 +46,7 @@ export default async function TasksPage({ params }: PageProps<"/jobs/[jobId]/tas
 
       <TodoForm jobId={job.id} />
 
-      <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Open ({open.length})</h2>
         </header>
@@ -85,7 +85,7 @@ export default async function TasksPage({ params }: PageProps<"/jobs/[jobId]/tas
       </section>
 
       {done.length > 0 ? (
-        <section className="rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
             <h2 className="text-sm font-semibold text-[var(--bt-text)]">Done ({done.length})</h2>
           </header>

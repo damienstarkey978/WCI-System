@@ -52,7 +52,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
         <InvitePortalButton clientId={client.id} />
       </div>
 
-      <section className="rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Job access</h2>
         {client.jobAccess.length === 0 ? (
           <p className="mt-2 text-sm text-[var(--bt-muted)]">Not granted access to any jobs yet.</p>

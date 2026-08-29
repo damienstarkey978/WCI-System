@@ -23,7 +23,7 @@ export function SearchWebPriceForm() {
         await formAction(formData);
         formRef.current?.reset();
       }}
-      className="rounded-lg border border-dashed bg-white p-4"
+      className="rounded-lg border border-dashed bg-[var(--bt-panel-bg)] p-4"
       style={{ borderColor: "var(--bt-border)" }}
     >
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">Search the web for a price</h2>

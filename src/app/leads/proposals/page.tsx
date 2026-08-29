@@ -46,7 +46,7 @@ export default async function LeadProposalsPage() {
       {proposals.length === 0 ? (
         <EmptyState title="No proposals yet" description="Proposals created from a lead will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr

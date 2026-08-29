@@ -59,7 +59,7 @@ export default async function OnlinePaymentReportPage({ params }: PageProps<"/jo
       {payments.length === 0 ? (
         <EmptyState title="No online payments yet" description="Payments made through the client portal will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr
