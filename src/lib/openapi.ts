@@ -64,6 +64,7 @@ import {
   portalAcceptPurchaseOrderSchema,
   portalAcceptWarrantyWorkSchema,
   portalApproveChangeOrderSchema,
+  portalUploadBillSchema,
   pushBidToPurchaseOrderSchema,
   pushChangeOrderToPurchaseOrderSchema,
   recordPaymentSchema,
@@ -1327,6 +1328,21 @@ const ENDPOINTS: readonly EndpointDef[] = [
     authKind: "vendorPortal",
     scopes: [],
     pathParams: ["jobId"],
+  },
+  {
+    method: "post",
+    path: "/vendor-portal/jobs/{jobId}/bills",
+    summary: "Upload an invoice, extracted by AI into a Bill on this job",
+    description:
+      "Same AI OCR pipeline as staff-facing POST /bills/ai-ocr (src/lib/ai/bill-ocr-service.ts) — the vendor " +
+      "never needs to know this organization's cost code catalog. vendorId is pinned to the authenticated " +
+      "vendor. The created Bill starts fromOcr: true and IN_REVIEW, so it enters the Budget through the same " +
+      "human-approval path as any other bill.",
+    tags: ["Vendor Portal"],
+    authKind: "vendorPortal",
+    scopes: [],
+    pathParams: ["jobId"],
+    requestSchema: portalUploadBillSchema,
   },
   {
     method: "post",

@@ -187,13 +187,20 @@ export const aiDraftEstimateSchema = z.object({
 
 const base64Pattern = /^[A-Za-z0-9+/]+=*$/;
 
+const billOcrDocumentSchema = z.object({
+  mediaType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]),
+  data: z.string().trim().min(1).max(30_000_000).regex(base64Pattern, "data must be base64-encoded"),
+});
+
 export const aiOcrBillSchema = z.object({
   jobId: z.string().cuid(),
   vendorId: z.string().cuid().nullish(),
-  document: z.object({
-    mediaType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]),
-    data: z.string().trim().min(1).max(30_000_000).regex(base64Pattern, "data must be base64-encoded"),
-  }),
+  document: billOcrDocumentSchema,
+});
+
+/** POST /vendor-portal/jobs/{jobId}/bills — jobId and vendorId come from the URL/session, not the body. */
+export const portalUploadBillSchema = z.object({
+  document: billOcrDocumentSchema,
 });
 
 // ---------------------------------------------------------------------------
