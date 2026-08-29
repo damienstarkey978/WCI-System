@@ -1896,6 +1896,17 @@ model Lead {
 
   notes String?
 
+  /// Buildertrend-match fields (list view + Add Lead Opportunity parity) — a
+  /// staff-entered read on how likely this opportunity is to close, not a computed
+  /// value. 0-100.
+  confidencePercent        Int       @default(0)
+  projectedSalesDate       DateTime?
+  estimatedRevenueMinCents Int?
+  estimatedRevenueMaxCents Int?
+  /// Free text (e.g. "Kitchen Remodel") rather than a managed picklist for now.
+  projectType              String?
+  tags                     String[]  @default([])
+
   assignedUserId String?
   assignedUser   User?   @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
 

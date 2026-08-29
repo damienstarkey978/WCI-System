@@ -39,6 +39,12 @@ export interface CreateLeadInput {
   readonly postalCode?: string | null;
   readonly notes?: string | null;
   readonly assignedUserId?: string | null;
+  readonly confidencePercent?: number;
+  readonly projectedSalesDate?: Date | null;
+  readonly estimatedRevenueMinCents?: number | null;
+  readonly estimatedRevenueMaxCents?: number | null;
+  readonly projectType?: string | null;
+  readonly tags?: readonly string[];
 }
 
 export async function createLead(input: CreateLeadInput) {
@@ -55,6 +61,12 @@ export async function createLead(input: CreateLeadInput) {
       postalCode: input.postalCode ?? null,
       notes: input.notes ?? null,
       assignedUserId: input.assignedUserId ?? null,
+      confidencePercent: input.confidencePercent ?? 0,
+      projectedSalesDate: input.projectedSalesDate ?? null,
+      estimatedRevenueMinCents: input.estimatedRevenueMinCents ?? null,
+      estimatedRevenueMaxCents: input.estimatedRevenueMaxCents ?? null,
+      projectType: input.projectType ?? null,
+      tags: input.tags ? [...input.tags] : [],
     },
   });
 }
@@ -64,6 +76,35 @@ export async function updateLeadStage(organizationId: string, leadId: string, st
   if (!lead) throw new LeadNotFoundError(leadId);
 
   return db.lead.update({ where: { id: lead.id }, data: { stage } });
+}
+
+export interface UpdateLeadDetailsInput {
+  readonly confidencePercent?: number;
+  readonly projectedSalesDate?: Date | null;
+  readonly estimatedRevenueMinCents?: number | null;
+  readonly estimatedRevenueMaxCents?: number | null;
+  readonly projectType?: string | null;
+  readonly tags?: readonly string[];
+}
+
+/** Updates the Buildertrend-parity opportunity fields (confidence, revenue range,
+ *  projected date, project type, tags) — the Lead's core identity fields
+ *  (name/email/phone/address/notes) stay set at creation, same as before this. */
+export async function updateLeadDetails(organizationId: string, leadId: string, input: UpdateLeadDetailsInput) {
+  const lead = await db.lead.findFirst({ where: { id: leadId, organizationId } });
+  if (!lead) throw new LeadNotFoundError(leadId);
+
+  return db.lead.update({
+    where: { id: lead.id },
+    data: {
+      ...(input.confidencePercent !== undefined ? { confidencePercent: input.confidencePercent } : {}),
+      ...(input.projectedSalesDate !== undefined ? { projectedSalesDate: input.projectedSalesDate } : {}),
+      ...(input.estimatedRevenueMinCents !== undefined ? { estimatedRevenueMinCents: input.estimatedRevenueMinCents } : {}),
+      ...(input.estimatedRevenueMaxCents !== undefined ? { estimatedRevenueMaxCents: input.estimatedRevenueMaxCents } : {}),
+      ...(input.projectType !== undefined ? { projectType: input.projectType } : {}),
+      ...(input.tags !== undefined ? { tags: [...input.tags] } : {}),
+    },
+  });
 }
 
 export type ConvertLeadToJobInput = CreateJobInput;

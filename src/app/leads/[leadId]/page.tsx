@@ -14,6 +14,7 @@ import { StageSelect } from "../stage-select";
 import { CreateLeadProposalForm } from "./create-lead-proposal-form";
 import { DraftLeadProposalForm } from "./draft-lead-proposal-form";
 import { LeadActivityForm } from "./lead-activity-form";
+import { LeadDetailsForm } from "./lead-details-form";
 import { declineProposalAction, sendProposalAction } from "./actions";
 import { ToggleActivityButton } from "./toggle-activity-button";
 
@@ -317,11 +318,57 @@ export default async function LeadDetailPage({
                 {[lead.addressLine1, lead.city, lead.state, lead.postalCode].filter(Boolean).join(", ") || "—"}
               </dd>
             </div>
+            <div>
+              <dt className="text-xs text-[var(--bt-muted)]">Confidence</dt>
+              <dd className="text-sm text-[var(--bt-text)]">{lead.confidencePercent}%</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--bt-muted)]">Projected sales date</dt>
+              <dd className="text-sm text-[var(--bt-text)]">{lead.projectedSalesDate ? formatDate(lead.projectedSalesDate) : "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--bt-muted)]">Estimated revenue</dt>
+              <dd className="text-sm text-[var(--bt-text)]">
+                {lead.estimatedRevenueMinCents !== null || lead.estimatedRevenueMaxCents !== null
+                  ? `${lead.estimatedRevenueMinCents !== null ? formatMoney(lead.estimatedRevenueMinCents) : "—"} to ${lead.estimatedRevenueMaxCents !== null ? formatMoney(lead.estimatedRevenueMaxCents) : "—"}`
+                  : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--bt-muted)]">Project type</dt>
+              <dd className="text-sm text-[var(--bt-text)]">{lead.projectType ?? "—"}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs text-[var(--bt-muted)]">Tags</dt>
+              <dd className="text-sm text-[var(--bt-text)]">
+                {lead.tags.length > 0 ? (
+                  <span className="flex flex-wrap gap-1">
+                    {lead.tags.map((tag) => (
+                      <span key={tag} className="rounded-full bg-black/5 px-2 py-0.5 text-xs">
+                        {tag}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  "—"
+                )}
+              </dd>
+            </div>
             <div className="sm:col-span-2">
               <dt className="text-xs text-[var(--bt-muted)]">Notes</dt>
               <dd className="whitespace-pre-wrap text-sm text-[var(--bt-text)]">{lead.notes ?? "—"}</dd>
             </div>
           </dl>
+
+          <LeadDetailsForm
+            leadId={lead.id}
+            confidencePercent={lead.confidencePercent}
+            projectedSalesDate={lead.projectedSalesDate}
+            estimatedRevenueMinCents={lead.estimatedRevenueMinCents}
+            estimatedRevenueMaxCents={lead.estimatedRevenueMaxCents}
+            projectType={lead.projectType}
+            tags={lead.tags}
+          />
         </div>
       )}
     </div>
