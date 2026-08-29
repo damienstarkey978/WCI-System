@@ -13,20 +13,36 @@ export interface JobNavLink {
   readonly isNew?: boolean;
 }
 
+export interface JobsMenuItem {
+  readonly label: string;
+  /** "global" always works; "job" needs an active job (rendered muted otherwise);
+   *  "soon" is a real Buildertrend item with no WCI OS feature behind it yet. */
+  readonly kind: "global" | "job" | "soon";
+  /** kind: "global" only. */
+  readonly href?: string;
+  /** kind: "job" only — appended to `/jobs/{jobId}`. Empty string = the job overview itself. */
+  readonly jobPath?: string;
+}
+
 /**
- * The "Jobs" dropdown. Buildertrend also lists "Summary", "Job Info", and
- * "Jobs Map" here — skipped for now: the first two are per-job tabs already
- * covered by the job Overview page reached from the sidebar, and a map view
- * needs a geocoding/maps integration that doesn't exist yet. "New Job From
- * Template" is skipped too — there's no job-template concept in the schema
- * yet, so it would be a new feature, not just a nav link.
+ * The "Jobs" dropdown (per Damien's screenshot, 2026-08-29) — a mix of job-scoped
+ * items (Job Info, Job Price Summary) and org-wide ones (everything else), unlike
+ * Project Management/Files/Financial below, which are entirely job-scoped. "New Job
+ * From Template" has no feature behind it yet — Job.isTemplate exists in the schema,
+ * but there's no clone-from-template creation flow built on top of it — so it shows
+ * as a real Buildertrend item rather than being silently dropped, but stays disabled
+ * until that flow exists.
  */
-export const JOBS_NAV = [
-  { label: "Jobs List", href: "/jobs" },
-  { label: "Job Groups", href: "/job-groups" },
-  { label: "Job Price Summary", href: "/reports?report=profitability" },
-  { label: "New Job From Scratch", href: "/admin/jobs" },
-] as const;
+export const JOBS_NAV: readonly JobsMenuItem[] = [
+  { label: "Summary", kind: "global", href: "/dashboard" },
+  { label: "Job Info", kind: "job", jobPath: "" },
+  { label: "Job Price Summary", kind: "job", jobPath: "/budget" },
+  { label: "Jobs List", kind: "global", href: "/jobs" },
+  { label: "Job Groups", kind: "global", href: "/job-groups" },
+  { label: "Jobs Map", kind: "global", href: "/jobs/map" },
+  { label: "New Job From Scratch", kind: "global", href: "/admin/jobs" },
+  { label: "New Job From Template", kind: "soon" },
+];
 
 /** The "Sales" dropdown — Buildertrend's CRM surface, none of it scoped to a selected job. */
 export const SALES_NAV = [

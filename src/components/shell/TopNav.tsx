@@ -15,6 +15,7 @@ import {
   REPORTS_HREF,
   SALES_NAV,
   type JobNavLink,
+  type JobsMenuItem,
 } from "@/lib/buildertrend-nav";
 
 import { GlobalSearch } from "./GlobalSearch";
@@ -177,6 +178,63 @@ function FlatNavDropdown({ label, items }: { label: string; items: readonly { la
 }
 
 /**
+ * The "Jobs" menu — unlike the other dropdowns, it mixes job-scoped items (need an
+ * active job) with org-wide ones (always work) and one real Buildertrend item WCI OS
+ * hasn't built yet ("soon" — shown, not silently dropped, so the menu still visually
+ * matches Buildertrend's, but disabled until the feature exists).
+ */
+function JobsDropdown({ items, activeJobId }: { items: readonly JobsMenuItem[]; activeJobId?: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="flex items-center gap-1 rounded px-3 py-2 transition hover:bg-white/10"
+        aria-expanded={open}
+      >
+        Jobs
+        <ChevronDownIcon className="h-3.5 w-3.5" />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-black/10 bg-[var(--bt-panel-bg)] py-1 text-sm text-[var(--bt-text)] shadow-lg">
+          {items.map((item) => {
+            if (item.kind === "global") {
+              return (
+                <Link key={item.label} href={item.href!} className="block px-3 py-2 hover:bg-black/5">
+                  {item.label}
+                </Link>
+              );
+            }
+            if (item.kind === "job") {
+              if (!activeJobId) {
+                return (
+                  <span key={item.label} className="block px-3 py-2 text-[var(--bt-muted)]">
+                    {item.label}
+                  </span>
+                );
+              }
+              return (
+                <Link key={item.label} href={`/jobs/${activeJobId}${item.jobPath}`} className="block px-3 py-2 hover:bg-black/5">
+                  {item.label}
+                </Link>
+              );
+            }
+            return (
+              <span key={item.label} className="block px-3 py-2 text-[var(--bt-muted)]" title="Coming soon">
+                {item.label}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Buildertrend's dark-teal top bar: brand mark, primary nav, the job-scoped
  * mega-dropdowns (Project Management, Files, Financial — meaningful only once
  * a job is selected), a flat Messaging link, and the icon cluster on the
@@ -216,7 +274,7 @@ export function TopNav({
 
         <nav className="flex items-center gap-1 text-sm font-medium">
           <FlatNavDropdown label="Sales" items={SALES_NAV} />
-          <FlatNavDropdown label="Jobs" items={JOBS_NAV} />
+          <JobsDropdown items={JOBS_NAV} activeJobId={activeJobId} />
 
           <JobNavDropdown label="Project Management" items={PROJECT_MANAGEMENT_NAV} activeJobId={activeJobId} />
           <JobNavDropdown label="Files" items={FILES_NAV} activeJobId={activeJobId} />

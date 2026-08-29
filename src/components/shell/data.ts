@@ -16,10 +16,11 @@ export async function sidebarJobsForOrg(organizationId: string, user: { readonly
   const jobs = await db.job.findMany({
     where: {
       organizationId,
+      isTemplate: false,
       ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
     },
     orderBy: { createdAt: "desc" },
-    include: { jobGroup: true },
+    include: { jobGroup: true, clientAccess: { take: 1, include: { client: true } } },
   });
 
   return jobs.map((job) => ({
@@ -28,6 +29,8 @@ export async function sidebarJobsForOrg(organizationId: string, user: { readonly
     prefix: job.prefix,
     status: job.status,
     groupName: job.jobGroup?.name ?? "General",
+    clientName: job.clientAccess[0]?.client.name ?? null,
+    address: [job.addressLine1, job.city].filter(Boolean).join(", ") || null,
   }));
 }
 
