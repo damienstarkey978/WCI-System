@@ -3,10 +3,13 @@ import { redirect } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { AppShell } from "@/components/shell/AppShell";
+import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
-import { formatMoney, formatPercent } from "@/lib/format";
+import { isAnthropicConfigured } from "@/lib/env";
+import { formatDate, formatMoney, formatPercent } from "@/lib/format";
+import { getDailyBrief } from "@/lib/reports/daily-brief";
 import {
   getBudgetedVsProjectedReport,
   getCashFlowReport,
@@ -14,6 +17,15 @@ import {
   getProfitabilityReport,
   getWipReport,
 } from "@/lib/reports/service";
+
+const BUSINESS_ADVISOR_SUGGESTIONS = [
+  "What needs my attention today?",
+  "Which invoices are overdue?",
+  "Are any jobs over budget?",
+  "How profitable are my jobs?",
+  "Which milestones can I bill?",
+  "Which proposals need follow-up?",
+] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +67,7 @@ export default async function DashboardPage() {
     redirect("/jobs");
   }
 
-  const [jobs, bell, wip, profitability, budgetVariance, invoicing, cashFlow] = await Promise.all([
+  const [jobs, bell, wip, profitability, budgetVariance, invoicing, cashFlow, dailyBrief] = await Promise.all([
     sidebarJobsForOrg(user.organizationId, user),
     notificationBellDataForUser(user.organizationId, user.id),
     getWipReport(user.organizationId),
@@ -63,6 +75,7 @@ export default async function DashboardPage() {
     getBudgetedVsProjectedReport(user.organizationId),
     getInvoicingReport(user.organizationId),
     getCashFlowReport(user.organizationId, { windowDays: 30 }),
+    getDailyBrief(user.organizationId),
   ]);
 
   const activeJobCount = wip.length;
@@ -78,6 +91,79 @@ export default async function DashboardPage() {
     <AppShell jobs={jobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Dashboard</h1>
+
+        {isAnthropicConfigured() ? (
+          <JarvisChatPanel
+            context={{ page: "dashboard" }}
+            storageKey="dashboard-business-advisor"
+            suggestions={BUSINESS_ADVISOR_SUGGESTIONS}
+            emptyStateHint="Ask Jarvis how the business is doing — which invoices are overdue, whether any jobs are over budget, which proposals need a nudge — and it'll answer from your real numbers."
+            heightClassName="h-80"
+          />
+        ) : null}
+
+        <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+          <h2 className="text-sm font-semibold text-[var(--bt-text)]">Daily brief</h2>
+          <p className="text-xs text-[var(--bt-muted)]">What needs attention across the whole business right now.</p>
+          <ul className="mt-3 flex flex-col gap-2 text-sm">
+            <li className="flex items-center justify-between">
+              <span className="text-[var(--bt-text)]">Overdue invoices</span>
+              {dailyBrief.overdueInvoices.length === 0 ? (
+                <span className="text-[var(--bt-muted)]">None</span>
+              ) : (
+                <Link href="/reports?report=invoicing" className="font-semibold text-[var(--bt-primary)] hover:underline">
+                  {dailyBrief.overdueInvoices.length} totaling {formatMoney(dailyBrief.overdueInvoiceTotalCents)}
+                </Link>
+              )}
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-[var(--bt-text)]">Jobs over budget</span>
+              {dailyBrief.jobsOverBudget.length === 0 ? (
+                <span className="text-[var(--bt-muted)]">None</span>
+              ) : (
+                <Link href="/reports?report=budget-variance" className="font-semibold text-[var(--bt-primary)] hover:underline">
+                  {dailyBrief.jobsOverBudget.map((job) => job.jobName).join(", ")}
+                </Link>
+              )}
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-[var(--bt-text)]">Unapproved timesheets</span>
+              <span className={dailyBrief.unapprovedShiftCount === 0 ? "text-[var(--bt-muted)]" : "font-semibold text-[var(--bt-text)]"}>
+                {dailyBrief.unapprovedShiftCount === 0 ? "None" : dailyBrief.unapprovedShiftCount}
+              </span>
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-[var(--bt-text)]">Change orders pending approval</span>
+              <span className={dailyBrief.pendingChangeOrderCount === 0 ? "text-[var(--bt-muted)]" : "font-semibold text-[var(--bt-text)]"}>
+                {dailyBrief.pendingChangeOrderCount === 0 ? "None" : dailyBrief.pendingChangeOrderCount}
+              </span>
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-[var(--bt-text)]">Proposals needing follow-up</span>
+              {dailyBrief.proposalsNeedingFollowUp.length === 0 ? (
+                <span className="text-[var(--bt-muted)]">None</span>
+              ) : (
+                <Link href="/leads/proposals" className="font-semibold text-[var(--bt-primary)] hover:underline">
+                  {dailyBrief.proposalsNeedingFollowUp.map((proposal) => `${proposal.title} (sent ${formatDate(proposal.sentAt)})`).join(", ")}
+                </Link>
+              )}
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-[var(--bt-text)]">Billable milestones ready</span>
+              {dailyBrief.billableMilestones.length === 0 ? (
+                <span className="text-[var(--bt-muted)]">None</span>
+              ) : (
+                <span className="font-semibold text-[var(--bt-text)]">{dailyBrief.billableMilestones.map((milestone) => milestone.title).join(", ")}</span>
+              )}
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-[var(--bt-text)]">Cost inbox awaiting review</span>
+              <span className={dailyBrief.costInboxItems.length === 0 ? "text-[var(--bt-muted)]" : "font-semibold text-[var(--bt-text)]"}>
+                {dailyBrief.costInboxItems.length === 0 ? "None" : `${dailyBrief.costInboxItems.length} bill(s)`}
+              </span>
+            </li>
+          </ul>
+        </section>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           <Tile label="Active jobs" value={String(activeJobCount)} href="/jobs" />

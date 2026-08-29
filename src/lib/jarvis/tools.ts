@@ -53,7 +53,14 @@ import { createPendingAction } from "@/lib/jarvis/pending-actions";
 import { createMaterialCatalogItem, listMaterialCatalogItems, searchAndSaveWebPrice } from "@/lib/materials/service";
 import { parseDollarsToCents } from "@/lib/money";
 import { createPurchaseOrder } from "@/lib/purchase-orders/service";
-import { getProfitabilityReport, getWipReport } from "@/lib/reports/service";
+import {
+  getBillableMilestones,
+  getCostInboxItems,
+  getDailyBrief,
+  getOverdueInvoices,
+  getProposalsNeedingFollowUp,
+} from "@/lib/reports/daily-brief";
+import { getBudgetedVsProjectedReport, getCashFlowReport, getInvoicingReport, getLaborReport, getProfitabilityReport, getWipReport } from "@/lib/reports/service";
 import { createRfi } from "@/lib/rfis/service";
 import { addScheduleItem, createSchedule, getComputedSchedule } from "@/lib/scheduling/service";
 import { createAllowance, createSelection } from "@/lib/selections/service";
@@ -1185,6 +1192,146 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     },
   });
 
+  const getBudgetVsProjectedReportTool = betaZodTool({
+    name: "get_budget_vs_projected_report",
+    description: "Get every active job's revised budget vs. its currently projected cost — flags which jobs are running over budget.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const rows = await getBudgetedVsProjectedReport(ctx.organizationId);
+      if (rows.length === 0) return "No active jobs to report on.";
+      return rows
+        .map(
+          (row) =>
+            `${row.jobName} | budget ${formatMoney(row.revisedBudgetCostCents)} | projected ${formatMoney(row.projectedCostCents)} | ${row.isOverBudget ? "OVER BUDGET by" : "under budget by"} ${formatMoney(Math.abs(row.varianceCents))}`,
+        )
+        .join("\n");
+    },
+  });
+
+  const getInvoicingReportTool = betaZodTool({
+    name: "get_invoicing_report",
+    description: "Get every active job's invoiced-to-date, remaining-to-invoice, and total paid amounts.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const rows = await getInvoicingReport(ctx.organizationId);
+      if (rows.length === 0) return "No active jobs to report on.";
+      return rows
+        .map(
+          (row) =>
+            `${row.jobName} | invoiced ${formatMoney(row.amountInvoicedCents)} | remaining to invoice ${formatMoney(row.remainingToInvoiceCents)} | paid ${formatMoney(row.totalPaidCents)}`,
+        )
+        .join("\n");
+    },
+  });
+
+  const getLaborReportTool = betaZodTool({
+    name: "get_labor_report",
+    description: "Get every active job's budgeted vs. approved labor cost.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const rows = await getLaborReport(ctx.organizationId);
+      if (rows.length === 0) return "No active jobs to report on.";
+      return rows
+        .map((row) => `${row.jobName} | budgeted labor ${formatMoney(row.budgetedLaborCostCents)} | approved labor ${formatMoney(row.approvedLaborCostCents)}`)
+        .join("\n");
+    },
+  });
+
+  const getCashFlowReportTool = betaZodTool({
+    name: "get_cash_flow_report",
+    description: "Get cash in (payments received) vs. cash out (bills paid) over a trailing window, default 30 days.",
+    inputSchema: z.object({
+      windowDays: z.number().int().positive().optional().describe("How many trailing days to cover — defaults to 30"),
+    }),
+    run: async (input) => {
+      const report = await getCashFlowReport(ctx.organizationId, { windowDays: input.windowDays });
+      const cashInCents = report.historical.reduce((total, day) => total + day.cashInCents, 0);
+      const cashOutCents = report.historical.reduce((total, day) => total + day.cashOutCents, 0);
+      return `Historical — cash in: ${formatMoney(cashInCents)} | cash out: ${formatMoney(cashOutCents)} | net: ${formatMoney(report.historicalNetCents)}. Projected — cash in: ${formatMoney(report.projection.projectedCashInCents)} | cash out: ${formatMoney(report.projection.projectedCashOutCents)}.`;
+    },
+  });
+
+  // --- AUTO: Business Advisor (handoff.ai feature-parity pass) -----------------
+
+  const getOverdueInvoicesTool = betaZodTool({
+    name: "get_overdue_invoices",
+    description: "List every invoice past its due date and not yet fully paid, across the whole organization.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const invoices = await getOverdueInvoices(ctx.organizationId);
+      if (invoices.length === 0) return "No overdue invoices.";
+      return invoices
+        .map((invoice) => `${invoice.invoiceNumber} — ${invoice.jobName} — ${formatMoney(invoice.amountCents)}, due ${formatDate(invoice.dueOn)}`)
+        .join("\n");
+    },
+  });
+
+  const getProposalsNeedingFollowUpTool = betaZodTool({
+    name: "get_proposals_needing_follow_up",
+    description: "List proposals sent to a client 5+ days ago with no response yet (not accepted or declined).",
+    inputSchema: z.object({}),
+    run: async () => {
+      const proposals = await getProposalsNeedingFollowUp(ctx.organizationId);
+      if (proposals.length === 0) return "No proposals need follow-up right now.";
+      return proposals.map((proposal) => `"${proposal.title}" — ${proposal.clientName} — sent ${formatDate(proposal.sentAt)}`).join("\n");
+    },
+  });
+
+  const getBillableMilestonesTool = betaZodTool({
+    name: "get_billable_milestones",
+    description: "List draw-schedule milestones whose trigger date has passed but haven't been invoiced yet.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const milestones = await getBillableMilestones(ctx.organizationId);
+      if (milestones.length === 0) return "No milestones are ready to bill right now.";
+      return milestones.map((milestone) => `${milestone.title} — ${milestone.jobName}`).join("\n");
+    },
+  });
+
+  const getCostInboxItemsTool = betaZodTool({
+    name: "get_cost_inbox_items",
+    description: "List AI-scanned bills still awaiting a human's approve/reject before they count toward any job's budget.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const items = await getCostInboxItems(ctx.organizationId);
+      if (items.length === 0) return "The cost inbox is empty — nothing awaiting review.";
+      return items.map((item) => `${item.vendorLabel} — ${item.jobName} — ${formatMoney(item.amountCents)}`).join("\n");
+    },
+  });
+
+  const getDailyBriefTool = betaZodTool({
+    name: "get_daily_brief",
+    description:
+      "Get the full 'what needs attention today' digest across the whole organization: overdue invoices, jobs over budget, unapproved timesheets, change orders pending approval, proposals needing follow-up, billable milestones, and the cost inbox. Use this for open-ended questions like 'what needs my attention' or 'how is my business looking today' — call the more specific report tools instead when the user asks about one thing in particular.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const brief = await getDailyBrief(ctx.organizationId);
+      const lines: string[] = [];
+      lines.push(
+        brief.overdueInvoices.length === 0
+          ? "Overdue invoices: none"
+          : `Overdue invoices: ${brief.overdueInvoices.length} totaling ${formatMoney(brief.overdueInvoiceTotalCents)}`,
+      );
+      lines.push(brief.jobsOverBudget.length === 0 ? "Jobs over budget: none" : `Jobs over budget: ${brief.jobsOverBudget.map((job) => job.jobName).join(", ")}`);
+      lines.push(brief.unapprovedShiftCount === 0 ? "Unapproved timesheets: none" : `Unapproved timesheets: ${brief.unapprovedShiftCount}`);
+      lines.push(
+        brief.pendingChangeOrderCount === 0 ? "Change orders pending approval: none" : `Change orders pending approval: ${brief.pendingChangeOrderCount}`,
+      );
+      lines.push(
+        brief.proposalsNeedingFollowUp.length === 0
+          ? "Proposals needing follow-up: none"
+          : `Proposals needing follow-up: ${brief.proposalsNeedingFollowUp.map((proposal) => proposal.title).join(", ")}`,
+      );
+      lines.push(
+        brief.billableMilestones.length === 0
+          ? "Billable milestones ready: none"
+          : `Billable milestones ready: ${brief.billableMilestones.map((milestone) => milestone.title).join(", ")}`,
+      );
+      lines.push(brief.costInboxItems.length === 0 ? "Cost inbox: empty" : `Cost inbox: ${brief.costInboxItems.length} bill(s) awaiting review`);
+      return lines.join("\n");
+    },
+  });
+
   // --- AUTO: Specifications & Surveys -----------------------------------------------
 
   const generateSpecFromEstimateTool = betaZodTool({
@@ -1629,6 +1776,15 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     searchMaterialPriceOnlineTool,
     getProfitabilityReportTool,
     getWipReportTool,
+    getBudgetVsProjectedReportTool,
+    getInvoicingReportTool,
+    getLaborReportTool,
+    getCashFlowReportTool,
+    getOverdueInvoicesTool,
+    getProposalsNeedingFollowUpTool,
+    getBillableMilestonesTool,
+    getCostInboxItemsTool,
+    getDailyBriefTool,
     generateSpecFromEstimateTool,
     createSurveyTool,
     inviteClientToPortalTool,
