@@ -10,7 +10,7 @@ import {
   FILES_NAV,
   FINANCIAL_NAV,
   JOBS_NAV,
-  MESSAGING_HREF,
+  MESSAGING_NAV,
   PROJECT_MANAGEMENT_NAV,
   REPORTS_HREF,
   SALES_NAV,
@@ -183,7 +183,8 @@ function FlatNavDropdown({ label, items }: { label: string; items: readonly { la
  * hasn't built yet ("soon" — shown, not silently dropped, so the menu still visually
  * matches Buildertrend's, but disabled until the feature exists).
  */
-function JobsDropdown({ items, activeJobId }: { items: readonly JobsMenuItem[]; activeJobId?: string }) {
+/** Shared by the Jobs and Messaging dropdowns — both mix job-scoped and org-wide items (JobsMenuItem's "job"/"global"/"soon" kinds). */
+function MixedNavDropdown({ label, items, activeJobId }: { label: string; items: readonly JobsMenuItem[]; activeJobId?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -195,7 +196,7 @@ function JobsDropdown({ items, activeJobId }: { items: readonly JobsMenuItem[]; 
         className="flex items-center gap-1 rounded px-3 py-2 transition hover:bg-white/10"
         aria-expanded={open}
       >
-        Jobs
+        {label}
         <ChevronDownIcon className="h-3.5 w-3.5" />
       </button>
       {open ? (
@@ -237,8 +238,9 @@ function JobsDropdown({ items, activeJobId }: { items: readonly JobsMenuItem[]; 
 /**
  * Buildertrend's dark-teal top bar: brand mark, primary nav, the job-scoped
  * mega-dropdowns (Project Management, Files, Financial — meaningful only once
- * a job is selected), a flat Messaging link, and the icon cluster on the
- * right. Buildertrend has no secondary tab strip below this bar — every
+ * a job is selected), the Jobs/Messaging dropdowns (a mix of job-scoped and
+ * org-wide items each), and the icon cluster on the right. Buildertrend has
+ * no secondary tab strip below this bar — every
  * job-scoped section, including Files and Financial, lives in a top-level
  * dropdown here (confirmed against Damien's screenshots, 2026-08-28). Client
  * component only for the dropdowns' open state and the active-link highlight.
@@ -260,7 +262,6 @@ export function TopNav({
   unreadCount?: number;
 }) {
   const pathname = usePathname();
-  const messagingHref = activeJobId ? `/jobs/${activeJobId}${MESSAGING_HREF}` : undefined;
 
   return (
     <header
@@ -274,22 +275,11 @@ export function TopNav({
 
         <nav className="flex items-center gap-1 text-sm font-medium">
           <FlatNavDropdown label="Sales" items={SALES_NAV} />
-          <JobsDropdown items={JOBS_NAV} activeJobId={activeJobId} />
+          <MixedNavDropdown label="Jobs" items={JOBS_NAV} activeJobId={activeJobId} />
 
           <JobNavDropdown label="Project Management" items={PROJECT_MANAGEMENT_NAV} activeJobId={activeJobId} />
           <JobNavDropdown label="Files" items={FILES_NAV} activeJobId={activeJobId} />
-
-          {messagingHref ? (
-            <Link
-              href={messagingHref}
-              className="rounded px-3 py-2 transition hover:bg-white/10"
-              style={pathname?.startsWith(messagingHref) ? { background: "var(--bt-nav-hover)" } : undefined}
-            >
-              Messaging
-            </Link>
-          ) : (
-            <span className="cursor-default rounded px-3 py-2 text-white/40">Messaging</span>
-          )}
+          <MixedNavDropdown label="Messaging" items={MESSAGING_NAV} activeJobId={activeJobId} />
 
           <JobNavDropdown label="Financial" items={FINANCIAL_NAV} activeJobId={activeJobId} />
 

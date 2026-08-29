@@ -71,8 +71,6 @@ export const PROJECT_MANAGEMENT_NAV: readonly JobNavLink[] = [
   { label: "Plans and Specs", path: "/plans-and-specs", isNew: true },
   { label: "Client Updates", path: "/client-updates" },
   { label: "Submittals", path: "/submittals", isNew: true },
-  { label: "RFIs", path: "/rfis" },
-  { label: "Surveys", path: "/surveys" },
 ];
 
 /**
@@ -86,8 +84,20 @@ export const FILES_NAV: readonly JobNavLink[] = [
   { label: "Videos", path: "/files?category=VIDEO" },
 ];
 
-/** "Messaging" has no dropdown in Buildertrend — a single job-scoped link. */
-export const MESSAGING_HREF = "/messages";
+/**
+ * The "Messaging" dropdown (per Damien's screenshot, 2026-08-29): Comments, Messages,
+ * and Surveys are job-scoped; Notification History is org-wide, same "job" vs "global"
+ * mix JOBS_NAV above already models. RFIs and Surveys moved here from
+ * PROJECT_MANAGEMENT_NAV to match Buildertrend's real grouping — same pages, just
+ * filed under the menu they actually live under.
+ */
+export const MESSAGING_NAV: readonly JobsMenuItem[] = [
+  { label: "Comments", kind: "job", jobPath: "/comments" },
+  { label: "Messages", kind: "job", jobPath: "/messages" },
+  { label: "RFIs", kind: "job", jobPath: "/rfis" },
+  { label: "Notification History", kind: "global", href: "/notifications" },
+  { label: "Surveys", kind: "job", jobPath: "/surveys" },
+];
 
 /** The "Financial" dropdown — every one of these is scoped to whichever job is selected. */
 export const FINANCIAL_NAV: readonly JobNavLink[] = [
