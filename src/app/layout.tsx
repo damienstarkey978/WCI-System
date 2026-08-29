@@ -20,6 +20,19 @@ export const metadata: Metadata = {
   description: "Construction management for World Construction Inc",
 };
 
+/**
+ * App-wide default for every route's Server Actions (a route can still set its own,
+ * shorter maxDuration to override this). The AI drafting actions — estimate/change
+ * order/lead proposal drafting, which call Opus 5 with up to a 16k-token ceiling and
+ * sometimes photos — can legitimately run well past a serverless platform's default
+ * ~10s function timeout; without this they get killed mid-call, which surfaces to the
+ * browser as a generic "An unexpected response was received from the server" error
+ * instead of a real one. Both Netlify's and Vercel's Next.js runtimes read this
+ * route-segment config to size the underlying function's timeout, up to whatever the
+ * hosting plan allows.
+ */
+export const maxDuration = 120;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <AuthProvider>
