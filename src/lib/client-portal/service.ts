@@ -93,6 +93,11 @@ export async function grantJobAccess(input: GrantJobAccessInput) {
   });
 }
 
+/** Idempotent — revoking access that's already gone is a no-op, not an error. */
+export async function revokeJobAccess(organizationId: string, clientId: string, jobId: string): Promise<void> {
+  await db.clientJobAccess.deleteMany({ where: { clientId, jobId, job: { organizationId } } });
+}
+
 /**
  * The client-facing slice of the job budget: price only, never the cost/profit
  * columns getJobBudget() also returns. This is CLAUDE.md 2.3's "Client

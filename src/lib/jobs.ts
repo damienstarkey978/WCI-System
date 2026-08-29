@@ -7,7 +7,7 @@
  */
 
 import type { JobModel } from "@/generated/prisma/models";
-import { JobStatus, type UserRole } from "@/generated/prisma/enums";
+import { AccountingBasis, ContractType, JobStatus, ProjectionReference, type UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { assertJobStatusTransition, JobStatusTransitionError } from "@/lib/job-status";
 import { emitEvent } from "@/lib/webhooks";
@@ -94,6 +94,42 @@ export async function transitionJobStatus(input: TransitionJobStatusInput): Prom
   await emitEvent(organizationId, "job.status_changed", { jobId: updated.id, from, to });
 
   return updated;
+}
+
+export interface UpdateJobDetailsInput {
+  readonly name?: string;
+  readonly prefix?: string | null;
+  readonly contractType?: ContractType;
+  readonly jobGroupId?: string | null;
+  readonly addressLine1?: string | null;
+  readonly addressLine2?: string | null;
+  readonly city?: string | null;
+  readonly state?: string | null;
+  readonly postalCode?: string | null;
+  readonly sqft?: number | null;
+  readonly permitNumber?: string | null;
+  readonly lotInfo?: string | null;
+  readonly projectedStart?: Date | null;
+  readonly projectedEnd?: Date | null;
+  readonly actualStart?: Date | null;
+  readonly actualEnd?: Date | null;
+  readonly scheduleColor?: string | null;
+  readonly geofenceRadiusMeters?: number | null;
+  readonly projectionReference?: ProjectionReference;
+  readonly accountingBasis?: AccountingBasis;
+  readonly isTemplate?: boolean;
+}
+
+/**
+ * Edits a job's own fields — everything on the "Job details"/"Advanced settings"
+ * tabs of src/app/jobs/[jobId]/settings, as opposed to transitionJobStatus above,
+ * which is the only supported way to change `status` itself.
+ */
+export async function updateJobDetails(organizationId: string, jobId: string, input: UpdateJobDetailsInput): Promise<JobModel> {
+  const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
+  if (!job) throw new JobNotFoundError(jobId);
+
+  return db.job.update({ where: { id: job.id }, data: input });
 }
 
 export { JobStatusTransitionError };

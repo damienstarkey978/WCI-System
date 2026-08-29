@@ -170,14 +170,21 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-5" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold text-[var(--bt-text)]">{job.name}</h1>
-          <span
-            className="rounded px-1.5 py-0.5 text-xs font-semibold"
-            style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
-          >
-            {STATUS_LABEL[job.status] ?? job.status}
-          </span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-[var(--bt-text)]">{job.name}</h1>
+            <span
+              className="rounded px-1.5 py-0.5 text-xs font-semibold"
+              style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
+            >
+              {STATUS_LABEL[job.status] ?? job.status}
+            </span>
+          </div>
+          {user.role === UserRole.ADMIN || user.role === UserRole.PM ? (
+            <Link href={`/jobs/${job.id}/settings`} className="text-sm text-[var(--bt-primary)] hover:underline">
+              Job settings
+            </Link>
+          ) : null}
         </div>
         {address ? (
           <a

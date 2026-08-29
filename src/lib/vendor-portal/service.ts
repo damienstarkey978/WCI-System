@@ -84,6 +84,11 @@ export async function grantVendorJobAccess(input: GrantVendorJobAccessInput) {
   });
 }
 
+/** Idempotent — revoking access that's already gone is a no-op, not an error. */
+export async function revokeVendorJobAccess(organizationId: string, vendorId: string, jobId: string): Promise<void> {
+  await db.vendorJobAccess.deleteMany({ where: { vendorId, jobId, job: { organizationId } } });
+}
+
 export interface AddCertificationInput {
   readonly organizationId: string;
   readonly vendorId: string;
