@@ -7,6 +7,14 @@ import type { JobGroupModel, JobModel } from "@/generated/prisma/models";
 
 import { updateJobDetailsAction, type ActionState } from "./actions";
 
+/** Mirrors src/lib/jobs.ts's getJobType — duplicated rather than imported, since that
+ *  module pulls in server-only Prisma code this client component must not bundle. */
+function readJobType(customFields: JobModel["customFields"]): string {
+  if (typeof customFields !== "object" || customFields === null || Array.isArray(customFields)) return "";
+  const value = (customFields as Record<string, unknown>).jobType;
+  return typeof value === "string" ? value : "";
+}
+
 const INITIAL: ActionState = {};
 
 const inputClass =
@@ -40,6 +48,9 @@ export function JobDetailsForm({ job, jobGroups }: { job: JobModel; jobGroups: r
           <input name="prefix" defaultValue={job.prefix ?? ""} className={inputClass} style={inputStyle} />
         </Field>
 
+        <Field label="Type">
+          <input name="jobType" defaultValue={readJobType(job.customFields)} placeholder="Addition, Remodel, New Construction…" className={inputClass} style={inputStyle} />
+        </Field>
         <Field label="Contract type *">
           <select name="contractType" required defaultValue={job.contractType} className={inputClass} style={inputStyle}>
             <option value={ContractType.FIXED_PRICE}>Fixed price</option>

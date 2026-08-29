@@ -53,6 +53,7 @@ export async function updateJobDetailsAction(jobId: string, _previous: ActionSta
       name,
       contractType,
       prefix: optionalString(formData, "prefix"),
+      jobType: optionalString(formData, "jobType"),
       jobGroupId: optionalString(formData, "jobGroupId"),
       addressLine1: optionalString(formData, "addressLine1"),
       addressLine2: optionalString(formData, "addressLine2"),

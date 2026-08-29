@@ -34,7 +34,7 @@ export default async function JobsIndexPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-[var(--bt-text)]">Jobs</h1>
           <Link
-            href="/admin/jobs"
+            href="/jobs/new"
             className="rounded px-4 py-2 text-sm font-semibold text-white"
             style={{ background: "var(--bt-primary)" }}
           >
@@ -77,7 +77,7 @@ export default async function JobsIndexPage() {
               {jobs.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-4 py-6 text-center text-[var(--bt-muted)]">
-                    No jobs yet. Create one from the admin screen.
+                    No jobs yet. Create one with the button above.
                   </td>
                 </tr>
               ) : null}

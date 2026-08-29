@@ -6,6 +6,7 @@
  * the lifecycle is auditable.
  */
 
+import type { Prisma } from "@/generated/prisma/client";
 import type { JobModel } from "@/generated/prisma/models";
 import { AccountingBasis, ContractType, JobStatus, ProjectionReference, type UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
@@ -118,6 +119,21 @@ export interface UpdateJobDetailsInput {
   readonly projectionReference?: ProjectionReference;
   readonly accountingBasis?: AccountingBasis;
   readonly isTemplate?: boolean;
+  /**
+   * Buildertrend's free-text job category ("Addition", "Remodel", ...). There's no
+   * dedicated column for it — Job.customFields already exists precisely for
+   * org-specific fields like this, so it's stored there rather than adding a
+   * single-purpose migration for one string.
+   */
+  readonly jobType?: string | null;
+}
+
+/** Reads the jobType stashed in Job.customFields by updateJobDetails below. */
+export function getJobType(job: Pick<JobModel, "customFields">): string | null {
+  const customFields = job.customFields;
+  if (typeof customFields !== "object" || customFields === null || Array.isArray(customFields)) return null;
+  const value = (customFields as Record<string, unknown>).jobType;
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 /**
@@ -126,10 +142,17 @@ export interface UpdateJobDetailsInput {
  * which is the only supported way to change `status` itself.
  */
 export async function updateJobDetails(organizationId: string, jobId: string, input: UpdateJobDetailsInput): Promise<JobModel> {
-  const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
+  const { jobType, ...rest } = input;
+  const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { customFields: true } });
   if (!job) throw new JobNotFoundError(jobId);
 
-  return db.job.update({ where: { id: job.id }, data: input });
+  const data: Prisma.JobUpdateInput = { ...rest };
+  if (jobType !== undefined) {
+    const existing = typeof job.customFields === "object" && job.customFields !== null && !Array.isArray(job.customFields) ? job.customFields : {};
+    data.customFields = { ...existing, jobType } as Prisma.InputJsonValue;
+  }
+
+  return db.job.update({ where: { id: jobId }, data });
 }
 
 export { JobStatusTransitionError };
