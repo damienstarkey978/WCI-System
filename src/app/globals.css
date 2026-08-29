@@ -40,3 +40,15 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* The Buildertrend-match UI (src/components/shell and everything styled with --bt-*
+   tokens) is a fixed light theme — its panels are always bg-white, never following
+   prefers-color-scheme. Form controls otherwise inherit `color` from body, which DOES
+   flip to a light gray in dark mode (see --foreground above), so typed text in every
+   input/textarea/select was going near-invisible (light gray on white) for anyone
+   with a dark system/browser theme. Pin form text to the dark color always. */
+input,
+textarea,
+select {
+  color: var(--bt-text, #111827);
+}
