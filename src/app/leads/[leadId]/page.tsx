@@ -101,13 +101,19 @@ export default async function LeadDetailPage({
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold text-[var(--bt-text)]">{lead.name}</h1>
+          <div>
+            <h1 className="text-xl font-semibold text-[var(--bt-text)]">{lead.title ?? lead.name}</h1>
+            <p className="text-xs text-[var(--bt-muted)]">
+              {lead.name}
+              {lead.email ? ` · ${lead.email}` : ""}
+            </p>
+          </div>
           {lead.convertedJob ? (
             <Link href={`/jobs/${lead.convertedJob.id}`} className="text-sm font-medium text-[var(--bt-primary)] hover:underline">
               View job: {lead.convertedJob.name}
             </Link>
           ) : (
-            <ConvertToJobButton leadId={lead.id} defaultName={lead.name} />
+            <ConvertToJobButton leadId={lead.id} defaultName={lead.title ?? lead.name} />
           )}
         </div>
         <Link href="/leads" className="text-xs text-[var(--bt-muted)] hover:underline">
@@ -362,6 +368,7 @@ export default async function LeadDetailPage({
 
           <LeadDetailsForm
             leadId={lead.id}
+            title={lead.title}
             confidencePercent={lead.confidencePercent}
             projectedSalesDate={lead.projectedSalesDate}
             estimatedRevenueMinCents={lead.estimatedRevenueMinCents}

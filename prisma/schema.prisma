@@ -1443,6 +1443,9 @@ model Client {
   actionTokens   ClientActionToken[]
   proposals      Proposal[]
   warrantyClaims WarrantyClaim[]
+  /// Leads whose contact was linked to this Client via "Choose from existing
+  /// contacts" in the Add Lead Opportunity modal.
+  leadsAsContact Lead[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1883,11 +1886,28 @@ model Lead {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  /// The opportunity's own free-text label (Buildertrend's "Title" field, e.g.
+  /// "123 Spartina Ave - Kellerman") — distinct from the linked contact's name.
+  /// Nullable only so existing rows from before this field don't need a value;
+  /// every new Lead sets it.
+  title String?
+
+  /// The primary contact's own name/email/phone. Either typed directly ("+ Contact"
+  /// in the Add Lead Opportunity modal) or copied from an existing Client picked via
+  /// "Choose from existing contacts" (contactClientId then records which one, for
+  /// traceability — these fields stay the source of truth everywhere else in the
+  /// codebase that already reads them, e.g. Job/Client creation on conversion).
   name   String
   email  String?
   phone  String?
   source String?
   stage  LeadStage @default(NEW)
+
+  /// Set when "Choose from existing contacts" picked a real Client rather than
+  /// typing a brand-new contact. Optional — plenty of leads still just have inline
+  /// contact info with no existing Client to link to yet.
+  contactClientId String?
+  contactClient   Client? @relation(fields: [contactClientId], references: [id], onDelete: SetNull)
 
   addressLine1 String?
   city         String?
@@ -1923,6 +1943,7 @@ model Lead {
   activities LeadActivity[]
 
   @@index([organizationId, stage])
+  @@index([contactClientId])
 }
 
 enum LeadActivityType {

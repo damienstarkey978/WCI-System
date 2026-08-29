@@ -5,7 +5,7 @@ import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
-import { LeadForm } from "./lead-form";
+import { AddLeadOpportunityModal } from "./add-lead-opportunity-modal";
 import { StageSelect } from "./stage-select";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,10 @@ export default async function LeadsPage() {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
 
-  const leads = await db.lead.findMany({ where: { organizationId: user.organizationId }, orderBy: { createdAt: "desc" } });
+  const [leads, clients] = await Promise.all([
+    db.lead.findMany({ where: { organizationId: user.organizationId }, orderBy: { createdAt: "desc" } }),
+    db.client.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4 p-6">
@@ -47,7 +50,7 @@ export default async function LeadsPage() {
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead opportunities</h1>
       </div>
 
-      <LeadForm />
+      <AddLeadOpportunityModal clients={clients} />
 
       {leads.length === 0 ? (
         <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
@@ -76,14 +79,15 @@ export default async function LeadsPage() {
                   <tr key={lead.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
                     <td className="whitespace-nowrap px-4 py-3">
                       <Link href={`/leads/${lead.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
-                        {lead.name}
+                        {lead.title ?? lead.name}
                       </Link>
                       {lead.convertedJobId ? (
                         <div className="text-[10px] font-semibold text-[var(--bt-status-open-text)]">Converted</div>
                       ) : null}
                     </td>
                     <td className="px-4 py-3 text-[var(--bt-muted)]">
-                      {lead.email ?? lead.phone ?? "—"}
+                      {lead.name}
+                      {lead.email ? <div className="text-xs">{lead.email}</div> : null}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-[var(--bt-muted)]">{formatDate(lead.createdAt)}</td>
                     <td className="whitespace-nowrap px-4 py-3">

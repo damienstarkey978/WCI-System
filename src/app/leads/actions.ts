@@ -5,7 +5,15 @@ import { redirect } from "next/navigation";
 
 import { ContractType, LeadStage } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
-import { convertLeadToJob, createLead, LeadAlreadyConvertedError, LeadNotFoundError, updateLeadDetails, updateLeadStage } from "@/lib/crm/service";
+import {
+  ClientNotFoundForLeadError,
+  convertLeadToJob,
+  createLead,
+  LeadAlreadyConvertedError,
+  LeadNotFoundError,
+  updateLeadDetails,
+  updateLeadStage,
+} from "@/lib/crm/service";
 import { MoneyError, parseDollarsToCents } from "@/lib/money";
 
 export interface ActionState {
@@ -25,9 +33,11 @@ function parseTags(raw: string): readonly string[] {
 export async function createLeadAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();
 
+  const title = String(formData.get("title") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
+  const contactClientId = String(formData.get("contactClientId") ?? "").trim();
   const source = String(formData.get("source") ?? "").trim();
   const confidenceRaw = String(formData.get("confidencePercent") ?? "").trim();
   const projectedSalesDateRaw = String(formData.get("projectedSalesDate") ?? "").trim();
@@ -36,16 +46,21 @@ export async function createLeadAction(_previous: ActionState, formData: FormDat
   const projectType = String(formData.get("projectType") ?? "").trim();
   const tagsRaw = String(formData.get("tags") ?? "").trim();
 
-  if (!name) {
-    return { error: "Name is required." };
+  if (!title) {
+    return { error: "Title is required." };
   }
 
   try {
     await createLead({
       organizationId: user.organizationId,
-      name,
+      title,
+      // A contact is optional at creation (matches the "Add a client contact"
+      // empty state being skippable) — Lead.name still can't be null, so fall
+      // back to the title until a real contact is added.
+      name: name || title,
       email: email || null,
       phone: phone || null,
+      contactClientId: contactClientId || null,
       source: source || null,
       confidencePercent: confidenceRaw ? Math.max(0, Math.min(100, Number(confidenceRaw))) : 0,
       projectedSalesDate: projectedSalesDateRaw ? new Date(projectedSalesDateRaw) : null,
@@ -56,6 +71,7 @@ export async function createLeadAction(_previous: ActionState, formData: FormDat
     });
   } catch (error) {
     if (error instanceof MoneyError) return { error: error.message };
+    if (error instanceof ClientNotFoundForLeadError) return { error: error.message };
     throw error;
   }
 
@@ -67,6 +83,7 @@ export async function updateLeadDetailsAction(_previous: ActionState, formData: 
   const user = await requireAppUser();
 
   const leadId = String(formData.get("leadId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
   const confidenceRaw = String(formData.get("confidencePercent") ?? "").trim();
   const projectedSalesDateRaw = String(formData.get("projectedSalesDate") ?? "").trim();
   const revenueMinRaw = String(formData.get("estimatedRevenueMin") ?? "").trim();
@@ -76,6 +93,7 @@ export async function updateLeadDetailsAction(_previous: ActionState, formData: 
 
   try {
     await updateLeadDetails(user.organizationId, leadId, {
+      title: title || null,
       confidencePercent: confidenceRaw ? Math.max(0, Math.min(100, Number(confidenceRaw))) : 0,
       projectedSalesDate: projectedSalesDateRaw ? new Date(projectedSalesDateRaw) : null,
       estimatedRevenueMinCents: revenueMinRaw ? parseDollarsToCents(revenueMinRaw) : null,

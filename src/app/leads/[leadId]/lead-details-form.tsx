@@ -13,6 +13,7 @@ function toDateInputValue(date: Date | null): string {
 
 export function LeadDetailsForm({
   leadId,
+  title,
   confidencePercent,
   projectedSalesDate,
   estimatedRevenueMinCents,
@@ -21,6 +22,7 @@ export function LeadDetailsForm({
   tags,
 }: {
   leadId: string;
+  title: string | null;
   confidencePercent: number;
   projectedSalesDate: Date | null;
   estimatedRevenueMinCents: number | null;
@@ -43,6 +45,15 @@ export function LeadDetailsForm({
     <form action={formAction} className="mt-3 flex flex-col gap-3 border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>
       <input type="hidden" name="leadId" value={leadId} />
       <div className="grid gap-3 sm:grid-cols-3">
+        <label className="grid gap-1 text-xs sm:col-span-3">
+          <span className="font-medium text-[var(--bt-muted)]">Title</span>
+          <input
+            name="title"
+            defaultValue={title ?? ""}
+            className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
         <label className="grid gap-1 text-xs">
           <span className="font-medium text-[var(--bt-muted)]">Confidence %</span>
           <input

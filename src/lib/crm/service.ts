@@ -27,11 +27,23 @@ export class LeadAlreadyConvertedError extends Error {
   }
 }
 
+export class ClientNotFoundForLeadError extends Error {
+  constructor(clientId: string) {
+    super(`Client ${clientId} not found`);
+    this.name = "ClientNotFoundForLeadError";
+  }
+}
+
 export interface CreateLeadInput {
   readonly organizationId: string;
+  /** The opportunity's own free-text label — distinct from the contact's name. */
+  readonly title?: string | null;
   readonly name: string;
   readonly email?: string | null;
   readonly phone?: string | null;
+  /** Set when the contact was picked via "Choose from existing contacts" rather
+   *  than typed fresh — name/email/phone above should already match that Client's. */
+  readonly contactClientId?: string | null;
   readonly source?: string | null;
   readonly addressLine1?: string | null;
   readonly city?: string | null;
@@ -48,12 +60,19 @@ export interface CreateLeadInput {
 }
 
 export async function createLead(input: CreateLeadInput) {
+  if (input.contactClientId) {
+    const client = await db.client.findFirst({ where: { id: input.contactClientId, organizationId: input.organizationId }, select: { id: true } });
+    if (!client) throw new ClientNotFoundForLeadError(input.contactClientId);
+  }
+
   return db.lead.create({
     data: {
       organizationId: input.organizationId,
+      title: input.title ?? null,
       name: input.name,
       email: input.email ?? null,
       phone: input.phone ?? null,
+      contactClientId: input.contactClientId ?? null,
       source: input.source ?? null,
       addressLine1: input.addressLine1 ?? null,
       city: input.city ?? null,
@@ -79,6 +98,7 @@ export async function updateLeadStage(organizationId: string, leadId: string, st
 }
 
 export interface UpdateLeadDetailsInput {
+  readonly title?: string | null;
   readonly confidencePercent?: number;
   readonly projectedSalesDate?: Date | null;
   readonly estimatedRevenueMinCents?: number | null;
@@ -87,9 +107,9 @@ export interface UpdateLeadDetailsInput {
   readonly tags?: readonly string[];
 }
 
-/** Updates the Buildertrend-parity opportunity fields (confidence, revenue range,
- *  projected date, project type, tags) — the Lead's core identity fields
- *  (name/email/phone/address/notes) stay set at creation, same as before this. */
+/** Updates the Buildertrend-parity opportunity fields (title, confidence, revenue
+ *  range, projected date, project type, tags) — the linked contact's own
+ *  name/email/phone/contactClientId stay set at creation, same as before this. */
 export async function updateLeadDetails(organizationId: string, leadId: string, input: UpdateLeadDetailsInput) {
   const lead = await db.lead.findFirst({ where: { id: leadId, organizationId } });
   if (!lead) throw new LeadNotFoundError(leadId);
@@ -97,6 +117,7 @@ export async function updateLeadDetails(organizationId: string, leadId: string, 
   return db.lead.update({
     where: { id: lead.id },
     data: {
+      ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.confidencePercent !== undefined ? { confidencePercent: input.confidencePercent } : {}),
       ...(input.projectedSalesDate !== undefined ? { projectedSalesDate: input.projectedSalesDate } : {}),
       ...(input.estimatedRevenueMinCents !== undefined ? { estimatedRevenueMinCents: input.estimatedRevenueMinCents } : {}),
