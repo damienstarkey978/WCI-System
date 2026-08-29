@@ -6,6 +6,7 @@ import { CommentThread } from "@/components/comments/CommentThread";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { AddLineItemForm } from "./add-line-item-form";
@@ -66,6 +67,19 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
     }),
   ]);
   if (!proposal) notFound();
+
+  const preSalePhotoFiles = await db.file.findMany({
+    where: { jobId: proposal.jobId, category: "PRESALE_PHOTO" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, fileName: true, url: true },
+  });
+  const preSalePhotos = await Promise.all(
+    preSalePhotoFiles.map(async (photo) => ({
+      id: photo.id,
+      fileName: photo.fileName,
+      url: await resolveFileUrl(photo.url).catch(() => null),
+    })),
+  );
 
   const editable = proposal.status === "DRAFT";
   const style = STATUS_STYLE[proposal.status] ?? STATUS_STYLE.DRAFT;
@@ -194,6 +208,8 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
                             unitCostCents: item.unitCostCents,
                             rateBasisPoints: item.rateBasisPoints,
                             extendedCents,
+                            confidence: item.confidence,
+                            priceSource: item.priceSource,
                           }}
                         />
                       );
@@ -220,6 +236,27 @@ export default async function ProposalEditorPage({ params }: PageProps<"/leads/p
         <div className="flex flex-col gap-3 rounded-lg border bg-white p-4" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Proposal</h2>
           <p className="text-xs text-[var(--bt-muted)]">The client-facing narrative — plain language, no pricing detail.</p>
+
+          {preSalePhotos.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Pre-Sale Photos</span>
+                <Link href={`/jobs/${proposal.jobId}/files?category=PRESALE_PHOTO`} className="text-xs text-[var(--bt-primary)] hover:underline">
+                  Manage in Files →
+                </Link>
+              </div>
+              <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1">
+                {preSalePhotos.map((photo) =>
+                  photo.url ? (
+                    <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer" className="block h-20 w-20 shrink-0 overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching */}
+                      <img src={photo.url} alt={photo.fileName} className="h-full w-full object-cover" />
+                    </a>
+                  ) : null,
+                )}
+              </div>
+            </div>
+          ) : null}
 
           {editable ? (
             <CoverMessageEditor proposalId={proposal.id} coverMessage={proposal.coverMessage ?? ""} />

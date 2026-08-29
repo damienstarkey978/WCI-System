@@ -436,6 +436,23 @@ enum RateMode {
   MARGIN
 }
 
+/// How confident the AI estimate assistant was in one line's quantity/pricing
+/// (src/lib/ai/estimate-assistant.ts). Only ever set on AI-drafted lines.
+enum LineItemConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+/// Where an AI-drafted line's unit cost came from. MANUAL exists for
+/// completeness but is never set by the AI drafting flow — a hand-entered
+/// line simply leaves this and confidence null.
+enum LineItemPriceSource {
+  CATALOG
+  MARKET_RATE
+  MANUAL
+}
+
 enum EstimateStatus {
   DRAFT
   SENT
@@ -550,6 +567,14 @@ model EstimateLineItem {
   /// Free-form grouping (room, assembly) for the estimate worksheet.
   groupLabel   String?
   sortOrder    Int     @default(0)
+
+  /// Set only on AI-drafted lines (src/lib/ai/estimate-assistant.ts) — how confident
+  /// the model was in this line's quantity/pricing. Null for hand-entered lines.
+  confidence LineItemConfidence?
+  /// Set only on AI-drafted lines — CATALOG when the unit cost came from the org's
+  /// Materials Catalog, MARKET_RATE when the model estimated from its own knowledge.
+  /// Null for hand-entered lines.
+  priceSource LineItemPriceSource?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1280,6 +1305,13 @@ enum FileCategory {
   DOCUMENT
   PHOTO
   VIDEO
+  /// Photos from a lead's pre-sale phase — e.g. attached to the "Draft with Jarvis"
+  /// AI proposal form. A Lead always converts to a Job before any file is created
+  /// (src/lib/crm/lead-proposal.ts's draftLeadProposalFromNotes runs
+  /// convertLeadToJob first), so these land directly in the job's own file library
+  /// under this category — a distinct folder, not a separate storage location that
+  /// needs to be migrated when the lead converts.
+  PRESALE_PHOTO
 }
 
 model File {

@@ -5,7 +5,7 @@
  * same validation path instead of a parallel copy of it.
  */
 
-import type { CostType, RateMode } from "@/generated/prisma/enums";
+import type { CostType, LineItemConfidence, LineItemPriceSource, RateMode } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import type { BasisPoints } from "@/lib/money";
 
@@ -57,6 +57,10 @@ export interface CreateEstimateLineItemInput {
   readonly taxable?: boolean;
   readonly internalNote?: string | null;
   readonly groupLabel?: string | null;
+  /** Set only by the AI estimate assistant — null for hand-entered lines. */
+  readonly confidence?: LineItemConfidence | null;
+  /** Set only by the AI estimate assistant — null for hand-entered lines. */
+  readonly priceSource?: LineItemPriceSource | null;
 }
 
 export interface CreateEstimateInput {
@@ -110,6 +114,8 @@ export async function createEstimate(input: CreateEstimateInput) {
           taxable: item.taxable ?? false,
           internalNote: item.internalNote ?? null,
           groupLabel: item.groupLabel ?? null,
+          confidence: item.confidence ?? null,
+          priceSource: item.priceSource ?? null,
           sortOrder: index,
         })),
       },

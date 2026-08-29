@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 const CATEGORIES = [
   { value: "ALL", label: "All" },
   { value: "PHOTO", label: "Photos" },
+  { value: "PRESALE_PHOTO", label: "Pre-Sale Photos" },
   { value: "DOCUMENT", label: "Documents" },
   { value: "VIDEO", label: "Videos" },
 ] as const;
@@ -43,7 +44,7 @@ export default async function FilesPage({
   const activeCategory = typeof category === "string" && category !== "ALL" ? category : "ALL";
 
   const files = await db.file.findMany({
-    where: { jobId: job.id, ...(activeCategory !== "ALL" ? { category: activeCategory as "DOCUMENT" | "PHOTO" | "VIDEO" } : {}) },
+    where: { jobId: job.id, ...(activeCategory !== "ALL" ? { category: activeCategory as "DOCUMENT" | "PHOTO" | "VIDEO" | "PRESALE_PHOTO" } : {}) },
     orderBy: { createdAt: "desc" },
     include: { uploadedByUser: true },
   });

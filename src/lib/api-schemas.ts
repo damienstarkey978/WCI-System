@@ -419,7 +419,7 @@ export const registerFileSchema = z.object({
   url: z.string().url().max(2_000),
   mimeType: z.string().trim().max(255).nullish(),
   sizeBytes: z.number().int().positive().max(10_000_000_000).nullish(),
-  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO"]).optional(),
+  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO"]).optional(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
   dailyLogId: z.string().cuid().nullish(),

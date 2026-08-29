@@ -15,7 +15,7 @@ import { AuthConfigurationError, requireRole } from "@/lib/auth";
 import { JobNotFoundError, DailyLogNotFoundError, uploadAndRegisterFile } from "@/lib/files/service";
 import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
 
-const CATEGORIES = new Set(["DOCUMENT", "PHOTO", "VIDEO"]);
+const CATEGORIES = new Set(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO"]);
 
 // Keeps the whole batch well under Netlify's function payload limit.
 const MAX_TOTAL_DECODED_BYTES = 40 * 1024 * 1024;
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         throw new Error("Each file requires jobId, fileName, and dataBase64.");
       }
       const categoryRaw = entry.category?.toUpperCase();
-      const category = categoryRaw && CATEGORIES.has(categoryRaw) ? (categoryRaw as "DOCUMENT" | "PHOTO" | "VIDEO") : "DOCUMENT";
+      const category = categoryRaw && CATEGORIES.has(categoryRaw) ? (categoryRaw as "DOCUMENT" | "PHOTO" | "VIDEO" | "PRESALE_PHOTO") : "DOCUMENT";
       const bytes = Buffer.from(entry.dataBase64, "base64");
 
       const file = await uploadAndRegisterFile({

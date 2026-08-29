@@ -132,6 +132,7 @@ export async function draftLeadProposalAction(_previous: ActionState, formData: 
     await draftLeadProposalFromNotes({
       organizationId: user.organizationId,
       leadId,
+      userId: user.id,
       notes,
       images,
       clientEmail: clientEmail || null,

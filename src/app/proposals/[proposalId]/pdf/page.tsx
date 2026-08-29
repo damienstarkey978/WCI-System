@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 
@@ -45,6 +46,19 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
     }),
   ]);
   if (!proposal) notFound();
+
+  const preSalePhotoFiles = await db.file.findMany({
+    where: { jobId: proposal.jobId, category: "PRESALE_PHOTO" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, fileName: true, url: true },
+  });
+  const preSalePhotos = await Promise.all(
+    preSalePhotoFiles.map(async (photo) => ({
+      id: photo.id,
+      fileName: photo.fileName,
+      url: await resolveFileUrl(photo.url).catch(() => null),
+    })),
+  );
 
   const grandTotalCents = proposal.estimate.lineItems.reduce((total, item) => {
     const cost = extendedCostCents(item.quantityMilli, item.unitCostCents);
@@ -101,6 +115,20 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
       </section>
 
       {proposal.coverMessage ? <p className="mt-6 whitespace-pre-wrap text-sm leading-relaxed">{proposal.coverMessage}</p> : null}
+
+      {preSalePhotos.length > 0 ? (
+        <section className="mt-8 break-inside-avoid">
+          <h2 className="border-b border-[#ddd] pb-1 text-sm font-semibold uppercase tracking-wide text-[#1a1a1a]">Project Photos</h2>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {preSalePhotos.map((photo) =>
+              photo.url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- a print document, not a Next-optimized page
+                <img key={photo.id} src={photo.url} alt={photo.fileName} className="h-28 w-full rounded object-cover" />
+              ) : null,
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {proposal.sections.length > 0 ? (
         <section className="mt-8 flex flex-col gap-6">

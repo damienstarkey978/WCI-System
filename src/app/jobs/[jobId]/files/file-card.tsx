@@ -42,7 +42,7 @@ function VisibilityToggle({ jobId, fileId, field, checked, label }: { jobId: str
 }
 
 export function FileCard({ jobId, file }: { jobId: string; file: FileCardData }) {
-  const isPhoto = file.category === "PHOTO";
+  const isPhoto = file.category === "PHOTO" || file.category === "PRESALE_PHOTO";
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border bg-white" style={{ borderColor: "var(--bt-border)" }}>

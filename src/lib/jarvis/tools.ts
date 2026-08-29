@@ -839,6 +839,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       const proposal = await draftLeadProposalFromNotes({
         organizationId: ctx.organizationId,
         leadId: input.leadId,
+        userId: ctx.userId,
         notes: input.notes,
         clientEmail: input.clientEmail ?? null,
         clientPhone: input.clientPhone ?? null,

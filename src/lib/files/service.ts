@@ -47,6 +47,8 @@ async function assertJobAndDailyLog(organizationId: string, jobId: string, daily
   }
 }
 
+export type FileCategoryInput = "DOCUMENT" | "PHOTO" | "VIDEO" | "PRESALE_PHOTO";
+
 export interface RegisterFileInput {
   readonly organizationId: string;
   readonly jobId: string;
@@ -55,7 +57,7 @@ export interface RegisterFileInput {
   readonly url: string;
   readonly mimeType?: string | null;
   readonly sizeBytes?: number | null;
-  readonly category?: "DOCUMENT" | "PHOTO" | "VIDEO";
+  readonly category?: FileCategoryInput;
   readonly clientVisible?: boolean;
   readonly subVisible?: boolean;
   readonly dailyLogId?: string | null;
@@ -89,7 +91,7 @@ export interface UploadAndRegisterFileInput {
   readonly bytes: Uint8Array | Buffer;
   readonly mimeType?: string | null;
   readonly sizeBytes?: number | null;
-  readonly category?: "DOCUMENT" | "PHOTO" | "VIDEO";
+  readonly category?: FileCategoryInput;
   readonly clientVisible?: boolean;
   readonly subVisible?: boolean;
   readonly dailyLogId?: string | null;

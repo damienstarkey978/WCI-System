@@ -17,6 +17,35 @@ export interface EstimateLineItemData {
   readonly unitCostCents: number;
   readonly rateBasisPoints: number;
   readonly extendedCents: number;
+  /** Set only on AI-drafted lines — null for hand-entered ones. */
+  readonly confidence: "HIGH" | "MEDIUM" | "LOW" | null;
+  /** Set only on AI-drafted lines — null for hand-entered ones. */
+  readonly priceSource: "CATALOG" | "MARKET_RATE" | "MANUAL" | null;
+}
+
+const CONFIDENCE_STYLE: Record<"MEDIUM" | "LOW", { bg: string; text: string; label: string }> = {
+  LOW: { bg: "#fee2e2", text: "#991b1b", label: "AI: low confidence" },
+  MEDIUM: { bg: "#fef3c7", text: "#92400e", label: "AI: medium confidence" },
+};
+
+function LineItemBadges({ confidence, priceSource }: { confidence: EstimateLineItemData["confidence"]; priceSource: EstimateLineItemData["priceSource"] }) {
+  if (!confidence && !priceSource) return null;
+  const confidenceBadge = confidence && confidence !== "HIGH" ? CONFIDENCE_STYLE[confidence] : null;
+
+  return (
+    <div className="mt-0.5 flex flex-wrap gap-1">
+      {confidenceBadge ? (
+        <span className="rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: confidenceBadge.bg, color: confidenceBadge.text }}>
+          {confidenceBadge.label}
+        </span>
+      ) : null}
+      {priceSource === "MARKET_RATE" ? (
+        <span className="rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: "#dbeafe", color: "#1e40af" }}>
+          Market-rate estimate
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export function EstimateLineItemRow({
@@ -97,6 +126,7 @@ export function EstimateLineItemRow({
       <td className="px-3 py-2 text-[var(--bt-text)]">
         {item.title}
         <div className="text-xs text-[var(--bt-muted)]">{item.costCodeLabel}</div>
+        <LineItemBadges confidence={item.confidence} priceSource={item.priceSource} />
       </td>
       <td className="px-3 py-2 text-right text-[var(--bt-muted)]">{item.quantityMilli / 1_000}</td>
       <td className="px-3 py-2 text-right text-[var(--bt-muted)]">{formatMoney(item.unitCostCents)}</td>

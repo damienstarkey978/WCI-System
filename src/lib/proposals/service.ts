@@ -97,6 +97,7 @@ export class ProposalClientMismatchError extends Error {
   }
 }
 
+
 export interface CreateProposalSectionInput {
   readonly title: string;
   readonly bullets: readonly string[];

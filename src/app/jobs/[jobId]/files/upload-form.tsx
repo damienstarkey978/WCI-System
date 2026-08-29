@@ -72,6 +72,7 @@ export function UploadForm({ jobId }: { jobId: string }) {
           <select name="category" defaultValue="DOCUMENT" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }}>
             <option value="DOCUMENT">Document</option>
             <option value="PHOTO">Photo</option>
+            <option value="PRESALE_PHOTO">Pre-Sale Photo</option>
             <option value="VIDEO">Video</option>
           </select>
         </label>

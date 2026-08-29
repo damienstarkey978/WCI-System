@@ -17,9 +17,57 @@ import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-dr
 import { convertLeadToJob, LeadNotFoundError } from "@/lib/crm/service";
 import { createEstimate, type CreateEstimateLineItemInput } from "@/lib/estimates/service";
 import { db } from "@/lib/db";
+import { isSupabaseStorageConfigured } from "@/lib/env";
+import { uploadAndRegisterFile } from "@/lib/files/service";
 import type { BasisPoints } from "@/lib/money";
 import { createProposal, type CreateProposalSectionInput } from "@/lib/proposals/service";
 import type { RateMode } from "@/generated/prisma/enums";
+
+const IMAGE_EXTENSION_BY_MEDIA_TYPE: Record<DraftEstimateImageInput["mediaType"], string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/**
+ * The photos a salesperson attaches to the "Draft with Jarvis" form are sent to
+ * Claude as vision input for the estimate draft, then would otherwise be thrown
+ * away. Persist them into the job's own Pre-Sale Photos folder (FileCategory.
+ * PRESALE_PHOTO) too — by the time this runs, createLeadProposal has already
+ * converted the Lead to a Job (idempotently, or it already existed), so there is
+ * no separate lead-scoped storage location to later "move": these photos land
+ * directly in the job's file library, filed under Pre-Sale Photos, from the
+ * start. Best effort: storage may not be configured, and a failed upload never
+ * fails the proposal itself, since the draft is the valuable part.
+ */
+async function persistPreSalePhotos(params: {
+  organizationId: string;
+  jobId: string;
+  uploadedByUserId: string;
+  images: readonly DraftEstimateImageInput[];
+}): Promise<void> {
+  if (params.images.length === 0 || !isSupabaseStorageConfigured()) return;
+
+  await Promise.all(
+    params.images.map(async (image, index) => {
+      try {
+        await uploadAndRegisterFile({
+          organizationId: params.organizationId,
+          jobId: params.jobId,
+          uploadedByUserId: params.uploadedByUserId,
+          fileName: `presale-photo-${index + 1}.${IMAGE_EXTENSION_BY_MEDIA_TYPE[image.mediaType]}`,
+          bytes: Buffer.from(image.base64Data, "base64"),
+          mimeType: image.mediaType,
+          category: "PRESALE_PHOTO",
+        });
+      } catch {
+        // Best effort — the AI-drafted estimate/proposal is already saved; a photo
+        // upload failure shouldn't take that down with it.
+      }
+    }),
+  );
+}
 
 export { LeadNotFoundError, AiNotConfiguredError, DraftGenerationError };
 
@@ -126,6 +174,7 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
 export interface DraftLeadProposalInput {
   readonly organizationId: string;
   readonly leadId: string;
+  readonly userId: string;
   readonly notes: string;
   readonly images?: readonly DraftEstimateImageInput[];
   readonly clientEmail?: string | null;
@@ -174,11 +223,12 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     unitCostCents: line.unitCostCents,
     rateMode: line.rateMode,
     rateBasisPoints: line.rateBasisPoints,
-    internalNote: `AI confidence: ${line.confidence} · price source: ${line.priceSource}`,
+    confidence: line.confidence,
+    priceSource: line.priceSource,
     groupLabel: line.groupLabel,
   }));
 
-  return createLeadProposal({
+  const proposal = await createLeadProposal({
     organizationId: input.organizationId,
     leadId: input.leadId,
     title: draft.title,
@@ -190,4 +240,15 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     aiGenerated: true,
     aiPromptNotes: input.notes,
   });
+
+  if (input.images?.length) {
+    await persistPreSalePhotos({
+      organizationId: input.organizationId,
+      jobId: proposal.jobId,
+      uploadedByUserId: input.userId,
+      images: input.images,
+    });
+  }
+
+  return proposal;
 }
