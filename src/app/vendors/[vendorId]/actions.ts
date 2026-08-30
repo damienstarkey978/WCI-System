@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 
 import { ScheduleScope } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
+import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
+import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
+import { syncVendorToQuickBooks } from "@/lib/quickbooks/sync/vendors";
 import { addCertification, grantVendorJobAccess, JobNotFoundError, VendorNotFoundError } from "@/lib/vendor-portal/service";
 
 export interface ActionState {
@@ -32,6 +35,25 @@ export async function grantVendorJobAccessAction(_previous: ActionState, formDat
     });
   } catch (error) {
     if (error instanceof VendorNotFoundError || error instanceof JobNotFoundError) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/vendors/${vendorId}`);
+  return { ok: true };
+}
+
+/** Explicit "Sync to QuickBooks" action (CLAUDE.md 2.3) — same pattern as invoice sync's SyncToQuickBooksButton. */
+export async function syncVendorToQuickBooksAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const vendorId = String(formData.get("vendorId") ?? "");
+
+  try {
+    await syncVendorToQuickBooks(user.organizationId, vendorId);
+  } catch (error) {
+    if (error instanceof QuickBooksNotConfiguredError || error instanceof QuickBooksNotConnectedError || error instanceof QuickBooksApiError) {
+      return { error: error.message };
+    }
     throw error;
   }
 

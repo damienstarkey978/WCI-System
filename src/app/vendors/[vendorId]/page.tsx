@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -8,6 +9,7 @@ import { formatDate } from "@/lib/format";
 
 import { AddCertificationForm } from "./add-certification-form";
 import { GrantJobAccessForm } from "./grant-job-access-form";
+import { SyncToQuickBooksButton } from "./sync-to-quickbooks-button";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,9 @@ export default async function VendorDetailPage({ params }: PageProps<"/vendors/[
     include: { jobAccess: { include: { job: { select: { id: true, name: true } } } }, certifications: { orderBy: { expiresAt: "asc" } } },
   });
   if (!vendor) notFound();
+
+  const qboConnection = await db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } });
+  const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
 
   const jobs = await db.job.findMany({
     where: { organizationId: user.organizationId },
@@ -98,6 +103,28 @@ export default async function VendorDetailPage({ params }: PageProps<"/vendors/[
         <div className="mt-3">
           <AddCertificationForm vendorId={vendor.id} />
         </div>
+      </section>
+
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--bt-text)]">QuickBooks status</h2>
+          {isQboConnected ? <SyncToQuickBooksButton vendorId={vendor.id} label={vendor.qboVendorId ? "Re-sync" : "Sync to QuickBooks"} /> : null}
+        </div>
+        {!isQboConnected ? (
+          <p className="mt-2 text-sm text-[var(--bt-muted)]">
+            QuickBooks isn&apos;t connected for this organization —{" "}
+            <Link href="/settings/quickbooks" className="text-[var(--bt-primary)] hover:underline">
+              connect it in Settings
+            </Link>{" "}
+            to sync vendors.
+          </p>
+        ) : vendor.qboVendorId ? (
+          <p className="mt-2 text-sm text-[var(--bt-text)]">
+            Synced to QuickBooks as Vendor <span className="font-mono">{vendor.qboVendorId}</span>.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-[var(--bt-muted)]">Not sent to QuickBooks yet.</p>
+        )}
       </section>
 
       <CommentThread organizationId={user.organizationId} featureType="Vendor" featureId={vendor.id} revalidate={`/vendors/${vendor.id}`} />

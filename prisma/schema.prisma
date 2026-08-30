@@ -1004,6 +1004,7 @@ model QuickBooksConnection {
 enum QboSyncEntityType {
   CUSTOMER
   INVOICE
+  VENDOR
 }
 
 enum QboSyncDirection {
@@ -1734,6 +1735,12 @@ model Vendor {
   /// Set on the vendor's first successful portal login (CLAUDE.md 2.3's
   /// "activated" state — see the identical field on Client).
   activatedAt DateTime?
+
+  /// This Vendor's QuickBooks Vendor Id, once pushed (src/lib/quickbooks/sync/vendors.ts).
+  qboVendorId  String?
+  /// QBO's own change-tracking token — required on every update call the QBO API
+  /// accepts, or it rejects the request as a stale-data conflict. Refreshed on every sync.
+  qboSyncToken String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
