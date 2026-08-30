@@ -41,8 +41,14 @@ const clerk = isClerkConfigured()
  *   - the Stripe webhook receiver — Stripe signs its request with a
  *     Stripe-Signature header, not a bearer token; that signature (verified in
  *     the route itself, src/lib/payments/stripe.ts) *is* this route's auth.
+ *   - the QuickBooks webhook receiver — same shape, Intuit signs with an
+ *     intuit-signature header instead (src/lib/quickbooks/webhook.ts).
  */
-const PUBLIC_API_PATHS: ReadonlySet<string> = new Set(["/api/v1/openapi.json", "/api/v1/webhooks/stripe"]);
+const PUBLIC_API_PATHS: ReadonlySet<string> = new Set([
+  "/api/v1/openapi.json",
+  "/api/v1/webhooks/stripe",
+  "/api/v1/webhooks/quickbooks",
+]);
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (request.nextUrl.pathname.startsWith("/api/v1")) {

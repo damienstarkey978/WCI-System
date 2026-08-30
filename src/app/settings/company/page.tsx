@@ -117,6 +117,7 @@ export default async function CompanySettingsPage() {
         <SettingsGroup title="Financials">
           <SettingsLink href="/admin/cost-codes" label="Cost codes" />
           <SettingsLink href="/materials" label="Catalog" />
+          <SettingsLink href="/settings/quickbooks" label="QuickBooks" />
           <ComingSoon label="Bids" />
           <ComingSoon label="Estimates" />
           <ComingSoon label="Bills / POs / Budget" />

@@ -126,3 +126,42 @@ export function supabaseUrl(): string {
 export function supabaseServiceRoleKey(): string {
   return required("SUPABASE_SERVICE_ROLE_KEY");
 }
+
+/**
+ * QuickBooks Online (CLAUDE.md 2.3's two-way sync). One Intuit app serves every
+ * organization's connection — QBO_CLIENT_ID/SECRET identify *that app* to Intuit,
+ * not any one company file; which company an org is synced to lives in the
+ * QuickBooksConnection row created when that org completes OAuth (src/lib/quickbooks).
+ */
+export function isQuickBooksConfigured(): boolean {
+  return optional("QBO_CLIENT_ID") !== undefined && optional("QBO_CLIENT_SECRET") !== undefined;
+}
+
+export function quickBooksClientId(): string {
+  return required("QBO_CLIENT_ID");
+}
+
+export function quickBooksClientSecret(): string {
+  return required("QBO_CLIENT_SECRET");
+}
+
+export function quickBooksRedirectUri(): string {
+  return required("QBO_REDIRECT_URI");
+}
+
+export function quickBooksEnvironment(): "sandbox" | "production" {
+  return optional("QBO_ENVIRONMENT") === "production" ? "production" : "sandbox";
+}
+
+/**
+ * 32-byte key (base64) for encrypting stored QuickBooks tokens at rest — see
+ * src/lib/quickbooks/crypto.ts. Generate one with `openssl rand -base64 32`.
+ */
+export function quickBooksTokenEncryptionKey(): string {
+  return required("QBO_TOKEN_ENCRYPTION_KEY");
+}
+
+/** Verifier token from the Intuit app's Webhooks settings page, for validating inbound webhook signatures. */
+export function quickBooksWebhookVerifierToken(): string | undefined {
+  return optional("QBO_WEBHOOK_VERIFIER_TOKEN");
+}

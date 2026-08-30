@@ -132,6 +132,8 @@ model Organization {
   clientUpdateSummaries ClientUpdateSummary[]
   materialCatalogItems  MaterialCatalogItem[]
   jarvisConversations   JarvisConversation[]
+  quickBooksConnection  QuickBooksConnection?
+  qboSyncLogs           QboSyncLog[]
 }
 
 model User {
@@ -351,14 +353,14 @@ model CostCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  timeClockEntries       TimeClockEntry[]
-  changeOrderLineItems   ChangeOrderLineItem[]
-  estimateLineItems      EstimateLineItem[]
-  budgetLines            BudgetLine[]
-  purchaseOrderLineItems PurchaseOrderLineItem[]
-  billLineItems          BillLineItem[]
-  allowances             Allowance[]
-  bidPackageLineItems    BidPackageLineItem[]
+  timeClockEntries          TimeClockEntry[]
+  changeOrderLineItems      ChangeOrderLineItem[]
+  estimateLineItems         EstimateLineItem[]
+  budgetLines               BudgetLine[]
+  purchaseOrderLineItems    PurchaseOrderLineItem[]
+  billLineItems             BillLineItem[]
+  allowances                Allowance[]
+  bidPackageLineItems       BidPackageLineItem[]
   estimateTemplateLineItems EstimateTemplateLineItem[]
 
   @@unique([organizationId, code])
@@ -570,7 +572,7 @@ model EstimateLineItem {
 
   /// Set only on AI-drafted lines (src/lib/ai/estimate-assistant.ts) — how confident
   /// the model was in this line's quantity/pricing. Null for hand-entered lines.
-  confidence LineItemConfidence?
+  confidence  LineItemConfidence?
   /// Set only on AI-drafted lines — CATALOG when the unit cost came from the org's
   /// Materials Catalog, MARKET_RATE when the model estimated from its own knowledge.
   /// Null for hand-entered lines.
@@ -616,9 +618,9 @@ model EstimateTemplateLineItem {
 
   title         String
   /// Quantity × 1000. 2.5 units is stored as 2500.
-  quantityMilli Int @default(1000)
-  unitCostCents Int @default(0)
-  sortOrder     Int @default(0)
+  quantityMilli Int    @default(1000)
+  unitCostCents Int    @default(0)
+  sortOrder     Int    @default(0)
 
   @@index([templateId, sortOrder])
   @@index([costCodeId])
@@ -871,6 +873,12 @@ model Invoice {
   drawId String? @unique
   draw   Draw?   @relation(fields: [drawId], references: [id], onDelete: SetNull)
 
+  /// This Invoice's QuickBooks Invoice Id, once pushed (src/lib/quickbooks/sync/invoices.ts).
+  qboInvoiceId String?
+  /// QBO's own change-tracking token — required on every update call the QBO API
+  /// accepts, or it rejects the request as a stale-data conflict. Refreshed on every sync.
+  qboSyncToken String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -953,6 +961,81 @@ model Payment {
   createdAt DateTime @default(now())
 
   @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// QuickBooks Online two-way sync (CLAUDE.md 2.3)
+// ---------------------------------------------------------------------------
+
+enum QuickBooksEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
+/// One org's connection to a QuickBooks Online company file. Tokens are the only
+/// sensitive fields, stored as ciphertext — see src/lib/quickbooks/crypto.ts — never
+/// the raw access/refresh token. QBO_CLIENT_ID/SECRET (one Intuit app, env-configured)
+/// identify WCI OS itself to Intuit; this row is what ties one org to one company file.
+model QuickBooksConnection {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  environment QuickBooksEnvironment @default(SANDBOX)
+  /// QuickBooks company id ("realmId") — which company file this org is connected to.
+  realmId     String
+
+  encryptedAccessToken  String
+  encryptedRefreshToken String
+  accessTokenExpiresAt  DateTime
+  /// Intuit refresh tokens are single-use and rotate on every refresh — this is
+  /// updated alongside encryptedRefreshToken every time, never left stale.
+  refreshTokenExpiresAt DateTime
+
+  connectedAt    DateTime  @default(now())
+  /// Set on manual disconnect; the row is kept (not deleted) as a connection history,
+  /// same "row existence vs. a status enum" pattern as Client.activatedAt.
+  disconnectedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum QboSyncEntityType {
+  CUSTOMER
+  INVOICE
+}
+
+enum QboSyncDirection {
+  TO_QBO
+  FROM_QBO
+}
+
+enum QboSyncStatus {
+  SUCCESS
+  FAILED
+}
+
+/// Audit/retry trail for every sync attempt (CLAUDE.md 2.3: "a sync-log table so a
+/// failed push is visible and retryable rather than silently dropped"). One row per
+/// attempt, not per record — a record synced 3 times has 3 rows.
+model QboSyncLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  entityType   QboSyncEntityType
+  direction    QboSyncDirection
+  /// The WCI OS record's id (Client.id or Invoice.id, per entityType).
+  wciRecordId  String
+  qboId        String?
+  status       QboSyncStatus
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, entityType, wciRecordId])
+  @@index([organizationId, status])
 }
 
 // ---------------------------------------------------------------------------
@@ -1434,6 +1517,13 @@ model Client {
   /// client who has access but has never logged in — the "activated" state
   /// from CLAUDE.md 2.3 is this timestamp, not a boolean.
   activatedAt DateTime?
+
+  /// This Client's QuickBooks Customer Id, once pushed (src/lib/quickbooks/sync/customers.ts).
+  /// Null until the first successful sync — presence, not a status enum, is the signal.
+  qboCustomerId String?
+  /// QBO's own change-tracking token — required on every update call the QBO API
+  /// accepts, or it rejects the request as a stale-data conflict. Refreshed on every sync.
+  qboSyncToken  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

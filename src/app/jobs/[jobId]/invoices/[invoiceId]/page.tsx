@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { RecordPaymentForm } from "../record-payment-form";
+import { SyncToQuickBooksButton } from "../sync-to-quickbooks-button";
 import { VoidInvoiceButton } from "../void-invoice-button";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,9 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
     },
   });
   if (!invoice) notFound();
+
+  const qboConnection = await db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } });
+  const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
 
   const style = STATUS_STYLE[invoice.status] ?? STATUS_STYLE.DRAFT;
   const paidCents = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
@@ -160,14 +164,30 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
       </section>
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-        <h2 className="text-sm font-semibold text-[var(--bt-text)]">QuickBooks status</h2>
-        {hasQboPayment ? (
-          <p className="mt-2 text-sm text-[var(--bt-text)]">A payment on this invoice was recorded via QuickBooks sync.</p>
-        ) : (
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--bt-text)]">QuickBooks status</h2>
+          {isQboConnected ? (
+            <SyncToQuickBooksButton jobId={job.id} invoiceId={invoice.id} label={invoice.qboInvoiceId ? "Re-sync" : "Sync to QuickBooks"} />
+          ) : null}
+        </div>
+        {!isQboConnected ? (
           <p className="mt-2 text-sm text-[var(--bt-muted)]">
-            QuickBooks two-way sync isn&apos;t connected for this organization yet — this invoice hasn&apos;t been sent to QuickBooks.
+            QuickBooks isn&apos;t connected for this organization —{" "}
+            <Link href="/settings/quickbooks" className="text-[var(--bt-primary)] hover:underline">
+              connect it in Settings
+            </Link>{" "}
+            to sync invoices.
           </p>
+        ) : invoice.qboInvoiceId ? (
+          <p className="mt-2 text-sm text-[var(--bt-text)]">
+            Synced to QuickBooks as Invoice <span className="font-mono">{invoice.qboInvoiceId}</span>.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-[var(--bt-muted)]">Not sent to QuickBooks yet.</p>
         )}
+        {hasQboPayment ? (
+          <p className="mt-1 text-xs text-[var(--bt-muted)]">A payment on this invoice was recorded via QuickBooks sync.</p>
+        ) : null}
         {hasOnlinePayment ? <p className="mt-1 text-xs text-[var(--bt-muted)]">This invoice has an online (Stripe) payment recorded.</p> : null}
       </section>
 

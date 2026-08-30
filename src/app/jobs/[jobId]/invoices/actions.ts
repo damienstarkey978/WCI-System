@@ -15,6 +15,9 @@ import {
 } from "@/lib/invoicing/service";
 import { parseDollarsToCents } from "@/lib/money";
 import { db } from "@/lib/db";
+import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
+import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
+import { InvoiceHasNoClientError, syncInvoiceToQuickBooks } from "@/lib/quickbooks/sync/invoices";
 
 export interface ActionState {
   readonly error?: string;
@@ -126,4 +129,34 @@ export async function voidInvoiceAction(formData: FormData): Promise<void> {
   await db.invoice.update({ where: { id: invoice.id }, data: { status: "VOID", voidedAt: new Date() } });
 
   revalidatePath(`/jobs/${jobId}/invoices`);
+}
+
+/**
+ * Explicit "Sync to QuickBooks" action (CLAUDE.md 2.3) — same pattern as Send to Budget
+ * / Push to PO: a staff member triggers the push, rather than it happening silently in
+ * the background. Every attempt is recorded in QboSyncLog regardless of outcome
+ * (src/lib/quickbooks/sync-log.ts), so a failure here is visible and retryable, not lost.
+ */
+export async function syncInvoiceToQuickBooksAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+
+  try {
+    await syncInvoiceToQuickBooks(user.organizationId, invoiceId);
+  } catch (error) {
+    if (
+      error instanceof QuickBooksNotConfiguredError ||
+      error instanceof QuickBooksNotConnectedError ||
+      error instanceof InvoiceHasNoClientError ||
+      error instanceof QuickBooksApiError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/invoices/${invoiceId}`);
+  return { ok: true };
 }
