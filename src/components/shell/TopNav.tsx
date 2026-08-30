@@ -26,6 +26,7 @@ import {
   BuildingIcon,
   ChevronDownIcon,
   GearIcon,
+  GlobeIcon,
   HelpIcon,
   MenuIcon,
   PeopleIcon,
@@ -286,7 +287,8 @@ export function TopNav({
           <MenuIcon className="h-5 w-5" />
         </button>
 
-        <Link href="/dashboard" className="text-lg font-bold tracking-tight">
+        <Link href="/dashboard" className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
+          <GlobeIcon className="h-5 w-5" />
           WCI OS
         </Link>
 

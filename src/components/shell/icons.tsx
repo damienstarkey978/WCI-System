@@ -83,6 +83,15 @@ export function FilterIcon({ className }: IconProps) {
   );
 }
 
+export function GlobeIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M2.5 10h15M10 2.5c2.2 2.1 3.3 4.8 3.3 7.5s-1.1 5.4-3.3 7.5c-2.2-2.1-3.3-4.8-3.3-7.5s1.1-5.4 3.3-7.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function SortIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
