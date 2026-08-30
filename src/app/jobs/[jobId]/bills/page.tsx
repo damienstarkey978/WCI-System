@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { CreateBillForm } from "./create-bill-form";
+import { SyncToQuickBooksButton } from "./sync-to-quickbooks-button";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function BillsPage({ params }: PageProps<"/jobs/[jobId]/bil
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const [bills, costCodes, purchaseOrders] = await Promise.all([
+  const [bills, costCodes, purchaseOrders, qboConnection] = await Promise.all([
     db.bill.findMany({
       where: { jobId: job.id, fromOcr: false },
       orderBy: { createdAt: "desc" },
@@ -46,7 +47,9 @@ export default async function BillsPage({ params }: PageProps<"/jobs/[jobId]/bil
       select: { id: true, code: true, name: true },
     }),
     db.purchaseOrder.findMany({ where: { jobId: job.id }, select: { id: true, poNumber: true }, orderBy: { createdAt: "desc" } }),
+    db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } }),
   ]);
+  const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
@@ -69,6 +72,7 @@ export default async function BillsPage({ params }: PageProps<"/jobs/[jobId]/bil
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Created</th>
                 <th className="px-4 py-3 text-right">Total</th>
+                {isQboConnected ? <th className="px-4 py-3 text-right">QuickBooks</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -86,6 +90,15 @@ export default async function BillsPage({ params }: PageProps<"/jobs/[jobId]/bil
                     </td>
                     <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(bill.createdAt)}</td>
                     <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(totalCents)}</td>
+                    {isQboConnected ? (
+                      <td className="px-4 py-3 text-right">
+                        {bill.qboBillId ? (
+                          <span className="text-xs text-[var(--bt-muted)]">Synced</span>
+                        ) : (
+                          <SyncToQuickBooksButton jobId={job.id} billId={bill.id} label="Sync" />
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}

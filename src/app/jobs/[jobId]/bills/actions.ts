@@ -6,6 +6,9 @@ import { createBill, JobNotFoundError, JobNotOpenError, UnknownCostCodeError, Un
 import { requireAppUser } from "@/lib/auth";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
+import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
+import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
+import { BillHasNoVendorError, syncBillToQuickBooks } from "@/lib/quickbooks/sync/bills";
 
 export interface ActionState {
   readonly error?: string;
@@ -44,6 +47,31 @@ export async function createBillAction(_previous: ActionState, formData: FormDat
     }
     if (error instanceof UnknownCostCodeError) return { error: error.message };
     if (error instanceof Error && error.message.includes("Cannot parse")) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/bills`);
+  return { ok: true };
+}
+
+/** Explicit "Sync to QuickBooks" action (CLAUDE.md 2.3) — same pattern as invoice/vendor sync. */
+export async function syncBillToQuickBooksAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const billId = String(formData.get("billId") ?? "");
+
+  try {
+    await syncBillToQuickBooks(user.organizationId, billId);
+  } catch (error) {
+    if (
+      error instanceof QuickBooksNotConfiguredError ||
+      error instanceof QuickBooksNotConnectedError ||
+      error instanceof BillHasNoVendorError ||
+      error instanceof QuickBooksApiError
+    ) {
+      return { error: error.message };
+    }
     throw error;
   }
 

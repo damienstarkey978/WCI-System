@@ -357,6 +357,13 @@ model CostCode {
   /// clock-in, so this is the *current* rate — past entries are unaffected by edits.
   defaultHourlyRateCents Int?
 
+  /// This cost code's QuickBooks Item Id, created lazily the first time a Bill line
+  /// using it syncs (src/lib/quickbooks/sync/cost-codes.ts) — one two-sided Item per
+  /// cost code, so Bills break out by cost code in QBO reporting. Never a QBO Account:
+  /// creating a new GL account per cost code would restructure the user's chart of
+  /// accounts, which this integration doesn't do without being asked.
+  qboItemId String?
+
   isActive  Boolean  @default(true)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
@@ -753,6 +760,12 @@ model Bill {
   /// True when the bill was drafted from a scanned receipt (Phase 8 OCR).
   fromOcr Boolean @default(false)
 
+  /// This Bill's QuickBooks Bill Id, once pushed (src/lib/quickbooks/sync/bills.ts).
+  qboBillId    String?
+  /// QBO's own change-tracking token — required on every update call the QBO API
+  /// accepts, or it rejects the request as a stale-data conflict. Refreshed on every sync.
+  qboSyncToken String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1015,6 +1028,7 @@ enum QboSyncEntityType {
   INVOICE
   VENDOR
   JOB
+  BILL
 }
 
 enum QboSyncDirection {

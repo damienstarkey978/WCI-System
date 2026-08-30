@@ -7,11 +7,10 @@
  * row), and jobs.ts itself syncs the client first as that sub-customer's parent.
  *
  * Simplification (documented, not hidden): every line posts against one generic
- * "WCI OS Services" QBO Item rather than a per-cost-code Item/Account, since WCI OS has
- * no cost-code-to-QuickBooks-account mapping yet. That mapping is real design work,
- * deferred to the same pass as Vendor/Bill sync (Bills need it too, and more of it —
- * every line there needs an Account or Item). Revenue still lands in QuickBooks
- * correctly; it just isn't broken out by cost code the way Bills eventually will be.
+ * "WCI OS Services" QBO Item rather than a per-cost-code one — Invoice line items have
+ * no cost code (they're what the client is billed, not what it cost), so the
+ * cost-code-to-Item mapping ../sync/cost-codes.ts built for Bills doesn't apply here.
+ * Revenue still lands in QuickBooks correctly; it just isn't broken out per line.
  */
 
 import { db } from "@/lib/db";
@@ -19,6 +18,7 @@ import { accountingRequest } from "@/lib/quickbooks/client";
 import { getValidAccessToken, type ValidQuickBooksAccess } from "@/lib/quickbooks/connection-service";
 import { recordSyncAttempt } from "@/lib/quickbooks/sync-log";
 
+import { findIncomeAccountId } from "./accounts";
 import { JobHasNoClientError, syncJobToQuickBooks } from "./jobs";
 
 export class InvoiceNotFoundError extends Error {
@@ -61,20 +61,6 @@ async function ensureServiceItemId(access: ValidQuickBooksAccess): Promise<strin
     body: { Name: SERVICE_ITEM_NAME, Type: "Service", IncomeAccountRef: { value: incomeAccount } },
   });
   return created.Item.Id;
-}
-
-async function findIncomeAccountId(access: ValidQuickBooksAccess): Promise<string> {
-  const result = await accountingRequest<{ QueryResponse: { Account?: QboRef[] } }>({
-    ...access,
-    method: "GET",
-    path: "query",
-    query: { query: "select * from Account where AccountType = 'Income' maxresults 1" },
-  });
-  const account = result.QueryResponse.Account?.[0];
-  if (!account) {
-    throw new Error("No Income account found in this QuickBooks company to post revenue against.");
-  }
-  return account.Id;
 }
 
 /** Push one Invoice to QuickBooks, creating or updating as needed. Returns the QBO Invoice id. */
