@@ -1,8 +1,10 @@
 /**
  * WCI Invoice -> QBO Invoice (CLAUDE.md 2.3, "Invoices ... WCI -> QBO"). Linked by
- * Invoice.qboInvoiceId once synced. Depends on customers.ts: a QBO Invoice must
- * reference an existing QBO Customer, so the invoice's client is synced first if it
- * hasn't been already.
+ * Invoice.qboInvoiceId once synced. Depends on jobs.ts: a QBO Invoice must reference an
+ * existing QBO Customer, so the invoice's job is synced as a sub-customer first if it
+ * hasn't been already — billing against the job-level sub-customer rather than the
+ * client-level one gives per-job P&L in QBO (CLAUDE.md 2.3's "Sub-customers/Projects"
+ * row), and jobs.ts itself syncs the client first as that sub-customer's parent.
  *
  * Simplification (documented, not hidden): every line posts against one generic
  * "WCI OS Services" QBO Item rather than a per-cost-code Item/Account, since WCI OS has
@@ -17,7 +19,7 @@ import { accountingRequest } from "@/lib/quickbooks/client";
 import { getValidAccessToken, type ValidQuickBooksAccess } from "@/lib/quickbooks/connection-service";
 import { recordSyncAttempt } from "@/lib/quickbooks/sync-log";
 
-import { syncClientToQuickBooks } from "./customers";
+import { JobHasNoClientError, syncJobToQuickBooks } from "./jobs";
 
 export class InvoiceNotFoundError extends Error {
   constructor(invoiceId: string) {
@@ -79,15 +81,12 @@ async function findIncomeAccountId(access: ValidQuickBooksAccess): Promise<strin
 export async function syncInvoiceToQuickBooks(organizationId: string, invoiceId: string): Promise<string> {
   const invoice = await db.invoice.findFirst({
     where: { id: invoiceId, organizationId },
-    include: { lineItems: { orderBy: { sortOrder: "asc" } }, job: { include: { clientAccess: { include: { client: true }, orderBy: { createdAt: "asc" }, take: 1 } } } },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } }, job: true },
   });
   if (!invoice) throw new InvoiceNotFoundError(invoiceId);
 
-  const client = invoice.job.clientAccess[0]?.client;
-  if (!client) throw new InvoiceHasNoClientError(invoiceId);
-
   try {
-    const qboCustomerId = client.qboCustomerId ?? (await syncClientToQuickBooks(organizationId, client.id));
+    const qboCustomerId = invoice.job.qboCustomerId ?? (await syncJobToQuickBooks(organizationId, invoice.job.id));
     const access = await getValidAccessToken(organizationId);
     const serviceItemId = await ensureServiceItemId(access);
 
@@ -132,6 +131,9 @@ export async function syncInvoiceToQuickBooks(organizationId: string, invoiceId:
     return qboInvoice.Invoice.Id;
   } catch (error) {
     await recordSyncAttempt({ organizationId, entityType: "INVOICE", direction: "TO_QBO", wciRecordId: invoice.id, error });
+    // Surfaced under the invoice's own error type — callers (e.g. the invoice detail
+    // page's sync action) don't need to know this bottoms out in a job-level check.
+    if (error instanceof JobHasNoClientError) throw new InvoiceHasNoClientError(invoiceId);
     throw error;
   }
 }

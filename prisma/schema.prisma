@@ -243,6 +243,15 @@ model Job {
   projectionReference ProjectionReference @default(GREATEST)
   accountingBasis     AccountingBasis     @default(ACCRUAL)
 
+  /// This Job's QuickBooks Customer Id, once pushed as a sub-customer under its
+  /// Client's own QBO Customer (CLAUDE.md 2.3's "Sub-customers/Projects" row —
+  /// src/lib/quickbooks/sync/jobs.ts). Gives per-job financials in QBO; Invoice sync
+  /// prefers this over the Client-level customer once it exists.
+  qboCustomerId String?
+  /// QBO's own change-tracking token — required on every update call the QBO API
+  /// accepts, or it rejects the request as a stale-data conflict. Refreshed on every sync.
+  qboSyncToken  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1005,6 +1014,7 @@ enum QboSyncEntityType {
   CUSTOMER
   INVOICE
   VENDOR
+  JOB
 }
 
 enum QboSyncDirection {
