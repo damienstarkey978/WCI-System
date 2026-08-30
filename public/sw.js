@@ -5,7 +5,7 @@
  * queue.ts) and synced by src/app/field/field-sync-manager.tsx, not by this worker.
  */
 
-const CACHE_NAME = "wci-field-shell-v1";
+const CACHE_NAME = "wci-field-shell-v2";
 const APP_SHELL = ["/field", "/field/time-clock", "/field/daily-log", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
