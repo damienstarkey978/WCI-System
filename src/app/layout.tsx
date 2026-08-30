@@ -19,6 +19,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "WCI OS",
   description: "Construction management for World Construction Inc",
+  // Was set only on /field's own layout, from when that was the only section meant to
+  // be installed as a home-screen app — every section is now, so this is site-wide.
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "WCI OS" },
 };
 
 /**
