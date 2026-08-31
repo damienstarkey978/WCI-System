@@ -73,6 +73,9 @@ export const SCOPES = [
   // Phase 8 — AI layer
   "weekly-summaries:read",
   "weekly-summaries:write",
+  // Historical data migration (Buildertrend cutover) — bypasses live workflow state
+  // machines to backfill already-settled records; see src/lib/migration/service.ts.
+  "migration:write",
 ] as const;
 
 export type Scope = (typeof SCOPES)[number];

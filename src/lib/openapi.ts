@@ -56,6 +56,10 @@ import {
   generateWeeklySummarySchema,
   grantJobAccessSchema,
   grantVendorJobAccessSchema,
+  importBillsSchema,
+  importDailyLogsSchema,
+  importInvoicesSchema,
+  importPurchaseOrdersSchema,
   inviteVendorToBidSchema,
   issueSubmittalReviewLinkSchema,
   issueSurveyResponseLinkSchema,
@@ -1780,6 +1784,59 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["AI"],
     scopes: ["jobs:read"],
     pathParams: ["jobId"],
+  },
+
+  // --- Historical data migration (Buildertrend cutover) ------------------------
+  {
+    method: "post",
+    path: "/migration/daily-logs",
+    summary: "Bulk-import historical Daily Logs",
+    description:
+      "For backfilling Buildertrend history, not live use: unlike POST /daily-logs, createdAt is required " +
+      "(the date the log actually documents) and attachments (already-hosted photo/document URLs) are created " +
+      "in the same call. Per-item results — one bad entry doesn't abort the batch. See src/lib/migration/service.ts.",
+    tags: ["Migration"],
+    scopes: ["migration:write"],
+    requestSchema: importDailyLogsSchema,
+    successDescription: "One result per requested daily log, each either { status: \"success\", dailyLogId } or { status: \"error\", error }.",
+  },
+  {
+    method: "post",
+    path: "/migration/purchase-orders",
+    summary: "Bulk-import historical Purchase Orders",
+    description:
+      "Unlike POST /purchase-orders, carries its final status (DRAFT/APPROVED/DECLINED/...) directly instead of " +
+      "always starting DRAFT, works on jobs that no longer accept new commitments, and requires createdAt. " +
+      "See src/lib/migration/service.ts.",
+    tags: ["Migration"],
+    scopes: ["migration:write"],
+    requestSchema: importPurchaseOrdersSchema,
+    successDescription: "One result per requested PO, each either { status: \"success\", purchaseOrderId, totalCents } or { status: \"error\", error }.",
+  },
+  {
+    method: "post",
+    path: "/migration/bills",
+    summary: "Bulk-import historical Bills",
+    description:
+      "Unlike POST /bills, carries its final approvalStatus (typically PAID, with paidAt) directly instead of " +
+      "starting IN_REVIEW and being walked through the approval funnel one status at a time. " +
+      "See src/lib/migration/service.ts.",
+    tags: ["Migration"],
+    scopes: ["migration:write"],
+    requestSchema: importBillsSchema,
+    successDescription: "One result per requested bill, each either { status: \"success\", billId, totalCents } or { status: \"error\", error }.",
+  },
+  {
+    method: "post",
+    path: "/migration/invoices",
+    summary: "Bulk-import historical client Invoices",
+    description:
+      "Unlike POST /invoices, carries its final status (typically PAID/PARTIALLY_PAID) directly and accepts the " +
+      "historical Payment rows that document how it got there. See src/lib/migration/service.ts.",
+    tags: ["Migration"],
+    scopes: ["migration:write"],
+    requestSchema: importInvoicesSchema,
+    successDescription: "One result per requested invoice, each either { status: \"success\", invoiceId, amountCents } or { status: \"error\", error }.",
   },
 ];
 

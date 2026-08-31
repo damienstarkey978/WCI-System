@@ -11,9 +11,11 @@ import {
   ContractType,
   CostType,
   FinancialSourceType,
+  InvoiceStatus,
   InvoiceType,
   JobStatus,
   PaymentMethod,
+  PurchaseOrderStatus,
   RateMode,
 } from "@/generated/prisma/enums";
 
@@ -760,4 +762,126 @@ export const generateWeeklySummarySchema = z.object({
   /** Both optional — default to the last 7 days when omitted. */
   periodStart: z.coerce.date().optional(),
   periodEnd: z.coerce.date().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Historical data migration (Buildertrend cutover) — see src/lib/migration/service.ts
+// for why these differ from the live create*/registerFile schemas above: every field
+// here that a live-workflow schema forces to a starting value or omits entirely
+// (status, paidAt/approvedAt, createdAt) is exactly what a historical record needs to
+// carry explicitly.
+// ---------------------------------------------------------------------------
+
+const migrationAttachmentSchema = z.object({
+  url: z.string().url().max(2_000),
+  fileName: z.string().trim().min(1).max(255),
+  mimeType: z.string().trim().max(255).nullish(),
+  sizeBytes: z.number().int().positive().max(10_000_000_000).nullish(),
+  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO"]).optional(),
+  createdAt: z.coerce.date().optional(),
+});
+
+export const importDailyLogSchema = z.object({
+  jobId: z.string().cuid(),
+  authorUserId: z.string().cuid(),
+  note: z.string().trim().min(1).max(10_000),
+  clientVisible: z.boolean().optional(),
+  subVisible: z.boolean().optional(),
+  createdAt: z.coerce.date(),
+  attachments: z.array(migrationAttachmentSchema).max(200).optional(),
+});
+
+export const importDailyLogsSchema = z.object({
+  dailyLogs: z.array(importDailyLogSchema).min(1).max(100),
+});
+
+export const importPurchaseOrderSchema = z.object({
+  jobId: z.string().cuid(),
+  uploadedByUserId: z.string().cuid(),
+  poNumber: z.string().trim().min(1).max(64),
+  poSuffix: z.string().trim().max(16).nullish(),
+  vendorName: z.string().trim().min(1).max(255),
+  vendorId: z.string().cuid().nullish(),
+  status: z.enum(PurchaseOrderStatus),
+  approvedAt: z.coerce.date().nullish(),
+  declinedAt: z.coerce.date().nullish(),
+  createdAt: z.coerce.date(),
+  lineItems: z
+    .array(
+      z.object({
+        costCodeId: z.string().cuid(),
+        costType: z.enum(CostType).optional(),
+        title: z.string().trim().min(1).max(255),
+        quantityMilli: quantityMilli.optional().default(1_000),
+        unitCostCents: cents,
+      }),
+    )
+    .min(1)
+    .max(500),
+  attachments: z.array(migrationAttachmentSchema).max(200).optional(),
+});
+
+export const importPurchaseOrdersSchema = z.object({
+  purchaseOrders: z.array(importPurchaseOrderSchema).min(1).max(100),
+});
+
+export const importBillSchema = z.object({
+  jobId: z.string().cuid(),
+  uploadedByUserId: z.string().cuid(),
+  purchaseOrderId: z.string().cuid().nullish(),
+  vendorName: z.string().trim().min(1).max(255),
+  vendorId: z.string().cuid().nullish(),
+  billNumber: z.string().trim().max(64).nullish(),
+  approvalStatus: z.enum(BillApprovalStatus),
+  issuedOn: z.coerce.date().nullish(),
+  dueOn: z.coerce.date().nullish(),
+  paidAt: z.coerce.date().nullish(),
+  createdAt: z.coerce.date(),
+  lineItems: z
+    .array(
+      z.object({
+        costCodeId: z.string().cuid(),
+        costType: z.enum(CostType).optional(),
+        title: z.string().trim().min(1).max(255),
+        amountCents: cents,
+      }),
+    )
+    .min(1)
+    .max(500),
+  attachments: z.array(migrationAttachmentSchema).max(200).optional(),
+});
+
+export const importBillsSchema = z.object({
+  bills: z.array(importBillSchema).min(1).max(100),
+});
+
+export const importInvoiceSchema = z.object({
+  jobId: z.string().cuid(),
+  uploadedByUserId: z.string().cuid(),
+  type: z.enum(InvoiceType),
+  invoiceNumber: z.string().trim().min(1).max(64),
+  status: z.enum(InvoiceStatus),
+  amountCents: cents.optional(),
+  lineItems: z.array(createInvoiceLineItemSchema).max(500).optional(),
+  issuedOn: z.coerce.date().nullish(),
+  dueOn: z.coerce.date().nullish(),
+  paidAt: z.coerce.date().nullish(),
+  voidedAt: z.coerce.date().nullish(),
+  createdAt: z.coerce.date(),
+  payments: z
+    .array(
+      z.object({
+        method: z.enum(PaymentMethod),
+        amountCents: z.number().int().positive().max(1_000_000_000),
+        reference: z.string().trim().max(255).nullish(),
+        receivedAt: z.coerce.date(),
+      }),
+    )
+    .max(500)
+    .optional(),
+  attachments: z.array(migrationAttachmentSchema).max(200).optional(),
+});
+
+export const importInvoicesSchema = z.object({
+  invoices: z.array(importInvoiceSchema).min(1).max(100),
 });

@@ -709,6 +709,7 @@ model PurchaseOrder {
 
   lineItems PurchaseOrderLineItem[]
   bills     Bill[]
+  files     File[]
 
   @@unique([organizationId, poNumber])
   @@index([jobId, status])
@@ -770,6 +771,7 @@ model Bill {
   updatedAt DateTime @updatedAt
 
   lineItems BillLineItem[]
+  files     File[]
 
   @@index([jobId, approvalStatus])
   @@index([organizationId])
@@ -906,6 +908,7 @@ model Invoice {
 
   lineItems InvoiceLineItem[]
   payments  Payment[]
+  files     File[]
 
   @@unique([organizationId, invoiceNumber])
   @@index([jobId, status])
@@ -1451,11 +1454,27 @@ model File {
   selectionOptionId String?
   selectionOption   SelectionOption? @relation(fields: [selectionOptionId], references: [id], onDelete: SetNull)
 
+  /// Set when this file is a receipt/document attached to a Bill (mainly historical
+  /// migration — bills.ts's live OCR flow doesn't set this yet).
+  billId String?
+  bill   Bill?   @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  /// Set when this file is attached to a Purchase Order (mainly historical migration).
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  /// Set when this file is attached to an Invoice (mainly historical migration).
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
 
   @@index([jobId, category])
   @@index([dailyLogId])
   @@index([selectionOptionId])
+  @@index([billId])
+  @@index([purchaseOrderId])
+  @@index([invoiceId])
 }
 
 // ---------------------------------------------------------------------------
