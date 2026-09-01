@@ -172,7 +172,7 @@ function JarvisChatBody({
         )}
         {pending ? (
           <div className="flex items-center gap-2 justify-start">
-            {funUi ? <JarvisMascot expression="thinking" size={22} /> : null}
+            {funUi ? <JarvisMascot expression="thinking" size={26} badge /> : null}
             <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm text-[var(--bt-muted)]" style={{ background: "var(--bt-panel-bg-muted)" }}>
               Jarvis is thinking…
             </div>
