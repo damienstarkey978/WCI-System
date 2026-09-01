@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { usePathname, useParams } from "next/navigation";
 
+import { JarvisAvatar } from "@/components/jarvis/JarvisAvatar";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
 import { useFunUi } from "@/components/jarvis/useFunUi";
@@ -60,11 +61,32 @@ export function JarvisLauncher() {
         className={
           funUi
             ? "wci-fun-chunky-btn fixed bottom-4 right-4 z-50 flex h-20 w-20 items-center justify-center rounded-full transition hover:scale-105 active:scale-95 sm:bottom-5 sm:right-5"
-            : "fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-[var(--bt-on-primary)] shadow-lg transition hover:scale-105 sm:bottom-5 sm:right-5"
+            : "fixed bottom-4 right-4 z-50 flex h-[60px] w-[60px] items-center justify-center rounded-full shadow-lg transition hover:scale-105 sm:bottom-5 sm:right-5"
         }
-        style={funUi ? { background: "linear-gradient(135deg, var(--bt-primary), var(--bt-nav))" } : { background: "var(--bt-primary)" }}
+        style={funUi ? { background: "linear-gradient(135deg, var(--bt-primary), var(--bt-nav))" } : undefined}
       >
-        {funUi ? <JarvisMascot expression={pending ? "thinking" : "happy"} size={60} tone="light" bob={!open} /> : "✦"}
+        {funUi ? (
+          <JarvisMascot expression={pending ? "thinking" : "happy"} size={60} tone="light" bob={!open} />
+        ) : (
+          <>
+            <JarvisAvatar pose={pending ? "thinking" : "crossed"} size={60} />
+            {/* BUILD_SPEC.md's "ping" — a small always-on-line accent dot, not a
+                notification count, so it doesn't need to react to anything. */}
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                top: 2,
+                right: 2,
+                width: 11,
+                height: 11,
+                borderRadius: "9999px",
+                background: "var(--bt-primary)",
+                border: "2px solid var(--background)",
+              }}
+            />
+          </>
+        )}
       </button>
 
       {open ? (

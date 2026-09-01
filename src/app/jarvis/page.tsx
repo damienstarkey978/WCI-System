@@ -31,7 +31,7 @@ export default async function JarvisNewChatPage() {
             enable Jarvis.
           </div>
         ) : null}
-        <MessageList conversationId="" messages={[]} pendingActions={[]} />
+        <MessageList conversationId="" messages={[]} pendingActions={[]} userFirstName={user.name?.split(" ")[0]} />
         <ChatInputForm showSuggestions />
       </div>
     </div>

@@ -1,3 +1,5 @@
+import { JarvisCharacter } from "@/components/jarvis/JarvisCharacter";
+
 import { confirmPendingActionAction, declinePendingActionAction } from "./actions";
 
 export interface JarvisMessageData {
@@ -68,16 +70,26 @@ export function MessageList({
   conversationId,
   messages,
   pendingActions,
+  userFirstName,
 }: {
   conversationId: string;
   messages: readonly JarvisMessageData[];
   pendingActions: readonly JarvisPendingActionData[];
+  /** BUILD_SPEC.md's chat-hero greeting ("What do you need, Damien?") — optional
+   *  since not every caller has a name handy, in which case it falls back to a
+   *  ungreeted heading rather than an awkward blank. */
+  userFirstName?: string;
 }) {
   if (messages.length === 0 && pendingActions.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-[var(--bt-muted)]">
-        Ask Jarvis to look up a job, draft a change order, log a note, or queue an invoice or proposal to send — it
-        can&apos;t send anything client-facing without your confirmation first.
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+        <JarvisCharacter pose="pointing" width={148} height={180} />
+        <h2 className="text-lg font-semibold text-[var(--bt-text)]">{userFirstName ? `What do you need, ${userFirstName}?` : "What do you need?"}</h2>
+        <p className="text-xs text-[var(--bt-muted)]">Let&apos;s get to work.</p>
+        <p className="max-w-sm text-sm text-[var(--bt-muted)]">
+          Ask Jarvis to look up a job, draft a change order, log a note, or queue an invoice or proposal to send — it
+          can&apos;t send anything client-facing without your confirmation first.
+        </p>
       </div>
     );
   }
