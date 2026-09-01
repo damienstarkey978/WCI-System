@@ -99,6 +99,13 @@ function JarvisChatBody({
     }
   }
 
+  // Fires once dictation stops with something actually said — sends it straight to
+  // Jarvis, the same as tapping Send, so talking is the whole interaction rather
+  // than dictate-then-remember-to-submit.
+  function sendVoiceMessage() {
+    formRef.current?.requestSubmit();
+  }
+
   return (
     <div
       className={`flex ${heightClassName} w-full flex-col overflow-hidden border bg-[var(--bt-panel-bg)] ${funUi ? "rounded-3xl border-2" : "rounded-lg"}`}
@@ -209,7 +216,7 @@ function JarvisChatBody({
       >
         {conversationId ? <input type="hidden" name="conversationId" value={conversationId} /> : null}
         <input type="hidden" name="context" value={context ? JSON.stringify(context) : ""} />
-        <JarvisVoiceButton onTranscript={appendVoiceTranscript} funUi={funUi} />
+        <JarvisVoiceButton onTranscript={appendVoiceTranscript} onFinish={sendVoiceMessage} funUi={funUi} />
         <div className="flex items-end gap-2">
           <textarea
             name="text"

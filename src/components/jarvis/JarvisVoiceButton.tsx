@@ -4,8 +4,10 @@
  * "Let's get to work" — a mic button on every Jarvis composer (the docked launcher
  * panel, the dashboard's inline business-advisor chat, /jarvis and /jarvis/[id], and
  * any other inline embedding, since they all render through JarvisChatPanel.tsx)
- * that dictates straight into the message box via the browser's built-in speech
- * recognition, so the device's microphone does the typing instead of a keyboard.
+ * that talks straight to Jarvis via the browser's built-in speech recognition:
+ * dictate, and the moment you stop (tap again, or just go quiet), it sends — no
+ * separate "now press Send" step, since the whole point is a hands-free way to
+ * communicate with Jarvis instead of typing.
  *
  * Chrome, Edge, and Safari (desktop and mobile) all ship `webkitSpeechRecognition`;
  * Firefox doesn't implement the Web Speech API at all, so this renders nothing there
@@ -49,17 +51,26 @@ function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | undef
 
 export function JarvisVoiceButton({
   onTranscript,
+  onFinish,
   funUi,
 }: {
   /** Called with each finalized chunk of speech — the caller decides how to fold it
    *  into the composer (JarvisChatPanel.tsx appends it to whatever's already typed,
    *  so starting to dictate never clobbers a draft). */
   onTranscript: (text: string) => void;
+  /** Called once, after listening stops, if at least one word was actually
+   *  recognized — JarvisChatPanel.tsx uses this to submit the message
+   *  automatically, so talking to Jarvis is a single hands-free action rather
+   *  than dictate-then-remember-to-tap-Send. Not called on a stop with nothing
+   *  captured (mic tapped and immediately tapped off, permission denied, etc.),
+   *  so it never sends an empty message. */
+  onFinish: () => void;
   funUi: boolean;
 }) {
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const capturedAnythingRef = useRef(false);
 
   useEffect(() => {
     const detectSupport = () => setSupported(getSpeechRecognitionConstructor() !== undefined);
@@ -77,6 +88,7 @@ export function JarvisVoiceButton({
     const RecognitionCtor = getSpeechRecognitionConstructor();
     if (!RecognitionCtor) return;
 
+    capturedAnythingRef.current = false;
     const recognition = new RecognitionCtor();
     recognition.continuous = true;
     recognition.interimResults = false;
@@ -87,10 +99,16 @@ export function JarvisVoiceButton({
         const result = event.results[i];
         if (result.isFinal) finalChunk += `${result[0].transcript} `;
       }
-      if (finalChunk.trim()) onTranscript(finalChunk.trim());
+      if (finalChunk.trim()) {
+        capturedAnythingRef.current = true;
+        onTranscript(finalChunk.trim());
+      }
     };
     recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      setListening(false);
+      if (capturedAnythingRef.current) onFinish();
+    };
 
     recognitionRef.current = recognition;
     recognition.start();
