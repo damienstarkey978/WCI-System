@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
 import { ServiceWorkerCleanup } from "@/components/service-worker-cleanup";
 import { ThemeScript } from "@/components/settings/ThemeScript";
+import { FunUiScript } from "@/components/settings/FunUiScript";
 
 import "./globals.css";
 
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <AuthProvider>
       <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
         <ThemeScript />
+        <FunUiScript />
         <body className="min-h-full flex flex-col bg-background text-foreground">
           <ServiceWorkerCleanup />
           {children}

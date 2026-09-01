@@ -19,6 +19,8 @@ import { useState } from "react";
 import { usePathname, useParams } from "next/navigation";
 
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
+import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
+import { useFunUi } from "@/components/jarvis/useFunUi";
 
 function currentPageContext(pathname: string | null, params: Record<string, string | string[] | undefined>): Record<string, unknown> | null {
   if (!pathname || pathname.startsWith("/jarvis")) return null;
@@ -41,6 +43,8 @@ function currentPageContext(pathname: string | null, params: Record<string, stri
 
 export function JarvisLauncher() {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const funUi = useFunUi();
 
   const pathname = usePathname();
   const rawParams = useParams();
@@ -53,15 +57,25 @@ export function JarvisLauncher() {
         onClick={() => setOpen((value) => !value)}
         aria-label="Ask Jarvis"
         title="Ask Jarvis"
-        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-white shadow-lg transition hover:scale-105"
-        style={{ background: "var(--bt-primary)" }}
+        className={
+          funUi
+            ? "fixed bottom-5 right-5 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-white p-1.5 shadow-lg transition hover:scale-105"
+            : "fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-white shadow-lg transition hover:scale-105"
+        }
+        style={funUi ? { border: "2px solid var(--bt-primary)" } : { background: "var(--bt-primary)" }}
       >
-        ✦
+        {funUi ? <JarvisMascot expression={pending ? "thinking" : "happy"} size={48} bob={!open} /> : "✦"}
       </button>
 
       {open ? (
         <div className="fixed bottom-24 right-5 z-50 w-96 max-w-[calc(100vw-2.5rem)] shadow-2xl">
-          <JarvisChatPanel context={context} storageKey="launcher" onClose={() => setOpen(false)} heightClassName="h-[32rem]" />
+          <JarvisChatPanel
+            context={context}
+            storageKey="launcher"
+            onClose={() => setOpen(false)}
+            onPendingChange={setPending}
+            heightClassName="h-[32rem]"
+          />
         </div>
       ) : null}
     </>

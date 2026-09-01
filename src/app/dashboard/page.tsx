@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { DashboardFunGreeting } from "@/app/dashboard/fun-greeting";
 import { AppShell } from "@/components/shell/AppShell";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
@@ -91,6 +92,8 @@ export default async function DashboardPage() {
     <AppShell jobs={jobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Dashboard</h1>
+
+        {isAnthropicConfigured() ? <DashboardFunGreeting /> : null}
 
         {isAnthropicConfigured() ? (
           <JarvisChatPanel

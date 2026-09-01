@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { ThemeToggle } from "@/components/settings/ThemeToggle";
+import { FunUiToggle } from "@/components/settings/FunUiToggle";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
 
@@ -38,8 +39,9 @@ export default async function SettingsPage() {
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Appearance</h2>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-col gap-4">
           <ThemeToggle />
+          <FunUiToggle />
         </div>
       </section>
 

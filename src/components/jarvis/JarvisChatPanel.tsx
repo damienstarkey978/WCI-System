@@ -15,6 +15,8 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { sendJarvisLauncherMessageAction, type LauncherActionState } from "@/app/jarvis/actions";
+import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
+import { useFunUi } from "@/components/jarvis/useFunUi";
 import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 const STORAGE_KEY_PREFIX = "jarvis-chat-conversation-id";
@@ -29,6 +31,10 @@ interface JarvisChatPanelProps {
   readonly emptyStateHint?: string;
   readonly onClose?: () => void;
   readonly heightClassName?: string;
+  /** Lets an embedding (JarvisLauncher's docked button) react to a request being in
+   *  flight — e.g. swap the mascot's face to "thinking" — without lifting the whole
+   *  useActionState up. */
+  readonly onPendingChange?: (pending: boolean) => void;
 }
 
 function JarvisChatBody({
@@ -39,6 +45,7 @@ function JarvisChatBody({
   onClose,
   onNewChat,
   heightClassName,
+  onPendingChange,
 }: {
   context: Record<string, unknown> | null;
   storageKeyFull: string;
@@ -47,7 +54,9 @@ function JarvisChatBody({
   onClose?: () => void;
   onNewChat: () => void;
   heightClassName: string;
+  onPendingChange?: (pending: boolean) => void;
 }) {
+  const funUi = useFunUi();
   const [initialConversationId] = useState<string | undefined>(() =>
     typeof window !== "undefined" ? (sessionStorage.getItem(storageKeyFull) ?? undefined) : undefined,
   );
@@ -65,6 +74,10 @@ function JarvisChatBody({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [state.messages]);
 
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
+
   const messages = state.messages ?? [];
   const pendingCount = state.pendingCount ?? 0;
   const conversationId = state.conversationId;
@@ -81,7 +94,7 @@ function JarvisChatBody({
     <div className={`flex ${heightClassName} w-full flex-col overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]`} style={{ borderColor: "var(--bt-border)" }}>
       <div className="flex items-center justify-between border-b px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
         <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]">
-          <span>✦</span> Jarvis
+          {funUi ? <JarvisMascot expression={pending ? "thinking" : "happy"} size={18} /> : <span>✦</span>} Jarvis
         </span>
         <div className="flex items-center gap-2.5 text-xs">
           <button type="button" onClick={onNewChat} className="text-[var(--bt-muted)] hover:underline">
@@ -137,7 +150,8 @@ function JarvisChatBody({
           ))
         )}
         {pending ? (
-          <div className="flex justify-start">
+          <div className="flex items-center gap-2 justify-start">
+            {funUi ? <JarvisMascot expression="thinking" size={22} /> : null}
             <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm text-[var(--bt-muted)]" style={{ background: "var(--bt-panel-bg-muted)" }}>
               Jarvis is thinking…
             </div>
@@ -203,6 +217,7 @@ export function JarvisChatPanel({
   emptyStateHint = "Ask Jarvis to look up a job, draft a change order, log a note, or queue an invoice or proposal to send — it can't send anything client-facing without your confirmation first.",
   onClose,
   heightClassName = "h-[32rem]",
+  onPendingChange,
 }: JarvisChatPanelProps) {
   const [chatKey, setChatKey] = useState(0);
   const storageKeyFull = `${STORAGE_KEY_PREFIX}:${storageKey}`;
@@ -218,6 +233,7 @@ export function JarvisChatPanel({
       context={context}
       storageKeyFull={storageKeyFull}
       suggestions={suggestions}
+      onPendingChange={onPendingChange}
       emptyStateHint={emptyStateHint}
       onClose={onClose}
       onNewChat={startNewChat}
