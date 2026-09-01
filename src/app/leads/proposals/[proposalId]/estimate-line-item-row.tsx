@@ -24,8 +24,8 @@ export interface EstimateLineItemData {
 }
 
 const CONFIDENCE_STYLE: Record<"MEDIUM" | "LOW", { bg: string; text: string; label: string }> = {
-  LOW: { bg: "#fee2e2", text: "#991b1b", label: "AI: low confidence" },
-  MEDIUM: { bg: "#fef3c7", text: "#92400e", label: "AI: medium confidence" },
+  LOW: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)", label: "AI: low confidence" },
+  MEDIUM: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)", label: "AI: medium confidence" },
 };
 
 function LineItemBadges({ confidence, priceSource }: { confidence: EstimateLineItemData["confidence"]; priceSource: EstimateLineItemData["priceSource"] }) {
@@ -40,7 +40,7 @@ function LineItemBadges({ confidence, priceSource }: { confidence: EstimateLineI
         </span>
       ) : null}
       {priceSource === "MARKET_RATE" ? (
-        <span className="rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: "#dbeafe", color: "#1e40af" }}>
+        <span className="rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
           Market-rate estimate
         </span>
       ) : null}
@@ -108,7 +108,7 @@ export function EstimateLineItemRow({
               style={{ borderColor: "var(--bt-border)" }}
               title="Rate %"
             />
-            <button type="submit" disabled={pending} className="rounded px-2 py-1 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+            <button type="submit" disabled={pending} className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
               {pending ? "…" : "Save"}
             </button>
             <button type="button" onClick={() => setEditing(false)} className="text-xs text-[var(--bt-muted)] hover:underline">

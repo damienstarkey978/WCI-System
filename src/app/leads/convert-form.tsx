@@ -15,7 +15,7 @@ export function ConvertToJobButton({ leadId, defaultName }: { leadId: string; de
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded px-2 py-1 text-xs font-semibold text-white"
+        className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)]"
         style={{ background: "var(--bt-primary)" }}
       >
         Convert to job
@@ -42,7 +42,7 @@ export function ConvertToJobButton({ leadId, defaultName }: { leadId: string; de
         <button
           type="submit"
           disabled={pending}
-          className="rounded px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+          className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
           style={{ background: "var(--bt-primary)" }}
         >
           {pending ? "Creating…" : "Create job"}

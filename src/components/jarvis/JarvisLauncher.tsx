@@ -60,7 +60,7 @@ export function JarvisLauncher() {
         className={
           funUi
             ? "wci-fun-chunky-btn fixed bottom-4 right-4 z-50 flex h-20 w-20 items-center justify-center rounded-full transition hover:scale-105 active:scale-95 sm:bottom-5 sm:right-5"
-            : "fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-white shadow-lg transition hover:scale-105 sm:bottom-5 sm:right-5"
+            : "fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-[var(--bt-on-primary)] shadow-lg transition hover:scale-105 sm:bottom-5 sm:right-5"
         }
         style={funUi ? { background: "linear-gradient(135deg, var(--bt-primary), var(--bt-nav))" } : { background: "var(--bt-primary)" }}
       >

@@ -15,7 +15,7 @@ import { SubmitBidOnBehalfForm } from "./submit-bid-on-behalf-form";
 export const dynamic = "force-dynamic";
 
 const PACKAGE_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  OPEN: { bg: "#dbeafe", text: "#1e40af" },
+  OPEN: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   CLOSED: { bg: "#e5e7eb", text: "#374151" },
   AWARDED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
 };
@@ -23,9 +23,9 @@ const PACKAGE_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
 const SUBMISSION_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   INVITED: { bg: "#e5e7eb", text: "#374151" },
   DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  SUBMITTED: { bg: "#fef3c7", text: "#92400e" },
+  SUBMITTED: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
   ACCEPTED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  DECLINED: { bg: "#fee2e2", text: "#991b1b" },
+  DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids">) {

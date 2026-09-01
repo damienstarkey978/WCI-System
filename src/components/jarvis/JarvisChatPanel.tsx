@@ -177,7 +177,7 @@ function JarvisChatBody({
                 className="max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm"
                 style={
                   message.role === "USER"
-                    ? { background: "var(--bt-primary)", color: "white" }
+                    ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" }
                     : { background: "var(--bt-panel-bg-muted)", color: "var(--bt-text)" }
                 }
               >
@@ -232,7 +232,7 @@ function JarvisChatBody({
           <button
             type="submit"
             disabled={pending}
-            className={`px-3.5 text-xs font-semibold text-white disabled:opacity-50 disabled:shadow-none ${funUi ? "wci-fun-chunky-btn rounded-xl py-2.5 active:scale-95" : "rounded py-1.5"}`}
+            className={`px-3.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 disabled:shadow-none ${funUi ? "wci-fun-chunky-btn rounded-xl py-2.5 active:scale-95" : "rounded py-1.5"}`}
             style={{ background: "var(--bt-primary)" }}
           >
             {pending ? "…" : "Send"}

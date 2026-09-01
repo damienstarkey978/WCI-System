@@ -68,7 +68,7 @@ function InternalUserCard({ jobId, row }: { jobId: string; row: InternalUserAcce
         <button
           type="submit"
           disabled={pending}
-          className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
           style={{ background: "var(--bt-primary)" }}
         >
           {pending ? "Saving…" : "Save permissions"}
@@ -114,7 +114,7 @@ export function InternalUsersTab({
         <button
           type="submit"
           disabled={pending || availableStaff.length === 0}
-          className="rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
           style={{ background: "var(--bt-primary)" }}
         >
           {pending ? "Adding…" : "+ Internal user"}

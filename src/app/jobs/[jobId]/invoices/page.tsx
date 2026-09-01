@@ -15,10 +15,10 @@ export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  SENT: { bg: "#dbeafe", text: "#1e40af" },
-  PARTIALLY_PAID: { bg: "#fef3c7", text: "#92400e" },
+  SENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
+  PARTIALLY_PAID: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
   PAID: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  VOID: { bg: "#fee2e2", text: "#991b1b" },
+  VOID: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 export default async function InvoicesPage({ params }: PageProps<"/jobs/[jobId]/invoices">) {

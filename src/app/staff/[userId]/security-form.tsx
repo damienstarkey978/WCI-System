@@ -21,7 +21,7 @@ export function SecurityForm({ userId, isActive }: { userId: string; isActive: b
         type="submit"
         disabled={pending}
         className={`rounded px-4 py-2 text-sm font-semibold disabled:opacity-50 ${
-          isActive ? "border border-red-300 text-red-700 hover:bg-red-50" : "text-white"
+          isActive ? "border border-red-300 text-red-700 hover:bg-red-50" : "text-[var(--bt-on-primary)]"
         }`}
         style={isActive ? undefined : { background: "var(--bt-primary)" }}
       >

@@ -8,11 +8,11 @@ export const dynamic = "force-dynamic";
 
 const STAGE_STYLE: Record<string, { bg: string; text: string }> = {
   NEW: { bg: "#e5e7eb", text: "#374151" },
-  CONTACTED: { bg: "#dbeafe", text: "#1e40af" },
-  QUALIFIED: { bg: "#fef3c7", text: "#92400e" },
-  PROPOSAL_SENT: { bg: "#ede9fe", text: "#5b21b6" },
+  CONTACTED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
+  QUALIFIED: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
+  PROPOSAL_SENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   WON: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  LOST: { bg: "#fee2e2", text: "#991b1b" },
+  LOST: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 /**

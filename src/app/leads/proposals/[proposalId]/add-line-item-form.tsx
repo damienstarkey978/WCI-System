@@ -62,7 +62,7 @@ export function AddLineItemForm({
       <input name="quantity" defaultValue="1" inputMode="decimal" title="Quantity" className="w-16 rounded border px-2 py-1 text-sm outline-none focus:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }} />
       <input name="unitCost" defaultValue="0" inputMode="decimal" title="Unit cost ($)" className="w-20 rounded border px-2 py-1 text-sm outline-none focus:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }} />
       <input name="ratePercent" defaultValue="0" inputMode="decimal" title="Rate %" className="w-16 rounded border px-2 py-1 text-sm outline-none focus:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }} />
-      <button type="submit" disabled={pending} className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+      <button type="submit" disabled={pending} className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
         {pending ? "…" : "Add line item"}
       </button>
       {state.error ? <span className="w-full text-xs text-red-600">{state.error}</span> : null}

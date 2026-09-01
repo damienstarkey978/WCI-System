@@ -20,9 +20,9 @@ export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  SENT: { bg: "#dbeafe", text: "#1e40af" },
+  SENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   ACCEPTED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  DECLINED: { bg: "#fee2e2", text: "#991b1b" },
+  DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]/estimates">) {

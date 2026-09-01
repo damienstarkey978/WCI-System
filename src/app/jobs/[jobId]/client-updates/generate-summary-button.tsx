@@ -12,7 +12,7 @@ export function GenerateSummaryButton({ jobId }: { jobId: string }) {
   return (
     <form action={formAction}>
       <input type="hidden" name="jobId" value={jobId} />
-      <button type="submit" disabled={pending} className="rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+      <button type="submit" disabled={pending} className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
         {pending ? "Generating…" : "Generate this week's update"}
       </button>
       {state.error ? (

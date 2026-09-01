@@ -34,7 +34,7 @@ function Tile({ label, value, warn, href }: { label: string; value: string; warn
   const body = (
     <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
       <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{label}</div>
-      <div className="mt-1 text-2xl font-semibold" style={{ color: warn ? "#b91c1c" : "var(--bt-text)" }}>
+      <div className="mt-1 text-2xl font-semibold" style={{ color: warn ? "var(--bt-danger)" : "var(--bt-text)" }}>
         {value}
       </div>
     </div>
@@ -203,7 +203,7 @@ export default async function DashboardPage() {
                   <Link href={`/jobs/${row.jobId}`} className="font-medium text-[var(--bt-primary)] hover:underline">
                     {row.jobName}
                   </Link>
-                  <span className="text-xs font-semibold" style={{ color: row.projectedMarginBasisPoints < 0 ? "#b91c1c" : "var(--bt-muted)" }}>
+                  <span className="text-xs font-semibold" style={{ color: row.projectedMarginBasisPoints < 0 ? "var(--bt-danger)" : "var(--bt-muted)" }}>
                     {formatPercent(row.projectedMarginBasisPoints)} margin
                   </span>
                 </li>

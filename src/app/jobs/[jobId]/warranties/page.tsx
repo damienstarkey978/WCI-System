@@ -12,9 +12,9 @@ import { ScheduleAppointmentForm } from "./schedule-appointment-form";
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  SUBMITTED: { bg: "#fef3c7", text: "#92400e" },
-  SCHEDULED: { bg: "#e0e7ff", text: "#3730a3" },
-  IN_PROGRESS: { bg: "#e0e7ff", text: "#3730a3" },
+  SUBMITTED: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
+  SCHEDULED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
+  IN_PROGRESS: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   COMPLETED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
   CLOSED: { bg: "#e5e7eb", text: "#374151" },
 };

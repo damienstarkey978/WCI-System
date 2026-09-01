@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fredoka, Geist, Geist_Mono } from "next/font/google";
+import { Fredoka, Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
 
 import { AuthProvider } from "@/components/auth-provider";
 import { ServiceWorkerCleanup } from "@/components/service-worker-cleanup";
@@ -8,11 +8,23 @@ import { FunUiScript } from "@/components/settings/FunUiScript";
 
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/** The redesign's body copy face (BUILD_SPEC.md) — replaces Geist Sans, which
+ *  nothing actually rendered with (body pinned to plain Arial before this). */
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
+/** The redesign's headline/display face, for h1-h3 and anything marked .display
+ *  (see globals.css) — the rounder, more graphic sibling to Inter's body text. */
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+});
+
+/** Still used for job/cost-code prefixes and IDs via Tailwind's font-mono utility —
+ *  unrelated to the redesign, kept as-is. */
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
@@ -53,7 +65,11 @@ export const maxDuration = 120;
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <AuthProvider>
-      <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} h-full antialiased`} suppressHydrationWarning>
+      <html
+        lang="en"
+        className={`${inter.variable} ${spaceGrotesk.variable} ${geistMono.variable} ${fredoka.variable} h-full antialiased`}
+        suppressHydrationWarning
+      >
         <ThemeScript />
         <FunUiScript />
         <body className="min-h-full flex flex-col bg-background text-foreground">

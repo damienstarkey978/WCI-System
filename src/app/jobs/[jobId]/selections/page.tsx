@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   PENDING: { bg: "#e5e7eb", text: "#374151" },
   APPROVED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  DECLINED: { bg: "#fee2e2", text: "#991b1b" },
+  DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 export default async function SelectionsPage({ params }: PageProps<"/jobs/[jobId]/selections">) {

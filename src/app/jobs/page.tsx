@@ -35,7 +35,7 @@ export default async function JobsIndexPage() {
           <h1 className="text-xl font-semibold text-[var(--bt-text)]">Jobs</h1>
           <Link
             href="/jobs/new"
-            className="rounded px-4 py-2 text-sm font-semibold text-white"
+            className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
             style={{ background: "var(--bt-primary)" }}
           >
             + New job

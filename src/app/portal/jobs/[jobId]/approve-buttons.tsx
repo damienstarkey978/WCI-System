@@ -16,7 +16,7 @@ export function ApproveChangeOrderButton({ jobId, changeOrderId }: { jobId: stri
       <button
         type="submit"
         disabled={pending}
-        className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+        className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
         style={{ background: "var(--bt-primary)" }}
       >
         {pending ? "Approving…" : "Approve"}
@@ -45,7 +45,7 @@ export function ApproveSelectionOptionButton({
       <button
         type="submit"
         disabled={pending}
-        className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+        className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
         style={{ background: "var(--bt-primary)" }}
       >
         {pending ? "Approving…" : "Choose this option"}

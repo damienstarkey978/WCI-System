@@ -57,7 +57,7 @@ function JobScopedSection({
           items.map((item) => (
             <Link key={item.path} href={`/jobs/${activeJobId}${item.path}`} onClick={onNavigate} className={SECTION_ITEM_CLASS}>
               {item.label}
-              {item.isNew ? <span className="ml-2 rounded bg-[var(--bt-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white">New</span> : null}
+              {item.isNew ? <span className="ml-2 rounded bg-[var(--bt-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--bt-on-primary)]">New</span> : null}
             </Link>
           ))
         )}

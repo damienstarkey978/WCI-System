@@ -11,10 +11,10 @@ import { CreateSubmittalForm } from "./create-submittal-form";
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  PENDING: { bg: "#fef3c7", text: "#92400e" },
+  PENDING: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
   APPROVED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  REJECTED: { bg: "#fee2e2", text: "#991b1b" },
-  REVISE_AND_RESUBMIT: { bg: "#e0e7ff", text: "#3730a3" },
+  REJECTED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
+  REVISE_AND_RESUBMIT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
 };
 
 const TYPE_LABEL: Record<string, string> = {

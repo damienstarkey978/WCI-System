@@ -13,8 +13,8 @@ import { CreateRfiForm } from "./create-rfi-form";
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  OPEN: { bg: "#fef3c7", text: "#92400e" },
-  ANSWERED: { bg: "#e0e7ff", text: "#3730a3" },
+  OPEN: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
+  ANSWERED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   CLOSED: { bg: "#e5e7eb", text: "#374151" },
 };
 

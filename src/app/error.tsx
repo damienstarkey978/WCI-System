@@ -19,7 +19,7 @@ export default function RootError({ error, reset }: { error: Error & { digest?: 
         <button
           type="button"
           onClick={() => reset()}
-          className="rounded px-4 py-2 text-sm font-semibold text-white"
+          className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
           style={{ background: "var(--bt-primary, #1a56db)" }}
         >
           Try again

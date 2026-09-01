@@ -34,7 +34,7 @@ export function InviteVendorForm({ jobId, bidPackageId, vendors }: { jobId: stri
           </option>
         ))}
       </select>
-      <button type="submit" disabled={pending} className="rounded px-2 py-1 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+      <button type="submit" disabled={pending} className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
         {pending ? "Inviting…" : "Invite"}
       </button>
       {state.error ? <span className="text-xs text-red-600">{state.error}</span> : null}

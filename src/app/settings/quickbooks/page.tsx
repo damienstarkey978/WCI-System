@@ -100,7 +100,7 @@ export default async function QuickBooksSettingsPage({ searchParams }: PageProps
             </p>
             <a
               href="/api/staff/quickbooks/connect"
-              className="w-fit rounded bg-[var(--bt-primary)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+              className="w-fit rounded bg-[var(--bt-primary)] px-3 py-1.5 text-sm font-medium text-[var(--bt-on-primary)] hover:opacity-90 aria-disabled:pointer-events-none aria-disabled:opacity-50"
               aria-disabled={!isQuickBooksConfigured()}
             >
               Connect to QuickBooks

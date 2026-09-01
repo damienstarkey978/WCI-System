@@ -78,7 +78,7 @@ export default async function CostInboxPage({ params }: PageProps<"/jobs/[jobId]
                     <input type="hidden" name="billId" value={bill.id} />
                     <button
                       type="submit"
-                      className="rounded px-3 py-1.5 text-xs font-semibold text-white"
+                      className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]"
                       style={{ background: "var(--bt-primary)" }}
                     >
                       Approve

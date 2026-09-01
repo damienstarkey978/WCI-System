@@ -37,7 +37,7 @@ export function SubmitBidOnBehalfForm({ jobId, bidSubmissionId }: { jobId: strin
         className="w-32 rounded border px-2 py-1 text-xs outline-none focus:border-[var(--bt-primary)]"
         style={{ borderColor: "var(--bt-border)" }}
       />
-      <button type="submit" disabled={pending} className="rounded px-2 py-1 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+      <button type="submit" disabled={pending} className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
         {pending ? "Saving…" : "Save"}
       </button>
       <button type="button" onClick={() => setOpen(false)} className="text-xs text-[var(--bt-muted)] hover:underline">

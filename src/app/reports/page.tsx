@@ -66,7 +66,7 @@ function Th({ children, right }: { children: ReactNode; right?: boolean }) {
 
 function Td({ children, right, warn }: { children: ReactNode; right?: boolean; warn?: boolean }) {
   return (
-    <td className={`px-4 py-2 ${right ? "text-right" : "text-left"}`} style={warn ? { color: "#b91c1c", fontWeight: 600 } : { color: "var(--bt-text)" }}>
+    <td className={`px-4 py-2 ${right ? "text-right" : "text-left"}`} style={warn ? { color: "var(--bt-danger)", fontWeight: 600 } : { color: "var(--bt-text)" }}>
       {children}
     </td>
   );
@@ -139,7 +139,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
               key={r.key}
               href={`/reports?category=${category}&report=${r.key}`}
               className="rounded px-3 py-1.5 text-sm font-medium"
-              style={active === r.key ? { background: "var(--bt-primary)", color: "white" } : { background: "var(--bt-panel-bg)", color: "var(--bt-muted)" }}
+              style={active === r.key ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" } : { background: "var(--bt-panel-bg)", color: "var(--bt-muted)" }}
             >
               {r.label}
             </Link>

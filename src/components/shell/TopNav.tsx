@@ -137,7 +137,7 @@ function JobNavDropdown({ label, items, activeJobId }: { label: string; items: r
               >
                 {item.label}
                 {item.isNew ? (
-                  <span className="rounded bg-[var(--bt-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  <span className="rounded bg-[var(--bt-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--bt-on-primary)]">
                     New
                   </span>
                 ) : null}

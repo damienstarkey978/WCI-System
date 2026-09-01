@@ -33,7 +33,7 @@ export function RoleForm({ userId, currentRole }: { userId: string; currentRole:
       <button
         type="submit"
         disabled={pending}
-        className="rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
         style={{ background: "var(--bt-primary)" }}
       >
         {pending ? "Saving…" : "Change role"}

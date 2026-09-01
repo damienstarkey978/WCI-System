@@ -41,7 +41,7 @@ export function ClosePackageButtons({
             type="submit"
             disabled={pending || !hasAccepted}
             title={hasAccepted ? undefined : "Accept at least one submission first."}
-            className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
             style={{ background: "var(--bt-primary)" }}
           >
             Award package

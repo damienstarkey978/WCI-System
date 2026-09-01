@@ -12,11 +12,11 @@ import { SyncToQuickBooksButton } from "./sync-to-quickbooks-button";
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  IN_REVIEW: { bg: "#fef3c7", text: "#92400e" },
-  APPROVED: { bg: "#dbeafe", text: "#1e40af" },
-  READY_FOR_PAYMENT: { bg: "#e0e7ff", text: "#3730a3" },
+  IN_REVIEW: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
+  APPROVED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
+  READY_FOR_PAYMENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   PAID: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  VOID: { bg: "#fee2e2", text: "#991b1b" },
+  VOID: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 export default async function BillsPage({ params }: PageProps<"/jobs/[jobId]/bills">) {

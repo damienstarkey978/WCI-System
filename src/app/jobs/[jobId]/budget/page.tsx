@@ -139,7 +139,7 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
             className="rounded px-3 py-1.5 text-sm font-medium"
             style={
               selectedBudgetView.key === budgetView.key
-                ? { background: "var(--bt-primary)", color: "white" }
+                ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" }
                 : { color: "var(--bt-muted)" }
             }
           >
@@ -173,7 +173,7 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
                     <td
                       key={columnId}
                       className="whitespace-nowrap px-4 py-2 text-right"
-                      style={line.isOverBudget && columnId === "projectedCost" ? { color: "#b91c1c", fontWeight: 600 } : { color: "var(--bt-text)" }}
+                      style={line.isOverBudget && columnId === "projectedCost" ? { color: "var(--bt-danger)", fontWeight: 600 } : { color: "var(--bt-text)" }}
                     >
                       {lineCell(line, columnId)}
                     </td>

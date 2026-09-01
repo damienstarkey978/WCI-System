@@ -24,9 +24,9 @@ export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  SENT: { bg: "#dbeafe", text: "#1e40af" },
+  SENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   ACCEPTED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  DECLINED: { bg: "#fee2e2", text: "#991b1b" },
+  DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 /**
@@ -127,7 +127,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold text-[var(--bt-text)]">{proposal.title}</h1>
               {aiGenerated ? (
-                <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#ede9fe", color: "#5b21b6" }}>
+                <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
                   Drafted by Jarvis
                 </span>
               ) : null}
@@ -155,7 +155,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               {proposal.status === "DRAFT" ? (
                 <form action={sendProposalPageAction}>
                   <input type="hidden" name="proposalId" value={proposal.id} />
-                  <button type="submit" className="rounded px-3 py-1.5 text-xs font-semibold text-white" style={{ background: "var(--bt-primary)" }}>
+                  <button type="submit" className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
                     Send to client
                   </button>
                 </form>

@@ -25,7 +25,7 @@ export function IssueLinkForm({ jobId, surveyId }: { jobId: string; surveyId: st
       <div className="flex flex-wrap gap-2">
         <input name="recipientName" placeholder="Recipient name" className="rounded border px-2 py-1 text-xs outline-none focus:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }} />
         <input name="recipientEmail" type="email" placeholder="Recipient email" className="rounded border px-2 py-1 text-xs outline-none focus:border-[var(--bt-primary)]" style={{ borderColor: "var(--bt-border)" }} />
-        <button type="submit" disabled={pending} className="rounded px-2 py-1 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+        <button type="submit" disabled={pending} className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
           {pending ? "Issuing…" : "Generate link"}
         </button>
       </div>

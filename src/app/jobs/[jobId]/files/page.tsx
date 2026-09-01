@@ -76,7 +76,7 @@ export default async function FilesPage({
             key={cat.value}
             href={`/jobs/${job.id}/files${cat.value === "ALL" ? "" : `?category=${cat.value}`}`}
             className="rounded px-3 py-1.5 text-sm font-medium"
-            style={activeCategory === cat.value ? { background: "var(--bt-primary)", color: "white" } : { color: "var(--bt-muted)" }}
+            style={activeCategory === cat.value ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" } : { color: "var(--bt-muted)" }}
           >
             {cat.label}
           </Link>

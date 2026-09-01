@@ -32,7 +32,7 @@ export function AnswerRfiForm({ jobId, rfiId }: { jobId: string; rfiId: string }
       />
       {state.error ? <p className="text-xs text-red-600">{state.error}</p> : null}
       <div className="flex gap-2">
-        <button type="submit" disabled={pending} className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+        <button type="submit" disabled={pending} className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
           {pending ? "Saving…" : "Submit answer"}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="text-xs text-[var(--bt-muted)] hover:underline">

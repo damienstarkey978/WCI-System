@@ -13,7 +13,7 @@ export function InvitePortalButton({ clientId }: { clientId: string }) {
   return (
     <form action={formAction}>
       <input type="hidden" name="clientId" value={clientId} />
-      <button type="submit" disabled={pending} className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+      <button type="submit" disabled={pending} className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
         {pending ? "Issuing…" : "Issue portal invite link"}
       </button>
       {state.error ? (

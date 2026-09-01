@@ -112,14 +112,21 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
               <div className="w-64 shrink-0 truncate px-4 py-3 text-sm text-[var(--bt-text)]">
                 {item.title}
                 {item.confirmationStatus === "UNCONFIRMED" ? (
-                  <span className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-800">
+                  <span
+                    className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold"
+                    style={{ background: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", color: "var(--bt-hazard)" }}
+                  >
                     Unconfirmed
                   </span>
                 ) : null}
                 {hasItemBaseline && varianceDays !== 0 ? (
                   <span
                     className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold"
-                    style={varianceDays > 0 ? { background: "#fee2e2", color: "#991b1b" } : { background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
+                    style={
+                      varianceDays > 0
+                        ? { background: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", color: "var(--bt-danger)" }
+                        : { background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }
+                    }
                     title="Difference between the current finish date and the baseline finish date"
                   >
                     {varianceDays > 0 ? `+${varianceDays}d` : `${varianceDays}d`}

@@ -72,7 +72,7 @@ export function JobAccessForm({ userId, jobs }: { userId: string; jobs: readonly
         </p>
       ) : null}
       <div className="mt-3">
-        <button type="submit" disabled={pending} className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+        <button type="submit" disabled={pending} className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
           {pending ? "Saving…" : "Grant access"}
         </button>
       </div>

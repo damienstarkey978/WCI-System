@@ -122,8 +122,8 @@ export function JarvisVoiceButton({
       type="button"
       onClick={toggleListening}
       aria-pressed={listening}
-      className={`flex w-full items-center justify-center gap-2 rounded-full py-2 text-sm font-semibold text-white transition ${
-        funUi ? "wci-fun-chunky-btn wci-fun-heading" : ""
+      className={`flex w-full items-center justify-center gap-2 rounded-full py-2 text-sm font-semibold transition ${
+        funUi ? "wci-fun-chunky-btn wci-fun-heading text-white" : "text-[var(--bt-on-primary)]"
       } ${listening ? "animate-pulse" : ""}`}
       style={{ background: funUi ? "linear-gradient(135deg, var(--bt-primary), var(--bt-nav))" : "var(--bt-primary)" }}
     >

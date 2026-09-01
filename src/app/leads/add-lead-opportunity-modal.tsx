@@ -53,7 +53,7 @@ export function AddLeadOpportunityModal({ clients }: { clients: readonly Existin
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="self-start rounded px-4 py-2 text-sm font-semibold text-white"
+        className="self-start rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
         style={{ background: "var(--bt-primary)" }}
       >
         + Lead Opportunity
@@ -104,7 +104,7 @@ export function AddLeadOpportunityModal({ clients }: { clients: readonly Existin
                   <button
                     type="button"
                     onClick={() => setContactMode("new")}
-                    className="rounded px-3 py-1.5 text-xs font-semibold text-white"
+                    className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]"
                     style={{ background: "var(--bt-primary)" }}
                   >
                     + Contact
@@ -269,7 +269,7 @@ export function AddLeadOpportunityModal({ clients }: { clients: readonly Existin
             <button type="button" onClick={close} className="rounded border px-4 py-2 text-sm font-medium text-[var(--bt-text)]" style={{ borderColor: "var(--bt-border)" }}>
               Cancel
             </button>
-            <button type="submit" disabled={pending} className="rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+            <button type="submit" disabled={pending} className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
               {pending ? "Saving…" : "Save"}
             </button>
           </div>

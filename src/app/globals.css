@@ -30,36 +30,113 @@
   --bt-status-open-text: #075985;
   --bt-badge-qb-bg: #16a34a;
   --bt-active-bar: #d97706;
+  /* Status colors not yet consumed by any component's own tokens (most status/error
+     text today reaches for a hardcoded Tailwind class like text-red-600 or
+     bg-amber-50 directly) — defined here so the dark redesign below has real
+     light-mode counterparts, and so future status UI can key off one shared name
+     instead of a new hardcoded color per page. */
+  --bt-danger: #dc2626;
+  --bt-hazard: #d97706;
+  --bt-success: #16a34a;
+  /* Text/icon color for anything painted solid --bt-primary (buttons, badges,
+     active pills) — white here since #1a56db is dark enough, but the dark-mode
+     redesign's accent (#4da3ff) is a much lighter blue that white text can't sit
+     on legibly, so this flips to near-black there. Every "background: var(--bt-
+     primary)" spot should pair with this instead of a hardcoded white. */
+  --bt-on-primary: #ffffff;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
+/*
+ * Dark mode = the WCI OS redesign spec (BUILD_SPEC.md): near-black background,
+ * layered surfaces, a single blue accent, and status colors reserved for their own
+ * meaning (mint = good, amber = hazard/weather-delay only, coral = danger) rather
+ * than decorative use. Applied through the same --bt-* tokens every page already
+ * reads, and the same [data-theme="dark"] attribute/toggle (ThemeScript.tsx,
+ * ThemeToggle.tsx) that existed before this — so the redesign is a full reskin
+ * with no page-by-page rebuild, exactly the same as how dark mode already worked,
+ * just with a completely different palette underneath it now.
+ */
 :root[data-theme="dark"] {
-  --background: #0d1117;
-  --foreground: #e6edf3;
+  --background: #0b0d10;
+  --foreground: #edeef0;
 
-  --bt-primary: #3b82f6;
-  --bt-primary-hover: #60a5fa;
-  --bt-page-bg: #0d1117;
-  --bt-panel-bg: #161b22;
-  --bt-panel-bg-muted: #1c2129;
-  --bt-sidebar-bg: #10141a;
-  --bt-border: #30363d;
-  --bt-muted: #9aa4b2;
-  --bt-text: #e6edf3;
-  --bt-status-open-bg: #0c4a6e;
-  --bt-status-open-text: #7dd3fc;
+  --bt-nav: #131619;
+  --bt-nav-hover: #1b1f24;
+  --bt-primary: #4da3ff;
+  --bt-primary-hover: #7cbeff;
+  --bt-page-bg: #0b0d10;
+  --bt-panel-bg: #131619;
+  --bt-panel-bg-muted: #1b1f24;
+  --bt-sidebar-bg: #0b0d10;
+  --bt-border: #24282e;
+  --bt-muted: #8a9098;
+  --bt-text: #edeef0;
+  /* Reused across the app for "good/approved/awarded/accepted" pills (see every
+     ..._STATUS_STYLES map keyed off these two tokens) — mint in the new palette,
+     matching the redesign's own on-track status-pill treatment. */
+  --bt-status-open-bg: rgba(74, 222, 128, 0.14);
+  --bt-status-open-text: #4ade80;
+  --bt-badge-qb-bg: #16a34a;
+  --bt-active-bar: #4da3ff;
+  --bt-danger: #ff6b5e;
+  --bt-hazard: #f5a623;
+  --bt-success: #4ade80;
+  --bt-on-primary: #0b0d10;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.display {
+  font-family: var(--font-space-grotesk), Arial, Helvetica, sans-serif;
+}
+
+/* Real Jarvis character art (src/components/jarvis/JarvisCharacter.tsx, public/jarvis/
+   *.png — five actual photoreal-style poses, not an icon) per BUILD_SPEC.md's
+   interaction notes: a fade+scale entrance on first mount, then a slow idle bob, on
+   both the dashboard hero card and the full-screen chat hero. Gated behind
+   prefers-reduced-motion, exactly as the spec calls for, rather than left running for
+   everyone. */
+@media (prefers-reduced-motion: no-preference) {
+  .wci-jarvis-figure {
+    animation:
+      wci-jarvis-float-in 0.5s ease,
+      wci-jarvis-bob-idle 3.4s ease-in-out 0.5s infinite;
+  }
+}
+
+@keyframes wci-jarvis-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes wci-jarvis-bob-idle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 /* Idle animation for the traced Jarvis mascot (src/components/jarvis/JarvisMascot.tsx)

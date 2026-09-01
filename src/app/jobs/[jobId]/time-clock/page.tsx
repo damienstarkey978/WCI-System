@@ -12,9 +12,9 @@ import { reviewTimeClockEntryAction } from "./actions";
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  PENDING: { bg: "#fef3c7", text: "#92400e" },
+  PENDING: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
   APPROVED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  REJECTED: { bg: "#fee2e2", text: "#991b1b" },
+  REJECTED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 function formatHours(hours: number): string {
@@ -88,7 +88,7 @@ export default async function TimeClockPage({ params }: PageProps<"/jobs/[jobId]
                               <input type="hidden" name="jobId" value={job.id} />
                               <input type="hidden" name="entryId" value={entry.id} />
                               <input type="hidden" name="decision" value="approve" />
-                              <button type="submit" className="rounded px-2 py-1 text-xs font-semibold text-white" style={{ background: "var(--bt-primary)" }}>
+                              <button type="submit" className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
                                 Approve
                               </button>
                             </form>

@@ -53,7 +53,7 @@ export function CreateSelectionForm({ jobId, allowances }: { jobId: string; allo
         </p>
       ) : null}
       <div className="mt-3">
-        <button type="submit" disabled={pending} className="rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
+        <button type="submit" disabled={pending} className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
           {pending ? "Creating…" : "Create selection"}
         </button>
       </div>

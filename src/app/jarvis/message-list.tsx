@@ -53,8 +53,8 @@ function PendingActionCard({ conversationId, action }: { conversationId: string;
         className="max-w-[70%] rounded-lg border px-3 py-2 text-sm"
         style={
           action.status === "CONFIRMED"
-            ? { borderColor: "#bbf7d0", background: "#f0fdf4", color: "#14532d" }
-            : { borderColor: "var(--bt-border)", background: "#f3f4f6", color: "var(--bt-muted)" }
+            ? { borderColor: "color-mix(in srgb, var(--bt-success) 35%, transparent)", background: "color-mix(in srgb, var(--bt-success) 14%, transparent)", color: "var(--bt-success)" }
+            : { borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)", color: "var(--bt-muted)" }
         }
       >
         <div className="text-xs font-semibold uppercase tracking-wide">{action.status === "CONFIRMED" ? "Confirmed" : "Declined"}</div>
@@ -96,7 +96,7 @@ export function MessageList({
               className="max-w-[70%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm"
               style={
                 entry.message.role === "USER"
-                  ? { background: "var(--bt-primary)", color: "white" }
+                  ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" }
                   : { background: "#f3f4f6", color: "var(--bt-text)" }
               }
             >

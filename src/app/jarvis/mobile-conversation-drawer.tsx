@@ -58,7 +58,7 @@ export function MobileConversationDrawer({
               <Link
                 href="/jarvis"
                 onClick={() => setOpen(false)}
-                className="rounded px-3 py-2 text-sm font-semibold text-white"
+                className="rounded px-3 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
                 style={{ background: "var(--bt-primary)" }}
               >
                 + New chat

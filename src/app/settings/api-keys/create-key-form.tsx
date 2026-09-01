@@ -62,7 +62,7 @@ export function CreateKeyForm() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded px-4 py-2 text-sm font-semibold text-white"
+        className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
         style={{ background: "var(--bt-primary)" }}
       >
         + New API key
@@ -135,7 +135,7 @@ export function CreateKeyForm() {
         <button
           type="submit"
           disabled={pending || selected.size === 0}
-          className="rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
           style={{ background: "var(--bt-primary)" }}
         >
           {pending ? "Creating…" : "Create key"}

@@ -36,9 +36,9 @@ const ACTIVITY_TYPE_LABEL: Record<string, string> = {
 
 const PROPOSAL_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  SENT: { bg: "#dbeafe", text: "#1e40af" },
+  SENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   ACCEPTED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  DECLINED: { bg: "#fee2e2", text: "#991b1b" },
+  DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
 export default async function LeadDetailPage({
@@ -235,14 +235,14 @@ export default async function LeadDetailPage({
                             {proposal.title}
                           </Link>
                           {proposal.options.length > 1 ? (
-                            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#dbeafe", color: "#1e40af" }}>
+                            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
                               {proposal.options.length} options
                             </span>
                           ) : null}
                           {aiGenerated ? (
                             <span
                               className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                              style={{ background: "#ede9fe", color: "#5b21b6" }}
+                              style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}
                             >
                               Drafted by Jarvis
                             </span>
@@ -280,7 +280,7 @@ export default async function LeadDetailPage({
                           <form action={sendProposalAction}>
                             <input type="hidden" name="leadId" value={lead.id} />
                             <input type="hidden" name="proposalId" value={proposal.id} />
-                            <button type="submit" className="rounded px-3 py-1.5 text-xs font-semibold text-white" style={{ background: "var(--bt-primary)" }}>
+                            <button type="submit" className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
                               Send
                             </button>
                           </form>

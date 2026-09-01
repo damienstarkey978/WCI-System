@@ -11,8 +11,8 @@ import { TodoForm } from "./todo-form";
 export const dynamic = "force-dynamic";
 
 const PRIORITY_STYLE: Record<string, { bg: string; text: string }> = {
-  HIGH: { bg: "#fee2e2", text: "#991b1b" },
-  MEDIUM: { bg: "#fef3c7", text: "#92400e" },
+  HIGH: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
+  MEDIUM: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
   LOW: { bg: "#e5e7eb", text: "#374151" },
 };
 
@@ -99,7 +99,7 @@ export default async function TasksPage({ params }: PageProps<"/jobs/[jobId]/tas
                   <button
                     type="submit"
                     aria-label="Reopen"
-                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-white"
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[var(--bt-on-primary)]"
                     style={{ background: "var(--bt-primary)" }}
                   >
                     ✓
