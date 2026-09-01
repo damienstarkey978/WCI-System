@@ -16,6 +16,7 @@ import Link from "next/link";
 
 import { sendJarvisLauncherMessageAction, type LauncherActionState } from "@/app/jarvis/actions";
 import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
+import { JarvisVoiceButton } from "@/components/jarvis/JarvisVoiceButton";
 import { useFunUi } from "@/components/jarvis/useFunUi";
 import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
@@ -86,6 +87,14 @@ function JarvisChatBody({
     const textarea = formRef.current?.elements.namedItem("text");
     if (textarea instanceof HTMLTextAreaElement) {
       textarea.value = suggestion;
+      textarea.focus();
+    }
+  }
+
+  function appendVoiceTranscript(text: string) {
+    const textarea = formRef.current?.elements.namedItem("text");
+    if (textarea instanceof HTMLTextAreaElement) {
+      textarea.value = textarea.value ? `${textarea.value} ${text}` : text;
       textarea.focus();
     }
   }
@@ -200,6 +209,7 @@ function JarvisChatBody({
       >
         {conversationId ? <input type="hidden" name="conversationId" value={conversationId} /> : null}
         <input type="hidden" name="context" value={context ? JSON.stringify(context) : ""} />
+        <JarvisVoiceButton onTranscript={appendVoiceTranscript} funUi={funUi} />
         <div className="flex items-end gap-2">
           <textarea
             name="text"
