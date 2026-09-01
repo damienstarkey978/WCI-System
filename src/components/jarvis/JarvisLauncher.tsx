@@ -51,6 +51,12 @@ export function JarvisLauncher() {
   const rawParams = useParams();
   const context = currentPageContext(pathname, (rawParams ?? {}) as Record<string, string | string[] | undefined>);
 
+  // The full-screen /jarvis pages ARE the Jarvis experience already — a floating
+  // "open Jarvis" bubble sitting on top of their own composer is pure redundant
+  // clutter, and on a phone-width screen it visually collides with the send/mic
+  // buttons in that composer. Hide it there entirely rather than just moving it.
+  if (pathname?.startsWith("/jarvis")) return null;
+
   return (
     <>
       <button

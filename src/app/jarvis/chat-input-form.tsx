@@ -2,6 +2,8 @@
 
 import { useActionState, useRef } from "react";
 
+import { JarvisVoiceButton } from "@/components/jarvis/JarvisVoiceButton";
+import { useFunUi } from "@/components/jarvis/useFunUi";
 import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 import { sendJarvisMessageAction, type ActionState } from "./actions";
@@ -11,11 +13,20 @@ const INITIAL: ActionState = {};
 export function ChatInputForm({ conversationId, showSuggestions }: { conversationId?: string; showSuggestions?: boolean }) {
   const [state, formAction, pending] = useActionState(sendJarvisMessageAction, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
+  const funUi = useFunUi();
 
   function fillSuggestion(suggestion: string) {
     const textarea = formRef.current?.elements.namedItem("text");
     if (textarea instanceof HTMLTextAreaElement) {
       textarea.value = suggestion;
+      textarea.focus();
+    }
+  }
+
+  function appendVoiceTranscript(text: string) {
+    const textarea = formRef.current?.elements.namedItem("text");
+    if (textarea instanceof HTMLTextAreaElement) {
+      textarea.value = textarea.value ? `${textarea.value} ${text}` : text;
       textarea.focus();
     }
   }
@@ -46,13 +57,16 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
           ))}
         </div>
       ) : null}
+      <JarvisVoiceButton onTranscript={appendVoiceTranscript} onFinish={() => formRef.current?.requestSubmit()} funUi={funUi} />
       <div className="flex items-end gap-2">
         <textarea
           name="text"
           required
           rows={2}
           placeholder="Ask Jarvis anything…"
-          className="flex-1 resize-none rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+          // text-base (16px), not text-sm — iOS Safari auto-zooms the page on
+          // focus for any input under 16px.
+          className="flex-1 resize-none rounded border px-3 py-2 text-base outline-none focus:border-[var(--bt-primary)]"
           style={{ borderColor: "var(--bt-border)" }}
         />
         <button
