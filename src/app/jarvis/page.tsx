@@ -5,6 +5,7 @@ import { isAnthropicConfigured } from "@/lib/env";
 import { ChatInputForm } from "./chat-input-form";
 import { ConversationSidebar } from "./conversation-sidebar";
 import { MessageList } from "./message-list";
+import { MobileConversationHistory } from "./mobile-conversation-history";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,10 @@ export default async function JarvisNewChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)]">
+    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
       <ConversationSidebar organizationId={user.organizationId} userId={user.id} />
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <MobileConversationHistory organizationId={user.organizationId} userId={user.id} />
         {!isAnthropicConfigured() ? (
           <div className="m-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
             Set <code className="font-mono">ANTHROPIC_API_KEY</code> in <code className="font-mono">.env</code> to

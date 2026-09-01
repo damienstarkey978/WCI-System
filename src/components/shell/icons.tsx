@@ -182,6 +182,17 @@ export function CloseIcon({ className }: IconProps) {
   );
 }
 
+/** The mobile Jarvis conversation drawer's trigger (src/app/jarvis/mobile-conversation-drawer.tsx). */
+export function HistoryIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M4 10a6 6 0 1 0 1.8-4.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M4 3.5V7h3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 7v3.2l2.2 1.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** The UserButton custom menu's "Company settings" entry (admin only). */
 export function BuildingIcon({ className }: IconProps) {
   return (

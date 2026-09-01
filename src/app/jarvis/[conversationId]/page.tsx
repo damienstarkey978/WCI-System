@@ -7,6 +7,7 @@ import { ConversationNotFoundError, getConversation } from "@/lib/jarvis/service
 import { ChatInputForm } from "../chat-input-form";
 import { ConversationSidebar } from "../conversation-sidebar";
 import { MessageList } from "../message-list";
+import { MobileConversationHistory } from "../mobile-conversation-history";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +33,10 @@ export default async function JarvisConversationPage({ params }: PageProps<"/jar
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)]">
+    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
       <ConversationSidebar organizationId={user.organizationId} userId={user.id} activeConversationId={conversation.id} />
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <MobileConversationHistory organizationId={user.organizationId} userId={user.id} activeConversationId={conversation.id} />
         <MessageList conversationId={conversation.id} messages={conversation.messages} pendingActions={conversation.pendingActions} />
         <ChatInputForm conversationId={conversation.id} showSuggestions={conversation.messages.length === 0} />
       </div>
