@@ -76,6 +76,52 @@ body {
   }
 }
 
+/* Fun-UI theme (src/components/settings/FunUiToggle.tsx) — a "kids video game" pass
+   on top of the Buildertrend-match UI, scoped to Jarvis's own surfaces (docked
+   launcher, chat panel, dashboard greeting) rather than the whole app, so it never
+   touches the real financial/job screens. All rules below are additive and only
+   active under [data-fun-ui="on"]; the fun-UI toggle being off reproduces the
+   plain look exactly. */
+
+/* Overshoot entrance for the chat panel opening — a snappy pop instead of an
+   instant appear, the same trick mobile games use for a modal/reward popup. */
+@keyframes wci-panel-pop {
+  0% {
+    transform: scale(0.85) translateY(12px);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.03) translateY(-2px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+[data-fun-ui="on"] .wci-fun-panel-enter {
+  animation: wci-panel-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* A game-style "3D" pressable button: a solid offset shadow that the button sinks
+   into on press, instead of a flat CSS box-shadow blur. */
+[data-fun-ui="on"] .wci-fun-chunky-btn {
+  box-shadow: 0 4px 0 var(--bt-primary-hover);
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+[data-fun-ui="on"] .wci-fun-chunky-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--bt-primary-hover);
+}
+
+[data-fun-ui="on"] .wci-fun-heading {
+  font-family: var(--font-fredoka), Arial, Helvetica, sans-serif;
+  letter-spacing: 0.01em;
+}
+
 /* The Buildertrend-match UI's form controls otherwise inherit `color` from body,
    which flips between --foreground's light/dark values — but every one of its own
    panels stays keyed off --bt-text instead, so pin form text to that same token

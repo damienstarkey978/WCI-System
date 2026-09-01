@@ -59,8 +59,8 @@ export function JarvisLauncher() {
         title="Ask Jarvis"
         className={
           funUi
-            ? "fixed bottom-5 right-5 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-white p-1.5 shadow-lg transition hover:scale-105"
-            : "fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-white shadow-lg transition hover:scale-105"
+            ? "wci-fun-chunky-btn fixed bottom-4 right-4 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-white p-1.5 transition hover:scale-105 active:scale-95 sm:bottom-5 sm:right-5"
+            : "fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-white shadow-lg transition hover:scale-105 sm:bottom-5 sm:right-5"
         }
         style={funUi ? { border: "2px solid var(--bt-primary)" } : { background: "var(--bt-primary)" }}
       >
@@ -68,15 +68,24 @@ export function JarvisLauncher() {
       </button>
 
       {open ? (
-        <div className="fixed bottom-24 right-5 z-50 w-96 max-w-[calc(100vw-2.5rem)] shadow-2xl">
-          <JarvisChatPanel
-            context={context}
-            storageKey="launcher"
-            onClose={() => setOpen(false)}
-            onPendingChange={setPending}
-            heightClassName="h-[32rem]"
-          />
-        </div>
+        <>
+          {/* Tap-outside-to-close backdrop — only needed on phones, where the panel
+              below takes over most of the screen; on desktop the panel floats
+              clear of everything else so a backdrop would just dim content for no
+              reason. */}
+          <div className="fixed inset-0 z-40 bg-black/20 sm:hidden" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div
+            className={`fixed inset-x-3 bottom-20 z-50 sm:inset-x-auto sm:right-5 sm:bottom-24 sm:w-96 ${funUi ? "wci-fun-panel-enter" : ""} shadow-2xl`}
+          >
+            <JarvisChatPanel
+              context={context}
+              storageKey="launcher"
+              onClose={() => setOpen(false)}
+              onPendingChange={setPending}
+              heightClassName="h-[min(32rem,70dvh)]"
+            />
+          </div>
+        </>
       ) : null}
     </>
   );

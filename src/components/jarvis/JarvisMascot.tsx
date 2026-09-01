@@ -22,6 +22,12 @@ export function JarvisMascot({
   expression = "happy",
   size = 32,
   bob = false,
+  /** "brand" (default) is the WCI-blue trace, for light backgrounds — everywhere
+   *  most of the app is. "light" is a white-recolored trace (public/mascot/*-white.svg)
+   *  for the fun-UI theme's own colored surfaces (e.g. the chat panel's blue-to-teal
+   *  gradient header), where the blue line art would otherwise disappear into a
+   *  same-hue background. */
+  tone = "brand",
   className,
 }: {
   expression?: JarvisExpression;
@@ -29,12 +35,13 @@ export function JarvisMascot({
   /** Subtle up/down idle animation — use for the docked launcher, not for small
    *  inline icons where it'd be distracting. */
   bob?: boolean;
+  tone?: "brand" | "light";
   className?: string;
 }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- static traced SVG, no need for next/image's optimization pipeline
     <img
-      src={`/mascot/${expression}.svg`}
+      src={`/mascot/${expression}${tone === "light" ? "-white" : ""}.svg`}
       alt={EXPRESSION_LABEL[expression]}
       width={size}
       height={size}

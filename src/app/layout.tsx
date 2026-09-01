@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fredoka, Geist, Geist_Mono } from "next/font/google";
 
 import { AuthProvider } from "@/components/auth-provider";
 import { ServiceWorkerCleanup } from "@/components/service-worker-cleanup";
@@ -16,6 +16,17 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+/** Only used for the Jarvis-mascot fun-UI theme (src/components/settings/
+ *  FunUiToggle.tsx) — a rounder, friendlier display face for its headings, kept
+ *  off the rest of the app's plain Arial body copy. Loading it site-wide (rather
+ *  than only when the toggle is on) is cheap — next/font subsets and self-hosts it
+ *  at build time, so it's zero extra network requests either way. */
+const fredoka = Fredoka({
+  variable: "--font-fredoka",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -42,7 +53,7 @@ export const maxDuration = 120;
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <AuthProvider>
-      <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} h-full antialiased`} suppressHydrationWarning>
         <ThemeScript />
         <FunUiScript />
         <body className="min-h-full flex flex-col bg-background text-foreground">

@@ -12,10 +12,14 @@ export function DashboardFunGreeting() {
   if (!funUi) return null;
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
-      <JarvisMascot expression="happy" size={40} />
-      <p className="text-sm text-[var(--bt-muted)]">
-        Hey — I&apos;m keeping an eye on the business below. Ask me anything in the chat, or tap me in the corner any time.
+    <div
+      className="flex items-center gap-3 rounded-2xl border-2 p-3"
+      style={{ borderColor: "var(--bt-primary)", background: "linear-gradient(135deg, color-mix(in srgb, var(--bt-primary) 8%, transparent), transparent)" }}
+    >
+      <JarvisMascot expression="happy" size={44} bob />
+      <p className="text-sm text-[var(--bt-text)]">
+        <span className="wci-fun-heading font-semibold">Hey, it&apos;s Jarvis!</span>{" "}
+        <span className="text-[var(--bt-muted)]">I&apos;m keeping an eye on the business below — ask me anything, or tap me in the corner any time.</span>
       </p>
     </div>
   );
