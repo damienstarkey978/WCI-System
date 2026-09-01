@@ -16,7 +16,7 @@ export function DashboardFunGreeting() {
       className="flex items-center gap-3 rounded-2xl border-2 p-3"
       style={{ borderColor: "var(--bt-primary)", background: "linear-gradient(135deg, color-mix(in srgb, var(--bt-primary) 8%, transparent), transparent)" }}
     >
-      <JarvisMascot expression="happy" size={52} bob badge />
+      <JarvisMascot expression="happy" size={64} bob badge />
       <p className="text-sm text-[var(--bt-text)]">
         <span className="wci-fun-heading font-semibold">Hey, it&apos;s Jarvis!</span>{" "}
         <span className="text-[var(--bt-muted)]">I&apos;m keeping an eye on the business below — ask me anything, or tap me in the corner any time.</span>

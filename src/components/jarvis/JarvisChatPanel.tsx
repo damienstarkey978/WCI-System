@@ -110,7 +110,7 @@ function JarvisChatBody({
               : "flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]"
           }
         >
-          {funUi ? <JarvisMascot expression={pending ? "thinking" : "happy"} size={22} tone="light" /> : <span>✦</span>} Jarvis
+          {funUi ? <JarvisMascot expression={pending ? "thinking" : "happy"} size={28} tone="light" /> : <span>✦</span>} Jarvis
         </span>
         <div className={funUi ? "flex items-center gap-3 text-xs text-white/90" : "flex items-center gap-2.5 text-xs"}>
           <button type="button" onClick={onNewChat} className={funUi ? "hover:underline" : "text-[var(--bt-muted)] hover:underline"}>
