@@ -12,14 +12,14 @@ import type { BellNotification } from "./TopNav";
  * FIELD only sees jobs they hold an explicit JobAccessGrant for, so the
  * sidebar never lists a job that clicking into would just deny.
  *
- * Excludes PRE_SALE jobs — a Job row exists in that status as soon as a
- * proposal is drafted for a Lead (src/lib/crm/lead-proposal.ts: "a Proposal
- * always belongs to a real Job"), before the client has accepted anything.
- * It only becomes a real job (JobStatus.OPEN) once its proposal is actually
- * accepted (src/lib/proposals/service.ts). The full /jobs list still shows
- * pre-sale jobs, with their own "Pre-sale" badge, for staff managing that
- * pipeline — this sidebar is the persistent nav on every page, and a Lead
- * someone is still drafting a proposal for isn't a job yet.
+ * Excludes PRE_SALE jobs. A Lead's proposal/estimate stay scoped to just the
+ * Lead (no Job row at all — src/lib/crm/lead-proposal.ts, src/lib/proposals/
+ * service.ts) until the client accepts, at which point the Job is created
+ * directly as OPEN. PRE_SALE is only ever used for a Job created directly
+ * (not via a Lead), so this filter is a belt-and-suspenders guard against
+ * that path, not the primary mechanism keeping unaccepted leads off this
+ * list. The full /jobs list still shows pre-sale jobs, with their own
+ * "Pre-sale" badge, for staff managing that pipeline.
  */
 export async function sidebarJobsForOrg(organizationId: string, user: { readonly id: string; readonly role: UserRole }): Promise<SidebarJob[]> {
   const jobs = await db.job.findMany({
