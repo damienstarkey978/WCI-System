@@ -8,7 +8,7 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
-import { JobStatus, type LeadActivityType, type LeadStage } from "@/generated/prisma/enums";
+import { JobStatus, ProposalStatus, type LeadActivityType, type LeadStage } from "@/generated/prisma/enums";
 import type { CreateJobInput } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
 import { emitEvent } from "@/lib/webhooks";
@@ -24,6 +24,19 @@ export class LeadAlreadyConvertedError extends Error {
   constructor(leadId: string) {
     super(`Lead ${leadId} has already been converted to a job.`);
     this.name = "LeadAlreadyConvertedError";
+  }
+}
+
+/** A Lead only earns a Job once a proposal for it is actually client-accepted
+ *  (CLAUDE.md 3: "converts to a Job on acceptance") — the normal way that
+ *  happens is automatically, inside acceptProposal() itself. This function
+ *  stays around as a direct/manual path (the staff "Convert to job" button,
+ *  the public API, Jarvis's tool), but only once that condition is already
+ *  true — never as a way to get ahead of it. */
+export class LeadNotReadyForConversionError extends Error {
+  constructor(leadId: string) {
+    super(`Lead ${leadId} has no accepted proposal yet — it can't become a job until a proposal is client-accepted.`);
+    this.name = "LeadNotReadyForConversionError";
   }
 }
 
@@ -145,6 +158,9 @@ export async function convertLeadToJob(
   const lead = await db.lead.findFirst({ where: { id: leadId, organizationId } });
   if (!lead) throw new LeadNotFoundError(leadId);
   if (lead.convertedJobId !== null) throw new LeadAlreadyConvertedError(leadId);
+
+  const acceptedProposal = await db.proposal.findFirst({ where: { leadId, organizationId, status: ProposalStatus.ACCEPTED }, select: { id: true } });
+  if (!acceptedProposal) throw new LeadNotReadyForConversionError(leadId);
 
   const { customFields, ...rest } = jobInput;
 

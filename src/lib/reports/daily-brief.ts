@@ -53,7 +53,8 @@ export async function getJobsOverBudget(organizationId: string): Promise<readonl
 
 export interface FollowUpProposal {
   readonly id: string;
-  readonly jobId: string;
+  /** Null for a proposal still against a Lead — no Job exists until it's accepted. */
+  readonly jobId: string | null;
   readonly title: string;
   readonly clientName: string;
   readonly sentAt: Date;

@@ -525,8 +525,20 @@ model Estimate {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  jobId          String
-  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// Exactly one of jobId/leadId is set until a Lead's proposal is accepted, then
+  /// both are (job gets backfilled in, lead stays for history) — see leadId below.
+  jobId String?
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// Set for an Estimate drafted straight off a Lead, before any Job exists yet
+  /// (src/lib/crm/lead-proposal.ts) — a Proposal's numbers have to live somewhere
+  /// from the moment it's drafted, not just once a client has accepted it and
+  /// earned a real Job. acceptProposal() backfills jobId onto the winning
+  /// option's Estimate at acceptance; this field is left set afterward too, as
+  /// the historical record of which lead it came from.
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   title   String
   status  EstimateStatus @default(DRAFT)
@@ -2080,6 +2092,7 @@ model Lead {
   updatedAt DateTime @updatedAt
 
   proposals  Proposal[]
+  estimates  Estimate[]
   activities LeadActivity[]
 
   @@index([organizationId, stage])
@@ -2142,8 +2155,14 @@ model Proposal {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  jobId          String
-  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// Null until the client accepts (acceptProposal() backfills it) for a
+  /// Lead-originated proposal (leadId set) — there is no Job to belong to
+  /// before that, on purpose (CLAUDE.md 3: "converts to a Job on acceptance").
+  /// A proposal created directly against an already-real Job (not from a Lead)
+  /// has this set from the start instead.
+  jobId String?
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: Cascade)
   leadId         String?
   lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   clientId       String

@@ -6,6 +6,7 @@
  */
 
 import type { CostType, LineItemConfidence, LineItemPriceSource, RateMode } from "@/generated/prisma/enums";
+import { LeadNotFoundError } from "@/lib/crm/service";
 import { db } from "@/lib/db";
 import type { BasisPoints } from "@/lib/money";
 
@@ -65,7 +66,10 @@ export interface CreateEstimateLineItemInput {
 
 export interface CreateEstimateInput {
   readonly organizationId: string;
-  readonly jobId: string;
+  /** Omit for an estimate drafted straight off a Lead, before any Job exists —
+   *  leadId is required in that case. Set for an estimate against a real Job. */
+  readonly jobId?: string;
+  readonly leadId?: string;
   readonly title: string;
   readonly rateMode?: RateMode;
   readonly defaultRateBasisPoints?: BasisPoints;
@@ -75,8 +79,16 @@ export interface CreateEstimateInput {
 }
 
 export async function createEstimate(input: CreateEstimateInput) {
-  const job = await db.job.findFirst({ where: { id: input.jobId, organizationId: input.organizationId }, select: { id: true } });
-  if (!job) throw new JobNotFoundError(input.jobId);
+  if (!input.jobId && !input.leadId) throw new Error("createEstimate requires a jobId or a leadId");
+
+  if (input.jobId) {
+    const job = await db.job.findFirst({ where: { id: input.jobId, organizationId: input.organizationId }, select: { id: true } });
+    if (!job) throw new JobNotFoundError(input.jobId);
+  }
+  if (input.leadId) {
+    const lead = await db.lead.findFirst({ where: { id: input.leadId, organizationId: input.organizationId }, select: { id: true } });
+    if (!lead) throw new LeadNotFoundError(input.leadId);
+  }
 
   const rateMode = input.rateMode ?? "MARKUP";
   const defaultRateBasisPoints = input.defaultRateBasisPoints ?? 0;
@@ -95,7 +107,8 @@ export async function createEstimate(input: CreateEstimateInput) {
   return db.estimate.create({
     data: {
       organizationId: input.organizationId,
-      jobId: input.jobId,
+      jobId: input.jobId ?? null,
+      leadId: input.leadId ?? null,
       title: input.title,
       rateMode,
       defaultRateBasisPoints,

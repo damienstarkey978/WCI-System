@@ -13,7 +13,7 @@
  * Phase 0's job-status.ts specifically anticipating this.
  */
 
-import { EstimateStatus, JobStatus, ProposalStatus } from "@/generated/prisma/enums";
+import { ContractType, EstimateStatus, JobStatus, ProposalStatus } from "@/generated/prisma/enums";
 import { sendEstimateToBudget } from "@/lib/budget/send-to-budget";
 import { db } from "@/lib/db";
 import { transitionJobStatus } from "@/lib/jobs";
@@ -147,12 +147,16 @@ export interface CreateProposalOptionInput {
 
 export interface CreateProposalInput {
   readonly organizationId: string;
-  readonly jobId: string;
+  /** Omit for a proposal drafted straight off a Lead, before any Job exists —
+   *  leadId is required in that case. Set (with or without leadId) for a
+   *  proposal against an already-real Job. */
+  readonly jobId?: string | null;
   readonly leadId?: string | null;
   readonly clientId: string;
   readonly title: string;
   readonly coverMessage?: string | null;
-  /** 1-5 priced options (CLAUDE.md 3/task #116) — each estimate must belong to jobId. */
+  /** 1-5 priced options (CLAUDE.md 3/task #116) — each estimate must belong to
+   *  the same Job (or the same Lead, if there's no Job yet) as the proposal. */
   readonly options: readonly CreateProposalOptionInput[];
   /// The client-facing narrative side of the estimate/proposal split (handoff.ai-style).
   /// Not FK-derived from the estimate's line items — generated together, then editable
@@ -160,29 +164,37 @@ export interface CreateProposalInput {
   readonly sections?: readonly CreateProposalSectionInput[];
 }
 
-async function validateOptionEstimates(organizationId: string, jobId: string, estimateIds: readonly string[]) {
+async function validateOptionEstimates(
+  organizationId: string,
+  anchor: { jobId: string | null; leadId: string | null },
+  estimateIds: readonly string[],
+) {
   const estimates = await db.estimate.findMany({
     where: { id: { in: [...estimateIds] }, organizationId },
-    select: { id: true, jobId: true },
+    select: { id: true, jobId: true, leadId: true },
   });
   const byId = new Map(estimates.map((estimate) => [estimate.id, estimate]));
   for (const estimateId of estimateIds) {
     const estimate = byId.get(estimateId);
     if (!estimate) throw new EstimateNotFoundError(estimateId);
-    if (estimate.jobId !== jobId) throw new EstimateJobMismatchError(estimateId, jobId);
+    const matches = anchor.jobId !== null ? estimate.jobId === anchor.jobId : estimate.leadId === anchor.leadId;
+    if (!matches) throw new EstimateJobMismatchError(estimateId, anchor.jobId ?? anchor.leadId ?? "");
   }
 }
 
 export async function createProposal(input: CreateProposalInput) {
   if (input.options.length === 0) throw new NoOptionsError();
   if (input.options.length > MAX_PROPOSAL_OPTIONS) throw new TooManyOptionsError();
+  if (!input.jobId && !input.leadId) throw new Error("createProposal requires a jobId or a leadId");
 
-  const job = await db.job.findFirst({ where: { id: input.jobId, organizationId: input.organizationId }, select: { id: true } });
-  if (!job) throw new JobNotFoundError(input.jobId);
+  if (input.jobId) {
+    const job = await db.job.findFirst({ where: { id: input.jobId, organizationId: input.organizationId }, select: { id: true } });
+    if (!job) throw new JobNotFoundError(input.jobId);
+  }
 
   await validateOptionEstimates(
     input.organizationId,
-    input.jobId,
+    { jobId: input.jobId ?? null, leadId: input.leadId ?? null },
     input.options.map((option) => option.estimateId),
   );
 
@@ -192,7 +204,7 @@ export async function createProposal(input: CreateProposalInput) {
   const proposal = await db.proposal.create({
     data: {
       organizationId: input.organizationId,
-      jobId: input.jobId,
+      jobId: input.jobId ?? null,
       leadId: input.leadId ?? null,
       clientId: input.clientId,
       title: input.title,
@@ -234,7 +246,7 @@ export async function addProposalOption(organizationId: string, proposalId: stri
   const existingCount = await db.proposalOption.count({ where: { proposalId } });
   if (existingCount >= MAX_PROPOSAL_OPTIONS) throw new TooManyOptionsError();
 
-  await validateOptionEstimates(organizationId, proposal.jobId, [input.estimateId]);
+  await validateOptionEstimates(organizationId, { jobId: proposal.jobId, leadId: proposal.leadId }, [input.estimateId]);
 
   const option = await db.proposalOption.create({ data: { proposalId, estimateId: input.estimateId, label: input.label, sortOrder: existingCount } });
 
@@ -401,16 +413,28 @@ export interface AcceptProposalInput {
 }
 
 /**
- * Accept a Proposal: settle which option won, e-sign it, move the Job from
- * PRE_SALE to OPEN, and send that option's Estimate to the Budget — the same
- * three facts CLAUDE.md 3 describes as one moment ("converts to a Job on
- * acceptance") but modeled as three separate, already-correct actions run
- * together rather than a fourth bespoke code path.
+ * Accept a Proposal: settle which option won, e-sign it, earn/open the Job,
+ * and send that option's Estimate to the Budget — the same facts CLAUDE.md 3
+ * describes as one moment ("converts to a Job on acceptance").
+ *
+ * A Lead-originated proposal (jobId null — see CreateProposalInput) has no Job
+ * to open yet, so acceptance is the moment the real Job gets created, directly
+ * as OPEN (there is no PRE_SALE phase for it — PRE_SALE only ever meant "this
+ * Job exists but nothing's been signed," which was never true of a Lead before
+ * this). A proposal already against a real Job (not Lead-originated, or a
+ * revised proposal re-signed on a job an earlier proposal already opened)
+ * keeps the older PRE_SALE -> OPEN transition instead, since the Job already
+ * exists and might already be OPEN.
  */
 export async function acceptProposal(input: AcceptProposalInput) {
   const proposal = await db.proposal.findFirst({
     where: { id: input.proposalId, organizationId: input.organizationId },
-    include: { client: { select: { name: true } }, job: { select: { status: true } }, options: true },
+    include: {
+      client: { select: { name: true } },
+      job: { select: { status: true } },
+      lead: { select: { id: true, name: true, title: true, addressLine1: true, city: true, state: true, postalCode: true } },
+      options: true,
+    },
   });
   if (!proposal) throw new ProposalNotFoundError(input.proposalId);
   if (proposal.status !== ProposalStatus.SENT) throw new ProposalNotPendingError(input.proposalId, proposal.status);
@@ -442,11 +466,62 @@ export async function acceptProposal(input: AcceptProposalInput) {
     },
   });
 
-  // The Job may already be OPEN (e.g. re-signing a revised proposal on a job
-  // whose earlier proposal already opened it) — only transition when needed.
-  if (proposal.job.status === JobStatus.PRE_SALE) {
+  let jobId = proposal.jobId;
+  if (jobId === null) {
+    if (!proposal.lead) throw new Error(`invariant: proposal ${proposal.id} has no jobId and no lead — nothing to open a Job from`);
+    const lead = proposal.lead;
+    const newJob = await db.$transaction(async (tx) => {
+      const job = await tx.job.create({
+        data: {
+          organizationId: input.organizationId,
+          name: lead.title ?? lead.name,
+          contractType: ContractType.FIXED_PRICE,
+          status: JobStatus.OPEN,
+          addressLine1: lead.addressLine1,
+          city: lead.city,
+          state: lead.state,
+          postalCode: lead.postalCode,
+        },
+      });
+      await tx.jobStatusEvent.create({
+        data: {
+          jobId: job.id,
+          from: null,
+          to: JobStatus.OPEN,
+          reason: `Proposal ${proposal.id} accepted`,
+          actorApiKeyId: input.actorApiKeyId ?? null,
+        },
+      });
+      await tx.proposal.update({ where: { id: proposal.id }, data: { jobId: job.id } });
+      await tx.estimate.update({ where: { id: selectedOption.estimateId }, data: { jobId: job.id } });
+      await tx.lead.update({ where: { id: lead.id }, data: { convertedJobId: job.id } });
+      await tx.clientJobAccess.upsert({
+        where: { clientId_jobId: { clientId: proposal.clientId, jobId: job.id } },
+        create: {
+          clientId: proposal.clientId,
+          jobId: job.id,
+          canViewDailyLogs: true,
+          canViewSchedule: true,
+          canViewDocuments: true,
+          canViewBudget: true,
+          canViewInvoices: true,
+          canMakePayments: true,
+          canViewBills: false,
+          canViewSelections: true,
+          canApproveSelections: true,
+          canViewChangeOrders: true,
+          canApproveChangeOrders: true,
+        },
+        update: {},
+      });
+      return job;
+    });
+    jobId = newJob.id;
+  } else if (proposal.job?.status === JobStatus.PRE_SALE) {
+    // The Job may already be OPEN (e.g. re-signing a revised proposal on a job
+    // whose earlier proposal already opened it) — only transition when needed.
     await transitionJobStatus({
-      jobId: proposal.jobId,
+      jobId,
       organizationId: input.organizationId,
       to: JobStatus.OPEN,
       actor: input.actorApiKeyId ? { kind: "apiKey", apiKeyId: input.actorApiKeyId } : undefined,
@@ -462,9 +537,9 @@ export async function acceptProposal(input: AcceptProposalInput) {
     }
   }
 
-  await emitEvent(input.organizationId, "proposal.accepted", { proposalId: updated.id, jobId: updated.jobId, estimateId: selectedOption.estimateId });
+  await emitEvent(input.organizationId, "proposal.accepted", { proposalId: updated.id, jobId, estimateId: selectedOption.estimateId });
 
-  return updated;
+  return { ...updated, jobId };
 }
 
 export async function declineProposal(organizationId: string, proposalId: string) {

@@ -34,6 +34,18 @@ export class EmptyEstimateError extends Error {
   }
 }
 
+/** There's no Budget to send to before a real Job exists — an estimate drafted
+ *  straight off a Lead (jobId null until its proposal is accepted, see
+ *  src/lib/crm/lead-proposal.ts) can't reach this function through any normal
+ *  path (acceptProposal() backfills jobId before ever calling this), so this
+ *  is a defensive invariant check, not an expected user-facing error. */
+export class EstimateHasNoJobError extends Error {
+  constructor(estimateId: string) {
+    super(`Estimate ${estimateId} has no Job yet — nothing to send to budget.`);
+    this.name = "EstimateHasNoJobError";
+  }
+}
+
 export interface EstimateLineForRollup {
   readonly costCodeId: string;
   readonly quantityMilli: number;
@@ -124,6 +136,10 @@ export async function sendEstimateToBudget(input: SendToBudgetInput): Promise<Se
     if (!estimate) {
       throw new EstimateNotFoundError(estimateId);
     }
+    if (estimate.jobId === null) {
+      throw new EstimateHasNoJobError(estimateId);
+    }
+    const jobId = estimate.jobId;
     if (estimate.sentToBudgetAt !== null && !allowResend) {
       throw new EstimateAlreadyLockedError(estimateId);
     }
@@ -135,7 +151,7 @@ export async function sendEstimateToBudget(input: SendToBudgetInput): Promise<Se
 
     for (const rollup of rollups) {
       const existing = await tx.budgetLine.findUnique({
-        where: { jobId_costCodeId: { jobId: estimate.jobId, costCodeId: rollup.costCodeId } },
+        where: { jobId_costCodeId: { jobId, costCodeId: rollup.costCodeId } },
       });
 
       if (existing) {
@@ -151,7 +167,7 @@ export async function sendEstimateToBudget(input: SendToBudgetInput): Promise<Se
       } else {
         await tx.budgetLine.create({
           data: {
-            jobId: estimate.jobId,
+            jobId,
             costCodeId: rollup.costCodeId,
             originalBudgetCostCents: rollup.costCents,
             revisedBudgetCostCents: rollup.costCents,
@@ -175,7 +191,7 @@ export async function sendEstimateToBudget(input: SendToBudgetInput): Promise<Se
 
     return {
       estimateId: estimate.id,
-      jobId: estimate.jobId,
+      jobId,
       budgetLinesWritten: rollups.length,
       totalCostCents: rollups.reduce((total, rollup) => total + rollup.costCents, 0),
       totalClientPriceCents: rollups.reduce((total, rollup) => total + rollup.clientPriceCents, 0),

@@ -1,20 +1,17 @@
 /**
  * "Lead Proposal" (Buildertrend parity): from the sales rep's point of view,
- * building a proposal straight off a Lead is one action. Under the hood there
- * is no separate pre-Job proposal concept — a Proposal always belongs to a
- * real Job and a real Client (CLAUDE.md 5's "one place computes the numbers":
- * Proposal always prices off a real Estimate on a real Job) — so this
- * orchestrates the same three already-correct, independently-tested actions
- * convertLeadToJob() already exists for (src/lib/crm/service.ts's own
- * "Lead is the only entity that legitimately predates a Job"): convert the
- * lead (idempotent if already converted), find-or-create the Client, then
- * create the Estimate and Proposal on that Job.
+ * building a proposal straight off a Lead is one action. There is no Job to
+ * belong to until a client actually accepts the proposal (CLAUDE.md 3:
+ * "converts to a Job on acceptance" — see acceptProposal() in
+ * src/lib/proposals/service.ts, which creates the real Job at that moment) —
+ * so this finds-or-creates the Client, then creates the Estimate and Proposal
+ * scoped to the Lead itself (or to its Job already, if an earlier proposal on
+ * this same lead already got accepted).
  */
 
-import { ContractType } from "@/generated/prisma/enums";
 import { AiNotConfiguredError, DraftGenerationError, draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
 import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
-import { convertLeadToJob, LeadNotFoundError } from "@/lib/crm/service";
+import { LeadNotFoundError } from "@/lib/crm/service";
 import { createEstimate, type CreateEstimateLineItemInput } from "@/lib/estimates/service";
 import { db } from "@/lib/db";
 import { isSupabaseStorageConfigured } from "@/lib/env";
@@ -34,12 +31,11 @@ const IMAGE_EXTENSION_BY_MEDIA_TYPE: Record<DraftEstimateImageInput["mediaType"]
  * The photos a salesperson attaches to the "Draft with Jarvis" form are sent to
  * Claude as vision input for the estimate draft, then would otherwise be thrown
  * away. Persist them into the job's own Pre-Sale Photos folder (FileCategory.
- * PRESALE_PHOTO) too — by the time this runs, createLeadProposal has already
- * converted the Lead to a Job (idempotently, or it already existed), so there is
- * no separate lead-scoped storage location to later "move": these photos land
- * directly in the job's file library, filed under Pre-Sale Photos, from the
- * start. Best effort: storage may not be configured, and a failed upload never
- * fails the proposal itself, since the draft is the valuable part.
+ * PRESALE_PHOTO) too — only called when the lead already has a real Job (an
+ * earlier proposal on it was already accepted); a still-jobless lead has
+ * nowhere to file them yet, so the caller skips this entirely in that case.
+ * Best effort: storage may not be configured, and a failed upload never fails
+ * the proposal itself, since the draft is the valuable part.
  */
 async function persistPreSalePhotos(params: {
   organizationId: string;
@@ -108,14 +104,11 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
   const clientEmail = input.clientEmail ?? lead.email;
   if (!clientEmail) throw new LeadMissingContactError(input.leadId);
 
-  let jobId = lead.convertedJobId;
-  if (!jobId) {
-    const converted = await convertLeadToJob(input.organizationId, input.leadId, {
-      name: lead.name,
-      contractType: ContractType.FIXED_PRICE,
-    });
-    jobId = converted.job.id;
-  }
+  // Null until a proposal for this lead is actually accepted (acceptProposal()
+  // creates the real Job at that moment, CLAUDE.md 3's "converts to a Job on
+  // acceptance") — unless this lead already has one, from an earlier accepted
+  // proposal (e.g. this is a follow-up/revised proposal against that same job).
+  const jobId = lead.convertedJobId;
 
   const client = await db.client.upsert({
     where: { organizationId_email: { organizationId: input.organizationId, email: clientEmail } },
@@ -128,29 +121,34 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
     update: {},
   });
 
-  await db.clientJobAccess.upsert({
-    where: { clientId_jobId: { clientId: client.id, jobId } },
-    create: {
-      clientId: client.id,
-      jobId,
-      canViewDailyLogs: true,
-      canViewSchedule: true,
-      canViewDocuments: true,
-      canViewBudget: true,
-      canViewInvoices: true,
-      canMakePayments: true,
-      canViewBills: false,
-      canViewSelections: true,
-      canApproveSelections: true,
-      canViewChangeOrders: true,
-      canApproveChangeOrders: true,
-    },
-    update: {},
-  });
+  // No Job yet means no portal to grant access to yet either — acceptProposal()
+  // creates this same grant once the Job actually exists.
+  if (jobId) {
+    await db.clientJobAccess.upsert({
+      where: { clientId_jobId: { clientId: client.id, jobId } },
+      create: {
+        clientId: client.id,
+        jobId,
+        canViewDailyLogs: true,
+        canViewSchedule: true,
+        canViewDocuments: true,
+        canViewBudget: true,
+        canViewInvoices: true,
+        canMakePayments: true,
+        canViewBills: false,
+        canViewSelections: true,
+        canApproveSelections: true,
+        canViewChangeOrders: true,
+        canApproveChangeOrders: true,
+      },
+      update: {},
+    });
+  }
 
   const estimate = await createEstimate({
     organizationId: input.organizationId,
-    jobId,
+    jobId: jobId ?? undefined,
+    leadId: jobId ? undefined : lead.id,
     title: input.title,
     rateMode: input.rateMode,
     defaultRateBasisPoints: input.defaultRateBasisPoints,
@@ -161,7 +159,7 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
 
   return createProposal({
     organizationId: input.organizationId,
-    jobId,
+    jobId: jobId ?? undefined,
     leadId: input.leadId,
     clientId: client.id,
     title: input.title,
@@ -241,7 +239,11 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     aiPromptNotes: input.notes,
   });
 
-  if (input.images?.length) {
+  // Only once there's a real Job to file them into (this lead already had an
+  // earlier proposal accepted) — a still-jobless proposal's photos stay in the
+  // AI-drafted proposal content itself; there's no job file library yet to
+  // persist a separate copy into.
+  if (input.images?.length && proposal.jobId) {
     await persistPreSalePhotos({
       organizationId: input.organizationId,
       jobId: proposal.jobId,

@@ -316,13 +316,14 @@ export async function addOptionAction(_previous: ActionState, formData: FormData
   const label = String(formData.get("label") ?? "").trim();
   if (!label) return { error: "Option label is required." };
 
-  const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId: user.organizationId }, select: { jobId: true, title: true } });
+  const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId: user.organizationId }, select: { jobId: true, leadId: true, title: true } });
   if (!proposal) return { error: `Proposal ${proposalId} not found` };
 
   try {
     const estimate = await createEstimate({
       organizationId: user.organizationId,
-      jobId: proposal.jobId,
+      jobId: proposal.jobId ?? undefined,
+      leadId: proposal.jobId ? undefined : (proposal.leadId ?? undefined),
       title: `${proposal.title} — ${label}`,
       lineItems: [],
     });

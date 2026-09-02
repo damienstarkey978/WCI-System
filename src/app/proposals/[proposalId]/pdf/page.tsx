@@ -50,11 +50,15 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
   ]);
   if (!proposal) notFound();
 
-  const preSalePhotoFiles = await db.file.findMany({
-    where: { jobId: proposal.jobId, category: "PRESALE_PHOTO" },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, fileName: true, url: true },
-  });
+  // Files always belong to a real Job — a proposal still against a bare Lead
+  // (no Job yet) can't have any pre-sale photos filed against it either.
+  const preSalePhotoFiles = proposal.jobId
+    ? await db.file.findMany({
+        where: { jobId: proposal.jobId, category: "PRESALE_PHOTO" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, fileName: true, url: true },
+      })
+    : [];
   const preSalePhotos = await Promise.all(
     preSalePhotoFiles.map(async (photo) => ({
       id: photo.id,
