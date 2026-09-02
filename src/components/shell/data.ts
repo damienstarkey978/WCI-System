@@ -1,4 +1,4 @@
-import { UserRole } from "@/generated/prisma/enums";
+import { JobStatus, UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { countUnreadNotifications, listNotificationsForUser } from "@/lib/notifications/service";
 
@@ -11,12 +11,22 @@ import type { BellNotification } from "./TopNav";
  * roles have org-wide visibility by design, see src/lib/job-access.ts);
  * FIELD only sees jobs they hold an explicit JobAccessGrant for, so the
  * sidebar never lists a job that clicking into would just deny.
+ *
+ * Excludes PRE_SALE jobs — a Job row exists in that status as soon as a
+ * proposal is drafted for a Lead (src/lib/crm/lead-proposal.ts: "a Proposal
+ * always belongs to a real Job"), before the client has accepted anything.
+ * It only becomes a real job (JobStatus.OPEN) once its proposal is actually
+ * accepted (src/lib/proposals/service.ts). The full /jobs list still shows
+ * pre-sale jobs, with their own "Pre-sale" badge, for staff managing that
+ * pipeline — this sidebar is the persistent nav on every page, and a Lead
+ * someone is still drafting a proposal for isn't a job yet.
  */
 export async function sidebarJobsForOrg(organizationId: string, user: { readonly id: string; readonly role: UserRole }): Promise<SidebarJob[]> {
   const jobs = await db.job.findMany({
     where: {
       organizationId,
       isTemplate: false,
+      status: { not: JobStatus.PRE_SALE },
       ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
     },
     orderBy: { createdAt: "desc" },
