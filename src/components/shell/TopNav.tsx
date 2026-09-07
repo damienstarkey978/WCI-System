@@ -18,6 +18,7 @@ import {
   type JobsMenuItem,
 } from "@/lib/buildertrend-nav";
 
+import { BrandMark } from "./BrandMark";
 import { GlobalSearch } from "./GlobalSearch";
 import type { SidebarJob } from "./JobSidebar";
 import { MobileMenuDrawer } from "./MobileMenuDrawer";
@@ -26,7 +27,6 @@ import {
   BuildingIcon,
   ChevronDownIcon,
   GearIcon,
-  GlobeIcon,
   HelpIcon,
   MenuIcon,
   PeopleIcon,
@@ -287,9 +287,8 @@ export function TopNav({
           <MenuIcon className="h-5 w-5" />
         </button>
 
-        <Link href="/dashboard" className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
-          <GlobeIcon className="h-5 w-5" />
-          WCI OS
+        <Link href="/dashboard" className="flex items-center">
+          <BrandMark className="h-8 w-auto" />
         </Link>
 
         <nav className="hidden items-center gap-1 text-sm font-medium lg:flex">

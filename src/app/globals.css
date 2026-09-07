@@ -17,8 +17,15 @@
      [data-theme="dark"] attribute (see the @custom-variant above). */
   --bt-nav: #2c6975;
   --bt-nav-hover: #23545e;
-  --bt-primary: #1a56db;
-  --bt-primary-hover: #1745ad;
+  --bt-primary: #2c6373;
+  --bt-primary-hover: #234e5a;
+  /* Fixed brand teal sampled directly from the World Construction Inc. logo's
+     "WORLD" wordmark (#3d849b) — same value in both skins (it's the brand mark,
+     not a themed UI color), used by BrandMark (src/components/shell/BrandMark.tsx)
+     and anywhere else the literal logo color is needed. --bt-primary above is a
+     darker shade of the same hue, not the exact logo color, chosen for AA contrast
+     with white button text on this skin's light background. */
+  --brand-teal: #3d849b;
   --bt-page-bg: #f7f8fa;
   --bt-panel-bg: #ffffff;
   --bt-panel-bg-muted: #f3f4f6;
@@ -69,8 +76,8 @@
 
   --bt-nav: #131619;
   --bt-nav-hover: #1b1f24;
-  --bt-primary: #4da3ff;
-  --bt-primary-hover: #7cbeff;
+  --bt-primary: #5fb8d6;
+  --bt-primary-hover: #8ecfe6;
   --bt-page-bg: #0b0d10;
   --bt-panel-bg: #131619;
   --bt-panel-bg-muted: #1b1f24;
@@ -84,7 +91,7 @@
   --bt-status-open-bg: rgba(74, 222, 128, 0.14);
   --bt-status-open-text: #4ade80;
   --bt-badge-qb-bg: #16a34a;
-  --bt-active-bar: #4da3ff;
+  --bt-active-bar: #5fb8d6;
   --bt-danger: #ff6b5e;
   --bt-hazard: #f5a623;
   --bt-success: #4ade80;
