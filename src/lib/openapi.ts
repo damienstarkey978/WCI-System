@@ -504,7 +504,7 @@ const ENDPOINTS: readonly EndpointDef[] = [
     description: "Requires supervisorUserId to belong to an ADMIN or PM. Per-worker failures don't abort the batch.",
     tags: ["Time Clock"],
     scopes: ["time-clock:write"],
-    requestSchema: bulkClockInSchema.extend({ supervisorUserId: z.string().cuid() }),
+    requestSchema: bulkClockInSchema.extend({ supervisorUserId: z.string().min(1).max(64) }),
     successDescription: "One result per requested worker, each either { ok: true, entry } or { ok: false, error }.",
   },
   {
@@ -542,7 +542,7 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Time Clock"],
     scopes: ["time-clock:write"],
     pathParams: ["entryId"],
-    requestSchema: z.object({ approverUserId: z.string().cuid() }),
+    requestSchema: z.object({ approverUserId: z.string().min(1).max(64) }),
   },
   {
     method: "post",
@@ -551,7 +551,7 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Time Clock"],
     scopes: ["time-clock:write"],
     pathParams: ["entryId"],
-    requestSchema: z.object({ approverUserId: z.string().cuid() }),
+    requestSchema: z.object({ approverUserId: z.string().min(1).max(64) }),
   },
   {
     method: "get",

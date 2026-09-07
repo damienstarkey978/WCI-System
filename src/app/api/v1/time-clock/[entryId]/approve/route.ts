@@ -14,7 +14,7 @@ import { db } from "@/lib/db";
 import { approveEntry, EntryNotFoundError, InsufficientRoleError } from "@/lib/time-clock/service";
 import { ClockNotClosedError } from "@/lib/time-clock/hours";
 
-const approveRequestSchema = z.object({ approverUserId: z.string().cuid() });
+const approveRequestSchema = z.object({ approverUserId: z.string().min(1).max(64) });
 
 type Context = { params: Promise<{ entryId: string }> };
 

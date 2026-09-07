@@ -14,7 +14,7 @@ import { bulkClockInSchema, formatZodIssues } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
 import { bulkClockIn, InsufficientRoleError } from "@/lib/time-clock/service";
 
-const bulkClockInRequestSchema = bulkClockInSchema.extend({ supervisorUserId: z.string().cuid() });
+const bulkClockInRequestSchema = bulkClockInSchema.extend({ supervisorUserId: z.string().min(1).max(64) });
 
 export const POST = withApiAuth(["time-clock:write"], async (request, auth) => {
   let payload: unknown;

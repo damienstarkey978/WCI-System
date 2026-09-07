@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { EntryNotFoundError, InsufficientRoleError, rejectEntry } from "@/lib/time-clock/service";
 import { ClockNotClosedError } from "@/lib/time-clock/hours";
 
-const rejectRequestSchema = z.object({ approverUserId: z.string().cuid() });
+const rejectRequestSchema = z.object({ approverUserId: z.string().min(1).max(64) });
 
 type Context = { params: Promise<{ entryId: string }> };
 

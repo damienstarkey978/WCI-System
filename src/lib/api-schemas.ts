@@ -25,7 +25,7 @@ export const createJobSchema = z.object({
   name: z.string().trim().min(1).max(255),
   contractType: z.enum(ContractType),
   prefix: z.string().trim().min(1).max(32).nullish(),
-  jobGroupId: z.string().cuid().nullish(),
+  jobGroupId: z.string().min(1).max(64).nullish(),
   addressLine1: nullableTrimmed,
   addressLine2: nullableTrimmed,
   city: nullableTrimmed,
@@ -51,10 +51,10 @@ export type CreateJobInput = z.infer<typeof createJobSchema>;
 export const listJobsQuerySchema = z.object({
   status: z.enum(JobStatus).optional(),
   contractType: z.enum(ContractType).optional(),
-  jobGroupId: z.string().cuid().optional(),
+  jobGroupId: z.string().min(1).max(64).optional(),
   includeTemplates: z.coerce.boolean().optional().default(false),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
-  cursor: z.string().cuid().optional(),
+  cursor: z.string().min(1).max(64).optional(),
 });
 
 export const transitionJobStatusSchema = z.object({
@@ -66,7 +66,7 @@ export const createCostCodeSchema = z.object({
   code: z.string().trim().min(1).max(32),
   name: z.string().trim().min(1).max(255),
   defaultCostType: z.enum(CostType).optional().default(CostType.NONE),
-  parentId: z.string().cuid().nullish(),
+  parentId: z.string().min(1).max(64).nullish(),
   sortOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
@@ -94,7 +94,7 @@ const cents = z.number().int().min(-1_000_000_000).max(1_000_000_000);
 const basisPoints = z.number().int().min(-9_999).max(1_000_000);
 
 export const estimateLineItemSchema = z.object({
-  costCodeId: z.string().cuid(),
+  costCodeId: z.string().min(1).max(64),
   costType: z.enum(CostType).optional(),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().max(2_000).nullish(),
@@ -108,7 +108,7 @@ export const estimateLineItemSchema = z.object({
 });
 
 export const createEstimateSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   rateMode: rateMode.optional().default(RateMode.MARKUP),
   defaultRateBasisPoints: basisPoints.optional().default(0),
@@ -116,18 +116,18 @@ export const createEstimateSchema = z.object({
 });
 
 export const createPurchaseOrderSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   poNumber: z.string().trim().min(1).max(64),
   poSuffix: z.string().trim().max(16).nullish(),
   vendorName: z.string().trim().min(1).max(255),
   /// Set only when the vendor has a Vendor Portal account (Phase 4).
-  vendorId: z.string().cuid().nullish(),
+  vendorId: z.string().min(1).max(64).nullish(),
   sourceType: z.enum(FinancialSourceType).optional().default(FinancialSourceType.SCRATCH),
   sourceId: z.string().trim().max(64).nullish(),
   lineItems: z
     .array(
       z.object({
-        costCodeId: z.string().cuid(),
+        costCodeId: z.string().min(1).max(64),
         costType: z.enum(CostType).optional(),
         title: z.string().trim().min(1).max(255),
         quantityMilli: quantityMilli.optional().default(1_000),
@@ -139,11 +139,11 @@ export const createPurchaseOrderSchema = z.object({
 });
 
 export const createBillSchema = z.object({
-  jobId: z.string().cuid(),
-  purchaseOrderId: z.string().cuid().nullish(),
+  jobId: z.string().min(1).max(64),
+  purchaseOrderId: z.string().min(1).max(64).nullish(),
   vendorName: z.string().trim().min(1).max(255),
   /// Set only when the vendor has a Vendor Portal account (Phase 4).
-  vendorId: z.string().cuid().nullish(),
+  vendorId: z.string().min(1).max(64).nullish(),
   billNumber: z.string().trim().max(64).nullish(),
   issuedOn: z.coerce.date().nullish(),
   dueOn: z.coerce.date().nullish(),
@@ -151,7 +151,7 @@ export const createBillSchema = z.object({
   lineItems: z
     .array(
       z.object({
-        costCodeId: z.string().cuid(),
+        costCodeId: z.string().min(1).max(64),
         costType: z.enum(CostType).optional(),
         title: z.string().trim().min(1).max(255),
         amountCents: cents,
@@ -183,7 +183,7 @@ export const emitEventSchema = z.object({
 });
 
 export const aiDraftEstimateSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   notes: z.string().trim().min(10).max(10_000),
 });
 
@@ -195,8 +195,8 @@ const billOcrDocumentSchema = z.object({
 });
 
 export const aiOcrBillSchema = z.object({
-  jobId: z.string().cuid(),
-  vendorId: z.string().cuid().nullish(),
+  jobId: z.string().min(1).max(64),
+  vendorId: z.string().min(1).max(64).nullish(),
   document: billOcrDocumentSchema,
 });
 
@@ -216,7 +216,7 @@ export const createInvoiceLineItemSchema = z.object({
 });
 
 export const createInvoiceSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   type: z.enum(InvoiceType),
   invoiceNumber: z.string().trim().min(1).max(64),
   issuedOn: z.coerce.date().nullish(),
@@ -233,7 +233,7 @@ export const createDrawSchema = z.object({
 });
 
 export const createDrawScheduleSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   name: z.string().trim().min(1).max(255).optional(),
   draws: z.array(createDrawSchema).min(1).max(50),
 });
@@ -258,17 +258,17 @@ export const clockInSchema = z.object({
   // Required: /api/v1 is API-key-only (CLAUDE.md 2.1), so there is no "current
   // user" session to default to. A human-facing field client (Phase 7's PWA) will
   // need its own session-authenticated path when it's built.
-  userId: z.string().cuid(),
-  jobId: z.string().cuid(),
-  costCodeId: z.string().cuid(),
+  userId: z.string().min(1).max(64),
+  jobId: z.string().min(1).max(64),
+  costCodeId: z.string().min(1).max(64),
   gps: gpsPointSchema.nullish(),
   overrideRateCents: z.number().int().positive().max(1_000_000).optional(),
 });
 
 export const bulkClockInSchema = z.object({
-  jobId: z.string().cuid(),
-  costCodeId: z.string().cuid(),
-  userIds: z.array(z.string().cuid()).min(1).max(200),
+  jobId: z.string().min(1).max(64),
+  costCodeId: z.string().min(1).max(64),
+  userIds: z.array(z.string().min(1).max(64)).min(1).max(200),
   gps: gpsPointSchema.nullish(),
 });
 
@@ -277,13 +277,13 @@ export const clockOutSchema = z.object({
 });
 
 export const weeklyOvertimeQuerySchema = z.object({
-  userId: z.string().cuid(),
+  userId: z.string().min(1).max(64),
   weekStart: z.coerce.date(),
 });
 
 export const listTimeClockQuerySchema = z.object({
-  jobId: z.string().cuid().optional(),
-  userId: z.string().cuid().optional(),
+  jobId: z.string().min(1).max(64).optional(),
+  userId: z.string().min(1).max(64).optional(),
   approvalStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
 });
@@ -293,31 +293,31 @@ export const listTimeClockQuerySchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const createScheduleSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   name: z.string().trim().min(1).max(255).optional(),
 });
 
 export const createScheduleItemSchema = z.object({
   title: z.string().trim().min(1).max(255),
   durationDays: z.number().int().min(1).max(3_650),
-  predecessorIds: z.array(z.string().cuid()).max(50).optional(),
+  predecessorIds: z.array(z.string().min(1).max(64)).max(50).optional(),
   lagDays: z.number().int().min(-365).max(365).optional(),
   manualStartDate: z.coerce.date().nullish(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
-  assigneeUserIds: z.array(z.string().cuid()).max(50).optional(),
+  assigneeUserIds: z.array(z.string().min(1).max(64)).max(50).optional(),
 });
 
 export const updateScheduleItemSchema = z.object({
   title: z.string().trim().min(1).max(255).optional(),
   durationDays: z.number().int().min(1).max(3_650).optional(),
-  predecessorIds: z.array(z.string().cuid()).max(50).optional(),
+  predecessorIds: z.array(z.string().min(1).max(64)).max(50).optional(),
   lagDays: z.number().int().min(-365).max(365).optional(),
   manualStartDate: z.coerce.date().nullish(),
   confirmationStatus: z.enum(["UNCONFIRMED", "CONFIRMED"]).optional(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
-  assigneeUserIds: z.array(z.string().cuid()).max(50).optional(),
+  assigneeUserIds: z.array(z.string().min(1).max(64)).max(50).optional(),
 });
 
 export const createNonWorkingDaySchema = z.object({
@@ -330,7 +330,7 @@ export const createNonWorkingDaySchema = z.object({
 // ---------------------------------------------------------------------------
 
 const changeOrderLineItemSchema = z.object({
-  costCodeId: z.string().cuid(),
+  costCodeId: z.string().min(1).max(64),
   costType: z.enum(CostType).optional(),
   title: z.string().trim().min(1).max(255),
   quantityMilli: quantityMilli.optional().default(1_000),
@@ -341,10 +341,10 @@ const changeOrderLineItemSchema = z.object({
 
 export const createChangeOrderSchema = z
   .object({
-    jobId: z.string().cuid(),
+    jobId: z.string().min(1).max(64),
     title: z.string().trim().min(1).max(255),
     mode: z.enum(ChangeOrderMode),
-    flatCostCodeId: z.string().cuid().optional(),
+    flatCostCodeId: z.string().min(1).max(64).optional(),
     flatCostCents: cents.optional(),
     flatClientPriceCents: cents.optional(),
     lineItems: z.array(changeOrderLineItemSchema).max(500).optional(),
@@ -374,27 +374,27 @@ export const pushChangeOrderToPurchaseOrderSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const createDailyLogSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   // Required: /api/v1 is API-key-only, so there is no session user to default to.
-  authorUserId: z.string().cuid(),
+  authorUserId: z.string().min(1).max(64),
   note: z.string().trim().min(1).max(10_000),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
 });
 
 export const listDailyLogsQuerySchema = z.object({
-  jobId: z.string().cuid().optional(),
+  jobId: z.string().min(1).max(64).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
 });
 
 export const createTodoSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().max(5_000).nullish(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   dueDate: z.coerce.date().nullish(),
   category: z.string().trim().max(64).nullish(),
-  assigneeUserId: z.string().cuid().nullish(),
+  assigneeUserId: z.string().min(1).max(64).nullish(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
   checklistItems: z.array(z.string().trim().min(1).max(255)).max(100).optional(),
@@ -409,11 +409,11 @@ export const setChecklistItemDoneSchema = z.object({
 });
 
 export const createRfiSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   question: z.string().trim().min(1).max(10_000),
   dueDate: z.coerce.date().nullish(),
-  assigneeUserId: z.string().cuid().nullish(),
+  assigneeUserId: z.string().min(1).max(64).nullish(),
   relatedItemRef: z.string().trim().max(255).nullish(),
 });
 
@@ -422,8 +422,8 @@ export const answerRfiSchema = z.object({
 });
 
 export const registerFileSchema = z.object({
-  jobId: z.string().cuid(),
-  uploadedByUserId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
+  uploadedByUserId: z.string().min(1).max(64),
   fileName: z.string().trim().min(1).max(255),
   url: z.string().url().max(2_000),
   mimeType: z.string().trim().max(255).nullish(),
@@ -431,7 +431,7 @@ export const registerFileSchema = z.object({
   category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO"]).optional(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
-  dailyLogId: z.string().cuid().nullish(),
+  dailyLogId: z.string().min(1).max(64).nullish(),
 });
 
 // ---------------------------------------------------------------------------
@@ -441,9 +441,9 @@ export const registerFileSchema = z.object({
 export const createCommentSchema = z.object({
   featureType: z.string().trim().min(1).max(64),
   featureId: z.string().trim().min(1).max(64),
-  authorUserId: z.string().cuid().nullish(),
+  authorUserId: z.string().min(1).max(64).nullish(),
   body: z.string().trim().min(1).max(10_000),
-  mentions: z.array(z.string().cuid()).max(50).optional(),
+  mentions: z.array(z.string().min(1).max(64)).max(50).optional(),
 });
 
 export const listCommentsQuerySchema = z.object({
@@ -452,7 +452,7 @@ export const listCommentsQuerySchema = z.object({
 });
 
 export const listNotificationsQuerySchema = z.object({
-  userId: z.string().cuid(),
+  userId: z.string().min(1).max(64),
   unreadOnly: z.coerce.boolean().optional().default(false),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
 });
@@ -482,7 +482,7 @@ const jobAccessFlags = {
 };
 
 export const grantJobAccessSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   ...jobAccessFlags,
 });
 
@@ -499,8 +499,8 @@ export const portalApproveChangeOrderSchema = z.object({
 });
 
 export const createAllowanceSchema = z.object({
-  jobId: z.string().cuid(),
-  costCodeId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
+  costCodeId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   amountCents: z.number().int().nonnegative(),
   clientPriceCents: z.number().int().nonnegative(),
@@ -514,8 +514,8 @@ export const createSelectionOptionInputSchema = z.object({
 });
 
 export const createSelectionSchema = z.object({
-  jobId: z.string().cuid(),
-  allowanceId: z.string().cuid().nullish(),
+  jobId: z.string().min(1).max(64),
+  allowanceId: z.string().min(1).max(64).nullish(),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().max(5_000).nullish(),
   dueDate: z.coerce.date().nullish(),
@@ -523,7 +523,7 @@ export const createSelectionSchema = z.object({
 });
 
 export const requestApprovalLinkSchema = z.object({
-  clientId: z.string().cuid(),
+  clientId: z.string().min(1).max(64),
 });
 
 // ---------------------------------------------------------------------------
@@ -542,7 +542,7 @@ export const createVendorSchema = z.object({
 });
 
 export const grantVendorJobAccessSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   scheduleScope: z.enum(["ASSIGNED_ONLY", "ALL_ITEMS"]).optional(),
   canViewDocuments: z.boolean().optional(),
   canViewPurchaseOrders: z.boolean().optional(),
@@ -556,7 +556,7 @@ export const addCertificationSchema = z.object({
 });
 
 export const requestVendorApprovalLinkSchema = z.object({
-  vendorId: z.string().cuid(),
+  vendorId: z.string().min(1).max(64),
 });
 
 export const portalAcceptPurchaseOrderSchema = z.object({
@@ -564,7 +564,7 @@ export const portalAcceptPurchaseOrderSchema = z.object({
 });
 
 const createBidPackageLineItemSchema = z.object({
-  costCodeId: z.string().cuid().nullish(),
+  costCodeId: z.string().min(1).max(64).nullish(),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().max(2_000).nullish(),
   quantityMilli: z.number().int().positive().nullish(),
@@ -572,7 +572,7 @@ const createBidPackageLineItemSchema = z.object({
 });
 
 export const createBidPackageSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().max(5_000).nullish(),
   dueDate: z.coerce.date().nullish(),
@@ -580,11 +580,11 @@ export const createBidPackageSchema = z.object({
 });
 
 export const inviteVendorToBidSchema = z.object({
-  vendorId: z.string().cuid(),
+  vendorId: z.string().min(1).max(64),
 });
 
 const submitBidLineItemSchema = z.object({
-  bidPackageLineItemId: z.string().cuid().nullish(),
+  bidPackageLineItemId: z.string().min(1).max(64).nullish(),
   title: z.string().trim().min(1).max(255),
   quantityMilli: z.number().int().positive(),
   unitCostCents: z.number().int().nonnegative(),
@@ -602,7 +602,7 @@ export const closeBidPackageSchema = z.object({
 
 export const pushBidToPurchaseOrderSchema = z.object({
   poNumber: z.string().trim().min(1).max(64),
-  fallbackCostCodeId: z.string().cuid().optional(),
+  fallbackCostCodeId: z.string().min(1).max(64).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -619,7 +619,7 @@ export const createLeadSchema = z.object({
   state: z.string().trim().length(2).nullish(),
   postalCode: z.string().trim().min(3).max(16).nullish(),
   notes: z.string().trim().max(10_000).nullish(),
-  assignedUserId: z.string().cuid().nullish(),
+  assignedUserId: z.string().min(1).max(64).nullish(),
 });
 
 export const updateLeadStageSchema = z.object({
@@ -630,14 +630,14 @@ export const updateLeadStageSchema = z.object({
 export const convertLeadToJobSchema = createJobSchema;
 
 const proposalOptionSchema = z.object({
-  estimateId: z.string().cuid(),
+  estimateId: z.string().min(1).max(64),
   label: z.string().trim().min(1).max(100),
 });
 
 export const createProposalSchema = z.object({
-  jobId: z.string().cuid(),
-  leadId: z.string().cuid().nullish(),
-  clientId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
+  leadId: z.string().min(1).max(64).nullish(),
+  clientId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   coverMessage: z.string().trim().max(10_000).nullish(),
   /** 1-5 priced options (task #116) — a single-option proposal auto-selects it. */
@@ -665,7 +665,7 @@ export const submitProposalFeedbackSchema = z.object({
 
 export const portalAcceptProposalSchema = z.object({
   clientSignatureName: z.string().trim().min(1).max(255).optional(),
-  optionId: z.string().cuid().optional(),
+  optionId: z.string().min(1).max(64).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -678,20 +678,20 @@ const createSpecificationSectionSchema = z.object({
 });
 
 export const createSpecificationSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   viewMode: z.enum(["BOOK_VIEW", "LIST_VIEW"]).optional(),
   sections: z.array(createSpecificationSectionSchema).max(200).optional(),
 });
 
 export const generateSpecificationFromEstimateSchema = z.object({
-  jobId: z.string().cuid(),
-  estimateId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
+  estimateId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
 });
 
 export const createSubmittalSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   type: z.enum(["MATERIAL_SPEC", "SHOP_DRAWING"]),
   documentUrl: z.string().url().max(2_000),
@@ -714,18 +714,18 @@ export const recordSubmittalReviewSchema = z.object({
 });
 
 export const createWarrantyClaimSchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   claimNumber: z.string().trim().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().min(1).max(10_000),
   submittedByName: z.string().trim().max(255).nullish(),
   submittedByEmail: z.string().trim().toLowerCase().email().max(255).nullish(),
-  clientId: z.string().cuid().nullish(),
+  clientId: z.string().min(1).max(64).nullish(),
 });
 
 export const scheduleWarrantyAppointmentSchema = z.object({
   appointmentAt: z.coerce.date(),
-  assignedVendorId: z.string().cuid().nullish(),
+  assignedVendorId: z.string().min(1).max(64).nullish(),
 });
 
 export const portalAcceptWarrantyWorkSchema = z.object({
@@ -737,7 +737,7 @@ const createSurveyQuestionSchema = z.object({
 });
 
 export const createSurveySchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
   touchpoint: z.enum(["PRE_PROJECT", "MID_PROJECT", "POST_COMPLETION"]),
   questions: z.array(createSurveyQuestionSchema).min(1).max(50),
@@ -758,7 +758,7 @@ export const submitSurveyResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const generateWeeklySummarySchema = z.object({
-  jobId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
   /** Both optional — default to the last 7 days when omitted. */
   periodStart: z.coerce.date().optional(),
   periodEnd: z.coerce.date().optional(),
@@ -782,8 +782,8 @@ const migrationAttachmentSchema = z.object({
 });
 
 export const importDailyLogSchema = z.object({
-  jobId: z.string().cuid(),
-  authorUserId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
+  authorUserId: z.string().min(1).max(64),
   note: z.string().trim().min(1).max(10_000),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
@@ -796,12 +796,12 @@ export const importDailyLogsSchema = z.object({
 });
 
 export const importPurchaseOrderSchema = z.object({
-  jobId: z.string().cuid(),
-  uploadedByUserId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
+  uploadedByUserId: z.string().min(1).max(64),
   poNumber: z.string().trim().min(1).max(64),
   poSuffix: z.string().trim().max(16).nullish(),
   vendorName: z.string().trim().min(1).max(255),
-  vendorId: z.string().cuid().nullish(),
+  vendorId: z.string().min(1).max(64).nullish(),
   status: z.enum(PurchaseOrderStatus),
   approvedAt: z.coerce.date().nullish(),
   declinedAt: z.coerce.date().nullish(),
@@ -809,7 +809,7 @@ export const importPurchaseOrderSchema = z.object({
   lineItems: z
     .array(
       z.object({
-        costCodeId: z.string().cuid(),
+        costCodeId: z.string().min(1).max(64),
         costType: z.enum(CostType).optional(),
         title: z.string().trim().min(1).max(255),
         quantityMilli: quantityMilli.optional().default(1_000),
@@ -826,11 +826,11 @@ export const importPurchaseOrdersSchema = z.object({
 });
 
 export const importBillSchema = z.object({
-  jobId: z.string().cuid(),
-  uploadedByUserId: z.string().cuid(),
-  purchaseOrderId: z.string().cuid().nullish(),
+  jobId: z.string().min(1).max(64),
+  uploadedByUserId: z.string().min(1).max(64),
+  purchaseOrderId: z.string().min(1).max(64).nullish(),
   vendorName: z.string().trim().min(1).max(255),
-  vendorId: z.string().cuid().nullish(),
+  vendorId: z.string().min(1).max(64).nullish(),
   billNumber: z.string().trim().max(64).nullish(),
   approvalStatus: z.enum(BillApprovalStatus),
   issuedOn: z.coerce.date().nullish(),
@@ -840,7 +840,7 @@ export const importBillSchema = z.object({
   lineItems: z
     .array(
       z.object({
-        costCodeId: z.string().cuid(),
+        costCodeId: z.string().min(1).max(64),
         costType: z.enum(CostType).optional(),
         title: z.string().trim().min(1).max(255),
         amountCents: cents,
@@ -856,8 +856,8 @@ export const importBillsSchema = z.object({
 });
 
 export const importInvoiceSchema = z.object({
-  jobId: z.string().cuid(),
-  uploadedByUserId: z.string().cuid(),
+  jobId: z.string().min(1).max(64),
+  uploadedByUserId: z.string().min(1).max(64),
   type: z.enum(InvoiceType),
   invoiceNumber: z.string().trim().min(1).max(64),
   status: z.enum(InvoiceStatus),
