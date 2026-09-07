@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { ChevronDownIcon, HomeIcon } from "./icons";
@@ -67,6 +68,22 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
   }
 
   const activeJob = activeJobId ? jobs.find((job) => job.id === activeJobId) : undefined;
+
+  // Preserve the current section (e.g. "/invoices") when switching jobs, so picking
+  // a different job from the list doesn't bounce back to the job overview page —
+  // just the top-level section, since a deeper id in the path (an invoice, a specific
+  // schedule item) belongs to the job being left and won't exist under the new one.
+  const pathname = usePathname();
+  const activeSection = useMemo(() => {
+    if (!activeJobId || !pathname) return null;
+    const parts = pathname.split("/");
+    if (parts[1] !== "jobs" || parts[2] !== activeJobId || !parts[3]) return null;
+    return `/${parts[3]}`;
+  }, [pathname, activeJobId]);
+
+  function jobHref(jobId: string) {
+    return activeSection ? `/jobs/${jobId}${activeSection}` : `/jobs/${jobId}`;
+  }
 
   const filteredJobs = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -180,11 +197,11 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
               return (
                 <Link
                   key={job.id}
-                  href={`/jobs/${job.id}`}
+                  href={jobHref(job.id)}
                   className={`block truncate px-4 py-1.5 text-sm transition ${isActive ? "" : "hover:bg-black/5"}`}
                   style={
                     isActive
-                      ? { background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }
+                      ? { background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)", color: "var(--bt-primary)" }
                       : { color: "var(--bt-text)" }
                   }
                 >

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import {
@@ -134,6 +135,17 @@ export function MobileMenuDrawer({
 }) {
   const [jobQuery, setJobQuery] = useState("");
 
+  // Same section-preserving behavior as JobSidebar.tsx's job list: switching jobs
+  // from "Jump to job" should stay on the current top-level section, not bounce
+  // back to the job overview page.
+  const pathname = usePathname();
+  const activeSection = useMemo(() => {
+    if (!activeJobId || !pathname) return null;
+    const parts = pathname.split("/");
+    if (parts[1] !== "jobs" || parts[2] !== activeJobId || !parts[3]) return null;
+    return `/${parts[3]}`;
+  }, [pathname, activeJobId]);
+
   const filteredJobs = useMemo(() => {
     const q = jobQuery.trim().toLowerCase();
     if (!q) return jobs;
@@ -184,10 +196,14 @@ export function MobileMenuDrawer({
               {filteredJobs.slice(0, 50).map((job) => (
                 <Link
                   key={job.id}
-                  href={`/jobs/${job.id}`}
+                  href={activeSection ? `/jobs/${job.id}${activeSection}` : `/jobs/${job.id}`}
                   onClick={onClose}
                   className="truncate rounded px-2 py-1.5 text-sm hover:bg-black/5"
-                  style={job.id === activeJobId ? { background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" } : { color: "var(--bt-text)" }}
+                  style={
+                    job.id === activeJobId
+                      ? { background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)", color: "var(--bt-primary)" }
+                      : { color: "var(--bt-text)" }
+                  }
                 >
                   {job.prefix ? <span className="mr-1.5 font-mono text-xs text-[var(--bt-muted)]">{job.prefix}</span> : null}
                   {job.name}
