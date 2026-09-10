@@ -100,6 +100,7 @@ model Organization {
   estimates             Estimate[]
   estimateTemplates     EstimateTemplate[]
   poAgreementTemplates  POAgreementTemplate[]
+  lienWaivers           LienWaiver[]
   purchaseOrders        PurchaseOrder[]
   bills                 Bill[]
   webhookSubscriptions  WebhookSubscription[]
@@ -163,6 +164,8 @@ model User {
   createdApiKeys            ApiKey[]             @relation("ApiKeyCreatedBy")
   jobStatusEvents           JobStatusEvent[]
   purchaseOrderEvents       PurchaseOrderEvent[]
+  createdBills              Bill[]               @relation("BillCreatedBy")
+  billApprovals             BillApproval[]       @relation("BillApprover")
   timeClockEntries          TimeClockEntry[]     @relation("TimeClockEntryUser")
   approvedTimeClockEntries  TimeClockEntry[]     @relation("TimeClockEntryApprovedBy")
   clockedInTimeClockEntries TimeClockEntry[]     @relation("TimeClockEntryClockedInBy")
@@ -529,12 +532,30 @@ enum PurchaseOrderEventType {
   WORK_REOPENED
 }
 
+/// INBOX is the arrival stage: a receipt that has been uploaded or forwarded in but
+/// nobody has confirmed yet. AI-extracted bills land in IN_REVIEW instead — the OCR
+/// has already read them, a human just hasn't agreed with it yet. Nothing reaches
+/// READY_FOR_PAYMENT without a person, by design.
 enum BillApprovalStatus {
+  INBOX
   IN_REVIEW
   APPROVED
   READY_FOR_PAYMENT
   PAID
   VOID
+}
+
+/// How a bill got into the system, so the Inbox can show provenance and the office
+/// can tell a forwarded vendor email from something typed by hand.
+enum BillSource {
+  MANUAL
+  UPLOAD
+  EMAIL
+}
+
+enum LienWaiverStatus {
+  UNRELEASED
+  RELEASED
 }
 
 /// Which layer of the funnel drives projectedCost. GREATEST is Buildertrend's
@@ -889,7 +910,27 @@ model Bill {
   vendor     Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   billNumber String?
 
+  /// Usually the receipt's own filename ("reading flooring.pdf", "IMG_4963.jpg"),
+  /// because most bills arrive as a photographed or forwarded receipt rather than
+  /// something typed from scratch.
+  title       String?
+  description String?
+
+  /// Ties the bill to the schedule task the work belongs to.
+  linkedScheduleItemId String?
+  linkedScheduleItem   ScheduleItem? @relation(fields: [linkedScheduleItemId], references: [id], onDelete: SetNull)
+
   approvalStatus BillApprovalStatus @default(IN_REVIEW)
+  source         BillSource         @default(MANUAL)
+
+  /// Which staff member entered or forwarded it — Buildertrend's "Created by" column.
+  createdByUserId String?
+  createdByUser   User?   @relation("BillCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  /// Set when the bill arrived by forwarded email, for tracing it back to the message.
+  sourceEmailFrom      String?
+  sourceEmailSubject   String?
+  sourceEmailMessageId String?
 
   issuedOn DateTime?
   dueOn    DateTime?
@@ -907,13 +948,66 @@ model Bill {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lineItems BillLineItem[]
-  files     File[]
+  lineItems   BillLineItem[]
+  files       File[]
+  approvals   BillApproval[]
+  lienWaivers LienWaiver[]
 
   @@index([jobId, approvalStatus])
-  @@index([organizationId])
+  @@index([organizationId, approvalStatus])
   @@index([purchaseOrderId])
   @@index([vendorId])
+  @@index([linkedScheduleItemId])
+}
+
+/// One required approver on a bill. v1 is "N required approvers, any order": the bill
+/// can't reach READY_FOR_PAYMENT until every row here has an approvedAt.
+model BillApproval {
+  id     String @id @default(cuid())
+  billId String
+  bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  approverUserId String
+  approverUser   User   @relation("BillApprover", fields: [approverUserId], references: [id], onDelete: Cascade)
+
+  approvedAt DateTime?
+  declinedAt DateTime?
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  /// One row per approver per bill — asking the same person twice is a mistake.
+  @@unique([billId, approverUserId])
+  @@index([approverUserId, approvedAt])
+}
+
+/// Lien waiver tracked per bill/vendor payment — a compliance record GCs need for
+/// every sub payment. v1 fills a static template and marks it released on send; the
+/// point is having the record and the trail, not a legal-document generator.
+model LienWaiver {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  billId         String
+  bill           Bill         @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  /// Which template was applied, by name, snapshotted so renaming a template later
+  /// doesn't rewrite what a released waiver says it was.
+  templateName String
+  /// The filled text as released. Frozen once status is RELEASED.
+  body String?
+
+  status     LienWaiverStatus @default(UNRELEASED)
+  releasedAt DateTime?
+  /// The generated PDF, once one exists.
+  fileId String?
+  file   File?   @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([billId])
 }
 
 model BillLineItem {
@@ -1359,6 +1453,9 @@ model ScheduleItem {
 
   sortOrder Int @default(0)
 
+  /// Bills booked against this schedule task.
+  bills Bill[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1603,6 +1700,9 @@ model File {
   /// Set when this file is attached to an Invoice (mainly historical migration).
   invoiceId String?
   invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  /// Set when this file is a generated lien-waiver PDF.
+  lienWaivers LienWaiver[]
 
   createdAt DateTime @default(now())
 

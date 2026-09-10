@@ -164,11 +164,16 @@ export class IllegalBillTransitionError extends Error {
 }
 
 /**
- * IN_REVIEW → APPROVED → READY_FOR_PAYMENT → PAID, with VOID reachable from any
- * unpaid state. The transitions are guarded because each one moves money in the
+ * INBOX → IN_REVIEW → APPROVED → READY_FOR_PAYMENT → PAID, with VOID reachable from
+ * any unpaid state. The transitions are guarded because each one moves money in the
  * funnel: reaching PAID is what makes a bill count as actual cost under cash basis.
+ *
+ * INBOX is the arrival stage for uploaded/forwarded receipts nobody has opened yet
+ * (src/lib/bills/intake.ts). It can only go forward to IN_REVIEW — an unread receipt
+ * can't skip straight to approved.
  */
 const ALLOWED_BILL_TRANSITIONS: Readonly<Record<BillApprovalStatus, readonly BillApprovalStatus[]>> = {
+  [BillApprovalStatus.INBOX]: [BillApprovalStatus.IN_REVIEW, BillApprovalStatus.VOID],
   [BillApprovalStatus.IN_REVIEW]: [BillApprovalStatus.APPROVED, BillApprovalStatus.VOID],
   [BillApprovalStatus.APPROVED]: [
     BillApprovalStatus.READY_FOR_PAYMENT,
@@ -196,6 +201,14 @@ export async function updateBillStatus(organizationId: string, billId: string, a
 
   if (!ALLOWED_BILL_TRANSITIONS[bill.approvalStatus].includes(approvalStatus)) {
     throw new IllegalBillTransitionError(bill.approvalStatus, approvalStatus, ALLOWED_BILL_TRANSITIONS[bill.approvalStatus]);
+  }
+
+  // Money only moves once every assigned approver has actually signed. Imported
+  // dynamically because intake.ts imports BillNotFoundError from this file, and a
+  // static import both ways is a cycle.
+  if (approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT) {
+    const { requireApprovalsComplete } = await import("@/lib/bills/intake");
+    await requireApprovalsComplete(organizationId, bill.id);
   }
 
   const updated = await db.bill.update({

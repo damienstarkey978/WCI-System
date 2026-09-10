@@ -114,6 +114,14 @@ describe("actual cost and accounting basis", () => {
     expect(line(PAINT, [], withVoid, { accountingBasis: "ACCRUAL" }).actualCostCents).toBe(75_000);
     expect(line(PAINT, [], withVoid, { accountingBasis: "CASH" }).actualCostCents).toBe(40_000);
   });
+
+  it("never counts a bill still sitting unread in the inbox, on either basis", () => {
+    // An uploaded or forwarded receipt nobody has opened: amount, job, and whether
+    // it's even a bill are all unconfirmed, so it must not move actual cost.
+    const withInbox = [...bills, { costCodeId: "paint", approvalStatus: "INBOX" as const, amountCents: 99_999 }];
+    expect(line(PAINT, [], withInbox, { accountingBasis: "ACCRUAL" }).actualCostCents).toBe(75_000);
+    expect(line(PAINT, [], withInbox, { accountingBasis: "CASH" }).actualCostCents).toBe(40_000);
+  });
 });
 
 describe("the layers overlap and must never be summed", () => {

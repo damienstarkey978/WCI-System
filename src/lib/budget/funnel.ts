@@ -41,7 +41,7 @@ export type PurchaseOrderStatus =
   | "COMPLETED"
   | "CANCELLED";
 
-export type BillApprovalStatus = "IN_REVIEW" | "APPROVED" | "READY_FOR_PAYMENT" | "PAID" | "VOID";
+export type BillApprovalStatus = "INBOX" | "IN_REVIEW" | "APPROVED" | "READY_FOR_PAYMENT" | "PAID" | "VOID";
 
 export type InvoiceStatus = "DRAFT" | "SENT" | "PARTIALLY_PAID" | "PAID" | "VOID";
 
@@ -145,9 +145,14 @@ function isPendingStatus(status: PurchaseOrderStatus): boolean {
 /**
  * Which bills count as actual cost. Void bills never count. Under cash basis only
  * paid bills do; under accrual, everything that is a real liability does.
+ *
+ * INBOX never counts under either basis: it's a receipt that arrived by upload or
+ * forwarded email and nobody has opened yet, so its amount, its job, and whether
+ * it's even a bill are all still unconfirmed. Letting it through would let an
+ * unread attachment move a job's actual cost.
  */
 function countsAsActual(status: BillApprovalStatus, basis: AccountingBasis): boolean {
-  if (status === "VOID") return false;
+  if (status === "VOID" || status === "INBOX") return false;
   if (basis === "CASH") return status === "PAID";
   return true;
 }
