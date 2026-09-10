@@ -25,7 +25,14 @@ describe("encryptToken / decryptToken", () => {
   it("rejects a tampered ciphertext", () => {
     const stored = encryptToken("a-real-refresh-token");
     const [iv, authTag, ciphertext] = stored.split(".");
-    const tampered = [iv, authTag, `${ciphertext.slice(0, -2)}xx`].join(".");
+    // Flip the last character to one it definitely isn't. Overwriting with a fixed
+    // string instead (this used to write "xx") is flaky: the parts are base64url,
+    // where "x" is a legal character, so roughly one ciphertext in 4096 already
+    // ended in "xx" — making the "tampered" value identical to the original, which
+    // then decrypts fine and fails the assertion.
+    const last = ciphertext.slice(-1);
+    const tampered = [iv, authTag, `${ciphertext.slice(0, -1)}${last === "A" ? "B" : "A"}`].join(".");
+    expect(tampered).not.toBe(stored);
     expect(() => decryptToken(tampered)).toThrow();
   });
 
