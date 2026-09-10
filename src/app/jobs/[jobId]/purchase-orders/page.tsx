@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -8,17 +9,9 @@ import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { CreatePoForm } from "./create-po-form";
+import { PO_STATUS_STYLE, WORK_STATUS_STYLE } from "./status-styles";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  PENDING_APPROVAL: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  APPROVED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
-  COMPLETED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  CANCELLED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
-};
 
 export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[jobId]/purchase-orders">) {
   const { jobId } = await params;
@@ -66,26 +59,37 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
                 style={{ borderColor: "var(--bt-border)" }}
               >
                 <th className="px-4 py-3">PO #</th>
-                <th className="px-4 py-3">Vendor</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Title</th>
+                <th className="px-4 py-3">Performed by</th>
+                <th className="px-4 py-3">PO status</th>
+                <th className="px-4 py-3">Work status</th>
                 <th className="px-4 py-3">Created</th>
                 <th className="px-4 py-3 text-right">Total</th>
               </tr>
             </thead>
             <tbody>
               {purchaseOrders.map((po) => {
-                const style = STATUS_STYLE[po.status] ?? STATUS_STYLE.DRAFT;
+                const style = PO_STATUS_STYLE[po.status] ?? PO_STATUS_STYLE.DRAFT;
+                const workStyle = WORK_STATUS_STYLE[po.workStatus];
                 const totalCents = po.lineItems.reduce((total, item) => total + extendedCostCents(item.quantityMilli, item.unitCostCents), 0);
                 return (
-                  <tr key={po.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                    <td className="px-4 py-3 font-medium text-[var(--bt-text)]">
-                      {po.poNumber}
-                      {po.poSuffix ? `-${po.poSuffix}` : ""}
+                  <tr key={po.id} className="border-b last:border-0 hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
+                    <td className="px-4 py-3 font-medium">
+                      <Link href={`/jobs/${job.id}/purchase-orders/${po.id}`} className="hover:underline" style={{ color: "var(--bt-primary)" }}>
+                        {po.poNumber}
+                        {po.poSuffix ? `-${po.poSuffix}` : ""}
+                      </Link>
                     </td>
+                    <td className="px-4 py-3 text-[var(--bt-text)]">{po.title ?? "—"}</td>
                     <td className="px-4 py-3 text-[var(--bt-text)]">{po.vendorName}</td>
                     <td className="px-4 py-3">
                       <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
                         {po.status.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: workStyle.bg, color: workStyle.text }}>
+                        {po.workStatus.replace(/_/g, " ")}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(po.createdAt)}</td>
@@ -94,6 +98,22 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr className="border-t font-semibold text-[var(--bt-text)]" style={{ borderColor: "var(--bt-border)" }}>
+                <td className="px-4 py-3" colSpan={6}>
+                  {purchaseOrders.length} purchase {purchaseOrders.length === 1 ? "order" : "orders"}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {formatMoney(
+                    purchaseOrders.reduce(
+                      (total, po) =>
+                        total + po.lineItems.reduce((sum, item) => sum + extendedCostCents(item.quantityMilli, item.unitCostCents), 0),
+                      0,
+                    ),
+                  )}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
