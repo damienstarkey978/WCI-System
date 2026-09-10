@@ -57,7 +57,7 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
       },
       purchaseOrders: { include: { lineItems: true } },
       bills: { include: { lineItems: true } },
-      invoices: { select: { status: true, amountCents: true } },
+      invoices: { select: { status: true, amountCents: true, taxCents: true } },
       timeClockEntries: {
         where: { approvalStatus: TimeClockApprovalStatus.APPROVED, clockOutAt: { not: null } },
         include: { breaks: true },
@@ -96,13 +96,22 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     amountCents: baseLaborCostCents(workedHours(entry.clockInAt, entry.clockOutAt, entry.breaks), entry.hourlyRateCents),
   }));
 
+  // Sales tax is stripped before invoices reach the funnel. Tax is collected on the
+  // state's behalf, not earned against the contract: counting it as amountInvoiced
+  // would make remainingToInvoice shrink on every taxed invoice and eventually claim
+  // a job was fully billed while work was still unbilled.
+  const invoicedRevenue = job.invoices.map((invoice) => ({
+    status: invoice.status,
+    amountCents: invoice.amountCents - invoice.taxCents,
+  }));
+
   const funnel = computeJobFunnel(
     job.budgetLines,
     purchaseOrderCosts,
     billCosts,
     unapprovedLabor,
     { projectionReference: job.projectionReference, accountingBasis: job.accountingBasis },
-    job.invoices,
+    invoicedRevenue,
   );
 
   const costCodes: Record<string, CostCodeLookupEntry> = {};

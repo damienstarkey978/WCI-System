@@ -25,13 +25,15 @@ describe("encryptToken / decryptToken", () => {
   it("rejects a tampered ciphertext", () => {
     const stored = encryptToken("a-real-refresh-token");
     const [iv, authTag, ciphertext] = stored.split(".");
-    // Flip the last character to one it definitely isn't. Overwriting with a fixed
-    // string instead (this used to write "xx") is flaky: the parts are base64url,
-    // where "x" is a legal character, so roughly one ciphertext in 4096 already
-    // ended in "xx" — making the "tampered" value identical to the original, which
-    // then decrypts fine and fails the assertion.
-    const last = ciphertext.slice(-1);
-    const tampered = [iv, authTag, `${ciphertext.slice(0, -1)}${last === "A" ? "B" : "A"}`].join(".");
+    // Flip a bit in the decoded bytes rather than editing the base64url text.
+    // Character-level edits are flaky here: the final character of a base64url string
+    // can carry bits that decode to nothing, so a changed *string* can still decode to
+    // the identical ciphertext, authenticate cleanly, and fail this assertion. Two
+    // earlier attempts (writing "xx" over the tail, then flipping the last character)
+    // both failed intermittently for exactly that reason.
+    const bytes = Buffer.from(ciphertext, "base64url");
+    bytes[0] ^= 0xff;
+    const tampered = [iv, authTag, bytes.toString("base64url")].join(".");
     expect(tampered).not.toBe(stored);
     expect(() => decryptToken(tampered)).toThrow();
   });

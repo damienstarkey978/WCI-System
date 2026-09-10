@@ -38,7 +38,11 @@ export const WEBHOOK_EVENT_TYPES = [
   "bill.unmatched_transaction",
   "invoice.created",
   "invoice.sent",
+  /// Raised when an already-sent invoice is sent again, e.g. chasing a late client.
+  "invoice.resent",
   "invoice.paid",
+  "credit_memo.issued",
+  "deposit.received",
   "change_order.approved",
   "daily_log.created",
   "time_clock.out_of_bounds",

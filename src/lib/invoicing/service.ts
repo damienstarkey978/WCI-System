@@ -3,8 +3,9 @@
  * in src/lib/invoicing/calc.ts and stays testable without a database.
  */
 
-import { InvoiceStatus, InvoiceType, type PaymentMethod } from "@/generated/prisma/enums";
+import { InvoiceStatus, InvoiceType, PaymentTerms, type PaymentMethod, type RateMode } from "@/generated/prisma/enums";
 import { applyPayment, computeDrawAmountCents, totalDrawPercentage } from "@/lib/invoicing/calc";
+import { computeInvoiceTotals, dueDateFor } from "@/lib/invoicing/terms";
 import { db } from "@/lib/db";
 import { acceptsNewCommitments } from "@/lib/job-status";
 import { emitEvent } from "@/lib/webhooks";
@@ -77,6 +78,12 @@ export interface CreateInvoiceLineItemInput {
   readonly title: string;
   readonly description?: string | null;
   readonly amountCents: Cents;
+  readonly taxable?: boolean;
+  readonly costCodeId?: string | null;
+  readonly quantityMilli?: number | null;
+  readonly unitCostCents?: Cents | null;
+  readonly rateMode?: RateMode | null;
+  readonly rateBasisPoints?: BasisPoints | null;
 }
 
 export interface CreateInvoiceInput {
@@ -89,6 +96,9 @@ export interface CreateInvoiceInput {
   /** Required for FLAT; ignored (computed from lineItems) for LINE_ITEM/PROGRESS. */
   readonly amountCents?: Cents;
   readonly lineItems?: readonly CreateInvoiceLineItemInput[];
+  readonly paymentTerms?: PaymentTerms;
+  readonly taxRateBasisPoints?: BasisPoints;
+  readonly clientMessage?: string | null;
 }
 
 async function assertJobAcceptsInvoices(organizationId: string, jobId: string) {
@@ -109,9 +119,24 @@ export async function createInvoice(input: CreateInvoiceInput) {
     throw new Error("FLAT invoices require amountCents.");
   }
 
-  const amountCents = usesLineItems
-    ? input.lineItems!.reduce((total, line) => total + line.amountCents, 0)
-    : input.amountCents!;
+  const taxRateBasisPoints = input.taxRateBasisPoints ?? 0;
+  const paymentTerms = input.paymentTerms ?? PaymentTerms.NET_30;
+
+  // A FLAT invoice is a single agreed number with no lines to apportion tax across,
+  // so it is taken as the whole amount and taxed at nothing. Charging tax on a flat
+  // invoice means writing it as a line.
+  const totals = usesLineItems
+    ? computeInvoiceTotals(
+        input.lineItems!.map((line) => ({ amountCents: line.amountCents, taxable: line.taxable ?? false })),
+        taxRateBasisPoints,
+      )
+    : { subtotalCents: input.amountCents!, taxableCents: 0, taxCents: 0, totalCents: input.amountCents! };
+
+  // An explicit dueOn always wins — it is what the office typed. Otherwise derive it
+  // from the terms, but only once there is an issue date to count from: an undated
+  // draft has nothing to be 30 days after.
+  const derivedDueOn =
+    input.dueOn ?? (input.issuedOn ? dueDateFor(paymentTerms, input.issuedOn) : null);
 
   const invoice = await db.invoice.create({
     data: {
@@ -119,11 +144,30 @@ export async function createInvoice(input: CreateInvoiceInput) {
       jobId: input.jobId,
       type: input.type,
       invoiceNumber: input.invoiceNumber,
-      amountCents,
+      amountCents: totals.totalCents,
+      taxCents: totals.taxCents,
+      taxRateBasisPoints,
+      paymentTerms,
+      clientMessage: input.clientMessage ?? null,
       issuedOn: input.issuedOn ?? null,
-      dueOn: input.dueOn ?? null,
+      dueOn: derivedDueOn,
       ...(usesLineItems
-        ? { lineItems: { create: input.lineItems!.map((line, index) => ({ ...line, sortOrder: index })) } }
+        ? {
+            lineItems: {
+              create: input.lineItems!.map((line, index) => ({
+                title: line.title,
+                description: line.description ?? null,
+                amountCents: line.amountCents,
+                taxable: line.taxable ?? false,
+                costCodeId: line.costCodeId ?? null,
+                quantityMilli: line.quantityMilli ?? null,
+                unitCostCents: line.unitCostCents ?? null,
+                rateMode: line.rateMode ?? null,
+                rateBasisPoints: line.rateBasisPoints ?? null,
+                sortOrder: index,
+              })),
+            },
+          }
         : {}),
     },
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
@@ -151,14 +195,64 @@ export async function sendInvoice(organizationId: string, invoiceId: string) {
   if (invoice.status === InvoiceStatus.SENT) return { invoice, alreadySent: true };
   if (invoice.status !== InvoiceStatus.DRAFT) throw new InvoiceNotSendableError(invoiceId, invoice.status);
 
+  const now = new Date();
+  const issuedOn = invoice.issuedOn ?? now;
+
   const updated = await db.invoice.update({
     where: { id: invoice.id },
-    data: { status: InvoiceStatus.SENT, issuedOn: invoice.issuedOn ?? new Date() },
+    data: {
+      status: InvoiceStatus.SENT,
+      issuedOn,
+      // Only fill a due date we don't already have. CUSTOM returns null, which leaves
+      // whatever the office set — including nothing.
+      dueOn: invoice.dueOn ?? dueDateFor(invoice.paymentTerms, issuedOn),
+      lastSentAt: now,
+      sendCount: { increment: 1 },
+    },
   });
 
   await emitEvent(organizationId, "invoice.sent", { invoiceId: updated.id, jobId: updated.jobId });
 
   return { invoice: updated, alreadySent: false };
+}
+
+/**
+ * Send an already-sent invoice again — the client lost it, or is being chased.
+ *
+ * This deliberately does not touch issuedOn, dueOn or the payment terms: a resend is
+ * a second copy of the same demand, and letting it restate the dates would quietly
+ * hand a late client a fresh 30 days every time the office followed up.
+ */
+export async function resendInvoice(organizationId: string, invoiceId: string) {
+  const invoice = await db.invoice.findFirst({ where: { id: invoiceId, organizationId } });
+  if (!invoice) throw new InvoiceNotFoundError(invoiceId);
+  if (invoice.status === InvoiceStatus.VOID) throw new InvoiceVoidedError(invoiceId);
+  if (invoice.status === InvoiceStatus.DRAFT) throw new InvoiceNotSendableError(invoiceId, invoice.status);
+
+  const updated = await db.invoice.update({
+    where: { id: invoice.id },
+    data: { lastSentAt: new Date(), sendCount: { increment: 1 } },
+  });
+
+  await emitEvent(organizationId, "invoice.resent", {
+    invoiceId: updated.id,
+    jobId: updated.jobId,
+    sendCount: updated.sendCount,
+  });
+
+  return updated;
+}
+
+/**
+ * Record that the client opened this invoice in the portal. Called from the client
+ * portal's read path, so it must stay cheap and must never fail the read: knowing
+ * whether they have seen it is useful, but not at the cost of showing it to them.
+ */
+export async function markInvoiceViewedByClient(invoiceId: string) {
+  await db.invoice.updateMany({
+    where: { id: invoiceId, status: { not: InvoiceStatus.DRAFT } },
+    data: { clientLastViewedAt: new Date() },
+  });
 }
 
 export interface CreateDrawInput {
@@ -259,15 +353,20 @@ export async function recordPayment(input: RecordPaymentInput) {
   return db.$transaction(async (tx) => {
     const invoice = await tx.invoice.findFirst({
       where: { id: input.invoiceId, organizationId: input.organizationId },
-      include: { payments: true },
+      include: { payments: true, creditMemos: { where: { status: "APPLIED" }, select: { amountCents: true } } },
     });
     if (!invoice) throw new InvoiceNotFoundError(input.invoiceId);
     if (invoice.status === InvoiceStatus.VOID) throw new InvoiceVoidedError(input.invoiceId);
 
     const previouslyPaidCents = invoice.payments.reduce((total, payment) => total + payment.amountCents, 0);
-    // Throws OverpaymentError if this would exceed the invoice total — surfaced to
-    // the caller unchanged so the API can map it to a 422.
-    const result = applyPayment(invoice.amountCents, previouslyPaidCents, input.amountCents);
+    // An applied credit memo reduces what is actually owed, so it counts against the
+    // invoice total here. Without this, a $1,000 invoice carrying a $600 credit would
+    // still accept a $1,000 payment and the job would show $600 it never collected.
+    const creditedCents = invoice.creditMemos.reduce((total, memo) => total + memo.amountCents, 0);
+    const owedCents = invoice.amountCents - creditedCents;
+    // Throws OverpaymentError if this would exceed what is owed — surfaced to the
+    // caller unchanged so the API can map it to a 422.
+    const result = applyPayment(owedCents, previouslyPaidCents, input.amountCents);
 
     const payment = await tx.payment.create({
       data: {

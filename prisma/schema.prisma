@@ -136,6 +136,8 @@ model Organization {
   jarvisConversations   JarvisConversation[]
   quickBooksConnection  QuickBooksConnection?
   qboSyncLogs           QboSyncLog[]
+  creditMemos           CreditMemo[]
+  deposits              Deposit[]
 }
 
 model User {
@@ -290,6 +292,8 @@ model Job {
   warrantyClaims        WarrantyClaim[]
   surveys               Survey[]
   clientUpdateSummaries ClientUpdateSummary[]
+  creditMemos           CreditMemo[]
+  deposits              Deposit[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -383,6 +387,7 @@ model CostCode {
   allowances                Allowance[]
   bidPackageLineItems       BidPackageLineItem[]
   estimateTemplateLineItems EstimateTemplateLineItem[]
+  invoiceLineItems          InvoiceLineItem[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -767,7 +772,7 @@ model PurchaseOrder {
   /// identifier everywhere the bare PO number is too opaque to be useful.
   title String?
 
-  status PurchaseOrderStatus @default(DRAFT)
+  status     PurchaseOrderStatus     @default(DRAFT)
   /// Independent of status — see PurchaseOrderWorkStatus.
   workStatus PurchaseOrderWorkStatus @default(NOT_COMPLETE)
 
@@ -780,7 +785,7 @@ model PurchaseOrder {
 
   /// The subcontractor agreement the vendor is accepting — work schedule, site
   /// cleanliness, safety/PPE, workmanship standards. Markdown.
-  scopeOfWork String?
+  scopeOfWork         String?
   /// Optional template this PO's scope of work started from.
   agreementTemplateId String?
   agreementTemplate   POAgreementTemplate? @relation(fields: [agreementTemplateId], references: [id], onDelete: SetNull)
@@ -800,7 +805,7 @@ model PurchaseOrder {
   sourceId   String?
 
   /// Amend-in-place with version history.
-  version    Int       @default(1)
+  version    Int                      @default(1)
   approvedAt DateTime?
   approvedBy PurchaseOrderApprovedBy?
   declinedAt DateTime?
@@ -856,9 +861,9 @@ model PurchaseOrderEvent {
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
-  type PurchaseOrderEventType
+  type    PurchaseOrderEventType
   /// PO version at the time, so an amend trail reads in order.
-  version Int @default(1)
+  version Int                    @default(1)
 
   /// Exactly one actor is set, depending on whether a human, an agent, or the vendor
   /// themselves drove the change. All three are null for a vendor portal acceptance,
@@ -995,13 +1000,13 @@ model LienWaiver {
   /// doesn't rewrite what a released waiver says it was.
   templateName String
   /// The filled text as released. Frozen once status is RELEASED.
-  body String?
+  body         String?
 
   status     LienWaiverStatus @default(UNRELEASED)
   releasedAt DateTime?
   /// The generated PDF, once one exists.
-  fileId String?
-  file   File?   @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  fileId     String?
+  file       File?            @relation(fields: [fileId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1087,6 +1092,31 @@ enum InvoiceType {
   PROGRESS
 }
 
+/// How long a client has to pay. NET_n means n days from the invoice's issue date;
+/// CUSTOM means the office set dueOn by hand and nothing should recompute it.
+enum PaymentTerms {
+  DUE_ON_RECEIPT
+  NET_15
+  NET_30
+  NET_45
+  NET_60
+  CUSTOM
+}
+
+enum CreditMemoStatus {
+  DRAFT
+  ISSUED
+  APPLIED
+  VOID
+}
+
+enum DepositStatus {
+  REQUESTED
+  RECEIVED
+  APPLIED
+  REFUNDED
+}
+
 enum InvoiceStatus {
   DRAFT
   SENT
@@ -1113,14 +1143,42 @@ model Invoice {
   status        InvoiceStatus @default(DRAFT)
   invoiceNumber String
 
-  /// Authoritative total. For LINE_ITEM/PROGRESS this must equal the sum of
-  /// lineItems — enforced in src/lib/invoicing/service.ts, not by a DB constraint.
+  /// Authoritative total the client owes, tax included. For LINE_ITEM/PROGRESS this
+  /// must equal the sum of lineItems plus taxCents — enforced in
+  /// src/lib/invoicing/service.ts, not by a DB constraint.
   amountCents Int
+
+  /// Sales tax charged on this invoice, already included in amountCents. Kept
+  /// separate because tax is collected for the state, not earned: the commitment
+  /// funnel's amountInvoiced deliberately excludes it (src/lib/budget/service.ts),
+  /// or every taxed invoice would eat into remainingToInvoice.
+  taxCents           Int @default(0)
+  /// The rate the tax was charged at, snapshotted so a later rate change never
+  /// silently restates an invoice that already went out.
+  taxRateBasisPoints Int @default(0)
+
+  /// How long the client has to pay. dueOn is derived from this and issuedOn when
+  /// the invoice is sent (src/lib/invoicing/terms.ts), except on CUSTOM where the
+  /// office sets dueOn by hand.
+  paymentTerms PaymentTerms @default(NET_30)
 
   issuedOn DateTime?
   dueOn    DateTime?
   paidAt   DateTime?
   voidedAt DateTime?
+
+  /// When this invoice was first sent, and most recently sent. A resend updates
+  /// lastSentAt only — issuedOn and the payment terms stay pinned to the original
+  /// send, so chasing a client for payment can't quietly extend their due date.
+  lastSentAt DateTime?
+  sendCount  Int       @default(0)
+
+  /// The last time the client opened this invoice in the portal. Null means they
+  /// have never seen it, which is the first thing to check before chasing payment.
+  clientLastViewedAt DateTime?
+
+  /// Freeform note printed on the client-facing invoice.
+  clientMessage String?
 
   /// Set when this invoice was auto-generated from a Draw (CLAUDE.md 2.3:
   /// "DrawSchedule -> Draw ... autoGeneratesInvoiceOnDate"). One draw generates at
@@ -1137,9 +1195,11 @@ model Invoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lineItems InvoiceLineItem[]
-  payments  Payment[]
-  files     File[]
+  lineItems   InvoiceLineItem[]
+  payments    Payment[]
+  files       File[]
+  creditMemos CreditMemo[]
+  deposits    Deposit[]
 
   @@unique([organizationId, invoiceNumber])
   @@index([jobId, status])
@@ -1152,10 +1212,31 @@ model InvoiceLineItem {
 
   title       String
   description String?
+
+  /// The client-facing amount for this line — authoritative, and what the invoice
+  /// total is summed from. The cost/quantity/markup fields below explain how it was
+  /// arrived at; they never override it, so an invoice already sent can't be
+  /// restated by editing a markup.
   amountCents Int
-  sortOrder   Int     @default(0)
+
+  /// Optional cost breakdown, mirroring EstimateLineItem. Present on lines pushed
+  /// from an estimate or a budget; null on a line typed straight onto the invoice.
+  costCodeId      String?
+  costCode        CostCode? @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+  /// Quantity × 1000. 2.5 units is stored as 2500.
+  quantityMilli   Int?
+  unitCostCents   Int?
+  rateMode        RateMode?
+  rateBasisPoints Int?
+
+  /// Whether this line is subject to the invoice's sales tax rate. Labor is
+  /// commonly exempt where materials are not, so it's per line and not per invoice.
+  taxable Boolean @default(false)
+
+  sortOrder Int @default(0)
 
   @@index([invoiceId, sortOrder])
+  @@index([costCodeId])
 }
 
 /// One per job in the common case, though nothing here enforces that — a job could
@@ -1216,6 +1297,72 @@ model Payment {
 
   createdAt DateTime @default(now())
 
+  @@index([invoiceId])
+}
+
+/// Money credited back to a client — a billing correction, a returned allowance, a
+/// negotiated reduction. Deliberately not a negative Invoice: an invoice that went
+/// out is a record of what was asked for, and editing it after the fact destroys the
+/// trail. The credit is its own document that reduces what is owed.
+model CreditMemo {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// The invoice this credit is applied against. Null while it is a job-level credit
+  /// not yet attached to a specific invoice.
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  memoNumber  String
+  status      CreditMemoStatus @default(DRAFT)
+  /// Always positive. The sign is carried by being a credit memo, not by the number.
+  amountCents Int
+  reason      String?
+
+  issuedOn  DateTime?
+  appliedAt DateTime?
+  voidedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, memoNumber])
+  @@index([jobId, status])
+  @@index([invoiceId])
+}
+
+/// Money taken from a client up front, before there is an invoice to put it against
+/// — the signing deposit, a selections deposit. It is a liability until applied: the
+/// job has the cash but hasn't earned it, so it is tracked apart from payments.
+model Deposit {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// Set once the deposit has been applied to an invoice.
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  title       String
+  status      DepositStatus  @default(REQUESTED)
+  amountCents Int
+  method      PaymentMethod?
+  reference   String?
+
+  requestedOn DateTime?
+  receivedAt  DateTime?
+  appliedAt   DateTime?
+  refundedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobId, status])
   @@index([invoiceId])
 }
 
@@ -2386,12 +2533,12 @@ model Proposal {
   /// before that, on purpose (CLAUDE.md 3: "converts to a Job on acceptance").
   /// A proposal created directly against an already-real Job (not from a Lead)
   /// has this set from the start instead.
-  jobId String?
-  job   Job?    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  leadId         String?
-  lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  clientId       String
-  client         Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  jobId    String?
+  job      Job?    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  leadId   String?
+  lead     Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  clientId String
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Restrict)
 
   title        String
   coverMessage String?
