@@ -5,7 +5,7 @@
  */
 
 import { TimeClockApprovalStatus } from "@/generated/prisma/enums";
-import { extendedCostCents, computeJobFunnel, type JobFunnel } from "@/lib/budget/funnel";
+import { contractRevenueOnly, extendedCostCents, computeJobFunnel, type JobFunnel } from "@/lib/budget/funnel";
 import type { CostCodeLookupEntry } from "@/lib/budget/grouping";
 import { contractTypePolicy } from "@/lib/contract-type";
 import { db } from "@/lib/db";
@@ -96,22 +96,13 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     amountCents: baseLaborCostCents(workedHours(entry.clockInAt, entry.clockOutAt, entry.breaks), entry.hourlyRateCents),
   }));
 
-  // Sales tax is stripped before invoices reach the funnel. Tax is collected on the
-  // state's behalf, not earned against the contract: counting it as amountInvoiced
-  // would make remainingToInvoice shrink on every taxed invoice and eventually claim
-  // a job was fully billed while work was still unbilled.
-  const invoicedRevenue = job.invoices.map((invoice) => ({
-    status: invoice.status,
-    amountCents: invoice.amountCents - invoice.taxCents,
-  }));
-
   const funnel = computeJobFunnel(
     job.budgetLines,
     purchaseOrderCosts,
     billCosts,
     unapprovedLabor,
     { projectionReference: job.projectionReference, accountingBasis: job.accountingBasis },
-    invoicedRevenue,
+    contractRevenueOnly(job.invoices),
   );
 
   const costCodes: Record<string, CostCodeLookupEntry> = {};

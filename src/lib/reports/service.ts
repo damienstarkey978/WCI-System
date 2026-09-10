@@ -6,7 +6,7 @@
  */
 
 import { ChangeOrderMode, ChangeOrderStatus, CostType, LeadStage, TimeClockApprovalStatus } from "@/generated/prisma/enums";
-import { computeJobFunnel, extendedCostCents } from "@/lib/budget/funnel";
+import { computeJobFunnel, contractRevenueOnly, extendedCostCents } from "@/lib/budget/funnel";
 import { rollUpEstimateLines } from "@/lib/budget/send-to-budget";
 import {
   bucketCashFlowByDay,
@@ -38,7 +38,7 @@ async function loadActiveJobFunnels(organizationId: string, jobGroupId?: string)
       budgetLines: { include: { costCode: { select: { defaultCostType: true } } } },
       purchaseOrders: { include: { lineItems: true } },
       bills: { include: { lineItems: true } },
-      invoices: { select: { status: true, amountCents: true } },
+      invoices: { select: { status: true, amountCents: true, taxCents: true } },
       timeClockEntries: {
         where: { approvalStatus: TimeClockApprovalStatus.APPROVED, clockOutAt: { not: null } },
         include: { breaks: true },
@@ -72,7 +72,7 @@ async function loadActiveJobFunnels(organizationId: string, jobGroupId?: string)
       billCosts,
       unapprovedLabor,
       { projectionReference: job.projectionReference, accountingBasis: job.accountingBasis },
-      job.invoices,
+      contractRevenueOnly(job.invoices),
     );
 
     const budgetedLaborCostCents = job.budgetLines

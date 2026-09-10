@@ -16,6 +16,12 @@ export interface OverdueInvoice {
   readonly jobId: string;
   readonly jobName: string;
   readonly invoiceNumber: string;
+  /**
+   * What is still owed, not what the invoice was raised for. A PARTIALLY_PAID
+   * invoice reported at its full face value overstates the morning's chase list by
+   * everything already collected. Sales tax is included, unlike in the funnel: the
+   * client genuinely owes it.
+   */
   readonly amountCents: number;
   readonly dueOn: Date;
 }
@@ -25,16 +31,29 @@ export async function getOverdueInvoices(organizationId: string): Promise<readon
   const invoices = await db.invoice.findMany({
     where: { organizationId, status: { in: ["SENT", "PARTIALLY_PAID"] }, dueOn: { lt: new Date() } },
     orderBy: { dueOn: "asc" },
-    include: { job: { select: { id: true, name: true } } },
+    include: {
+      job: { select: { id: true, name: true } },
+      payments: { select: { amountCents: true } },
+      creditMemos: { where: { status: "APPLIED" }, select: { amountCents: true } },
+    },
   });
-  return invoices.map((invoice) => ({
-    id: invoice.id,
-    jobId: invoice.job.id,
-    jobName: invoice.job.name,
-    invoiceNumber: invoice.invoiceNumber,
-    amountCents: invoice.amountCents,
-    dueOn: invoice.dueOn!,
-  }));
+  return invoices
+    .map((invoice) => {
+      const settled =
+        invoice.payments.reduce((total, payment) => total + payment.amountCents, 0) +
+        invoice.creditMemos.reduce((total, memo) => total + memo.amountCents, 0);
+      return {
+        id: invoice.id,
+        jobId: invoice.job.id,
+        jobName: invoice.job.name,
+        invoiceNumber: invoice.invoiceNumber,
+        amountCents: invoice.amountCents - settled,
+        dueOn: invoice.dueOn!,
+      };
+    })
+    // An invoice settled entirely by credits still reads SENT, but there is nothing
+    // left to chase — it doesn't belong on the morning brief.
+    .filter((invoice) => invoice.amountCents > 0);
 }
 
 export interface OverBudgetJob {

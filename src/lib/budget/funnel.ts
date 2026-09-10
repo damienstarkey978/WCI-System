@@ -61,6 +61,24 @@ function countsAsInvoiced(status: InvoiceStatus): boolean {
   return status !== "DRAFT" && status !== "VOID";
 }
 
+/**
+ * Strip sales tax from a job's invoices before they reach the funnel.
+ *
+ * Tax is collected on the state's behalf, not earned against the contract. Counting
+ * it as amountInvoiced would shrink remainingToInvoice on every taxed invoice until a
+ * job read as fully billed with work still unbilled. Every caller that feeds invoices
+ * into computeJobFunnel goes through here — the job costing screen and the reports
+ * both — so the two can't disagree about what a job has billed.
+ */
+export function contractRevenueOnly(
+  invoices: readonly { status: InvoiceStatus; amountCents: Cents; taxCents: Cents }[],
+): readonly InvoiceCostInput[] {
+  return invoices.map((invoice) => ({
+    status: invoice.status,
+    amountCents: invoice.amountCents - invoice.taxCents,
+  }));
+}
+
 /** The authored numbers for one Job × CostCode. */
 export interface BudgetLineInput {
   readonly costCodeId: string;
