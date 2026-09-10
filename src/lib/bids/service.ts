@@ -108,6 +108,12 @@ export interface CreateBidPackageInput {
   readonly description?: string | null;
   readonly dueDate?: Date | null;
   readonly lineItems?: readonly CreateBidPackageLineItemInput[];
+  /**
+   * DRAFT to assemble the scope before anyone sees it; OPEN to release immediately.
+   * Defaults to OPEN so existing API callers, which have no notion of a draft, keep
+   * behaving exactly as they did.
+   */
+  readonly status?: BidPackageStatus;
 }
 
 export async function createBidPackage(input: CreateBidPackageInput) {
@@ -121,6 +127,7 @@ export async function createBidPackage(input: CreateBidPackageInput) {
       title: input.title,
       description: input.description ?? null,
       dueDate: input.dueDate ?? null,
+      status: input.status ?? BidPackageStatus.OPEN,
       lineItems: {
         create: (input.lineItems ?? []).map((line, index) => ({
           costCodeId: line.costCodeId ?? null,
@@ -132,6 +139,79 @@ export async function createBidPackage(input: CreateBidPackageInput) {
         })),
       },
     },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+export class BidPackageNotDraftError extends Error {
+  constructor(id: string, status: BidPackageStatus) {
+    super(`Bid package ${id} is already ${status.toLowerCase()} — only a draft can be released.`);
+    this.name = "BidPackageNotDraftError";
+  }
+}
+
+export class BidPackageHasNoScopeError extends Error {
+  constructor(id: string) {
+    super(
+      `Bid package ${id} has no line items. Add the scope before releasing it — a sub asked to bid on a title ` +
+        "and a paragraph will either pad the number or come back with questions.",
+    );
+    this.name = "BidPackageHasNoScopeError";
+  }
+}
+
+/**
+ * Release a draft to subcontractors. This is the moment the package stops being an
+ * internal working document, which is why it refuses an empty scope: everything
+ * downstream — comparing bids line by line, pushing the winner to a PO — assumes
+ * there is a scope to compare against.
+ */
+export async function releaseBidPackage(organizationId: string, bidPackageId: string) {
+  const bidPackage = await db.bidPackage.findFirst({
+    where: { id: bidPackageId, organizationId },
+    include: { lineItems: { select: { id: true } } },
+  });
+  if (!bidPackage) throw new BidPackageNotFoundError(bidPackageId);
+  if (bidPackage.status !== BidPackageStatus.DRAFT) throw new BidPackageNotDraftError(bidPackageId, bidPackage.status);
+  if (bidPackage.lineItems.length === 0) throw new BidPackageHasNoScopeError(bidPackageId);
+
+  return db.bidPackage.update({ where: { id: bidPackage.id }, data: { status: BidPackageStatus.OPEN } });
+}
+
+export interface AddBidPackageLineItemsInput {
+  readonly organizationId: string;
+  readonly bidPackageId: string;
+  readonly lineItems: readonly CreateBidPackageLineItemInput[];
+}
+
+/**
+ * Add scope to a draft. Deliberately draft-only: changing what was asked for after
+ * subs have started pricing it means their numbers no longer answer the same
+ * question, and nothing tells them it changed.
+ */
+export async function addBidPackageLineItems(input: AddBidPackageLineItemsInput) {
+  const bidPackage = await db.bidPackage.findFirst({
+    where: { id: input.bidPackageId, organizationId: input.organizationId },
+    include: { lineItems: { select: { id: true } } },
+  });
+  if (!bidPackage) throw new BidPackageNotFoundError(input.bidPackageId);
+  if (bidPackage.status !== BidPackageStatus.DRAFT) throw new BidPackageNotDraftError(input.bidPackageId, bidPackage.status);
+
+  const startOrder = bidPackage.lineItems.length;
+  await db.bidPackageLineItem.createMany({
+    data: input.lineItems.map((line, index) => ({
+      bidPackageId: bidPackage.id,
+      costCodeId: line.costCodeId ?? null,
+      title: line.title,
+      description: line.description ?? null,
+      quantityMilli: line.quantityMilli ?? null,
+      unit: line.unit ?? null,
+      sortOrder: startOrder + index,
+    })),
+  });
+
+  return db.bidPackage.findUniqueOrThrow({
+    where: { id: bidPackage.id },
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
 }

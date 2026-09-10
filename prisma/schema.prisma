@@ -2286,6 +2286,9 @@ model VendorActionToken {
 // ---------------------------------------------------------------------------
 
 enum BidPackageStatus {
+  /// Being assembled. Subs cannot be invited to a draft — releasing it is the
+  /// deliberate act of putting a scope in front of a subcontractor.
+  DRAFT
   OPEN
   CLOSED
   AWARDED

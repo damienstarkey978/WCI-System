@@ -9,12 +9,14 @@ import { formatDate, formatMoney } from "@/lib/format";
 
 import { acceptBidSubmissionAction, declineBidSubmissionAction } from "./actions";
 import { CreateBidPackageForm } from "./create-bid-package-form";
+import { DraftPanel } from "./draft-panel";
 import { InviteVendorForm } from "./invite-vendor-form";
 import { SubmitBidOnBehalfForm } from "./submit-bid-on-behalf-form";
 
 export const dynamic = "force-dynamic";
 
 const PACKAGE_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
+  DRAFT: { bg: "#e5e7eb", text: "#374151" },
   OPEN: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
   CLOSED: { bg: "#e5e7eb", text: "#374151" },
   AWARDED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
@@ -48,7 +50,10 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
     db.bidPackage.findMany({
       where: { jobId: job.id },
       orderBy: { createdAt: "desc" },
-      include: { submissions: { include: { vendor: true } } },
+      include: {
+        submissions: { include: { vendor: true } },
+        lineItems: { orderBy: { sortOrder: "asc" } },
+      },
     }),
     db.vendor.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
@@ -85,7 +90,22 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
                   </div>
                 </div>
 
-                {pkg.submissions.length === 0 ? (
+                {pkg.lineItems.length > 0 ? (
+                  <ul className="mt-3 flex flex-col gap-0.5 text-xs text-[var(--bt-muted)]">
+                    {pkg.lineItems.map((line) => (
+                      <li key={line.id}>
+                        • {line.title}
+                        {line.quantityMilli !== null
+                          ? ` — ${line.quantityMilli / 1000}${line.unit ? ` ${line.unit}` : ""}`
+                          : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                {pkg.status === "DRAFT" ? (
+                  <DraftPanel jobId={job.id} bidPackageId={pkg.id} hasScope={pkg.lineItems.length > 0} />
+                ) : pkg.submissions.length === 0 ? (
                   <p className="mt-3 text-xs text-[var(--bt-muted)]">No vendors invited yet.</p>
                 ) : (
                   <ul className="mt-3 divide-y" style={{ borderColor: "var(--bt-border)" }}>
