@@ -93,7 +93,10 @@ before you run `deploy`. **If it wants to apply anything older than
 `20260902134055`, stop and say so — do not let it run.** That would mean the
 baseline didn't take, and applying those would corrupt live data.
 
-Expected `deploy` output: 3 migrations applied (case A) or 4 (case B).
+Expected `deploy` output: 4 migrations applied (case A) or 5 (case B). In order:
+`phase_9d_purchase_order_workflow`, `phase_9d_bills_intake_pipeline`,
+`phase_9e_invoicing_terms_credits_deposits`, `phase_9e_bill_to_invoice_link` —
+plus `lead_proposal_no_job_until_accepted` first, in case B.
 
 ### 1c. Confirm
 
@@ -102,9 +105,11 @@ SELECT column_name FROM information_schema.columns
 WHERE table_name = 'Invoice' AND column_name IN ('taxCents','paymentTerms','clientLastViewedAt');
 SELECT table_name FROM information_schema.tables
 WHERE table_name IN ('CreditMemo','Deposit','LienWaiver','BillApproval','PurchaseOrderEvent','POAgreementTemplate');
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'InvoiceLineItem' AND column_name = 'sourceBillId';
 ```
 
-First query: 3 rows. Second: 6 rows.
+First query: 3 rows. Second: 6 rows. Third: 1 row.
 
 Then redeploy the app on Netlify so the running build matches the schema.
 
@@ -125,15 +130,28 @@ Once the migrations are live, on any real job:
    cost**.
 3. **Payment.** Mark the bill paid. Confirm the PO detail page's progress shows
    billed and paid against the committed amount.
-4. **Invoice side.** Raise an invoice with one taxable and one non-taxable line,
+4. **Bill it to the client.** On that bill, use **Bill to client** — 20% markup, a
+   new draft invoice. Confirm the client's invoice keeps the bill's own line
+   breakdown rather than one collapsed figure, and that trying it a second time is
+   refused: the same vendor cost must not reach the client twice.
+5. **Invoice side.** Raise an invoice with one taxable and one non-taxable line,
    send it, record a partial payment. Confirm the invoice list shows the right
    balance and that Job Costing's **Amount invoiced excludes the sales tax** —
    tax is collected for the state, not earned against the contract, and this is
    the specific thing that used to make the reports disagree with the screen.
 
 Screenshots worth having: the PO after vendor approval, the refused
-"Ready for payment", the Job Costing page with non-zero Committed and Actual,
-and the Invoices tab's summary strip.
+"Ready for payment", the refused second "Add to invoice", the Job Costing page
+with non-zero Committed and Actual, and the Invoices tab's summary strip.
+
+**Also worth a quick look while you are there: the Files page.** The React error
+#441 that blocked the photo migration on 2026-08-31 is fixed — the page was
+signing every file's storage URL in one batch, so a single unreadable row took
+the whole page down and hid every good file with it. It now renders unreadable
+rows as "File unavailable" cards (with a working Delete, since those are usually
+orphans left by failed uploads) and shows everything else normally. If the Files
+page loads, the 205 remaining Daily-Logs photos for
+`job_8056d45cd8944c4e842aa075990ed0c2` are unblocked.
 
 If any step behaves differently from the above, that is a real bug — send the
 screenshot and the exact steps rather than working around it.
