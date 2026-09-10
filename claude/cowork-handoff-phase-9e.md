@@ -12,7 +12,7 @@ Ordered by dependency — task 1 blocks 2, and 2 blocks 3.
 
 ---
 
-## 1. Apply three migrations to the production database
+## 1. Apply the pending migrations to the production database
 
 **Read this whole section before running anything.** The obvious command is
 wrong here and will fail loudly.
@@ -20,7 +20,7 @@ wrong here and will fail loudly.
 Every migration in this database's history was applied by hand through the
 Supabase SQL editor, so the `_prisma_migrations` bookkeeping table **does not
 exist**. A bare `npx prisma migrate deploy` therefore believes nothing has ever
-been applied, tries to re-run all 32 migrations from the beginning, and fails on
+been applied, tries to re-run every migration from the beginning, and fails on
 the first `CREATE TABLE "Organization"`. The database has to be baselined first.
 
 ### 1a. Check whether one older migration is also pending
@@ -88,17 +88,16 @@ npx prisma migrate status
 npx prisma migrate deploy
 ```
 
-`migrate status` should list exactly the pending migrations and nothing else
-before you run `deploy`. **If it wants to apply anything older than
-`20260902134055`, stop and say so — do not let it run.** That would mean the
-baseline didn't take, and applying those would corrupt live data.
+`migrate status` names exactly what is pending, and it is authoritative over
+anything written here. As of this writing that is the `phase_9d_*`, `phase_9e_*`
+and `phase_9f_*` migrations — everything dated 2026-09-10 — plus
+`lead_proposal_no_job_until_accepted` in case B. Work continued after this doc
+was written, so treat a longer list as normal and a *shorter* one as worth
+asking about.
 
-`migrate status` names exactly what is pending; that is the list to expect from
-`deploy`, and it is authoritative over anything written here. As of this writing
-it is the `phase_9d_*`, `phase_9e_*` and `phase_9f_*` migrations — everything
-dated 2026-09-10 — plus `lead_proposal_no_job_until_accepted` in case B. Work
-continued after this doc was written, so treat a longer list as normal and a
-*shorter* one as the thing worth asking about.
+**If it wants to apply anything older than `20260902134055`, stop and say so —
+do not let it run.** That means the baseline didn't take, and applying those
+against a live database would corrupt real data.
 
 ### 1c. Confirm
 
@@ -176,7 +175,8 @@ This has been blocked for a while on things that are now resolved or resolvable:
   were blocked by the safety classifier in earlier attempts and there is no
   reason to fight that again — the API is the app's own validated write path.
   The cuid validation that previously rejected Buildertrend's ID format has been
-  fixed. Damien has an API key: `wci_444eea04b9d2e2b3_…` (he has the full value).
+  fixed. Damien has an API key already provisioned — ask him for it rather than
+  minting a new one.
 - **Two data-shape gotchas**, both documented in
   `claude/buildertrend-export-shapes-and-costcodes.md`: the bills CSV has **no
   column linking a bill to its PO**, and jobs are referenced **by name string
