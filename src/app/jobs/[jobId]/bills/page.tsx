@@ -151,8 +151,14 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
                 const billTotal = bill.lineItems.reduce((total, item) => total + item.amountCents, 0);
                 return (
                   <tr key={bill.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                    <td className="px-4 py-3 text-[var(--bt-text)]">
-                      {bill.title ?? "—"}
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/jobs/${job.id}/bills/${bill.id}`}
+                        className="hover:underline"
+                        style={{ color: "var(--bt-primary)" }}
+                      >
+                        {bill.title ?? bill.billNumber ?? bill.vendorName}
+                      </Link>
                       {bill.fromOcr ? (
                         <span className="ml-1.5 rounded bg-black/5 px-1 py-0.5 text-[10px] text-[var(--bt-muted)]">AI</span>
                       ) : null}
