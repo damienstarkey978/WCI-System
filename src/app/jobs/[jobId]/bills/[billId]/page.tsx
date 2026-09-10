@@ -7,7 +7,7 @@ import { TEMPLATE_NAMES } from "@/lib/bills/lien-waivers";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
-import { ApproversPanel, LienWaiverPanel, StatusActions } from "./bill-panels";
+import { AddToInvoicePanel, ApproversPanel, LienWaiverPanel, StatusActions } from "./bill-panels";
 
 export const dynamic = "force-dynamic";
 
@@ -61,18 +61,28 @@ export default async function BillDetailPage({ params }: PageProps<"/jobs/[jobId
       files: { select: { id: true, fileName: true, url: true } },
       approvals: { include: { approverUser: { select: { name: true, email: true } } } },
       lienWaivers: { orderBy: { createdAt: "desc" }, take: 1 },
+      invoiceLines: { include: { invoice: { select: { id: true, invoiceNumber: true, status: true } } } },
     },
   });
   if (!bill) notFound();
 
-  const [staff, qboConnection] = await Promise.all([
+  const [staff, qboConnection, draftInvoices] = await Promise.all([
     db.user.findMany({
       where: { organizationId: user.organizationId, isActive: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true },
     }),
     db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } }),
+    db.invoice.findMany({
+      where: { jobId, organizationId: user.organizationId, status: "DRAFT" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, invoiceNumber: true, amountCents: true },
+    }),
   ]);
+
+  // A line on a voided invoice doesn't count — that charge was withdrawn, so the
+  // cost is legitimately still to be recovered.
+  const billedOnLine = bill.invoiceLines.find((line) => line.invoice.status !== "VOID") ?? null;
   const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
 
   const totalCents = bill.lineItems.reduce((total, item) => total + item.amountCents, 0);
@@ -242,6 +252,26 @@ export default async function BillDetailPage({ params }: PageProps<"/jobs/[jobId
         <div className="flex flex-col gap-4">
           <Panel title="Actions">
             <StatusActions jobId={jobId} billId={bill.id} status={bill.approvalStatus} />
+          </Panel>
+
+          <Panel title="Bill to client">
+            <AddToInvoicePanel
+              jobId={jobId}
+              billId={bill.id}
+              draftInvoices={draftInvoices.map((invoice) => ({
+                id: invoice.id,
+                label: `${invoice.invoiceNumber} — ${formatMoney(invoice.amountCents)}`,
+              }))}
+              billedOn={
+                billedOnLine
+                  ? {
+                      invoiceId: billedOnLine.invoice.id,
+                      invoiceNumber: billedOnLine.invoice.invoiceNumber,
+                      status: billedOnLine.invoice.status,
+                    }
+                  : null
+              }
+            />
           </Panel>
 
           <Panel title="Approvers">

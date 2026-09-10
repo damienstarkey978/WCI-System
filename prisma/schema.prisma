@@ -953,10 +953,11 @@ model Bill {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lineItems   BillLineItem[]
-  files       File[]
-  approvals   BillApproval[]
-  lienWaivers LienWaiver[]
+  lineItems    BillLineItem[]
+  invoiceLines InvoiceLineItem[] @relation("BillInvoiceLines")
+  files        File[]
+  approvals    BillApproval[]
+  lienWaivers  LienWaiver[]
 
   @@index([jobId, approvalStatus])
   @@index([organizationId, approvalStatus])
@@ -1219,6 +1220,12 @@ model InvoiceLineItem {
   /// restated by editing a markup.
   amountCents Int
 
+  /// Set when this line was pushed onto the invoice from a bill ("Add to invoice" on
+  /// the bill detail). It is what stops the same vendor cost being billed to the
+  /// client twice, and the trail back from a client charge to the receipt behind it.
+  sourceBillId String?
+  sourceBill   Bill?   @relation("BillInvoiceLines", fields: [sourceBillId], references: [id], onDelete: SetNull)
+
   /// Optional cost breakdown, mirroring EstimateLineItem. Present on lines pushed
   /// from an estimate or a budget; null on a line typed straight onto the invoice.
   costCodeId      String?
@@ -1237,6 +1244,7 @@ model InvoiceLineItem {
 
   @@index([invoiceId, sortOrder])
   @@index([costCodeId])
+  @@index([sourceBillId])
 }
 
 /// One per job in the common case, though nothing here enforces that — a job could

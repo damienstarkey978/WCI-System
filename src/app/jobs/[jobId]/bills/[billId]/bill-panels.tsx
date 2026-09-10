@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import {
+  addToInvoiceAction,
   applyLienWaiverAction,
   approveAsMeAction,
   claimFromInboxAction,
@@ -245,5 +246,77 @@ export function LienWaiverPanel({
         </form>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Bill this cost to the client. The default markup is blank rather than a guessed
+ * number: whoever is charging a client should type the figure, not accept one the
+ * screen chose for them.
+ */
+export function AddToInvoicePanel({
+  jobId,
+  billId,
+  draftInvoices,
+  billedOn,
+}: {
+  jobId: string;
+  billId: string;
+  draftInvoices: readonly { id: string; label: string }[];
+  billedOn: { invoiceId: string; invoiceNumber: string; status: string } | null;
+}) {
+  const [state, action, pending] = useActionState(addToInvoiceAction, INITIAL);
+
+  if (billedOn) {
+    return (
+      <div className="flex flex-col gap-1 text-sm">
+        <span className="text-[var(--bt-text)]">
+          Billed on{" "}
+          <a href={`/jobs/${jobId}/invoices/${billedOn.invoiceId}`} className="hover:underline" style={{ color: "var(--bt-primary)" }}>
+            {billedOn.invoiceNumber}
+          </a>
+        </span>
+        <span className="text-xs text-[var(--bt-muted)]">
+          {billedOn.status.replace(/_/g, " ")} — remove the line there to re-bill this cost.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <form action={action} className="flex flex-col gap-2">
+      <input type="hidden" name="jobId" value={jobId} />
+      <input type="hidden" name="billId" value={billId} />
+      <label className="flex flex-col gap-1 text-xs text-[var(--bt-muted)]">
+        Markup %
+        <input
+          name="markup"
+          placeholder="20"
+          inputMode="decimal"
+          className="rounded border px-2 py-1.5 text-xs outline-none focus:border-[var(--bt-primary)]"
+          style={{ borderColor: "var(--bt-border)" }}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-[var(--bt-muted)]">
+        Add to
+        <select
+          name="invoiceId"
+          defaultValue=""
+          className="rounded border px-2 py-1.5 text-xs outline-none focus:border-[var(--bt-primary)]"
+          style={{ borderColor: "var(--bt-border)" }}
+        >
+          <option value="">A new draft invoice</option>
+          {draftInvoices.map((invoice) => (
+            <option key={invoice.id} value={invoice.id}>
+              {invoice.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" disabled={pending} className={PRIMARY} style={{ background: "var(--bt-primary)" }}>
+        {pending ? "Adding…" : "Add to invoice"}
+      </button>
+      <Err state={state} />
+    </form>
   );
 }

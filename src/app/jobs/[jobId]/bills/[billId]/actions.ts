@@ -16,6 +16,13 @@ import {
   applyLienWaiver,
   releaseLienWaiver,
 } from "@/lib/bills/lien-waivers";
+import {
+  BillAlreadyInvoicedError,
+  BillNotBillableError,
+  InvoiceNotEditableError,
+  addBillToInvoice,
+} from "@/lib/bills/to-invoice";
+import { parsePercentToBasisPoints } from "@/lib/money";
 import { BillNotFoundError, IllegalBillTransitionError, updateBillStatus } from "@/lib/bills/service";
 
 export interface BillActionState {
@@ -43,8 +50,14 @@ async function run(
       error instanceof IllegalBillTransitionError ||
       error instanceof ApprovalsIncompleteError ||
       error instanceof ApproverNotAssignedError ||
-      error instanceof LienWaiverAlreadyReleasedError
+      error instanceof LienWaiverAlreadyReleasedError ||
+      error instanceof BillNotBillableError ||
+      error instanceof BillAlreadyInvoicedError ||
+      error instanceof InvoiceNotEditableError
     ) {
+      return { error: error.message };
+    }
+    if (error instanceof Error && error.message.includes("Cannot parse")) {
       return { error: error.message };
     }
     throw error;
@@ -96,4 +109,26 @@ export async function releaseLienWaiverAction(_previous: BillActionState, formDa
   const billId = String(formData.get("billId") ?? "");
   const lienWaiverId = String(formData.get("lienWaiverId") ?? "");
   return run(jobId, billId, (organizationId) => releaseLienWaiver({ organizationId, lienWaiverId }));
+}
+
+/**
+ * Bill the vendor's cost to the client at a markup. Revalidates the invoices screen
+ * too, since that is where the resulting draft shows up.
+ */
+export async function addToInvoiceAction(_previous: BillActionState, formData: FormData): Promise<BillActionState> {
+  const jobId = String(formData.get("jobId") ?? "");
+  const billId = String(formData.get("billId") ?? "");
+  const markupRaw = String(formData.get("markup") ?? "").trim();
+  const invoiceId = String(formData.get("invoiceId") ?? "").trim();
+
+  const state = await run(jobId, billId, (organizationId) =>
+    addBillToInvoice({
+      organizationId,
+      billId,
+      markupBasisPoints: markupRaw ? parsePercentToBasisPoints(markupRaw) : 0,
+      invoiceId: invoiceId || null,
+    }),
+  );
+  revalidatePath(`/jobs/${jobId}/invoices`);
+  return state;
 }
