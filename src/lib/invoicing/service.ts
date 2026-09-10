@@ -244,15 +244,23 @@ export async function resendInvoice(organizationId: string, invoiceId: string) {
 }
 
 /**
- * Record that the client opened this invoice in the portal. Called from the client
- * portal's read path, so it must stay cheap and must never fail the read: knowing
- * whether they have seen it is useful, but not at the cost of showing it to them.
+ * Record that the client has seen these invoices in the portal.
+ *
+ * Called from the portal's read path, so it stays a single cheap write and never
+ * throws into the render: knowing whether the client has looked is useful, but not
+ * at the cost of failing to show them their invoices. Drafts are excluded — an
+ * invoice nobody has sent isn't something a client can have viewed.
  */
-export async function markInvoiceViewedByClient(invoiceId: string) {
-  await db.invoice.updateMany({
-    where: { id: invoiceId, status: { not: InvoiceStatus.DRAFT } },
-    data: { clientLastViewedAt: new Date() },
-  });
+export async function markInvoicesViewedByClient(invoiceIds: readonly string[]) {
+  if (invoiceIds.length === 0) return;
+  try {
+    await db.invoice.updateMany({
+      where: { id: { in: [...invoiceIds] }, status: { not: InvoiceStatus.DRAFT } },
+      data: { clientLastViewedAt: new Date() },
+    });
+  } catch {
+    // Deliberately swallowed: see above.
+  }
 }
 
 export interface CreateDrawInput {

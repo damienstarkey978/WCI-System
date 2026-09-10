@@ -12,6 +12,7 @@ import { formatBasisPoints } from "@/lib/money";
 import { RecordPaymentForm } from "../record-payment-form";
 import { SyncToQuickBooksButton } from "../sync-to-quickbooks-button";
 import { VoidInvoiceButton } from "../void-invoice-button";
+import { ClientPreview } from "./client-preview";
 import { SendInvoiceButtons } from "./send-buttons";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,15 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
 
-  const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
+  const job = await db.job.findFirst({
+    where: { id: jobId, organizationId: user.organizationId },
+    include: {
+      organization: { select: { name: true } },
+      // A job reaches its client through ClientJobAccess, not a direct relation —
+      // the portal is per-client-per-job. The first one is who the invoice is billed to.
+      clientAccess: { take: 1, include: { client: { select: { name: true } } } },
+    },
+  });
   if (!job) notFound();
 
   const invoice = await db.invoice.findFirst({
@@ -235,6 +244,32 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
           </p>
         ) : null}
       </section>
+
+      <ClientPreview
+        data={{
+          organizationName: job.organization.name,
+          clientName: job.clientAccess[0]?.client.name ?? null,
+          jobName: job.name,
+          jobAddress: [job.addressLine1, job.city, job.state].filter(Boolean).join(", ") || null,
+          invoiceNumber: invoice.invoiceNumber,
+          issuedOn: formatDate(invoice.issuedOn),
+          dueOn: formatDate(invoice.dueOn),
+          terms: PAYMENT_TERMS_LABELS[invoice.paymentTerms],
+          lines: invoice.lineItems.map((item) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            amount: formatMoney(item.amountCents),
+          })),
+          subtotal: formatMoney(subtotalCents),
+          taxLabel: invoice.taxCents > 0 ? `Sales tax (${formatBasisPoints(invoice.taxRateBasisPoints)})` : null,
+          tax: formatMoney(invoice.taxCents),
+          total: formatMoney(invoice.amountCents),
+          paid: formatMoney(paidCents + creditedCents),
+          balance: formatMoney(balanceCents),
+          message: invoice.clientMessage,
+        }}
+      />
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex items-center justify-between">

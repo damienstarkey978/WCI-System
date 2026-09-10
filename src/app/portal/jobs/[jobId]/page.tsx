@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getComputedSchedule } from "@/lib/scheduling/service";
+import { markInvoicesViewedByClient } from "@/lib/invoicing/service";
 import { getClientBudgetView } from "@/lib/client-portal/service";
 
 import { ApproveChangeOrderButton, ApproveSelectionOptionButton } from "./approve-buttons";
@@ -46,7 +47,14 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
       ? db.file.findMany({ where: { organizationId: session.organizationId, jobId, clientVisible: true }, orderBy: { createdAt: "desc" }, take: 10 })
       : Promise.resolve(null),
     access.canViewInvoices
-      ? db.invoice.findMany({ where: { organizationId: session.organizationId, jobId }, orderBy: { createdAt: "desc" }, take: 10 })
+      ? // Drafts and voids are deliberately excluded. A draft hasn't been sent, and a
+        // void has been withdrawn — showing either to the client asks them to pay
+        // something the office never actually demanded.
+        db.invoice.findMany({
+          where: { organizationId: session.organizationId, jobId, status: { notIn: ["DRAFT", "VOID"] } },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        })
       : Promise.resolve(null),
     access.canViewSelections
       ? db.selection.findMany({ where: { organizationId: session.organizationId, jobId }, orderBy: { createdAt: "desc" }, include: { options: { orderBy: { sortOrder: "asc" } } } })
@@ -55,6 +63,10 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
       ? db.changeOrder.findMany({ where: { organizationId: session.organizationId, jobId }, orderBy: { createdAt: "desc" } })
       : Promise.resolve(null),
   ]);
+
+  // The client is looking at these right now, which is what the office checks before
+  // chasing a late payment.
+  if (invoices) await markInvoicesViewedByClient(invoices.map((invoice) => invoice.id));
 
   const schedule = scheduleRow ? await getComputedSchedule(session.organizationId, scheduleRow.id) : null;
   const budget = access.canViewBudget ? await getClientBudgetView(session.organizationId, jobId) : null;
