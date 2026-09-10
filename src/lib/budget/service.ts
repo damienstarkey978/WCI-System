@@ -6,6 +6,7 @@
 
 import { TimeClockApprovalStatus } from "@/generated/prisma/enums";
 import { extendedCostCents, computeJobFunnel, type JobFunnel } from "@/lib/budget/funnel";
+import type { CostCodeLookupEntry } from "@/lib/budget/grouping";
 import { contractTypePolicy } from "@/lib/contract-type";
 import { db } from "@/lib/db";
 import { baseLaborCostCents, workedHours } from "@/lib/time-clock/hours";
@@ -27,8 +28,11 @@ export interface JobBudgetView {
     readonly accountingBasis: string;
   };
   readonly funnel: JobFunnel;
-  /** Cost code metadata, so a caller can render the grid without a second lookup. */
-  readonly costCodes: Readonly<Record<string, { code: string; name: string }>>;
+  /**
+   * Cost code metadata, so a caller can render the grid without a second lookup.
+   * `group` is the cost code's parent, which the job costing screen groups by.
+   */
+  readonly costCodes: Readonly<Record<string, CostCodeLookupEntry>>;
   /** Which columns this job's contract type renders (CLAUDE.md 2.3). */
   readonly columns: readonly string[];
 }
@@ -44,7 +48,13 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
   const job = await db.job.findFirst({
     where: { id: jobId, organizationId },
     include: {
-      budgetLines: { include: { costCode: { select: { code: true, name: true } } } },
+      budgetLines: {
+        include: {
+          costCode: {
+            select: { code: true, name: true, parent: { select: { id: true, code: true, name: true } } },
+          },
+        },
+      },
       purchaseOrders: { include: { lineItems: true } },
       bills: { include: { lineItems: true } },
       invoices: { select: { status: true, amountCents: true } },
@@ -95,9 +105,13 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     job.invoices,
   );
 
-  const costCodes: Record<string, { code: string; name: string }> = {};
+  const costCodes: Record<string, CostCodeLookupEntry> = {};
   for (const line of job.budgetLines) {
-    costCodes[line.costCodeId] = { code: line.costCode.code, name: line.costCode.name };
+    costCodes[line.costCodeId] = {
+      code: line.costCode.code,
+      name: line.costCode.name,
+      group: line.costCode.parent,
+    };
   }
 
   return {

@@ -4,9 +4,12 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUser } from "@/lib/auth";
 import { getJobBudget, JobNotFoundError } from "@/lib/budget/service";
-import type { FunnelLine, FunnelTotals } from "@/lib/budget/funnel";
+import type { FunnelLine, FunnelSubtotal, FunnelTotals } from "@/lib/budget/funnel";
+import { groupFunnelLines } from "@/lib/budget/grouping";
 import { BUDGET_VIEWS, budgetViewByKey, type BudgetColumnId } from "@/lib/contract-type";
 import { formatMoney, formatPercent } from "@/lib/format";
+
+import { BudgetGrid, type GridCell } from "./budget-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -26,67 +29,116 @@ const COLUMN_LABELS: Record<BudgetColumnId, string> = {
   projectedMarginPct: "Margin",
 };
 
-function lineCell(line: FunnelLine, columnId: BudgetColumnId): string {
+function lineCell(line: FunnelLine, columnId: BudgetColumnId): GridCell {
+  const danger = line.isOverBudget && columnId === "projectedCost";
   switch (columnId) {
     case "originalBudgetCost":
-      return formatMoney(line.originalBudgetCostCents);
+      return { text: formatMoney(line.originalBudgetCostCents) };
     case "revisedBudgetCost":
-      return formatMoney(line.revisedBudgetCostCents);
+      return { text: formatMoney(line.revisedBudgetCostCents) };
     case "pendingCost":
-      return formatMoney(line.pendingCostCents);
+      return { text: formatMoney(line.pendingCostCents) };
     case "committedCost":
-      return formatMoney(line.committedCostCents);
+      return { text: formatMoney(line.committedCostCents) };
     case "actualCost":
-      return formatMoney(line.actualCostCents);
+      return { text: formatMoney(line.actualCostCents) };
     case "projectedCost":
-      return formatMoney(line.projectedCostCents);
+      return { text: formatMoney(line.projectedCostCents), danger };
     case "costToComplete":
-      return formatMoney(line.costToCompleteCents);
+      return { text: formatMoney(line.costToCompleteCents) };
     case "originalClientPrice":
-      return formatMoney(line.originalClientPriceCents);
+      return { text: formatMoney(line.originalClientPriceCents) };
     case "revisedClientPrice":
-      return formatMoney(line.revisedClientPriceCents);
+      return { text: formatMoney(line.revisedClientPriceCents) };
     case "projectedProfit":
-      return formatMoney(line.projectedProfitCents);
+      return { text: formatMoney(line.projectedProfitCents) };
     case "projectedMarginPct":
-      return formatPercent(line.projectedMarginBasisPoints);
+      return { text: formatPercent(line.projectedMarginBasisPoints) };
     // Invoicing is tracked at the job level only — a single progress invoice bills
     // against the whole contract, not a specific cost code (CLAUDE.md 2.3).
     case "amountInvoiced":
     case "remainingToInvoice":
-      return "—";
+      return { text: "—" };
   }
 }
 
-function totalsCell(totals: FunnelTotals, columnId: BudgetColumnId): string {
+/**
+ * A group subtotal. Same columns as a line, and the same reason invoicing is blank:
+ * an invoice belongs to the contract, not to "05 Painting".
+ */
+function subtotalCell(subtotal: FunnelSubtotal, columnId: BudgetColumnId): GridCell {
   switch (columnId) {
     case "originalBudgetCost":
-      return formatMoney(totals.originalBudgetCostCents);
+      return { text: formatMoney(subtotal.originalBudgetCostCents) };
     case "revisedBudgetCost":
-      return formatMoney(totals.revisedBudgetCostCents);
+      return { text: formatMoney(subtotal.revisedBudgetCostCents) };
     case "pendingCost":
-      return formatMoney(totals.pendingCostCents);
+      return { text: formatMoney(subtotal.pendingCostCents) };
     case "committedCost":
-      return formatMoney(totals.committedCostCents);
+      return { text: formatMoney(subtotal.committedCostCents) };
     case "actualCost":
-      return formatMoney(totals.actualCostCents);
+      return { text: formatMoney(subtotal.actualCostCents) };
     case "projectedCost":
-      return formatMoney(totals.projectedCostCents);
+      return {
+        text: formatMoney(subtotal.projectedCostCents),
+        danger: subtotal.projectedCostCents > subtotal.revisedBudgetCostCents,
+      };
     case "costToComplete":
-      return formatMoney(totals.costToCompleteCents);
+      return { text: formatMoney(subtotal.costToCompleteCents) };
     case "originalClientPrice":
-      return formatMoney(totals.originalClientPriceCents);
+      return { text: formatMoney(subtotal.originalClientPriceCents) };
     case "revisedClientPrice":
-      return formatMoney(totals.revisedClientPriceCents);
-    case "amountInvoiced":
-      return formatMoney(totals.amountInvoicedCents);
-    case "remainingToInvoice":
-      return formatMoney(totals.remainingToInvoiceCents);
+      return { text: formatMoney(subtotal.revisedClientPriceCents) };
     case "projectedProfit":
-      return formatMoney(totals.projectedProfitCents);
+      return { text: formatMoney(subtotal.projectedProfitCents) };
     case "projectedMarginPct":
-      return formatPercent(totals.projectedMarginBasisPoints);
+      return { text: formatPercent(subtotal.projectedMarginBasisPoints) };
+    case "amountInvoiced":
+    case "remainingToInvoice":
+      return { text: "—" };
   }
+}
+
+function totalsCell(totals: FunnelTotals, columnId: BudgetColumnId): GridCell {
+  if (columnId === "amountInvoiced") return { text: formatMoney(totals.amountInvoicedCents) };
+  if (columnId === "remainingToInvoice") return { text: formatMoney(totals.remainingToInvoiceCents) };
+  return subtotalCell(totals, columnId);
+}
+
+/**
+ * The four numbers a PM checks before anything else: what the job sells for, what it
+ * is now projected to cost, and the profit and margin that fall out of the two. They
+ * are always shown, whatever column view is selected, because a view that hides the
+ * price column shouldn't also hide whether the job is making money.
+ */
+function SummaryStrip({ totals }: { totals: FunnelTotals }) {
+  const losing = totals.projectedProfitCents < 0;
+  const tiles = [
+    { label: "Revised price", value: formatMoney(totals.revisedClientPriceCents) },
+    { label: "Projected cost", value: formatMoney(totals.projectedCostCents) },
+    { label: "Projected profit", value: formatMoney(totals.projectedProfitCents), danger: losing },
+    { label: "Margin", value: formatPercent(totals.projectedMarginBasisPoints), danger: losing },
+  ];
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {tiles.map((tile) => (
+        <div
+          key={tile.label}
+          className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3"
+          style={{ borderColor: "var(--bt-border)" }}
+        >
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{tile.label}</div>
+          <div
+            className="mt-1 text-xl font-semibold"
+            style={{ color: tile.danger ? "var(--bt-danger)" : "var(--bt-text)" }}
+          >
+            {tile.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default async function JobBudgetPage({ params, searchParams }: PageProps<"/jobs/[jobId]/budget">) {
@@ -102,9 +154,9 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
 
-  let rawView;
+  let view;
   try {
-    rawView = await getJobBudget(jobId, user.organizationId);
+    view = await getJobBudget(jobId, user.organizationId);
   } catch (error) {
     if (error instanceof JobNotFoundError) notFound();
     throw error;
@@ -112,24 +164,42 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
 
   // JobBudgetView.columns is typed as `readonly string[]`, but it's always the
   // result of ContractTypePolicy.budgetColumns() — narrow it back for the lookup tables below.
-  const contractTypeColumns = rawView.columns as readonly BudgetColumnId[];
+  const contractTypeColumns = view.columns as readonly BudgetColumnId[];
 
   const { view: viewParam } = await searchParams;
   const selectedBudgetView = budgetViewByKey(typeof viewParam === "string" ? viewParam : "standard");
   // Intersect with what this contract type actually exposes — e.g. Open Book has no
   // "original client price" column, so Standard just renders without it here.
-  const columns = contractTypeColumns.filter((id) => (selectedBudgetView.columns as readonly BudgetColumnId[]).includes(id));
+  const columns = contractTypeColumns.filter((id) =>
+    (selectedBudgetView.columns as readonly BudgetColumnId[]).includes(id),
+  );
 
-  const view = { ...rawView, columns };
+  const groups = groupFunnelLines(view.funnel.lines, view.costCodes).map((group) => ({
+    key: group.key,
+    code: group.code,
+    name: group.name,
+    hasOverBudgetLine: group.hasOverBudgetLine,
+    subtotalCells: columns.map((columnId) => subtotalCell(group.subtotal, columnId)),
+    rows: group.lines.map((entry) => ({
+      key: entry.line.costCodeId,
+      code: entry.code,
+      name: entry.name,
+      cells: columns.map((columnId) => lineCell(entry.line, columnId)),
+    })),
+  }));
 
   return (
     <div className="flex flex-col gap-4 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Job costing — {view.job.name}</h1>
         <span className="text-xs text-[var(--bt-muted)]">
-          {view.job.projectionReference === "GREATEST" ? "Projected at worst of budget/committed/actual" : view.job.projectionReference}
+          {view.job.projectionReference === "GREATEST"
+            ? "Projected at worst of budget/committed/actual"
+            : view.job.projectionReference}
         </span>
       </div>
+
+      <SummaryStrip totals={view.funnel.totals} />
 
       <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: "var(--bt-border)" }}>
         {BUDGET_VIEWS.map((budgetView) => (
@@ -148,61 +218,11 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-        <table className="w-full min-w-max text-sm">
-          <thead>
-            <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-              <th className="sticky left-0 bg-[var(--bt-panel-bg)] px-4 py-3 text-left">Cost code</th>
-              {view.columns.map((columnId) => (
-                <th key={columnId} className="whitespace-nowrap px-4 py-3 text-right">
-                  {COLUMN_LABELS[columnId]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {view.funnel.lines.map((line) => {
-              const costCode = view.costCodes[line.costCodeId];
-              return (
-                <tr key={line.costCodeId} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                  <td className="sticky left-0 whitespace-nowrap bg-[var(--bt-panel-bg)] px-4 py-2">
-                    <span className="font-mono text-xs text-[var(--bt-muted)]">{costCode?.code}</span>{" "}
-                    <span className="text-[var(--bt-text)]">{costCode?.name}</span>
-                  </td>
-                  {view.columns.map((columnId) => (
-                    <td
-                      key={columnId}
-                      className="whitespace-nowrap px-4 py-2 text-right"
-                      style={line.isOverBudget && columnId === "projectedCost" ? { color: "var(--bt-danger)", fontWeight: 600 } : { color: "var(--bt-text)" }}
-                    >
-                      {lineCell(line, columnId)}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-            {view.funnel.lines.length === 0 ? (
-              <tr>
-                <td colSpan={view.columns.length + 1} className="px-4 py-6 text-center text-[var(--bt-muted)]">
-                  No budget lines yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-          {view.funnel.lines.length > 0 ? (
-            <tfoot>
-              <tr className="border-t-2 font-semibold" style={{ borderColor: "var(--bt-border)" }}>
-                <td className="sticky left-0 bg-[var(--bt-panel-bg)] px-4 py-3 text-[var(--bt-text)]">Total</td>
-                {view.columns.map((columnId) => (
-                  <td key={columnId} className="whitespace-nowrap px-4 py-3 text-right text-[var(--bt-text)]">
-                    {totalsCell(view.funnel.totals, columnId)}
-                  </td>
-                ))}
-              </tr>
-            </tfoot>
-          ) : null}
-        </table>
-      </div>
+      <BudgetGrid
+        columnLabels={columns.map((columnId) => COLUMN_LABELS[columnId])}
+        groups={groups}
+        totalCells={columns.map((columnId) => totalsCell(view.funnel.totals, columnId))}
+      />
     </div>
   );
 }

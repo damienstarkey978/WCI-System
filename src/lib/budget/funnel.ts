@@ -246,7 +246,12 @@ export function computeFunnelLine(
   };
 }
 
-export interface FunnelTotals {
+/**
+ * A roll-up of some set of funnel lines — the whole job, or one cost-code group on
+ * the job costing screen. Invoicing is deliberately absent: it is tracked against the
+ * contract as a whole, so it exists on FunnelTotals only.
+ */
+export interface FunnelSubtotal {
   readonly originalBudgetCostCents: Cents;
   readonly revisedBudgetCostCents: Cents;
   readonly pendingCostCents: Cents;
@@ -258,8 +263,37 @@ export interface FunnelTotals {
   readonly revisedClientPriceCents: Cents;
   readonly projectedProfitCents: Cents;
   readonly projectedMarginBasisPoints: BasisPoints;
+}
+
+export interface FunnelTotals extends FunnelSubtotal {
   readonly amountInvoicedCents: Cents;
   readonly remainingToInvoiceCents: Cents;
+}
+
+/**
+ * Roll a set of lines up. Every cost layer sums, but margin does *not*: a group's
+ * margin is recomputed from its own summed price and cost, because averaging the
+ * lines' percentages would weight a $500 line the same as a $50,000 one.
+ */
+export function sumFunnelLines(lines: readonly FunnelLine[]): FunnelSubtotal {
+  const sum = (pick: (line: FunnelLine) => Cents): Cents => lines.reduce((total, line) => total + pick(line), 0);
+
+  const revisedClientPriceCents = sum((line) => line.revisedClientPriceCents);
+  const projectedCostCents = sum((line) => line.projectedCostCents);
+
+  return {
+    originalBudgetCostCents: sum((line) => line.originalBudgetCostCents),
+    revisedBudgetCostCents: sum((line) => line.revisedBudgetCostCents),
+    pendingCostCents: sum((line) => line.pendingCostCents),
+    committedCostCents: sum((line) => line.committedCostCents),
+    actualCostCents: sum((line) => line.actualCostCents),
+    projectedCostCents,
+    costToCompleteCents: sum((line) => line.costToCompleteCents),
+    originalClientPriceCents: sum((line) => line.originalClientPriceCents),
+    revisedClientPriceCents,
+    projectedProfitCents: revisedClientPriceCents - projectedCostCents,
+    projectedMarginBasisPoints: marginBasisPoints(revisedClientPriceCents, projectedCostCents),
+  };
 }
 
 export interface JobFunnel {
@@ -280,30 +314,17 @@ export function computeJobFunnel(
     computeFunnelLine(line, purchaseOrders, bills, unapprovedLabor, options),
   );
 
-  const sum = (pick: (line: FunnelLine) => Cents): Cents => lines.reduce((total, line) => total + pick(line), 0);
-
-  const revisedClientPriceCents = sum((line) => line.revisedClientPriceCents);
-  const projectedCostCents = sum((line) => line.projectedCostCents);
+  const subtotal = sumFunnelLines(lines);
   const amountInvoicedCents = sumBy(invoices, (invoice) => countsAsInvoiced(invoice.status), (invoice) => invoice.amountCents);
 
   return {
     lines,
     totals: {
-      originalBudgetCostCents: sum((line) => line.originalBudgetCostCents),
-      revisedBudgetCostCents: sum((line) => line.revisedBudgetCostCents),
-      pendingCostCents: sum((line) => line.pendingCostCents),
-      committedCostCents: sum((line) => line.committedCostCents),
-      actualCostCents: sum((line) => line.actualCostCents),
-      projectedCostCents,
-      costToCompleteCents: sum((line) => line.costToCompleteCents),
-      originalClientPriceCents: sum((line) => line.originalClientPriceCents),
-      revisedClientPriceCents,
-      projectedProfitCents: revisedClientPriceCents - projectedCostCents,
-      projectedMarginBasisPoints: marginBasisPoints(revisedClientPriceCents, projectedCostCents),
+      ...subtotal,
       amountInvoicedCents,
       // Never negative: an overbilled job (a draw schedule totalling >100%, or a
       // late change order) has nothing left to invoice, not a negative amount.
-      remainingToInvoiceCents: Math.max(0, revisedClientPriceCents - amountInvoicedCents),
+      remainingToInvoiceCents: Math.max(0, subtotal.revisedClientPriceCents - amountInvoicedCents),
     },
   };
 }
