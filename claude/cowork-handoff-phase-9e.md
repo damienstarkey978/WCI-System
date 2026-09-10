@@ -93,10 +93,12 @@ before you run `deploy`. **If it wants to apply anything older than
 `20260902134055`, stop and say so — do not let it run.** That would mean the
 baseline didn't take, and applying those would corrupt live data.
 
-Expected `deploy` output: 4 migrations applied (case A) or 5 (case B). In order:
-`phase_9d_purchase_order_workflow`, `phase_9d_bills_intake_pipeline`,
-`phase_9e_invoicing_terms_credits_deposits`, `phase_9e_bill_to_invoice_link` —
-plus `lead_proposal_no_job_until_accepted` first, in case B.
+`migrate status` names exactly what is pending; that is the list to expect from
+`deploy`, and it is authoritative over anything written here. As of this writing
+it is the `phase_9d_*`, `phase_9e_*` and `phase_9f_*` migrations — everything
+dated 2026-09-10 — plus `lead_proposal_no_job_until_accepted` in case B. Work
+continued after this doc was written, so treat a longer list as normal and a
+*shorter* one as the thing worth asking about.
 
 ### 1c. Confirm
 
@@ -107,9 +109,10 @@ SELECT table_name FROM information_schema.tables
 WHERE table_name IN ('CreditMemo','Deposit','LienWaiver','BillApproval','PurchaseOrderEvent','POAgreementTemplate');
 SELECT column_name FROM information_schema.columns
 WHERE table_name = 'InvoiceLineItem' AND column_name = 'sourceBillId';
+SELECT unnest(enum_range(NULL::"BidPackageStatus"));
 ```
 
-First query: 3 rows. Second: 6 rows. Third: 1 row.
+First query: 3 rows. Second: 6 rows. Third: 1 row. Fourth includes `DRAFT`.
 
 Then redeploy the app on Netlify so the running build matches the schema.
 
@@ -134,7 +137,10 @@ Once the migrations are live, on any real job:
    new draft invoice. Confirm the client's invoice keeps the bill's own line
    breakdown rather than one collapsed figure, and that trying it a second time is
    refused: the same vendor cost must not reach the client twice.
-5. **Invoice side.** Raise an invoice with one taxable and one non-taxable line,
+5. **Bid board.** Create a package with "Save draft", confirm subs *cannot* be
+   invited to it, add a scope line, release it, then confirm they can. A package
+   released with no scope should be refused.
+6. **Invoice side.** Raise an invoice with one taxable and one non-taxable line,
    send it, record a partial payment. Confirm the invoice list shows the right
    balance and that Job Costing's **Amount invoiced excludes the sales tax** —
    tax is collected for the state, not earned against the contract, and this is
