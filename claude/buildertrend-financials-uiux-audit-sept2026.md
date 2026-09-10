@@ -292,15 +292,20 @@ These were already documented in `buildertrend-parity-gap-analysis-and-ai-featur
 weren't the focus of this pass, but they're real and still worth Claude Code's attention after
 Gaps 1–5 above:
 
-- **Bid Board** (`/jobs/[jobId]/bids`): still a bare Title/Due date/Description form, same
-  pattern as POs/Bills used to be. Needs: package cards, invited-sub tracking, "Save and Release"
-  vs "Save Draft" as distinct actions, per-sub "View & Submit Bid" flow.
-- **Estimate builder**: still likely missing the five explicit entry methods (line-by-line, Excel
-  import, saved template, Cost Catalog pick, bulk Cost Code add) as toolbar actions, and
-  **Estimate Templates has schema but no UI** (no nav entry, no browse/manage page, no
-  save-as-template control) per `deployment-status.md` item 10.
-- **Daily-log photo migration** was blocked by a React error (#441) on the Files page as of
-  2026-08-31 — worth a quick re-check of whether that's been fixed before resuming the 205
-  remaining photo uploads for job `job_8056d45cd8944c4e842aa075990ed0c2`.
+- **Bid Board** (`/jobs/[jobId]/bids`): **resolved 2026-09-10.** This entry was already stale
+  when written — package cards, invited-sub tracking, submit-on-behalf and a bid comparison
+  screen all existed. What was genuinely missing was the draft/release distinction and any way
+  to put scope on a package, both of which are now built (see `verify-bid-draft-release.mts`).
+- **Estimate builder**: the "Estimate Templates has no UI" half of this is **stale — re-checked
+  2026-09-10**. The builder has a use-template picker and a save-as-template control; what's
+  actually missing is a top-level nav entry and a standalone browse/manage page, so templates are
+  only reachable from inside a job's Estimate screen. The five-entry-methods point was not
+  re-verified this pass.
+- **Daily-log photo migration**: the React #441 blocker is **fixed in the repo as of
+  2026-09-10**, pending deploy. It was never a React bug — the Files page signed every file's
+  storage URL in one `Promise.all`, so a single unreadable row took the page down and hid every
+  good file with it. See `verify-files-resilience.mts` and `deployment-status.md` item 15. The
+  205 remaining uploads for `job_8056d45cd8944c4e842aa075990ed0c2` should be unblocked once the
+  fix is live.
 - **AI Employees Hub / AI Estimating Platform** (Parts B/C of the Aug 27 doc) — not attempted in
   this pass; still aspirational per that doc's Phase 10/11 prompts.
