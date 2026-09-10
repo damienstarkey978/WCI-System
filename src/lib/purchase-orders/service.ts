@@ -48,6 +48,13 @@ export class DuplicatePoNumberError extends Error {
   }
 }
 
+export class UnknownAgreementTemplateError extends Error {
+  constructor(templateId: string) {
+    super(`No PO agreement template ${templateId} in this organization.`);
+    this.name = "UnknownAgreementTemplateError";
+  }
+}
+
 export interface CreatePurchaseOrderLineItemInput {
   readonly costCodeId: string;
   readonly costType?: CostType;
@@ -66,6 +73,20 @@ export interface CreatePurchaseOrderInput {
   readonly sourceType?: FinancialSourceType;
   readonly sourceId?: string | null;
   readonly lineItems: readonly CreatePurchaseOrderLineItemInput[];
+
+  /** Short label for the PO — "Install Shower Pan" rather than just "0036". */
+  readonly title?: string | null;
+  readonly materialsOnly?: boolean;
+  readonly scheduledCompletionOn?: Date | null;
+  /**
+   * The subcontractor agreement text. When agreementTemplateId is given and this is
+   * not, the template's body is copied in — copied, not referenced, so editing the
+   * template later never changes an agreement a vendor already accepted.
+   */
+  readonly scopeOfWork?: string | null;
+  readonly agreementTemplateId?: string | null;
+  /** Staff-only; never rendered in the vendor portal. */
+  readonly internalNotes?: string | null;
 }
 
 export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
@@ -92,6 +113,19 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
     if (!vendor) throw new UnknownVendorError(input.vendorId);
   }
 
+  // An explicit scopeOfWork always wins; a template only fills the gap when none was
+  // typed. The body is copied here rather than read through the relation at display
+  // time, so later edits to the template can't rewrite an agreement in flight.
+  let scopeOfWork = input.scopeOfWork ?? null;
+  if (input.agreementTemplateId) {
+    const template = await db.pOAgreementTemplate.findFirst({
+      where: { id: input.agreementTemplateId, organizationId: input.organizationId },
+      select: { id: true, body: true },
+    });
+    if (!template) throw new UnknownAgreementTemplateError(input.agreementTemplateId);
+    if (scopeOfWork === null) scopeOfWork = template.body;
+  }
+
   try {
     const purchaseOrder = await db.purchaseOrder.create({
       data: {
@@ -103,6 +137,13 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
         vendorId: input.vendorId ?? null,
         sourceType: input.sourceType ?? "SCRATCH",
         sourceId: input.sourceId ?? null,
+        title: input.title ?? null,
+        materialsOnly: input.materialsOnly ?? false,
+        scheduledCompletionOn: input.scheduledCompletionOn ?? null,
+        scopeOfWork,
+        agreementTemplateId: input.agreementTemplateId ?? null,
+        internalNotes: input.internalNotes ?? null,
+        events: { create: { type: "CREATED", version: 1 } },
         lineItems: {
           create: input.lineItems.map((item, index) => ({
             costCodeId: item.costCodeId,

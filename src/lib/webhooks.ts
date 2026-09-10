@@ -24,7 +24,13 @@ export const WEBHOOK_EVENT_TYPES = [
   "job.status_changed",
   "estimate.sent_to_budget",
   "po.created",
+  "po.sent_for_approval",
   "po.approved",
+  "po.declined",
+  /// Raised when an approved PO is revised, which re-opens vendor acceptance.
+  "po.amended",
+  /// Raised when a PO is voided — subscribers should stop treating it as committed.
+  "po.recalled",
   "bill.created",
   "bill.ready_for_payment",
   "bill.paid",

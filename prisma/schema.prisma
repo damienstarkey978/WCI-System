@@ -99,6 +99,7 @@ model Organization {
 
   estimates             Estimate[]
   estimateTemplates     EstimateTemplate[]
+  poAgreementTemplates  POAgreementTemplate[]
   purchaseOrders        PurchaseOrder[]
   bills                 Bill[]
   webhookSubscriptions  WebhookSubscription[]
@@ -161,6 +162,7 @@ model User {
   jobGrants                 JobAccessGrant[]
   createdApiKeys            ApiKey[]             @relation("ApiKeyCreatedBy")
   jobStatusEvents           JobStatusEvent[]
+  purchaseOrderEvents       PurchaseOrderEvent[]
   timeClockEntries          TimeClockEntry[]     @relation("TimeClockEntryUser")
   approvedTimeClockEntries  TimeClockEntry[]     @relation("TimeClockEntryApprovedBy")
   clockedInTimeClockEntries TimeClockEntry[]     @relation("TimeClockEntryClockedInBy")
@@ -415,7 +417,8 @@ model ApiKey {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  jobStatusEvents JobStatusEvent[]
+  jobStatusEvents     JobStatusEvent[]
+  purchaseOrderEvents PurchaseOrderEvent[]
 
   @@index([organizationId])
 }
@@ -479,6 +482,9 @@ enum EstimateStatus {
   DECLINED
 }
 
+/// Buildertrend's own PO Status vocabulary maps onto this: its "Internally Approved"
+/// and "Sub/Vendor Approved" are both APPROVED here (the distinction is preserved on
+/// PurchaseOrder.approvedBy), "Denied" is DECLINED, and "Recalled" is CANCELLED.
 enum PurchaseOrderStatus {
   DRAFT
   PENDING_APPROVAL
@@ -486,6 +492,41 @@ enum PurchaseOrderStatus {
   DECLINED
   COMPLETED
   CANCELLED
+}
+
+/// Whether the physical work is finished, tracked separately from whether the PO was
+/// approved — a sub can finish work on a PO nobody has paid yet, and a PO can be
+/// approved for work that hasn't started. Buildertrend shows these as two independent
+/// columns ("PO Status" and "Work Status") and so do we.
+///
+/// PurchaseOrderStatus.COMPLETED predates this field and conflated the two axes. It is
+/// kept so existing rows and the funnel's isCommittedStatus() keep working, but new
+/// work completion goes here instead: markWorkComplete() sets workStatus and leaves
+/// status alone.
+enum PurchaseOrderWorkStatus {
+  NOT_COMPLETE
+  WORK_COMPLETE
+}
+
+/// Which side signed off on an approved PO. Buildertrend distinguishes these and the
+/// Sept 2026 audit found both values live in the real export, so an imported PO keeps
+/// the distinction rather than flattening to a single "approved".
+enum PurchaseOrderApprovedBy {
+  INTERNAL
+  VENDOR
+}
+
+/// What happened to a PO, for the detail view's history panel. Approve/decline sit
+/// alongside AMENDED/RECALLED so one query renders the whole trail.
+enum PurchaseOrderEventType {
+  CREATED
+  SENT_FOR_APPROVAL
+  APPROVED
+  DECLINED
+  AMENDED
+  RECALLED
+  WORK_MARKED_COMPLETE
+  WORK_REOPENED
 }
 
 enum BillApprovalStatus {
@@ -701,7 +742,37 @@ model PurchaseOrder {
   vendorId   String?
   vendor     Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
+  /// Short human label for the PO ("Install Shower Pan"), shown as the primary
+  /// identifier everywhere the bare PO number is too opaque to be useful.
+  title String?
+
   status PurchaseOrderStatus @default(DRAFT)
+  /// Independent of status — see PurchaseOrderWorkStatus.
+  workStatus PurchaseOrderWorkStatus @default(NOT_COMPLETE)
+
+  /// A materials-only PO buys goods with no labor attached, which changes how the
+  /// office treats it (no scope of work to agree to, no lien-waiver exposure).
+  materialsOnly Boolean @default(false)
+
+  scheduledCompletionOn DateTime?
+  completedOn           DateTime?
+
+  /// The subcontractor agreement the vendor is accepting — work schedule, site
+  /// cleanliness, safety/PPE, workmanship standards. Markdown.
+  scopeOfWork String?
+  /// Optional template this PO's scope of work started from.
+  agreementTemplateId String?
+  agreementTemplate   POAgreementTemplate? @relation(fields: [agreementTemplateId], references: [id], onDelete: SetNull)
+
+  /// Frozen copy of scopeOfWork as it read at the moment the vendor accepted, so
+  /// "View agreement" always shows what they actually agreed to. Never rewritten:
+  /// editing scopeOfWork after acceptance requires an amend, which re-opens approval
+  /// and re-snapshots on the next acceptance.
+  agreementSnapshot   String?
+  agreementSnapshotAt DateTime?
+
+  /// Staff-only. Never rendered in the vendor portal's view of the PO.
+  internalNotes String?
 
   sourceType FinancialSourceType @default(SCRATCH)
   /// Id of the originating record, so a PO can be traced back to its source.
@@ -710,7 +781,9 @@ model PurchaseOrder {
   /// Amend-in-place with version history.
   version    Int       @default(1)
   approvedAt DateTime?
+  approvedBy PurchaseOrderApprovedBy?
   declinedAt DateTime?
+  recalledAt DateTime?
 
   vendorSignatureName String?
   vendorSignedAt      DateTime?
@@ -722,10 +795,62 @@ model PurchaseOrder {
   lineItems PurchaseOrderLineItem[]
   bills     Bill[]
   files     File[]
+  events    PurchaseOrderEvent[]
 
   @@unique([organizationId, poNumber])
   @@index([jobId, status])
+  @@index([jobId, workStatus])
   @@index([vendorId])
+}
+
+/// Reusable subcontractor-agreement boilerplate. WCI pastes the same
+/// responsibilities text into every PO by hand today; this makes it pickable.
+model POAgreementTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name String
+  /// Markdown, copied into PurchaseOrder.scopeOfWork when picked. Copied rather than
+  /// referenced so editing a template never silently changes an agreement a vendor
+  /// already accepted.
+  body String
+
+  /// Pre-selected on new POs. At most one per org should carry this.
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+}
+
+/// Append-only audit trail for a PO. Mirrors JobStatusEvent's actor pattern.
+model PurchaseOrderEvent {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  type PurchaseOrderEventType
+  /// PO version at the time, so an amend trail reads in order.
+  version Int @default(1)
+
+  /// Exactly one actor is set, depending on whether a human, an agent, or the vendor
+  /// themselves drove the change. All three are null for a vendor portal acceptance,
+  /// where vendorSignatureName on the PO is the record of who signed.
+  actorUserId   String?
+  actorUser     User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorApiKeyId String?
+  actorApiKey   ApiKey? @relation(fields: [actorApiKeyId], references: [id], onDelete: SetNull)
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([purchaseOrderId, createdAt])
 }
 
 model PurchaseOrderLineItem {
