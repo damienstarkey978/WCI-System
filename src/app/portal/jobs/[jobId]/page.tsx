@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { currentPortalSession } from "@/lib/client-portal/browser-session";
 import { db } from "@/lib/db";
-import { resolveFileUrl } from "@/lib/files/service";
+import { resolveFileUrlSafe } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 import { markInvoicesViewedByClient } from "@/lib/invoicing/service";
@@ -70,8 +70,10 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
 
   const schedule = scheduleRow ? await getComputedSchedule(session.organizationId, scheduleRow.id) : null;
   const budget = access.canViewBudget ? await getClientBudgetView(session.organizationId, jobId) : null;
+  // A client seeing a blank error page because one document row is broken is the
+  // worst version of this failure — they have no way to know it isn't their problem.
   const filesWithUrls = files
-    ? await Promise.all(files.map(async (file) => ({ ...file, url: await resolveFileUrl(file.url) })))
+    ? await Promise.all(files.map(async (file) => ({ ...file, url: await resolveFileUrlSafe(file.url) })))
     : null;
 
   const address = [job.addressLine1, job.city, job.state].filter(Boolean).join(", ");
@@ -197,17 +199,25 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
               {filesWithUrls.length === 0 ? (
                 <p className="px-4 py-4 text-sm text-[var(--bt-muted)]">No documents yet.</p>
               ) : (
-                filesWithUrls.map((file) => (
-                  <a
-                    key={file.id}
-                    href={file.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between px-4 py-3 text-sm text-[var(--bt-primary)] hover:underline"
-                  >
-                    {file.fileName}
-                  </a>
-                ))
+                filesWithUrls.map((file) =>
+                  // A document we can't produce a link for is shown as unavailable
+                  // rather than as a link that goes nowhere.
+                  file.url === null ? (
+                    <span key={file.id} className="flex items-center justify-between px-4 py-3 text-sm text-[var(--bt-muted)]">
+                      {file.fileName} — unavailable
+                    </span>
+                  ) : (
+                    <a
+                      key={file.id}
+                      href={file.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between px-4 py-3 text-sm text-[var(--bt-primary)] hover:underline"
+                    >
+                      {file.fileName}
+                    </a>
+                  ),
+                )
               )}
             </div>
           </Card>

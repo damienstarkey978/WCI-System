@@ -5,7 +5,7 @@ import { PhotoStrip } from "@/components/files/PhotoStrip";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isAnthropicConfigured } from "@/lib/env";
-import { resolveFileUrl } from "@/lib/files/service";
+import { resolveFileUrlSafe } from "@/lib/files/service";
 import { formatDate } from "@/lib/format";
 
 import { DailyLogForm } from "./daily-log-form";
@@ -46,7 +46,7 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
     logs.map(async (log) => ({
       ...log,
       photos: await Promise.all(
-        log.files.map(async (file) => ({ id: file.id, fileName: file.fileName, category: file.category, url: await resolveFileUrl(file.url) })),
+        log.files.map(async (file) => ({ id: file.id, fileName: file.fileName, category: file.category, url: await resolveFileUrlSafe(file.url) })),
       ),
     })),
   );

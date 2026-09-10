@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { resolveFileUrl } from "@/lib/files/service";
+import { resolveFileUrlSafe } from "@/lib/files/service";
 
 import { FileCard } from "./file-card";
 import { UploadForm } from "./upload-form";
@@ -49,12 +49,15 @@ export default async function FilesPage({
     include: { uploadedByUser: true },
   });
 
+  // resolveFileUrlSafe, not resolveFileUrl: one row that can't be signed used to
+  // reject this Promise.all and take the whole page down with it, hiding every good
+  // file on the job behind React error #441.
   const filesWithUrls = await Promise.all(
     files.map(async (file) => ({
       id: file.id,
       fileName: file.fileName,
       category: file.category,
-      url: await resolveFileUrl(file.url),
+      url: await resolveFileUrlSafe(file.url),
       mimeType: file.mimeType,
       sizeBytes: file.sizeBytes,
       clientVisible: file.clientVisible,

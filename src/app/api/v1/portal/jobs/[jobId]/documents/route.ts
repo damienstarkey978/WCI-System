@@ -2,7 +2,7 @@
 
 import { authenticatePortalJobRequest, portalAuthErrorResponse } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
-import { resolveFileUrl } from "@/lib/files/service";
+import { resolveFileUrlSafe } from "@/lib/files/service";
 
 type Context = { params: Promise<{ jobId: string }> };
 
@@ -18,7 +18,9 @@ export async function GET(request: Request, context: Context) {
       take: 200,
     });
 
-    const withUrls = await Promise.all(files.map(async (file) => ({ ...file, url: await resolveFileUrl(file.url) })));
+    // A file that cannot be signed comes back with url: null rather than 500ing the
+    // whole list — the consumer can skip it and still get every other document.
+    const withUrls = await Promise.all(files.map(async (file) => ({ ...file, url: await resolveFileUrlSafe(file.url) })));
 
     return Response.json({ data: withUrls });
   } catch (error) {

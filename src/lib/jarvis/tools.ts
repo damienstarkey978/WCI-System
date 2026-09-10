@@ -46,7 +46,7 @@ import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/serv
 import { draftLeadProposalFromNotes } from "@/lib/crm/lead-proposal";
 import { db } from "@/lib/db";
 import { createDailyLog } from "@/lib/daily-logs/service";
-import { resolveFileUrl } from "@/lib/files/service";
+import { resolveFileUrlSafe } from "@/lib/files/service";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { transitionJobStatus } from "@/lib/jobs";
 import { createPendingAction } from "@/lib/jarvis/pending-actions";
@@ -233,7 +233,11 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       if (files.length === 0) return `No files matching "${input.searchText}" found for ${job.name}.`;
 
       const withLinks = await Promise.all(
-        files.map(async (file) => `${file.fileName}: ${await resolveFileUrl(file.url)}`),
+        files.map(async (file) => {
+          const url = await resolveFileUrlSafe(file.url);
+          // Saying so beats failing the whole tool call over one bad row.
+          return `${file.fileName}: ${url ?? "(file unavailable in storage)"}`;
+        }),
       );
       return withLinks.join("\n");
     },

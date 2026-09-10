@@ -137,6 +137,30 @@ export async function resolveFileUrl(url: string): Promise<string> {
   return signedJobFileUrl(url);
 }
 
+/**
+ * The same thing, but returning null instead of throwing when a file can't be
+ * signed — a row pointing at an object that isn't in the bucket, storage not
+ * configured, a transient Supabase error.
+ *
+ * **Use this, not resolveFileUrl, whenever resolving a list of files.** Signing a
+ * whole list inside Promise.all means one unsignable row rejects the lot: the page
+ * 500s, and every *good* file on that job becomes invisible too. That is a real
+ * failure this app has had — the Files page went down site-wide on every job,
+ * surfacing only as React error #441 ("an error occurred in the Server Components
+ * render"), which says nothing about storage at all. Duplicate rows left behind by
+ * failed uploads are exactly the kind that can't be signed.
+ *
+ * resolveFileUrl stays strict for single-file operations, where the caller is acting
+ * on one specific file and silence would be worse than an error.
+ */
+export async function resolveFileUrlSafe(url: string): Promise<string | null> {
+  try {
+    return await resolveFileUrl(url);
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteFile(organizationId: string, fileId: string): Promise<void> {
   const file = await db.file.findFirst({ where: { id: fileId, organizationId } });
   if (!file) throw new FileNotFoundError(fileId);

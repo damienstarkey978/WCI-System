@@ -6,7 +6,8 @@ export interface FileCardData {
   readonly id: string;
   readonly fileName: string;
   readonly category: string;
-  readonly url: string;
+  /** Null when the file's storage object couldn't be signed — see resolveFileUrlSafe. */
+  readonly url: string | null;
   readonly mimeType: string | null;
   readonly sizeBytes: number | null;
   readonly clientVisible: boolean;
@@ -43,23 +44,44 @@ function VisibilityToggle({ jobId, fileId, field, checked, label }: { jobId: str
 
 export function FileCard({ jobId, file }: { jobId: string; file: FileCardData }) {
   const isPhoto = file.category === "PHOTO" || file.category === "PRESALE_PHOTO";
+  // A file whose storage object can't be signed still renders — as an unavailable
+  // card with a working Delete, since these are usually orphan rows left by a failed
+  // upload and the office needs to be able to clear them out.
+  const missing = file.url === null;
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-      <a href={file.url} target="_blank" rel="noreferrer" className="block h-36 bg-[var(--bt-page-bg)]">
-        {isPhoto ? (
-          // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching
-          <img src={file.url} alt={file.fileName} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-4xl text-[var(--bt-muted)]">
-            {file.category === "VIDEO" ? "🎬" : "📄"}
-          </div>
-        )}
-      </a>
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        <a href={file.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-[var(--bt-text)] hover:underline">
-          {file.fileName}
+      {missing ? (
+        <div
+          className="flex h-36 w-full flex-col items-center justify-center gap-1 px-2 text-center"
+          style={{ background: "color-mix(in srgb, var(--bt-hazard) 8%, var(--bt-page-bg))" }}
+        >
+          <span className="text-2xl">⚠️</span>
+          <span className="text-[10px] font-semibold" style={{ color: "var(--bt-hazard)" }}>
+            File unavailable
+          </span>
+          <span className="text-[10px] text-[var(--bt-muted)]">Not found in storage</span>
+        </div>
+      ) : (
+        <a href={file.url} target="_blank" rel="noreferrer" className="block h-36 bg-[var(--bt-page-bg)]">
+          {isPhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching
+            <img src={file.url} alt={file.fileName} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-4xl text-[var(--bt-muted)]">
+              {file.category === "VIDEO" ? "🎬" : "📄"}
+            </div>
+          )}
         </a>
+      )}
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        {missing ? (
+          <span className="truncate text-sm font-medium text-[var(--bt-muted)]">{file.fileName}</span>
+        ) : (
+          <a href={file.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-[var(--bt-text)] hover:underline">
+            {file.fileName}
+          </a>
+        )}
         <div className="text-xs text-[var(--bt-muted)]">
           {file.uploaderEmail} · {file.uploadedAt}
           {file.sizeBytes ? ` · ${formatBytes(file.sizeBytes)}` : ""}
