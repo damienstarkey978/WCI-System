@@ -1,6 +1,6 @@
 # WCI OS — handoff for Cowork (2026-09-11)
 
-Deployed: `main@e0fa7c1`. Netlify builds and migrates on push, so this is live once
+Deployed: `main@daeabec`. Netlify builds and migrates on push, so this is live once
 the build goes green. Two things in here: the narrowed inbound-email test, and a
 decision on the 3 remaining MIGTEST records.
 
