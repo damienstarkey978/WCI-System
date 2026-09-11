@@ -12,6 +12,8 @@ export interface GridRow {
   readonly code: string;
   readonly name: string;
   readonly cells: readonly GridCell[];
+  /** Spend against a cost code nobody budgeted for. */
+  readonly unbudgeted?: boolean;
 }
 
 export interface GridGroup {
@@ -129,6 +131,15 @@ export function BudgetGrid({
                         <td className="sticky left-0 whitespace-nowrap bg-[var(--bt-panel-bg)] px-4 py-2 pl-9">
                           <span className="font-mono text-xs text-[var(--bt-muted)]">{row.code}</span>{" "}
                           <span className="text-[var(--bt-text)]">{row.name}</span>
+                          {row.unbudgeted ? (
+                            <span
+                              className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold"
+                              style={{ background: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", color: "var(--bt-hazard)" }}
+                              title="Costs have been booked against this code, but it was never budgeted."
+                            >
+                              No budget
+                            </span>
+                          ) : null}
                         </td>
                         {row.cells.map((cell, index) => (
                           <td

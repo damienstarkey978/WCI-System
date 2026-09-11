@@ -13,7 +13,7 @@ import {
   JobNotOpenError,
   recordPayment,
 } from "@/lib/invoicing/service";
-import { parseDollarsToCents } from "@/lib/money";
+import { parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
 import { db } from "@/lib/db";
 import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
 import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
@@ -54,13 +54,33 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
     } else {
       const titles = formData.getAll("lineItemTitle").map(String);
       const amounts = formData.getAll("lineItemAmount").map(String);
+      const keys = formData.getAll("lineItemKey").map(String);
+      // Checkboxes submit their row key only when ticked, so they are matched by key
+      // rather than by position — an unticked box submits nothing and would otherwise
+      // shift every taxable flag onto the wrong line.
+      const taxableKeys = new Set(formData.getAll("lineItemTaxable").map(String));
+
       const lineItems = titles
-        .map((title, index) => ({ title: title.trim(), amountRaw: amounts[index] ?? "" }))
+        .map((title, index) => ({
+          title: title.trim(),
+          amountRaw: amounts[index] ?? "",
+          taxable: taxableKeys.has(keys[index] ?? ""),
+        }))
         .filter((line) => line.title && line.amountRaw)
-        .map((line) => ({ title: line.title, amountCents: parseDollarsToCents(line.amountRaw) }));
+        .map((line) => ({
+          title: line.title,
+          amountCents: parseDollarsToCents(line.amountRaw),
+          taxable: line.taxable,
+        }));
 
       if (lineItems.length === 0) {
         return { error: "Add at least one line item with a title and amount." };
+      }
+
+      const taxRateRaw = String(formData.get("taxRate") ?? "").trim();
+      const taxRateBasisPoints = taxRateRaw ? parsePercentToBasisPoints(taxRateRaw) : 0;
+      if (taxRateBasisPoints > 0 && !lineItems.some((line) => line.taxable)) {
+        return { error: "A tax rate is set but no line is marked taxable. Tick Tax on the lines it applies to." };
       }
 
       await createInvoice({
@@ -69,6 +89,7 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
         type,
         invoiceNumber,
         dueOn: dueOnRaw ? new Date(dueOnRaw) : null,
+        taxRateBasisPoints,
         lineItems,
       });
     }

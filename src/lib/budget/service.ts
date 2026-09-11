@@ -114,6 +114,20 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     };
   }
 
+  // The funnel now includes cost codes that have spend but no budget line, so their
+  // names have to be looked up too — otherwise those rows render blank on a screen
+  // whose whole purpose is telling someone where the money went.
+  const unnamed = funnel.lines.map((line) => line.costCodeId).filter((id) => !costCodes[id]);
+  if (unnamed.length > 0) {
+    const extra = await db.costCode.findMany({
+      where: { id: { in: unnamed }, organizationId },
+      select: { id: true, code: true, name: true, parent: { select: { id: true, code: true, name: true } } },
+    });
+    for (const costCode of extra) {
+      costCodes[costCode.id] = { code: costCode.code, name: costCode.name, group: costCode.parent };
+    }
+  }
+
   return {
     job: {
       id: job.id,

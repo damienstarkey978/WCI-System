@@ -145,6 +145,14 @@ export interface FunnelLine {
   /** True when projected cost has passed the revised budget. */
   readonly isOverBudget: boolean;
   readonly varianceCents: Cents;
+
+  /**
+   * True when this cost code has spend against it but no budget line — money going
+   * out against something nobody budgeted for. Distinct from isOverBudget, which such
+   * a line is also technically true for (anything exceeds a budget of zero); the UI
+   * needs to say "never budgeted" rather than implying a budget was blown through.
+   */
+  readonly isUnbudgeted: boolean;
 }
 
 /** A PO counts as committed only once it is actually approved. */
@@ -261,6 +269,9 @@ export function computeFunnelLine(
     projectedMarginBasisPoints: marginBasisPoints(budgetLine.revisedClientPriceCents, projectedCostCents),
     isOverBudget: projectedCostCents > budgetLine.revisedBudgetCostCents,
     varianceCents: budgetLine.revisedBudgetCostCents - projectedCostCents,
+    // computeJobFunnel overrides this for the lines it synthesizes; a line built from
+    // a real budget row is budgeted by definition.
+    isUnbudgeted: false,
   };
 }
 
@@ -320,6 +331,19 @@ export interface JobFunnel {
 }
 
 /** Compute the funnel for every cost code on a job, plus job-level totals. */
+/** A cost code with spend but no budget line: everything zero, so the real costs show. */
+function unbudgetedLine(costCodeId: string): BudgetLineInput {
+  return {
+    costCodeId,
+    originalBudgetCostCents: 0,
+    revisedBudgetCostCents: 0,
+    originalClientPriceCents: 0,
+    revisedClientPriceCents: 0,
+    rateMode: "MARKUP",
+    rateBasisPoints: 0,
+  };
+}
+
 export function computeJobFunnel(
   budgetLines: readonly BudgetLineInput[],
   purchaseOrders: readonly PurchaseOrderCostInput[],
@@ -328,9 +352,32 @@ export function computeJobFunnel(
   options: ComputeFunnelOptions = {},
   invoices: readonly InvoiceCostInput[] = [],
 ): JobFunnel {
-  const lines = budgetLines.map((line) =>
-    computeFunnelLine(line, purchaseOrders, bills, unapprovedLabor, options),
-  );
+  const budgeted = new Set(budgetLines.map((line) => line.costCodeId));
+
+  // The funnel is computed from what actually happened, not from what was budgeted
+  // (CLAUDE.md 2.3). Mapping only over budgetLines hid every cost on a code nobody
+  // had budgeted — a job that never went through Estimate → Send to Job Budget showed
+  // $0 committed and $0 actual no matter how much had been spent, and those costs were
+  // missing from the totals as well, so the job simply looked cheaper than it was.
+  const spentOn = new Set<string>([
+    ...purchaseOrders.map((po) => po.costCodeId),
+    ...bills.map((bill) => bill.costCodeId),
+    ...unapprovedLabor.map((labor) => labor.costCodeId),
+  ]);
+
+  const extra = [...spentOn]
+    .filter((costCodeId) => !budgeted.has(costCodeId))
+    .sort()
+    .map((costCodeId) => computeFunnelLine(unbudgetedLine(costCodeId), purchaseOrders, bills, unapprovedLabor, options))
+    // A code touched only by a cancelled or declined PO nets to nothing. Listing it
+    // as a zero row would be noise, not information.
+    .filter((line) => line.projectedCostCents !== 0 || line.pendingCostCents !== 0)
+    .map((line) => ({ ...line, isUnbudgeted: true }));
+
+  const lines = [
+    ...budgetLines.map((line) => computeFunnelLine(line, purchaseOrders, bills, unapprovedLabor, options)),
+    ...extra,
+  ];
 
   const subtotal = sumFunnelLines(lines);
   const amountInvoicedCents = sumBy(invoices, (invoice) => countsAsInvoiced(invoice.status), (invoice) => invoice.amountCents);

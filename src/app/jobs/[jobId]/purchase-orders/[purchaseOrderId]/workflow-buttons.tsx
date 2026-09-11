@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import {
   amendAction,
@@ -46,21 +46,19 @@ function ActionForm({
   extra?: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL);
+  const [armed, setArmed] = useState(false);
+
+  const needsConfirm = Boolean(confirmMessage);
+  const showSubmit = !needsConfirm || armed;
 
   return (
-    <form
-      action={formAction}
-      className="flex flex-wrap items-center gap-2"
-      onSubmit={(event) => {
-        if (confirmMessage && !window.confirm(confirmMessage)) event.preventDefault();
-      }}
-    >
+    <form action={formAction} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="jobId" value={jobId} />
       <input type="hidden" name="purchaseOrderId" value={purchaseOrderId} />
       {Object.entries(extra ?? {}).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      {withReason ? (
+      {withReason && showSubmit ? (
         <input
           name="reason"
           placeholder="Reason (optional)"
@@ -68,18 +66,64 @@ function ActionForm({
           style={{ borderColor: "var(--bt-border)" }}
         />
       ) : null}
-      <button
-        type="submit"
-        disabled={pending}
-        className={variant === "primary" ? PRIMARY_CLASS : SECONDARY_CLASS}
-        style={
-          variant === "primary"
-            ? { background: "var(--bt-primary)" }
-            : { borderColor: "var(--bt-border)" }
-        }
-      >
-        {pending ? "Working…" : label}
-      </button>
+
+      {/*
+        Confirmation is a second button rather than window.confirm().
+
+        The native dialog blocked the renderer synchronously from inside the submit
+        handler, which froze the tab outright — Amend and Recall were the only two
+        actions carrying a confirm, and Amend was unusable because of it. The cancel
+        path was broken too: calling event.preventDefault() in onSubmit does not
+        reliably stop a React form `action` from dispatching, since the action runs
+        through React's own path rather than the native submit.
+
+        Two buttons have neither problem, and the consequence is visible in the page
+        instead of in a modal the user has to read and dismiss.
+      */}
+      {needsConfirm && !armed ? (
+        <button
+          type="button"
+          onClick={() => setArmed(true)}
+          className={variant === "primary" ? PRIMARY_CLASS : SECONDARY_CLASS}
+          style={variant === "primary" ? { background: "var(--bt-primary)" } : { borderColor: "var(--bt-border)" }}
+        >
+          {label}
+        </button>
+      ) : null}
+
+      {showSubmit ? (
+        <>
+          <button
+            type="submit"
+            disabled={pending}
+            className={needsConfirm ? PRIMARY_CLASS : variant === "primary" ? PRIMARY_CLASS : SECONDARY_CLASS}
+            style={
+              needsConfirm
+                ? { background: "var(--bt-danger)" }
+                : variant === "primary"
+                  ? { background: "var(--bt-primary)" }
+                  : { borderColor: "var(--bt-border)" }
+            }
+          >
+            {pending ? "Working…" : needsConfirm ? `Yes, ${label.toLowerCase()}` : label}
+          </button>
+          {needsConfirm ? (
+            <button
+              type="button"
+              onClick={() => setArmed(false)}
+              disabled={pending}
+              className="text-xs text-[var(--bt-muted)] hover:underline disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          ) : null}
+        </>
+      ) : null}
+
+      {needsConfirm && armed ? (
+        <span className="text-xs text-[var(--bt-muted)]">{confirmMessage}</span>
+      ) : null}
+
       {state.error ? (
         <span role="alert" className="text-xs" style={{ color: "var(--bt-danger)" }}>
           {state.error}
@@ -153,7 +197,7 @@ export function WorkflowButtons({
           purchaseOrderId={purchaseOrderId}
           label="Amend"
           withReason
-          confirmMessage="Amending bumps the version, clears the vendor's acceptance, and sends this PO back for approval. Continue?"
+          confirmMessage="Bumps the version, clears the vendor's acceptance, and sends this PO back for approval."
         />
       ) : null}
 
@@ -164,7 +208,7 @@ export function WorkflowButtons({
           purchaseOrderId={purchaseOrderId}
           label="Recall"
           withReason
-          confirmMessage="Recalling voids this PO permanently and removes it from committed cost. This cannot be undone. Continue?"
+          confirmMessage="Voids this PO permanently and removes it from committed cost. This cannot be undone."
         />
       ) : null}
     </div>

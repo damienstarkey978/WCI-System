@@ -30,7 +30,10 @@ const COLUMN_LABELS: Record<BudgetColumnId, string> = {
 };
 
 function lineCell(line: FunnelLine, columnId: BudgetColumnId): GridCell {
-  const danger = line.isOverBudget && columnId === "projectedCost";
+  // An unbudgeted line is "over budget" against a budget of zero, which is true but
+  // useless — it would paint every such row red. The "No budget" badge says the real
+  // thing, so the overrun styling is kept for lines that actually had a budget to beat.
+  const danger = line.isOverBudget && !line.isUnbudgeted && columnId === "projectedCost";
   switch (columnId) {
     case "originalBudgetCost":
       return { text: formatMoney(line.originalBudgetCostCents) };
@@ -184,6 +187,7 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
       key: entry.line.costCodeId,
       code: entry.code,
       name: entry.name,
+      unbudgeted: entry.line.isUnbudgeted,
       cells: columns.map((columnId) => lineCell(entry.line, columnId)),
     })),
   }));

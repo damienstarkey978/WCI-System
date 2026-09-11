@@ -68,9 +68,30 @@ export function CreateInvoiceForm({ jobId }: { jobId: string }) {
         </label>
       ) : (
         <div className="mt-3 flex flex-col gap-2">
+          <label className="grid max-w-xs gap-1 text-sm">
+            <span className="text-xs font-medium text-[var(--bt-muted)]">Sales tax rate %</span>
+            {/*
+              Charged on the taxable lines only — labor is commonly exempt where
+              materials are not. Leave it at 0 for an untaxed invoice.
+            */}
+            <input
+              name="taxRate"
+              defaultValue="0"
+              inputMode="decimal"
+              className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+              style={{ borderColor: "var(--bt-border)" }}
+            />
+          </label>
           <span className="text-xs font-medium text-[var(--bt-muted)]">Line items</span>
           {rows.map((row) => (
-            <div key={row.key} className="flex gap-2">
+            <div key={row.key} className="flex items-center gap-2">
+              {/*
+                An unchecked checkbox submits nothing, so the taxable list would not
+                line up with the titles by position. Each row carries its own key and
+                the checkbox submits that key, which keeps them matched however many
+                boxes are ticked.
+              */}
+              <input type="hidden" name="lineItemKey" value={row.key} />
               <input
                 name="lineItemTitle"
                 placeholder="Description"
@@ -84,6 +105,10 @@ export function CreateInvoiceForm({ jobId }: { jobId: string }) {
                 className="w-32 rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
                 style={{ borderColor: "var(--bt-border)" }}
               />
+              <label className="flex items-center gap-1 whitespace-nowrap text-xs text-[var(--bt-muted)]" title="Charge sales tax on this line">
+                <input type="checkbox" name="lineItemTaxable" value={row.key} />
+                Tax
+              </label>
               {rows.length > 1 ? (
                 <button
                   type="button"

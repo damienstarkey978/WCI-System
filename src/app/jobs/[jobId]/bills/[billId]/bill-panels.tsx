@@ -289,9 +289,15 @@ export function AddToInvoicePanel({
       <input type="hidden" name="billId" value={billId} />
       <label className="flex flex-col gap-1 text-xs text-[var(--bt-muted)]">
         Markup %
+        {/*
+          A real value, not a placeholder. As a placeholder the grey "20" read as a
+          filled-in default, and submitting without touching it billed the client at
+          cost — the markup was silently dropped and nobody could see it had been.
+        */}
         <input
           name="markup"
-          placeholder="20"
+          defaultValue="20"
+          required
           inputMode="decimal"
           className="rounded border px-2 py-1.5 text-xs outline-none focus:border-[var(--bt-primary)]"
           style={{ borderColor: "var(--bt-border)" }}

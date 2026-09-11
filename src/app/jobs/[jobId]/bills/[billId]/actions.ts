@@ -121,11 +121,18 @@ export async function addToInvoiceAction(_previous: BillActionState, formData: F
   const markupRaw = String(formData.get("markup") ?? "").trim();
   const invoiceId = String(formData.get("invoiceId") ?? "").trim();
 
+  // An empty markup is refused rather than quietly meaning 0%. Billing a client at
+  // cost is a legitimate choice, but it has to be a choice — "0" typed in, not a
+  // field left blank.
+  if (markupRaw === "") {
+    return { error: "Enter a markup — type 0 to bill this at cost." };
+  }
+
   const state = await run(jobId, billId, (organizationId) =>
     addBillToInvoice({
       organizationId,
       billId,
-      markupBasisPoints: markupRaw ? parsePercentToBasisPoints(markupRaw) : 0,
+      markupBasisPoints: parsePercentToBasisPoints(markupRaw),
       invoiceId: invoiceId || null,
     }),
   );
