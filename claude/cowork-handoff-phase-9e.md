@@ -193,7 +193,7 @@ Dedupe on Buildertrend's own ID so a re-run is safe.
 
 ---
 
-## 4. Two decisions only Damien can make
+## 4. Account and DNS setup only Damien can do
 
 Neither blocks anything above.
 
@@ -201,10 +201,24 @@ Neither blocks anything above.
   nobody has confirmed the current connection actually has AP *write* scope
   rather than read-only. Worth checking in the Intuit developer console before
   someone finds out by having a sync fail.
-- **Inbound email for bills.** The Bills screen advertises a forwarding address
-  (`bills-<org-slug>@inbox.worldconstructionjax.com`) and the schema records
-  where an emailed bill came from, but **nothing receives that mail yet** — the
-  webhook handler is deliberately unwritten because it depends on the provider.
-  Needs a choice (SendGrid Inbound Parse, Postmark, Mailgun Routes) and an MX
-  record on `inbox.worldconstructionjax.com`. Until then, upload works and email
-  does not; the address on screen is aspirational.
+- **Inbound email for bills — built, needs DNS and a SendGrid account.** Damien
+  chose SendGrid Inbound Parse and the handler now exists at
+  `POST /api/webhooks/sendgrid/inbound`. It is not live until three things are
+  done, in this order:
+  1. Generate a secret (`openssl rand -hex 32`) and set `SENDGRID_INBOUND_SECRET`
+     in Netlify's environment, then redeploy. Until it is set the endpoint
+     refuses **every** delivery with a 401 — that is deliberate, not a bug.
+  2. Add an MX record on `inbox.worldconstructionjax.com` → `mx.sendgrid.net`,
+     priority 10. Only that subdomain; do not touch the root domain's MX or you
+     will break normal mail for worldconstructioninc.com.
+  3. In SendGrid → Settings → Inbound Parse, add a host of
+     `inbox.worldconstructionjax.com` pointing at
+     `https://app.worldconstructionjax.com/api/webhooks/sendgrid/inbound?key=<the
+     secret from step 1>`. Leave "POST the raw, full MIME message" **off** — the
+     handler expects the parsed multipart form, not raw MIME.
+  Then send a test: forward any receipt to
+  `bills-world-construction@inbox.worldconstructionjax.com` and confirm it
+  appears in that job's Bills **Inbox** tab, and at `/admin/inbound-email`.
+  Rotating the secret later means changing Netlify and the Inbound Parse URL
+  together — change one alone and mail stops being accepted silently.
+  `SENDGRID_API_KEY` is *not* needed; receiving mail requires no API key.
