@@ -196,6 +196,50 @@ export function structuralDefect(bytes: Buffer): string | null {
   }
 }
 
+const PNG_COLOR_TYPES: Record<number, string> = {
+  0: "greyscale",
+  2: "truecolour",
+  3: "indexed-colour",
+  4: "greyscale with alpha",
+  6: "truecolour with alpha",
+};
+
+/**
+ * The encoding details a dimension check cannot see: bit depth, colour type,
+ * interlacing, and which sections the file actually contains.
+ *
+ * A 16-bit, interlaced or palette-indexed image is still a perfectly valid PNG of
+ * exactly the dimensions it claims, and still something a given decoder may refuse.
+ * When a file is rejected and everything obvious about it looks right, this is what
+ * is left to look at — and reading it off the bytes beats asking whoever sent the
+ * file how they made it.
+ */
+export function imageInternals(bytes: Buffer): Record<string, string | number | boolean> {
+  const facts = probeImage(bytes);
+  if (facts.format !== "png" || bytes.byteLength < 33) return { format: facts.format };
+
+  const chunks: string[] = [];
+  let offset = 8;
+  while (offset + 8 <= bytes.byteLength) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.subarray(offset + 4, offset + 8).toString("ascii");
+    chunks.push(`${type}(${length})`);
+    offset += 12 + length;
+    if (type === "IEND") break;
+  }
+
+  const colorType = bytes[25];
+  return {
+    format: "png",
+    bitDepth: bytes[24],
+    colorType: `${colorType} — ${PNG_COLOR_TYPES[colorType] ?? "unrecognised"}`,
+    compression: bytes[26],
+    filter: bytes[27],
+    interlaced: bytes[28] === 1,
+    chunks: chunks.join(" "),
+  };
+}
+
 /**
  * An exact identifier for a specific set of bytes, for logs. When the same file
  * fails here and succeeds elsewhere (or the reverse), the first question is always

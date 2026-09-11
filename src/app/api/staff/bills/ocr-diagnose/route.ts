@@ -18,7 +18,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import { UserRole } from "@/generated/prisma/enums";
-import { imageFingerprint, probeImage, rejectionReason, structuralDefect } from "@/lib/ai/image-probe";
+import {
+  imageFingerprint,
+  imageInternals,
+  probeImage,
+  rejectionReason,
+  structuralDefect,
+} from "@/lib/ai/image-probe";
 import { extractBillFromDocument, type BillOcrDocumentInput } from "@/lib/ai/bill-ocr-assistant";
 import { AuthConfigurationError, requireRole } from "@/lib/auth";
 import { isAnthropicConfigured } from "@/lib/env";
@@ -172,6 +178,9 @@ export async function POST(request: Request) {
   return Response.json({
     fileName: typeof payload.fileName === "string" ? payload.fileName : null,
     fingerprint: imageFingerprint(bytes),
+    // What a dimension check cannot see. If every step below passes and the API
+    // still refuses the file, the answer is in here.
+    internals: imageInternals(bytes),
     steps,
     verdict: steps.find((step) => !step.ok)?.step ?? "every step succeeded",
   });

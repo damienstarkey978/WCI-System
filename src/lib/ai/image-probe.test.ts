@@ -4,6 +4,7 @@ import zlib from "node:zlib";
 import {
   describeImage,
   imageFingerprint,
+  imageInternals,
   probeImage,
   rejectionReason,
   structuralDefect,
@@ -128,5 +129,21 @@ describe("catching files that are structurally broken, not just mislabelled", ()
     expect(fingerprint).toMatch(/^PNG 300×160, \d+KB, sha256:[0-9a-f]{16}$/);
     expect(imageFingerprint(png(300, 160))).toBe(fingerprint);
     expect(imageFingerprint(png(300, 161))).not.toBe(fingerprint);
+  });
+});
+
+describe("reporting the encoding details a dimension check cannot see", () => {
+  it("reads a PNG's bit depth, colour type, interlacing and section list", () => {
+    expect(imageInternals(png(300, 160))).toMatchObject({
+      format: "png",
+      bitDepth: 8,
+      colorType: "2 — truecolour",
+      interlaced: false,
+    });
+    expect(String(imageInternals(png(300, 160)).chunks)).toMatch(/IHDR\(13\).*IDAT\(\d+\).*IEND\(0\)/);
+  });
+
+  it("says only the format for anything that isn't a PNG", () => {
+    expect(imageInternals(Buffer.from("%PDF-1.7\n%%EOF\n"))).toEqual({ format: "pdf" });
   });
 });

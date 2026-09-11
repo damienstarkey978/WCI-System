@@ -1,6 +1,6 @@
 # WCI OS — handoff for Cowork (2026-09-11)
 
-Deployed: `main@00ae32d`. Netlify builds and migrates on push, so this is live once
+Deployed: `main@e0fa7c1`. Netlify builds and migrates on push, so this is live once
 the build goes green. Two things in here: the narrowed inbound-email test, and a
 decision on the 3 remaining MIGTEST records.
 
@@ -96,6 +96,12 @@ not stop at the first failure:
 4. passes the pre-flight the inbound-email path applies
 5. plain vision call — same image, trivial question, no output schema
 6. bill OCR call — same image, real schema-constrained request
+
+It also returns an `internals` block: the PNG's bit depth, colour type, whether it is
+interlaced, and the list of sections it actually contains. A 16-bit, interlaced or
+palette-indexed image is a perfectly valid PNG of exactly the dimensions it claims
+and still something a decoder can refuse — so if every step passes and the API still
+says no, the answer is in there.
 
 Please paste the whole response back, including any `request_id` values — those are
 the only handle Anthropic can look a specific refusal up by.
