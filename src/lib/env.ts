@@ -110,6 +110,34 @@ export function cronSecret(): string | undefined {
 }
 
 /**
+ * SendGrid Inbound Parse, for bills forwarded to bills-{orgSlug}@inbox.<domain>.
+ *
+ * Inbound Parse does **not** sign its requests, so a shared secret in the webhook
+ * URL's query string is the protection: SendGrid is configured to POST to
+ * /api/webhooks/sendgrid/inbound?key=<this>, and anything without it is refused.
+ * IP allowlisting is not used — SendGrid publishes no stable inbound range.
+ *
+ * Only needed in this direction. Sending mail would need SENDGRID_API_KEY; receiving
+ * does not, so that key is deliberately not read here.
+ */
+export function isInboundEmailConfigured(): boolean {
+  return optional("SENDGRID_INBOUND_SECRET") !== undefined;
+}
+
+export function inboundEmailSecret(): string | undefined {
+  return optional("SENDGRID_INBOUND_SECRET");
+}
+
+/**
+ * The domain the per-org forwarding addresses live on. Only the MX record and the
+ * SendGrid Inbound Parse host need to agree with this; it is separate from the app's
+ * own domain so mail routing can move without touching the app's.
+ */
+export function inboundEmailDomain(): string {
+  return optional("INBOUND_EMAIL_DOMAIN") ?? "inbox.worldconstructionjax.com";
+}
+
+/**
  * Supabase Storage (job files — photos/documents/videos) is optional, same pattern
  * as every other integration here: without it, upload endpoints return a clear
  * "not configured" error rather than the app failing to build. The service-role key

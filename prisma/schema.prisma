@@ -138,6 +138,7 @@ model Organization {
   qboSyncLogs           QboSyncLog[]
   creditMemos           CreditMemo[]
   deposits              Deposit[]
+  inboundEmails         InboundEmail[]
 }
 
 model User {
@@ -294,6 +295,7 @@ model Job {
   clientUpdateSummaries ClientUpdateSummary[]
   creditMemos           CreditMemo[]
   deposits              Deposit[]
+  inboundEmails         InboundEmail[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -552,6 +554,16 @@ enum BillApprovalStatus {
 
 /// How a bill got into the system, so the Inbox can show provenance and the office
 /// can tell a forwarded vendor email from something typed by hand.
+/// How an email that arrived at a per-org bills address was resolved.
+enum InboundEmailStatus {
+  /// Matched an organization; bills were created from its attachments.
+  ROUTED
+  /// The address matched no organization. Kept for manual triage rather than dropped.
+  UNROUTED
+  /// Matched, but processing failed — a bad attachment, OCR down. Retryable by hand.
+  FAILED
+}
+
 enum BillSource {
   MANUAL
   UPLOAD
@@ -933,6 +945,9 @@ model Bill {
   createdByUser   User?   @relation("BillCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   /// Set when the bill arrived by forwarded email, for tracing it back to the message.
+  /// The inbound email this bill was extracted from, when it arrived that way.
+  inboundEmailId       String?
+  inboundEmail         InboundEmail? @relation(fields: [inboundEmailId], references: [id], onDelete: SetNull)
   sourceEmailFrom      String?
   sourceEmailSubject   String?
   sourceEmailMessageId String?
@@ -3026,4 +3041,51 @@ model JarvisPendingAction {
   resolvedAt DateTime?
 
   @@index([conversationId, createdAt])
+}
+
+/// Every email delivered to a per-org bills inbox address, whether or not it
+/// produced a bill.
+///
+/// This exists for two reasons. An email that matches no organization must not be
+/// silently dropped — someone typed an address slightly wrong and is waiting for
+/// their bill to appear — so it is kept here, flagged UNROUTED, for manual triage.
+/// And for mail that *did* route, this is the audit trail: who sent it, what the
+/// subject was, when it arrived, and which bills came out of it.
+model InboundEmail {
+  id String @id @default(cuid())
+
+  /// Null when the address matched no organization. Not a required relation for
+  /// exactly that reason — an unroutable email still has to be recorded somewhere.
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Set only when the address carried a job prefix that resolved.
+  jobId          String?
+  job            Job?          @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  status InboundEmailStatus @default(UNROUTED)
+
+  toAddress   String
+  fromAddress String
+  subject     String?
+  /// The provider's Message-ID. Unique so a retried delivery is recognised as the
+  /// same email rather than creating a second set of bills.
+  messageId   String  @unique
+  textBody    String?
+
+  attachmentCount Int      @default(0)
+  /// Storage paths for attachments kept when the email couldn't be routed. Empty for
+  /// routed mail, whose attachments live on the bills they produced.
+  storedPaths     String[]
+
+  /// Why this failed or went unrouted, in language the office can act on.
+  note String?
+
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  /// Bills created from this email's attachments.
+  bills Bill[]
+
+  @@index([status, receivedAt])
+  @@index([organizationId, receivedAt])
 }
