@@ -113,7 +113,7 @@ const ERROR_SCHEMA = {
 } as const;
 
 interface EndpointDef {
-  readonly method: "get" | "post";
+  readonly method: "get" | "post" | "delete";
   readonly path: string;
   readonly summary: string;
   readonly description?: string;
@@ -292,6 +292,17 @@ const ENDPOINTS: readonly EndpointDef[] = [
     pathParams: ["purchaseOrderId"],
   },
   {
+    method: "delete",
+    path: "/purchase-orders/{purchaseOrderId}",
+    summary: "Delete a draft purchase order",
+    description:
+      "Hard delete, for records that should never have existed — an import artifact, a validation probe, a typo. It is deliberately not an undo: anything that has taken part in the money flow is refused with 409 and a machine-readable error code naming why, and should be cancelled instead. Refused (409) when the PO is past DRAFT " +
+      "(not_draft) or has bills against it (has_bills).",
+    tags: ["Purchase Orders"],
+    scopes: ["purchase-orders:write"],
+    pathParams: ["purchaseOrderId"],
+  },
+  {
     method: "post",
     path: "/purchase-orders/match-by-road-name",
     summary: "Match a PO name or transaction description to a job (Duke's matcher)",
@@ -335,6 +346,18 @@ const ENDPOINTS: readonly EndpointDef[] = [
     requestSchema: updateBillStatusSchema,
   },
   {
+    method: "delete",
+    path: "/bills/{billId}",
+    summary: "Delete a bill still in review",
+    description:
+      "Hard delete, for records that should never have existed — an import artifact, a validation probe, a typo. It is deliberately not an undo: anything that has taken part in the money flow is refused with 409 and a machine-readable error code naming why, and should be voided instead. Refused (409) when the bill is past review " +
+      "(past_review), has been billed to a client (billed_to_client), has a released lien waiver " +
+      "(waiver_released), or has attachments (has_attachments).",
+    tags: ["Bills"],
+    scopes: ["bills:write"],
+    pathParams: ["billId"],
+  },
+  {
     method: "post",
     path: "/bills/ai-ocr",
     summary: "Draft a bill from a photographed/scanned receipt or invoice with AI",
@@ -374,6 +397,18 @@ const ENDPOINTS: readonly EndpointDef[] = [
     summary: "Mark a draft invoice as sent",
     description: "The transition that makes it count toward the budget's amountInvoiced.",
     tags: ["Invoicing"],
+    scopes: ["invoices:write"],
+    pathParams: ["invoiceId"],
+  },
+  {
+    method: "delete",
+    path: "/invoices/{invoiceId}",
+    summary: "Delete an unsent draft invoice",
+    description:
+      "Hard delete, for records that should never have existed — an import artifact, a validation probe, a typo. It is deliberately not an undo: anything that has taken part in the money flow is refused with 409 and a machine-readable error code naming why, and should be voided instead. Refused (409) when the invoice has been sent " +
+      "(not_draft), has payments (has_payments), or has credit memos or deposits attached " +
+      "(has_credits).",
+    tags: ["Invoices"],
     scopes: ["invoices:write"],
     pathParams: ["invoiceId"],
   },
