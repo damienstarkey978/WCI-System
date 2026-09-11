@@ -10,20 +10,8 @@
  */
 
 import { db } from "@/lib/db";
+import { formatMoney } from "@/lib/format";
 import { BillNotFoundError } from "@/lib/bills/service";
-
-/**
- * Deliberately not formatMoney(): that rounds to whole dollars, which is right on a
- * dashboard and wrong on a document that states the exact sum being released.
- */
-function exactAmount(cents: number): string {
-  return (cents / 100).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 export class LienWaiverNotFoundError extends Error {
   constructor(id: string) {
@@ -61,7 +49,7 @@ export const TEMPLATES: Readonly<Record<string, (facts: LienWaiverFacts) => stri
       `Project: ${facts.jobName}${facts.jobAddress ? `, ${facts.jobAddress}` : ""}`,
       `Through date: ${facts.throughDate.toISOString().slice(0, 10)}`,
       facts.billNumber ? `Invoice reference: ${facts.billNumber}` : "",
-      `Payment amount: ${exactAmount(facts.amountCents)}`,
+      `Payment amount: ${formatMoney(facts.amountCents)}`,
       "",
       "Upon receipt by the claimant of a check payable to the claimant in the amount",
       "stated above, and when the check has been properly endorsed and has been paid by",

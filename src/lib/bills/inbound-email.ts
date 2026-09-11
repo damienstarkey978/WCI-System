@@ -11,6 +11,7 @@
 import { db } from "@/lib/db";
 import { createBillFromOcr } from "@/lib/ai/bill-ocr-service";
 import type { BillOcrDocumentInput } from "@/lib/ai/bill-ocr-assistant";
+import { describeImage, rejectionReason } from "@/lib/ai/image-probe";
 import { JOB_FILES_BUCKET, uploadJobFile } from "@/lib/storage/supabase-storage";
 
 /** What Claude's vision API accepts. Anything else is recorded and skipped, not guessed at. */
@@ -219,6 +220,16 @@ export async function ingestInboundEmail(message: InboundMessage): Promise<Inges
       continue;
     }
 
+    // Check the bytes before spending an API call on them. The vision API's refusal
+    // is a bare "Could not process image", which is indistinguishable between an
+    // oversized receipt, a mislabelled file and a corrupt one — and leaves whoever
+    // forwarded it with nothing to act on.
+    const reason = rejectionReason(attachment.bytes, attachment.contentType);
+    if (reason) {
+      notes.push(`Skipped ${attachment.fileName} (${describeImage(attachment.bytes)}): ${reason}.`);
+      continue;
+    }
+
     try {
       const { bill } = await createBillFromOcr({
         organizationId: routing.organizationId,
@@ -241,8 +252,11 @@ export async function ingestInboundEmail(message: InboundMessage): Promise<Inges
       });
       created += 1;
     } catch (error) {
+      // Include what was sent. Without it the recorded note is the API's opaque
+      // message and nothing about the file it refused.
       notes.push(
-        `Could not read ${attachment.fileName}: ${error instanceof Error ? error.message : "unknown error"}`,
+        `Could not read ${attachment.fileName} (${describeImage(attachment.bytes)}): ` +
+          `${error instanceof Error ? error.message : "unknown error"}`,
       );
     }
   }

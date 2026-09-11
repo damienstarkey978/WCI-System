@@ -68,7 +68,18 @@ export async function uploadBillsAction(_previous: UploadState, formData: FormDa
     }
 
     try {
-      const data = Buffer.from(await file.arrayBuffer()).toString("base64");
+      const bytes = Buffer.from(await file.arrayBuffer());
+
+      // Same pre-flight the email path does — a clear reason beats the vision API's
+      // "Could not process image".
+      const { describeImage, rejectionReason } = await import("@/lib/ai/image-probe");
+      const reason = rejectionReason(bytes, file.type);
+      if (reason) {
+        results.push({ fileName: file.name, ok: false, detail: `${describeImage(bytes)} — ${reason}.` });
+        continue;
+      }
+
+      const data = bytes.toString("base64");
       const { bill, assumptions } = await createBillFromOcr({
         organizationId: user.organizationId,
         jobId,
