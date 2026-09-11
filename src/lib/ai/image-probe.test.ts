@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import zlib from "node:zlib";
 
-import { describeImage, probeImage, rejectionReason } from "@/lib/ai/image-probe";
+import {
+  describeImage,
+  imageFingerprint,
+  probeImage,
+  rejectionReason,
+  structuralDefect,
+} from "@/lib/ai/image-probe";
 
 /** A real, valid PNG of the given size — header parsing needs genuine bytes. */
 function png(width: number, height: number): Buffer {
@@ -74,5 +80,53 @@ describe("deciding whether the vision API will take it", () => {
   it("rejects a file past the size limit before spending an API call on it", () => {
     const huge = Buffer.concat([png(10, 10), Buffer.alloc(6 * 1024 * 1024)]);
     expect(rejectionReason(huge, "image/png")).toContain("over the 5MB limit");
+  });
+});
+
+describe("catching files that are structurally broken, not just mislabelled", () => {
+  it("accepts a whole PNG", () => {
+    expect(structuralDefect(png(300, 160))).toBeNull();
+  });
+
+  it("catches a PNG cut off part-way through its pixel data", () => {
+    // The exact shape of the inbound-email failure this check was written for: the
+    // header still reads 300×160, so every dimension and size check passes.
+    const truncated = png(300, 160).subarray(0, 60);
+    expect(probeImage(truncated)).toMatchObject({ format: "png", width: 300, height: 160 });
+    expect(structuralDefect(truncated)).toMatch(/incomplete/);
+    expect(rejectionReason(truncated, "image/png")).toMatch(/incomplete/);
+  });
+
+  it("catches a PNG whose bytes were altered in transit", () => {
+    const damaged = png(300, 160);
+    damaged[40] ^= 0xff;
+    expect(structuralDefect(damaged)).toMatch(/checksum|damaged/);
+  });
+
+  it("catches a PNG with a header and no end marker", () => {
+    const whole = png(300, 160);
+    const noEnd = whole.subarray(0, whole.byteLength - 12);
+    expect(structuralDefect(noEnd)).toMatch(/incomplete/);
+  });
+
+  it("catches a JPEG with no end-of-image marker", () => {
+    const jpeg = Buffer.concat([
+      Buffer.from("ffd8ffe000104a46494600010100000100010000", "hex"),
+      Buffer.alloc(200, 0x11),
+    ]);
+    expect(structuralDefect(jpeg)).toMatch(/incomplete/);
+    expect(structuralDefect(Buffer.concat([jpeg, Buffer.from([0xff, 0xd9])]))).toBeNull();
+  });
+
+  it("catches a PDF that never finished uploading", () => {
+    expect(structuralDefect(Buffer.from("%PDF-1.7\nstuff"))).toMatch(/incomplete/);
+    expect(structuralDefect(Buffer.from("%PDF-1.7\nstuff\n%%EOF\n"))).toBeNull();
+  });
+
+  it("fingerprints bytes so the same file can be identified across systems", () => {
+    const fingerprint = imageFingerprint(png(300, 160));
+    expect(fingerprint).toMatch(/^PNG 300×160, \d+KB, sha256:[0-9a-f]{16}$/);
+    expect(imageFingerprint(png(300, 160))).toBe(fingerprint);
+    expect(imageFingerprint(png(300, 161))).not.toBe(fingerprint);
   });
 });

@@ -11,10 +11,20 @@
 import { db } from "@/lib/db";
 import { createBillFromOcr } from "@/lib/ai/bill-ocr-service";
 import type { BillOcrDocumentInput } from "@/lib/ai/bill-ocr-assistant";
-import { describeImage, rejectionReason } from "@/lib/ai/image-probe";
+import { imageFingerprint, rejectionReason } from "@/lib/ai/image-probe";
 import { JOB_FILES_BUCKET, uploadJobFile } from "@/lib/storage/supabase-storage";
 
 /** What Claude's vision API accepts. Anything else is recorded and skipped, not guessed at. */
+/**
+ * The vision API stamps every response with a request id. When a file is refused,
+ * that id is the only handle on the failure that Anthropic can look up — so it goes
+ * in the note next to the file's own fingerprint.
+ */
+function requestIdOf(error: unknown): string {
+  const id = (error as { request_id?: unknown } | null)?.request_id;
+  return typeof id === "string" && id.length > 0 ? ` [request ${id}]` : "";
+}
+
 const ACCEPTED: Record<string, BillOcrDocumentInput["mediaType"]> = {
   "image/png": "image/png",
   "image/jpeg": "image/jpeg",
@@ -226,7 +236,7 @@ export async function ingestInboundEmail(message: InboundMessage): Promise<Inges
     // forwarded it with nothing to act on.
     const reason = rejectionReason(attachment.bytes, attachment.contentType);
     if (reason) {
-      notes.push(`Skipped ${attachment.fileName} (${describeImage(attachment.bytes)}): ${reason}.`);
+      notes.push(`Skipped ${attachment.fileName} (${imageFingerprint(attachment.bytes)}): ${reason}.`);
       continue;
     }
 
@@ -252,11 +262,13 @@ export async function ingestInboundEmail(message: InboundMessage): Promise<Inges
       });
       created += 1;
     } catch (error) {
-      // Include what was sent. Without it the recorded note is the API's opaque
-      // message and nothing about the file it refused.
+      // Include what was sent, down to a hash of the exact bytes. Without it the
+      // recorded note is the API's opaque message and nothing about the file it
+      // refused — and the first question when a file fails here but opens fine on
+      // someone's desk is whether the bytes that arrived are the bytes they sent.
       notes.push(
-        `Could not read ${attachment.fileName} (${describeImage(attachment.bytes)}): ` +
-          `${error instanceof Error ? error.message : "unknown error"}`,
+        `Could not read ${attachment.fileName} (${imageFingerprint(attachment.bytes)}): ` +
+          `${error instanceof Error ? error.message : "unknown error"}${requestIdOf(error)}`,
       );
     }
   }

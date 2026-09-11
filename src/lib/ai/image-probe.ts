@@ -10,7 +10,16 @@
  *
  * Header parsing rather than a decoding library: the dimensions live in the first
  * few dozen bytes of every format here, and this is not worth a dependency.
+ *
+ * The header is not the whole story, though. A file truncated part-way through its
+ * pixel data still has a perfectly good header — it reports its real format and its
+ * real dimensions, passes every size check, and is then refused by the vision API
+ * with the same unhelpful "Could not process image". So the checks below also walk
+ * each format's container structure far enough to prove the bytes are all there.
  */
+
+import { createHash } from "node:crypto";
+import zlib from "node:zlib";
 
 /** Anthropic's documented ceiling for a single image. */
 export const MAX_IMAGE_EDGE_PX = 8_000;
@@ -90,6 +99,114 @@ export function probeImage(bytes: Buffer): ImageFacts {
   return { format: "unknown", width: null, height: null };
 }
 
+function crc32(bytes: Buffer): number {
+  return zlib.crc32(bytes);
+}
+
+/**
+ * Walks the PNG chunk chain, verifying every chunk's declared length and CRC.
+ *
+ * This catches the case a header check cannot: bytes lost in transit leave IHDR
+ * intact, so the file still looks like a valid 300×160 PNG right up until something
+ * tries to decode it.
+ */
+function pngDefect(bytes: Buffer): string | null {
+  let offset = 8;
+  let sawIhdr = false;
+  let idatChunks = 0;
+  let sawIend = false;
+
+  while (offset + 8 <= bytes.byteLength) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.subarray(offset + 4, offset + 8).toString("ascii");
+    const dataEnd = offset + 8 + length;
+    const crcEnd = dataEnd + 4;
+    if (crcEnd > bytes.byteLength) {
+      return `it is cut off part-way through its ${type} section — the file is incomplete`;
+    }
+    if (crc32(bytes.subarray(offset + 4, dataEnd)) !== bytes.readUInt32BE(dataEnd)) {
+      return `its ${type} section fails its own checksum — the file is damaged`;
+    }
+    if (type === "IHDR") sawIhdr = true;
+    if (type === "IDAT") idatChunks += 1;
+    offset = crcEnd;
+    if (type === "IEND") {
+      sawIend = true;
+      break;
+    }
+  }
+
+  if (!sawIhdr) return "it is missing its PNG header section";
+  if (idatChunks === 0) return "it contains no image data";
+  if (!sawIend) return "it has no end-of-file marker — the file is incomplete";
+  return null;
+}
+
+/** JPEG data runs until an end-of-image marker; without one the file is truncated. */
+function jpegDefect(bytes: Buffer): string | null {
+  if (bytes.lastIndexOf(Buffer.from([0xff, 0xd9])) < 4) {
+    return "it has no end-of-image marker — the file is incomplete";
+  }
+  return null;
+}
+
+/** A GIF's last byte is its trailer. */
+function gifDefect(bytes: Buffer): string | null {
+  if (bytes[bytes.byteLength - 1] !== 0x3b) {
+    return "it does not end with a GIF trailer — the file is incomplete";
+  }
+  return null;
+}
+
+/** RIFF states its own payload length up front, so a short file is self-evident. */
+function webpDefect(bytes: Buffer): string | null {
+  const declared = bytes.readUInt32LE(4);
+  if (bytes.byteLength - 8 < declared) {
+    return `it declares ${declared + 8} bytes but only ${bytes.byteLength} arrived — the file is incomplete`;
+  }
+  return null;
+}
+
+/** A PDF ends with %%EOF; anything else means the upload did not finish. */
+function pdfDefect(bytes: Buffer): string | null {
+  const tail = bytes.subarray(Math.max(0, bytes.byteLength - 1024)).toString("latin1");
+  if (!tail.includes("%%EOF")) return "it has no end-of-file marker — the file is incomplete";
+  return null;
+}
+
+/**
+ * Returns a reason the file's own container structure is broken, or null if the
+ * bytes hang together. Separate from `rejectionReason` so it can be reported on its
+ * own when diagnosing a file by hand.
+ */
+export function structuralDefect(bytes: Buffer): string | null {
+  switch (probeImage(bytes).format) {
+    case "png":
+      return pngDefect(bytes);
+    case "jpeg":
+      return jpegDefect(bytes);
+    case "gif":
+      return gifDefect(bytes);
+    case "webp":
+      return webpDefect(bytes);
+    case "pdf":
+      return pdfDefect(bytes);
+    default:
+      return null;
+  }
+}
+
+/**
+ * An exact identifier for a specific set of bytes, for logs. When the same file
+ * fails here and succeeds elsewhere (or the reverse), the first question is always
+ * whether it is really the same file — this answers it without shipping the file
+ * around.
+ */
+export function imageFingerprint(bytes: Buffer): string {
+  const sha = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+  return `${describeImage(bytes)}, sha256:${sha}`;
+}
+
 const EXPECTED_FORMAT: Record<string, ImageFacts["format"]> = {
   "image/png": "png",
   "image/jpeg": "jpeg",
@@ -128,7 +245,7 @@ export function rejectionReason(bytes: Buffer, claimedContentType: string): stri
     }
   }
 
-  return null;
+  return structuralDefect(bytes);
 }
 
 /** A short description for logs and audit notes, e.g. "PNG 1200×1600, 271KB". */

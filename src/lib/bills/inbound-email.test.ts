@@ -82,7 +82,15 @@ describe("a bill created from an email", () => {
       subject: "Invoice 8842",
       text: null,
       messageId: "<m1@homedepot.com>",
-      attachments: [{ fileName: "receipt.pdf", contentType: "application/pdf", bytes: Buffer.from("%PDF-") }],
+      attachments: [
+        {
+          fileName: "receipt.pdf",
+          contentType: "application/pdf",
+          // A complete-enough PDF: the pre-flight now rejects files that stop
+          // before their end marker, which is what a half-delivered upload is.
+          bytes: Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"),
+        },
+      ],
     });
 
     expect(result.billsCreated).toBe(1);
