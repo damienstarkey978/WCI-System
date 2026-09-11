@@ -160,9 +160,23 @@ export async function ingestInboundEmail(message: InboundMessage): Promise<Inges
   // than once. Recognise it rather than creating a second set of bills.
   const existing = await db.inboundEmail.findUnique({
     where: { messageId: message.messageId },
-    select: { id: true, status: true, note: true, _count: { select: { bills: true } } },
+    select: {
+      id: true,
+      status: true,
+      note: true,
+      processedAt: true,
+      bills: { select: { title: true } },
+      _count: { select: { bills: true } },
+    },
   });
-  if (existing) {
+
+  // Only a message seen through to an outcome counts as a duplicate. Reading several
+  // attachments can take longer than the request that started it, and if that first
+  // attempt died part-way — a timeout, a redeploy, a crash — the row is already here
+  // with processedAt still null. Calling the retry a duplicate then would file the
+  // email as handled and silently drop every bill in it, which is the worst outcome
+  // available for mail nobody is watching. So an unfinished attempt is resumed.
+  if (existing?.processedAt) {
     return {
       inboundEmailId: existing.id,
       status: existing.status as IngestResult["status"],
@@ -174,7 +188,7 @@ export async function ingestInboundEmail(message: InboundMessage): Promise<Inges
 
   const routing = await routeInboundAddress(message.to);
 
-  const record = await db.inboundEmail.create({
+  const record = existing ?? await db.inboundEmail.create({
     data: {
       organizationId: routing.organizationId,
       jobId: routing.jobId,
@@ -216,10 +230,22 @@ export async function ingestInboundEmail(message: InboundMessage): Promise<Inges
     return { inboundEmailId: record.id, status: "FAILED", billsCreated: 0, duplicate: false, note };
   }
 
-  const notes: string[] = routing.note ? [routing.note] : [];
-  let created = 0;
+  // On a resumed attempt the note already carries the routing note and whatever the
+  // first pass managed to say about each attachment, so it is kept rather than
+  // rewritten — the point of resuming is not to lose what was already learned.
+  const notes: string[] = existing?.note ? [existing.note] : routing.note ? [routing.note] : [];
+
+  // A bill is titled with the attachment it came from, which is what makes a resumed
+  // attempt able to tell what it already did. Without this a retry would read every
+  // attachment again and file a second copy of each bill the first pass created.
+  const alreadyBilled = new Set(
+    (existing?.bills ?? []).map((bill) => bill.title).filter((title): title is string => Boolean(title)),
+  );
+  let created = existing?._count.bills ?? 0;
 
   for (const attachment of message.attachments) {
+    if (alreadyBilled.has(attachment.fileName)) continue;
+
     const mediaType = ACCEPTED[attachment.contentType.toLowerCase().split(";")[0].trim()];
     if (!mediaType) {
       notes.push(`Skipped ${attachment.fileName}: ${attachment.contentType || "unknown type"} can't be read.`);

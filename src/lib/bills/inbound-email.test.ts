@@ -108,3 +108,81 @@ describe("a bill created from an email", () => {
     expect(data.sourceEmailMessageId).toBe("<m1@homedepot.com>");
   });
 });
+
+// --- Retries of a message that was already delivered once -------------------
+// SendGrid retries anything that isn't a 2xx, and reading several attachments can
+// outlive the request that started it. What separates a genuine duplicate from a
+// half-finished first attempt is processedAt, and getting that wrong loses mail.
+
+const pdf = () => ({
+  fileName: "receipt.pdf",
+  contentType: "application/pdf",
+  bytes: Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"),
+});
+
+describe("a message that arrives twice", () => {
+  it("is a duplicate only once the first delivery reached an outcome", async () => {
+    const { db } = await import("@/lib/db");
+    const { ingestInboundEmail } = await import("@/lib/bills/inbound-email");
+    const { createBillFromOcr } = await import("@/lib/ai/bill-ocr-service");
+
+    vi.mocked(db.inboundEmail.findUnique).mockResolvedValueOnce({
+      id: "email_1",
+      status: "ROUTED",
+      note: null,
+      processedAt: new Date(),
+      bills: [{ title: "receipt.pdf" }],
+      _count: { bills: 1 },
+    } as never);
+    vi.mocked(createBillFromOcr).mockClear();
+
+    const result = await ingestInboundEmail({
+      to: "bills-org-a@inbox.example.com",
+      from: "ap@homedepot.com",
+      subject: "Invoice 8842",
+      text: null,
+      messageId: "<m1@homedepot.com>",
+      attachments: [pdf()],
+    });
+
+    expect(result.duplicate).toBe(true);
+    expect(result.billsCreated).toBe(1);
+    expect(createBillFromOcr).not.toHaveBeenCalled();
+  });
+
+  it("resumes an attempt that died part-way instead of dropping its bills", async () => {
+    const { db } = await import("@/lib/db");
+    const { ingestInboundEmail } = await import("@/lib/bills/inbound-email");
+    const { createBillFromOcr } = await import("@/lib/ai/bill-ocr-service");
+
+    // The first pass read one of two attachments and never came back: the row is
+    // here, processedAt is still null. Calling this a duplicate would file the
+    // email as handled and lose the second bill entirely.
+    vi.mocked(db.inboundEmail.findUnique).mockResolvedValueOnce({
+      id: "email_1",
+      status: "UNROUTED",
+      note: null,
+      processedAt: null,
+      bills: [{ title: "first.pdf" }],
+      _count: { bills: 1 },
+    } as never);
+    vi.mocked(createBillFromOcr).mockClear();
+    vi.mocked(db.inboundEmail.create).mockClear();
+
+    const result = await ingestInboundEmail({
+      to: "bills-org-a@inbox.example.com",
+      from: "ap@homedepot.com",
+      subject: "Invoice 8842",
+      text: null,
+      messageId: "<m1@homedepot.com>",
+      attachments: [{ ...pdf(), fileName: "first.pdf" }, { ...pdf(), fileName: "second.pdf" }],
+    });
+
+    expect(result.duplicate).toBe(false);
+    // No second row for the same message, and the attachment already read is not
+    // read again — one bill carried over, one newly created.
+    expect(db.inboundEmail.create).not.toHaveBeenCalled();
+    expect(createBillFromOcr).toHaveBeenCalledTimes(1);
+    expect(result.billsCreated).toBe(2);
+  });
+});
