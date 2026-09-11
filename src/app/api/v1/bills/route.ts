@@ -6,7 +6,7 @@
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { createBillSchema, formatZodIssues } from "@/lib/api-schemas";
+import { createBillSchema, formatZodIssues, listBillsQuerySchema } from "@/lib/api-schemas";
 import {
   createBill,
   JobNotFoundError,
@@ -19,22 +19,33 @@ import {
 import { db } from "@/lib/db";
 
 export const GET = withApiAuth(["bills:read"], async (request, auth) => {
-  const params = new URL(request.url).searchParams;
-  const jobId = params.get("jobId");
-  const approvalStatus = params.get("approvalStatus");
+  const url = new URL(request.url);
+  const parsed = listBillsQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+  if (!parsed.success) {
+    return apiError(400, "invalid_query", "Invalid query parameters.", formatZodIssues(parsed.error));
+  }
+  const { jobId, approvalStatus, limit, cursor } = parsed.data;
 
   const bills = await db.bill.findMany({
     where: {
       organizationId: auth.organizationId,
       ...(jobId ? { jobId } : {}),
-      ...(approvalStatus ? { approvalStatus: approvalStatus as never } : {}),
+      ...(approvalStatus ? { approvalStatus } : {}),
     },
     orderBy: { createdAt: "desc" },
-    take: 100,
+    // One more than asked for, so hasMore is known without a second count query.
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
 
-  return Response.json({ data: bills });
+  const hasMore = bills.length > limit;
+  const page = hasMore ? bills.slice(0, limit) : bills;
+
+  return Response.json({
+    data: page,
+    pagination: { nextCursor: hasMore ? page[page.length - 1].id : null, hasMore },
+  });
 });
 
 export const POST = withApiAuth(["bills:write"], async (request, auth) => {

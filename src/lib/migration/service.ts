@@ -412,7 +412,12 @@ export async function importInvoice(input: ImportInvoiceInput) {
     : input.amountCents!;
 
   const paymentsTotalCents = (input.payments ?? []).reduce((total, payment) => total + payment.amountCents, 0);
-  if (paymentsTotalCents > amountCents) {
+  // The overpayment guard has to follow the invoice's sign. A negative invoice is a
+  // refund or credit — money flowing back to the client — and against one of those a
+  // plain `paymentsTotal > amountCents` is true even with no payments at all
+  // (0 > -5000), so every refund in a historical import was rejected as overpaid.
+  const overpaid = amountCents >= 0 ? paymentsTotalCents > amountCents : paymentsTotalCents < amountCents;
+  if (overpaid) {
     throw new OverpaidInvoiceError(amountCents, paymentsTotalCents);
   }
 

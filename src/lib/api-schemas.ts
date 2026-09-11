@@ -57,6 +57,33 @@ export const listJobsQuerySchema = z.object({
   cursor: z.string().min(1).max(64).optional(),
 });
 
+/**
+ * Paging for the financial list endpoints. Same shape as listJobsQuerySchema on
+ * purpose: those three hardcoded `take: 100` and ignored ?limit= entirely, so a
+ * migration reading back what it had written silently saw only the first hundred
+ * rows with nothing in the response to say more existed.
+ */
+const financialListPaging = {
+  jobId: z.string().min(1).max(64).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  cursor: z.string().min(1).max(64).optional(),
+};
+
+export const listPurchaseOrdersQuerySchema = z.object({
+  ...financialListPaging,
+  status: z.enum(PurchaseOrderStatus).optional(),
+});
+
+export const listBillsQuerySchema = z.object({
+  ...financialListPaging,
+  approvalStatus: z.enum(BillApprovalStatus).optional(),
+});
+
+export const listInvoicesQuerySchema = z.object({
+  ...financialListPaging,
+  status: z.enum(InvoiceStatus).optional(),
+});
+
 export const transitionJobStatusSchema = z.object({
   status: z.enum(JobStatus),
   reason: z.string().trim().max(500).optional(),

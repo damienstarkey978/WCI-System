@@ -3,7 +3,7 @@
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { createPurchaseOrderSchema, formatZodIssues } from "@/lib/api-schemas";
+import { createPurchaseOrderSchema, formatZodIssues, listPurchaseOrdersQuerySchema } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
 import {
   createPurchaseOrder,
@@ -15,22 +15,33 @@ import {
 } from "@/lib/purchase-orders/service";
 
 export const GET = withApiAuth(["purchase-orders:read"], async (request, auth) => {
-  const params = new URL(request.url).searchParams;
-  const jobId = params.get("jobId");
-  const status = params.get("status");
+  const url = new URL(request.url);
+  const parsed = listPurchaseOrdersQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+  if (!parsed.success) {
+    return apiError(400, "invalid_query", "Invalid query parameters.", formatZodIssues(parsed.error));
+  }
+  const { jobId, status, limit, cursor } = parsed.data;
 
   const purchaseOrders = await db.purchaseOrder.findMany({
     where: {
       organizationId: auth.organizationId,
       ...(jobId ? { jobId } : {}),
-      ...(status ? { status: status as never } : {}),
+      ...(status ? { status } : {}),
     },
     orderBy: { createdAt: "desc" },
-    take: 100,
+    // One more than asked for, so hasMore is known without a second count query.
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
 
-  return Response.json({ data: purchaseOrders });
+  const hasMore = purchaseOrders.length > limit;
+  const page = hasMore ? purchaseOrders.slice(0, limit) : purchaseOrders;
+
+  return Response.json({
+    data: page,
+    pagination: { nextCursor: hasMore ? page[page.length - 1].id : null, hasMore },
+  });
 });
 
 export const POST = withApiAuth(["purchase-orders:write"], async (request, auth) => {
