@@ -1,6 +1,6 @@
 # WCI OS — handoff for Cowork (2026-09-11)
 
-Deployed: `main@e33a0ea`. Netlify builds and migrates on push, so this is live once
+Deployed: `main@00ae32d`. Netlify builds and migrates on push, so this is live once
 the build goes green. Two things in here: the narrowed inbound-email test, and a
 decision on the 3 remaining MIGTEST records.
 
@@ -34,11 +34,46 @@ Single encoding, no `data:` prefix, correct `media_type`, and the base64 decodes
 to a byte-identical PNG. So transport, encoding and packaging are all clear. Three
 theories are now dead: oversized image, corrupted transport, malformed request.
 
-What is still untested is the one thing that request has which a plain vision call
-does not: `output_config` — the schema-constrained output. That is the next thing to
-isolate, and it needs a real API key, which only production has.
 
-### Run this
+### And my own last hypothesis is dead too — I killed it before sending this
+
+The remaining suspect was the one thing that request has which a plain vision call
+does not: `output_config`, the schema-constrained output. It is not that either, and
+the proof was already in the codebase.
+
+`src/lib/ai/estimate-assistant.ts` — AI proposal drafting from Pre-Sale Photos —
+sends `type: "image"` blocks through the *same* `client.parse` call, on the same
+model, with the same `output_config: { format: zodOutputFormat(...) }`, accepting the
+same four media types. The only differences from bill OCR are `max_tokens`, the
+system prompt, and which schema. That feature works. So images and schema-constrained
+output are fine together.
+
+What is left is one of two things, and a single API call tells them apart.
+
+### Run this first — 30 seconds, uses the API key you already have
+
+`POST /api/v1/bills/ai-ocr` reaches bill OCR by exactly the same code path as the
+email webhook (both go through `createBillFromOcr`), but skips the webhook entirely.
+Same file, same extraction, different way in.
+
+```bash
+python3 -c "import base64,json;print(json.dumps({'jobId':'<any open job id>','document':{'mediaType':'image/png','data':base64.b64encode(open('test-receipt-small.png','rb').read()).decode()}}))" \
+  > /tmp/ai-ocr.json
+curl -sS -X POST https://app.worldconstructionjax.com/api/v1/bills/ai-ocr \
+  -H "Authorization: Bearer $WCI_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data-binary @/tmp/ai-ocr.json | python3 -m json.tool
+```
+
+- **It creates a bill** → the OCR call, the schema and the model are all fine with
+  that exact file. The bug is then in what the webhook does to the attachment bytes
+  before they get there, and the sha256 now recorded in every failure note will show
+  it: compare it against `shasum -a 256 test-receipt-small.png` on your machine. If
+  they differ, the bytes are being mangled in the webhook, which is the whole answer.
+- **It fails with the same `Could not process image`** → the webhook is exonerated
+  and it is the file or the call. Run the step-by-step route below.
+
+### Then this, only if the call above also failed
 
 New route, admin-only, same Clerk session auth as `/api/staff/files/batch-import`
 which you already use:
@@ -52,17 +87,6 @@ Content-Type: application/json
   "dataBase64": "<the file, base64, no data: prefix>" }
 ```
 
-As a one-liner from wherever you have the file and a session cookie:
-
-```bash
-python3 -c "import base64,json,sys;print(json.dumps({'fileName':'test-receipt-small.png','mimeType':'image/png','dataBase64':base64.b64encode(open('test-receipt-small.png','rb').read()).decode()}))" \
-  > /tmp/ocr-diagnose.json
-curl -sS -X POST https://app.worldconstructionjax.com/api/staff/bills/ocr-diagnose \
-  -H 'Content-Type: application/json' \
-  -b "<your session cookie>" \
-  --data-binary @/tmp/ocr-diagnose.json | python3 -m json.tool
-```
-
 It runs six steps against that one image and reports each **independently** — it does
 not stop at the first failure:
 
@@ -70,20 +94,11 @@ not stop at the first failure:
 2. bytes identify as a readable format (with a sha256 of the exact bytes)
 3. file structure is complete and undamaged
 4. passes the pre-flight the inbound-email path applies
-5. **plain vision call** — same image, trivial question, no output schema
-6. **bill OCR call** — same image, real schema-constrained request
+5. plain vision call — same image, trivial question, no output schema
+6. bill OCR call — same image, real schema-constrained request
 
-Steps 5 and 6 are the point. They are identical but for the output format:
-
-- **5 fails too** → the API genuinely will not take that image, and step 2's sha256
-  tells us whether the bytes that reached the server are the bytes you sent.
-- **5 succeeds, 6 fails** → the image was never the problem; it is the structured
-  output, and I fix it in `src/lib/ai/bill-ocr-assistant.ts`.
-- **both succeed** → the failure is somewhere in the inbound path before the call,
-  and steps 1–4 will say where.
-
-Please paste the whole JSON response back, including the `request_id` values — those
-are the only handle Anthropic can look up a specific refusal by.
+Please paste the whole response back, including any `request_id` values — those are
+the only handle Anthropic can look a specific refusal up by.
 
 ### Also shipped, whatever the answer turns out to be
 
