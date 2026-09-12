@@ -38,6 +38,7 @@ import {
   NoCostCodesError as AiDraftNoCostCodesError,
 } from "@/lib/ai/service";
 import type { JarvisImageInput, JarvisTool } from "@/lib/jarvis/assistant";
+import { estimateTotalCents } from "@/lib/budget/funnel";
 import { createBidPackage, lockBidSubmission } from "@/lib/bids/service";
 import { createBill } from "@/lib/bills/service";
 import { createChangeOrder } from "@/lib/change-orders/service";
@@ -46,6 +47,34 @@ import { createVendor } from "@/lib/vendor-portal/service";
 import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/service";
 import { draftLeadProposalFromNotes } from "@/lib/crm/lead-proposal";
 import { db } from "@/lib/db";
+import {
+  addProposalDraw,
+  addProposalOption,
+  addProposalSection,
+  addProposalSectionBullet,
+  declineProposal,
+  deleteProposalDraw,
+  deleteProposalSection,
+  deleteProposalSectionBullet,
+  EstimateJobMismatchError,
+  EstimateNotFoundError,
+  LastOptionError,
+  ProposalDrawNotFoundError,
+  ProposalDrawOverallocatedError,
+  ProposalNotEditableError,
+  ProposalNotFoundError,
+  ProposalNotPendingError,
+  ProposalOptionNotFoundError,
+  ProposalSectionBulletNotFoundError,
+  ProposalSectionNotFoundError,
+  removeProposalOption,
+  TooManyOptionsError,
+  updateProposalBranding,
+  updateProposalCoverMessage,
+  updateProposalOptionLabel,
+  updateProposalSectionBullet,
+  updateProposalSectionTitle,
+} from "@/lib/proposals/service";
 import { createDailyLog } from "@/lib/daily-logs/service";
 import { resolveFileUrlSafe } from "@/lib/files/service";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
@@ -114,6 +143,28 @@ async function getOrCreateSchedule(organizationId: string, jobId: string) {
   const existing = await db.schedule.findFirst({ where: { jobId }, select: { id: true } });
   if (existing) return existing;
   return createSchedule({ organizationId, jobId });
+}
+
+/** Every proposal-editing tool below hits the same handful of "can't do that" cases
+ *  (not found, not a DRAFT anymore, etc.) — collected here so each tool's catch block
+ *  is one line instead of repeating the same nine instanceof checks. */
+function proposalEditErrorMessage(error: unknown): string | null {
+  if (
+    error instanceof ProposalNotFoundError ||
+    error instanceof ProposalNotEditableError ||
+    error instanceof ProposalSectionNotFoundError ||
+    error instanceof ProposalSectionBulletNotFoundError ||
+    error instanceof ProposalOptionNotFoundError ||
+    error instanceof ProposalDrawNotFoundError ||
+    error instanceof ProposalDrawOverallocatedError ||
+    error instanceof EstimateNotFoundError ||
+    error instanceof EstimateJobMismatchError ||
+    error instanceof LastOptionError ||
+    error instanceof TooManyOptionsError
+  ) {
+    return error.message;
+  }
+  return null;
 }
 
 export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
@@ -290,7 +341,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
           notes: input.notes,
           images: ctx.images,
         });
-        return `Drafted estimate "${result.title}" with ${result.lineItemCount} line item${result.lineItemCount === 1 ? "" : "s"} — status DRAFT, view it in the job's Estimates tab. A human needs to review it before it's sent to Budget.`;
+        return `Drafted estimate "${result.title}" (id: ${result.estimateId}) with ${result.lineItemCount} line item${result.lineItemCount === 1 ? "" : "s"} — status DRAFT, view it in the job's Estimates tab. A human needs to review it before it's sent to Budget. Pass this id to add_proposal_option to offer it as a priced option on a job-based proposal.`;
       } catch (error) {
         if (error instanceof AiNotConfiguredError) return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
         if (error instanceof AiDraftJobNotFoundError) return `No job found with id ${input.jobId} in this organization.`;
@@ -957,6 +1008,369 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         clientPhone: input.clientPhone ?? null,
       });
       return `Drafted proposal "${proposal.title}" for the lead — status DRAFT, view it at /leads/proposals/${proposal.id}. A human needs to review and send it.`;
+    },
+  });
+
+  // --- AUTO: Proposals (read + draft editing) ---------------------------------------
+
+  const listProposalsTool = betaZodTool({
+    name: "list_proposals",
+    description:
+      "List this organization's proposals, optionally filtered by lead, job, or status. Needed before reading or editing a specific proposal.",
+    inputSchema: z.object({
+      leadId: z.string().optional().describe("Filter to proposals for this lead, from list_leads"),
+      jobId: z.string().optional().describe("Filter to proposals for this job, from list_jobs"),
+      status: z.enum(["DRAFT", "SENT", "ACCEPTED", "DECLINED"]).optional(),
+    }),
+    run: async (input) => {
+      const proposals = await db.proposal.findMany({
+        where: {
+          organizationId: ctx.organizationId,
+          ...(input.leadId ? { leadId: input.leadId } : {}),
+          ...(input.jobId ? { jobId: input.jobId } : {}),
+          ...(input.status ? { status: input.status as ProposalStatus } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, title: true, status: true, sentAt: true, createdAt: true, client: { select: { name: true } } },
+      });
+      if (proposals.length === 0) return "No proposals match that filter.";
+      return proposals
+        .map(
+          (proposal) =>
+            `${proposal.id} | ${proposal.title} | ${proposal.status} | ${proposal.client.name} | ${
+              proposal.sentAt ? `sent ${formatDate(proposal.sentAt)}` : `drafted ${formatDate(proposal.createdAt)}`
+            }`,
+        )
+        .join("\n");
+    },
+  });
+
+  const getProposalTool = betaZodTool({
+    name: "get_proposal",
+    description:
+      "Get full detail on one proposal: its priced options, narrative sections, payment schedule, and status history. Pass the id from list_proposals.",
+    inputSchema: z.object({ proposalId: z.string().describe("The proposal's id, from list_proposals") }),
+    run: async (input) => {
+      const proposal = await db.proposal.findFirst({
+        where: { id: input.proposalId, organizationId: ctx.organizationId },
+        include: {
+          client: { select: { name: true, email: true } },
+          job: { select: { id: true, name: true } },
+          lead: { select: { id: true, name: true } },
+          options: { orderBy: { sortOrder: "asc" }, include: { estimate: { include: { lineItems: true } } } },
+          sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
+          draws: { orderBy: { sortOrder: "asc" } },
+        },
+      });
+      if (!proposal) return `No proposal found with id ${input.proposalId} in this organization.`;
+
+      const lines: string[] = [];
+      lines.push(`"${proposal.title}" — status ${proposal.status}, client ${proposal.client.name} (${proposal.client.email})`);
+      lines.push(
+        proposal.job
+          ? `Job: ${proposal.job.name} (${proposal.job.id})`
+          : proposal.lead
+            ? `Lead: ${proposal.lead.name} (${proposal.lead.id}), not yet a job`
+            : "No job or lead linked.",
+      );
+      if (proposal.sentAt) lines.push(`Sent ${formatDate(proposal.sentAt)}.`);
+      if (proposal.clientSignedAt) lines.push(`Signed by ${proposal.clientSignatureName} on ${formatDate(proposal.clientSignedAt)}.`);
+      if (proposal.declinedAt) lines.push(`Declined ${formatDate(proposal.declinedAt)}.`);
+      if (proposal.clientFeedback) lines.push(`Client feedback: "${proposal.clientFeedback}"`);
+      if (proposal.coverMessage) lines.push(`Cover message: ${proposal.coverMessage}`);
+
+      lines.push("", "Options:");
+      for (const option of proposal.options) {
+        const total = estimateTotalCents(option.estimate.lineItems);
+        const selected = proposal.selectedOptionId === option.id ? " (selected)" : "";
+        lines.push(`  ${option.id} | ${option.label} | ${formatMoney(total)}${selected} | estimate ${option.estimateId}`);
+      }
+
+      if (proposal.sections.length > 0) {
+        lines.push("", "Sections:");
+        for (const section of proposal.sections) {
+          lines.push(`  ${section.id} | ${section.title}`);
+          for (const bullet of section.bullets) lines.push(`    ${bullet.id} | ${bullet.text}`);
+        }
+      }
+
+      if (proposal.draws.length > 0) {
+        lines.push("", "Payment schedule:");
+        for (const draw of proposal.draws) {
+          lines.push(`  ${draw.id} | ${draw.title} | ${(draw.pctOfContractBasisPoints / 100).toFixed(2)}%`);
+        }
+      }
+
+      return lines.join("\n");
+    },
+  });
+
+  const updateProposalCoverMessageTool = betaZodTool({
+    name: "update_proposal_cover_message",
+    description: "Change the cover message on a DRAFT proposal — the note shown above the pricing when the client opens it. Pass the id from list_proposals.",
+    inputSchema: z.object({ proposalId: z.string().describe("The proposal's id, from list_proposals"), coverMessage: z.string() }),
+    run: async (input) => {
+      try {
+        await updateProposalCoverMessage(ctx.organizationId, input.proposalId, input.coverMessage);
+        return "Updated the proposal's cover message.";
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const addProposalSectionTool = betaZodTool({
+    name: "add_proposal_section",
+    description: "Add a new narrative section (e.g. \"Scope of work\", \"What's included\") to a DRAFT proposal. Pass the id from list_proposals.",
+    inputSchema: z.object({ proposalId: z.string().describe("The proposal's id, from list_proposals"), title: z.string() }),
+    run: async (input) => {
+      try {
+        const section = await addProposalSection(ctx.organizationId, input.proposalId, input.title);
+        return `Added section "${section.title}" (id: ${section.id}).`;
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const updateProposalSectionTitleTool = betaZodTool({
+    name: "update_proposal_section_title",
+    description: "Rename a section on a DRAFT proposal. Pass the section id from get_proposal.",
+    inputSchema: z.object({ sectionId: z.string().describe("The section's id, from get_proposal"), title: z.string() }),
+    run: async (input) => {
+      try {
+        await updateProposalSectionTitle(ctx.organizationId, input.sectionId, input.title);
+        return `Renamed the section to "${input.title}".`;
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const deleteProposalSectionTool = betaZodTool({
+    name: "delete_proposal_section",
+    description: "Remove a section (and its bullets) from a DRAFT proposal. Pass the section id from get_proposal.",
+    inputSchema: z.object({ sectionId: z.string().describe("The section's id, from get_proposal") }),
+    run: async (input) => {
+      try {
+        await deleteProposalSection(ctx.organizationId, input.sectionId);
+        return "Removed the section.";
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const addProposalSectionBulletTool = betaZodTool({
+    name: "add_proposal_section_bullet",
+    description: "Add a bullet point to a section on a DRAFT proposal. Pass the section id from get_proposal.",
+    inputSchema: z.object({ sectionId: z.string().describe("The section's id, from get_proposal"), text: z.string() }),
+    run: async (input) => {
+      try {
+        const bullet = await addProposalSectionBullet(ctx.organizationId, input.sectionId, input.text);
+        return `Added bullet "${bullet.text}" (id: ${bullet.id}).`;
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const updateProposalSectionBulletTool = betaZodTool({
+    name: "update_proposal_section_bullet",
+    description: "Edit the text of one bullet on a DRAFT proposal. Pass the bullet id from get_proposal.",
+    inputSchema: z.object({ bulletId: z.string().describe("The bullet's id, from get_proposal"), text: z.string() }),
+    run: async (input) => {
+      try {
+        await updateProposalSectionBullet(ctx.organizationId, input.bulletId, input.text);
+        return "Updated the bullet.";
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const deleteProposalSectionBulletTool = betaZodTool({
+    name: "delete_proposal_section_bullet",
+    description: "Remove one bullet from a DRAFT proposal. Pass the bullet id from get_proposal.",
+    inputSchema: z.object({ bulletId: z.string().describe("The bullet's id, from get_proposal") }),
+    run: async (input) => {
+      try {
+        await deleteProposalSectionBullet(ctx.organizationId, input.bulletId);
+        return "Removed the bullet.";
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const addProposalOptionTool = betaZodTool({
+    name: "add_proposal_option",
+    description:
+      "Offer another priced option (Good/Better/Best) on a DRAFT proposal, up to 5 total — using an estimate already drafted for the same job (from draft_estimate_with_ai). Only works on a proposal already tied to a real job; a lead-only proposal's estimate comes from draft_lead_proposal instead. Pass the proposal id from list_proposals and the estimate id from draft_estimate_with_ai.",
+    inputSchema: z.object({
+      proposalId: z.string().describe("The proposal's id, from list_proposals"),
+      estimateId: z.string().describe("The estimate's id, from draft_estimate_with_ai — must belong to the same job as the proposal"),
+      label: z.string().describe("e.g. \"Good\", \"Better\", \"Best\", or a descriptive name"),
+    }),
+    run: async (input) => {
+      try {
+        const option = await addProposalOption(ctx.organizationId, input.proposalId, { estimateId: input.estimateId, label: input.label });
+        return `Added option "${option.label}" (id: ${option.id}) to the proposal.`;
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const updateProposalOptionLabelTool = betaZodTool({
+    name: "update_proposal_option_label",
+    description: "Rename an option on a DRAFT proposal (e.g. \"Option A\" -> \"Good\"). Pass the option id from get_proposal.",
+    inputSchema: z.object({ optionId: z.string().describe("The option's id, from get_proposal"), label: z.string() }),
+    run: async (input) => {
+      try {
+        await updateProposalOptionLabel(ctx.organizationId, input.optionId, input.label);
+        return `Renamed the option to "${input.label}".`;
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const removeProposalOptionTool = betaZodTool({
+    name: "remove_proposal_option",
+    description: "Remove an option from a DRAFT proposal — refuses to leave zero options. Pass the option id from get_proposal.",
+    inputSchema: z.object({ optionId: z.string().describe("The option's id, from get_proposal") }),
+    run: async (input) => {
+      try {
+        await removeProposalOption(ctx.organizationId, input.optionId);
+        return "Removed the option.";
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const updateProposalBrandingTool = betaZodTool({
+    name: "update_proposal_branding",
+    description: "Set the accent color and/or logo shown on a DRAFT proposal's client-facing review page. Pass the id from list_proposals.",
+    inputSchema: z.object({
+      proposalId: z.string().describe("The proposal's id, from list_proposals"),
+      accentColor: z.string().optional().describe("A hex color, e.g. #1E3A8A"),
+      logoUrl: z.string().optional(),
+    }),
+    run: async (input) => {
+      try {
+        await updateProposalBranding(ctx.organizationId, input.proposalId, { accentColor: input.accentColor, logoUrl: input.logoUrl });
+        return "Updated the proposal's branding.";
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const addProposalDrawTool = betaZodTool({
+    name: "add_proposal_draw",
+    description:
+      "Add a payment-schedule milestone (e.g. \"Deposit\", \"Rough-in complete\") to a DRAFT proposal, as a percent of whatever the contract ends up costing. The total across all milestones can't exceed 100%. On acceptance this becomes the job's real Draw Schedule. Pass the proposal id from list_proposals.",
+    inputSchema: z.object({
+      proposalId: z.string().describe("The proposal's id, from list_proposals"),
+      title: z.string().describe("e.g. Deposit, Rough-in complete, Final"),
+      percentOfContract: z.number().positive().max(100).describe("e.g. 10 for 10%"),
+    }),
+    run: async (input) => {
+      try {
+        const draw = await addProposalDraw(ctx.organizationId, input.proposalId, {
+          title: input.title,
+          pctOfContractBasisPoints: Math.round(input.percentOfContract * 100),
+        });
+        return `Added milestone "${draw.title}" (${(draw.pctOfContractBasisPoints / 100).toFixed(2)}%, id: ${draw.id}).`;
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const deleteProposalDrawTool = betaZodTool({
+    name: "delete_proposal_draw",
+    description: "Remove a payment-schedule milestone from a DRAFT proposal. Pass the milestone id from get_proposal.",
+    inputSchema: z.object({ drawId: z.string().describe("The milestone's id, from get_proposal") }),
+    run: async (input) => {
+      try {
+        await deleteProposalDraw(ctx.organizationId, input.drawId);
+        return "Removed the milestone.";
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
+
+  const declineProposalTool = betaZodTool({
+    name: "decline_proposal",
+    description:
+      "Record that a SENT proposal was declined — e.g. the client said no over the phone. This just records the outcome; it doesn't notify anyone (WCI OS has no outbound email). Pass the id from list_proposals.",
+    inputSchema: z.object({ proposalId: z.string().describe("The proposal's id, from list_proposals") }),
+    run: async (input) => {
+      try {
+        const proposal = await declineProposal(ctx.organizationId, input.proposalId);
+        return `Marked "${proposal.title}" as declined.`;
+      } catch (error) {
+        if (error instanceof ProposalNotFoundError || error instanceof ProposalNotPendingError) return error.message;
+        throw error;
+      }
+    },
+  });
+
+  const acceptProposalTool = betaZodTool({
+    name: "accept_proposal",
+    description:
+      "Queue accepting a SENT proposal on the client's behalf — e.g. they signed a paper copy or agreed verbally. This e-signs the proposal, opens (or converts the lead to) a real Job, sends the winning option's estimate to Budget, and copies its payment schedule onto the job — real money and contract consequences, so it does NOT execute immediately; it queues for the user's explicit confirmation. Pass the proposal id from list_proposals, and an optionId (from get_proposal) if the proposal has more than one option.",
+    inputSchema: z.object({
+      proposalId: z.string().describe("The proposal's id, from list_proposals"),
+      optionId: z.string().optional().describe("Which option is winning — required if the proposal has more than one, from get_proposal"),
+    }),
+    run: async (input) => {
+      const proposal = await db.proposal.findFirst({
+        where: { id: input.proposalId, organizationId: ctx.organizationId },
+        select: { id: true, title: true, status: true },
+      });
+      if (!proposal) return `No proposal found with id ${input.proposalId} in this organization.`;
+      if (proposal.status !== ProposalStatus.SENT) {
+        return `Proposal "${proposal.title}" is ${proposal.status}, not SENT — it can't be accepted from here.`;
+      }
+
+      await createPendingAction({
+        conversationId: ctx.conversationId,
+        toolName: "accept_proposal",
+        input: { proposalId: input.proposalId, optionId: input.optionId },
+        summary: `Accept proposal "${proposal.title}" — opens the job and sends the winning estimate to Budget`,
+      });
+      return `Queued accepting "${proposal.title}" for the user's confirmation. It has NOT been accepted yet — tell the user to confirm it in the chat.`;
     },
   });
 
@@ -1787,6 +2201,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     lockBidSubmissionTool,
     sendInvoiceTool,
     sendProposalTool,
+    acceptProposalTool,
     approveSelectionOptionTool,
     advanceBillStatusTool,
     inviteVendorToBidTool,
@@ -1799,6 +2214,22 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     logLeadActivityTool,
     convertLeadToJobTool,
     draftLeadProposalTool,
+    listProposalsTool,
+    getProposalTool,
+    updateProposalCoverMessageTool,
+    addProposalSectionTool,
+    updateProposalSectionTitleTool,
+    deleteProposalSectionTool,
+    addProposalSectionBulletTool,
+    updateProposalSectionBulletTool,
+    deleteProposalSectionBulletTool,
+    addProposalOptionTool,
+    updateProposalOptionLabelTool,
+    removeProposalOptionTool,
+    updateProposalBrandingTool,
+    addProposalDrawTool,
+    deleteProposalDrawTool,
+    declineProposalTool,
     createJobTool,
     transitionJobStatusTool,
     listStaffTool,

@@ -35,7 +35,15 @@ import { ClientNotFoundError, issuePortalLoginInvite as issueClientPortalInvite 
 import { db } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
 import { InvoiceNotFoundError, InvoiceNotSendableError, sendInvoice } from "@/lib/invoicing/service";
-import { ProposalNotDraftError, ProposalNotFoundError, sendProposal } from "@/lib/proposals/service";
+import {
+  acceptProposal,
+  OptionSelectionRequiredError,
+  ProposalNotDraftError,
+  ProposalNotFoundError,
+  ProposalNotPendingError,
+  ProposalOptionNotFoundError,
+  sendProposal,
+} from "@/lib/proposals/service";
 import {
   approveSelectionOption,
   JobNotOpenError,
@@ -134,6 +142,11 @@ async function executePendingAction(organizationId: string, toolName: string, in
       const proposal = await sendProposal(organizationId, proposalId);
       return `Sent proposal "${proposal.title}" to the client.`;
     }
+    case "accept_proposal": {
+      const { proposalId, optionId } = input as { proposalId: string; optionId?: string };
+      const accepted = await acceptProposal({ organizationId, proposalId, optionId });
+      return `Accepted "${accepted.title}" and opened the job (${accepted.jobId}).`;
+    }
     case "approve_selection_option": {
       const { selectionId, optionId } = input as { selectionId: string; optionId: string };
       await approveSelectionOption({ organizationId, selectionId, optionId });
@@ -222,6 +235,9 @@ export async function confirmPendingAction(organizationId: string, actionId: str
       error instanceof InvoiceNotSendableError ||
       error instanceof ProposalNotFoundError ||
       error instanceof ProposalNotDraftError ||
+      error instanceof ProposalNotPendingError ||
+      error instanceof ProposalOptionNotFoundError ||
+      error instanceof OptionSelectionRequiredError ||
       error instanceof SelectionNotFoundError ||
       error instanceof SelectionOptionNotFoundError ||
       error instanceof SelectionAlreadyDecidedError ||
