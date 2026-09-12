@@ -1,6 +1,6 @@
 /**
  * Read-only. Reports what an org's CostCode catalog actually looks like on
- * production, against the canonical list in prisma/seed.ts.
+ * production, against the canonical list in src/lib/cost-codes/canonical.ts.
  *
  * The complaint: cost-code pickers across the app render `{code.code} — {code.name}`
  * — checked in every one of them, that template is correct everywhere — but in
@@ -17,51 +17,34 @@
  * seeded before that import ran, by seed.ts or by something else.
  *
  * This only reports. See fix-cost-code-codes.mts for the actual repair, which this
- * script's output is what tells you whether you need.
+ * script's output is what tells you whether you need. Same logic is also available
+ * from the app itself at /admin/diagnostics, for whenever a terminal isn't handy.
  */
-import { PrismaPg } from "@prisma/adapter-pg";
+import { db } from "@/lib/db";
+import { diagnoseCostCodes } from "@/lib/cost-codes/diagnostics";
 
-import { PrismaClient } from "../src/generated/prisma/client";
-
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  console.error("DATABASE_URL is not set.");
-  process.exit(1);
-}
-
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
-
-const org = await prisma.organization.findFirst({ select: { id: true, name: true, slug: true } });
+const org = await db.organization.findFirst({ select: { id: true } });
 if (!org) {
   console.error("No organization found.");
   process.exit(1);
 }
-console.log(`Organization: ${org.name} (${org.slug})\n`);
 
-const costCodes = await prisma.costCode.findMany({
-  where: { organizationId: org.id },
-  select: { id: true, code: true, name: true, parentId: true, isActive: true },
-  orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-});
+const report = await diagnoseCostCodes(org.id);
 
-console.log(`Total cost codes: ${costCodes.length}\n`);
-
-const codeEqualsName = costCodes.filter((c) => c.code.trim().toLowerCase() === c.name.trim().toLowerCase());
-const blankCode = costCodes.filter((c) => c.code.trim().length === 0);
-const codesLookCanonical = costCodes.filter((c) => /^[A-Z0-9]+(-[A-Z0-9-]+)*$/.test(c.code) && c.code !== c.name);
-
-console.log(`code === name (case-insensitive):  ${codeEqualsName.length}`);
-console.log(`code is blank:                     ${blankCode.length}`);
-console.log(`code looks like seed.ts's scheme:  ${codesLookCanonical.length}`);
+console.log(`Organization: ${report.organizationName}\n`);
+console.log(`Total cost codes: ${report.totalCount}\n`);
+console.log(`code === name (case-insensitive):  ${report.codeEqualsNameCount}`);
+console.log(`code is blank:                     ${report.blankCodeCount}`);
+console.log(`code looks like the canonical scheme:  ${report.canonicalLookingCount}`);
 
 console.log("\n--- first 20 rows, verbatim ---");
-for (const c of costCodes.slice(0, 20)) {
-  console.log(`  code=${JSON.stringify(c.code)}  name=${JSON.stringify(c.name)}  active=${c.isActive}  parentId=${c.parentId ?? "null"}`);
+for (const c of report.sampleRows) {
+  console.log(`  code=${JSON.stringify(c.code)}  name=${JSON.stringify(c.name)}  active=${c.active}  parentId=${c.parentId ?? "null"}`);
 }
 
-if (codeEqualsName.length > 0) {
-  console.log(`\n--- all ${codeEqualsName.length} row(s) where code === name ---`);
-  for (const c of codeEqualsName) {
+if (report.codeEqualsNameRows.length > 0) {
+  console.log(`\n--- all ${report.codeEqualsNameRows.length} row(s) where code === name ---`);
+  for (const c of report.codeEqualsNameRows) {
     console.log(`  id=${c.id}  code=${JSON.stringify(c.code)}  name=${JSON.stringify(c.name)}`);
   }
 }
@@ -72,4 +55,4 @@ console.log(
     "(so every Estimate/PO/Bill/Budget line already pointing at these rows is unaffected).",
 );
 
-await prisma.$disconnect();
+await db.$disconnect();

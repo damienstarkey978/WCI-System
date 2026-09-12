@@ -21,6 +21,9 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
           <Link className="hover:underline" href="/admin/ai-estimate">
             AI Estimate
           </Link>
+          <Link className="hover:underline" href="/admin/diagnostics">
+            Diagnostics
+          </Link>
         </nav>
       </header>
       <main className="flex flex-1 flex-col gap-6">{children}</main>

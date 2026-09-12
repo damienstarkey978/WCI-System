@@ -4,14 +4,18 @@
  * example.com) — no proposal was created alongside it (Jarvis correctly refused to
  * fabricate scope from a blank test image). Scoped tightly to that exact
  * placeholder email so this can't touch anything else. Run with --dry-run first.
+ *
+ * Same logic (src/lib/admin/test-data-cleanup.ts) also runs from the app itself at
+ * /admin/diagnostics, behind an explicit confirm, for whenever a terminal isn't
+ * handy.
  */
 import { db } from "@/lib/db";
+import { deleteTestRecordsByEmail, findTestRecordsByEmail } from "@/lib/admin/test-data-cleanup";
 
 const TEST_EMAIL = "test-jarvis-photoqa@example.com";
 const dryRun = process.argv.includes("--dry-run");
 
-const leads = await db.lead.findMany({ where: { email: TEST_EMAIL }, select: { id: true, name: true, email: true } });
-const clients = await db.client.findMany({ where: { email: TEST_EMAIL }, select: { id: true, name: true, email: true } });
+const { leads, clients } = await findTestRecordsByEmail(TEST_EMAIL);
 
 if (leads.length === 0 && clients.length === 0) {
   console.log(`Nothing found for ${TEST_EMAIL} — already cleaned up, or it was never created here.`);
@@ -27,7 +31,7 @@ if (dryRun) {
   process.exit(0);
 }
 
-for (const lead of leads) await db.lead.delete({ where: { id: lead.id } });
-for (const client of clients) await db.client.delete({ where: { id: client.id } });
+const { deletedLeads, deletedClients } = await deleteTestRecordsByEmail(TEST_EMAIL);
+console.log(`\nDeleted ${deletedLeads} lead(s) and ${deletedClients} client(s).`);
 
-console.log(`\nDeleted ${leads.length} lead(s) and ${clients.length} client(s).`);
+await db.$disconnect();
