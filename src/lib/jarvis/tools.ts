@@ -42,6 +42,7 @@ import { createBidPackage, lockBidSubmission } from "@/lib/bids/service";
 import { createBill } from "@/lib/bills/service";
 import { createChangeOrder } from "@/lib/change-orders/service";
 import { createClient, grantJobAccess } from "@/lib/client-portal/service";
+import { createVendor } from "@/lib/vendor-portal/service";
 import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/service";
 import { draftLeadProposalFromNotes } from "@/lib/crm/lead-proposal";
 import { db } from "@/lib/db";
@@ -754,6 +755,36 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       });
       if (vendors.length === 0) return "This organization has no vendors yet.";
       return vendors.map((vendor) => `${vendor.id} | ${vendor.name} | ${vendor.tradeType ?? "no trade listed"}`).join("\n");
+    },
+  });
+
+  const createVendorTool = betaZodTool({
+    name: "create_vendor",
+    description:
+      "Create a new vendor/subcontractor record. This does NOT invite them to the vendor portal or notify them — it's just the record. Needed before inviting a vendor to bid or granting them job access.",
+    inputSchema: z.object({
+      name: z.string(),
+      email: z.string().describe("Must be unique within this organization"),
+      tradeType: z.string().optional().describe("e.g. Electrical, Plumbing, Framing"),
+      phone: z.string().optional(),
+      addressLine1: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      postalCode: z.string().optional(),
+    }),
+    run: async (input) => {
+      const vendor = await createVendor({
+        organizationId: ctx.organizationId,
+        name: input.name,
+        email: input.email,
+        tradeType: input.tradeType ?? null,
+        phone: input.phone ?? null,
+        addressLine1: input.addressLine1 ?? null,
+        city: input.city ?? null,
+        state: input.state ?? null,
+        postalCode: input.postalCode ?? null,
+      });
+      return `Created vendor "${vendor.name}" (${vendor.email}).`;
     },
   });
 
@@ -1750,6 +1781,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     createWarrantyClaimTool,
     scheduleWarrantyAppointmentTool,
     listVendors,
+    createVendorTool,
     listBidPackagesForJob,
     createBidPackageTool,
     lockBidSubmissionTool,
