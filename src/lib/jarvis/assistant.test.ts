@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AiNotConfiguredError, JarvisReplyError, runJarvisTurn } from "@/lib/jarvis/assistant";
+import { AiNotConfiguredError, JarvisReplyError, JarvisTurnTimeoutError, runJarvisTurn } from "@/lib/jarvis/assistant";
 
 function fakeRunner(response: unknown) {
   return vi.fn().mockResolvedValue(response);
@@ -63,5 +63,39 @@ describe("runJarvisTurn", () => {
     const runner = fakeRunner({ stop_reason: "end_turn", content: [] });
 
     await expect(runJarvisTurn([{ role: "USER", content: "hi" }], [], runner)).rejects.toBeInstanceOf(JarvisReplyError);
+  });
+
+  describe("the internal deadline", () => {
+    afterEach(() => {
+      delete process.env.JARVIS_TURN_TIMEOUT_MS;
+    });
+
+    it(
+      "throws a JarvisTurnTimeoutError instead of hanging when the tool runner never resolves",
+      async () => {
+        process.env.ANTHROPIC_API_KEY = "test-key";
+        process.env.JARVIS_TURN_TIMEOUT_MS = "50";
+        // Simulates exactly the production symptom: a multi-step tool-calling chain
+        // (or a slow nested call like draft_lead_proposal's own estimate drafting)
+        // that never resolves within the request's lifetime.
+        const neverResolves = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+        const result = runJarvisTurn([{ role: "USER", content: "create a client, a lead, and a proposal" }], [], neverResolves);
+
+        await expect(result).rejects.toBeInstanceOf(JarvisTurnTimeoutError);
+        await expect(result).rejects.toBeInstanceOf(JarvisReplyError);
+      },
+      2_000,
+    );
+
+    it("still returns the real reply when the tool runner finishes well within the deadline", async () => {
+      process.env.ANTHROPIC_API_KEY = "test-key";
+      process.env.JARVIS_TURN_TIMEOUT_MS = "50000";
+      const runner = fakeRunner({ stop_reason: "end_turn", content: [{ type: "text", text: "Done." }] });
+
+      const reply = await runJarvisTurn([{ role: "USER", content: "hi" }], [], runner);
+
+      expect(reply).toBe("Done.");
+    });
   });
 });

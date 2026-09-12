@@ -31,6 +31,56 @@ export class JarvisReplyError extends Error {
   }
 }
 
+/**
+ * A multi-step request (create a client, a lead, AND draft a full proposal from long
+ * notes) can chain several Anthropic round trips — including draft_lead_proposal's own
+ * tool run() making a second, separate, non-streaming call of its own — inside the one
+ * synchronous request/response cycle a Server Action runs in. Left unbounded, that
+ * total wall-clock time can exceed the hosting platform's own function execution
+ * limit; when that happens the platform kills the function outright, our own code
+ * never runs its catch blocks, and the request just hangs with no error at all —
+ * confirmed against production (see the bug report this constant was added for).
+ *
+ * This deadline fires *before* that limit, so runJarvisTurn always gets a chance to
+ * throw a real, catchable JarvisReplyError instead. It must stay comfortably under
+ * whatever the platform's synchronous function timeout actually is — Netlify's is
+ * 10s on Starter and up to 26s on Pro and above — so the safe default here is
+ * deliberately conservative; raise JARVIS_TURN_TIMEOUT_MS only after confirming the
+ * platform's own limit is higher.
+ */
+/** Read at call time, not module load, so a test (or a future runtime env change) can
+ *  override it without needing to re-import the module. */
+function getJarvisTurnTimeoutMs(): number {
+  return Number(process.env.JARVIS_TURN_TIMEOUT_MS) || 22_000;
+}
+
+export class JarvisTurnTimeoutError extends JarvisReplyError {
+  constructor(timeoutMs: number) {
+    super(
+      `Jarvis is taking too long to finish this (over ${Math.round(timeoutMs / 1000)}s). This usually means too much was asked for in one message — ` +
+        `e.g. creating a client, a lead, AND drafting a full proposal all at once. Try breaking it into smaller steps: create the client and lead first, ` +
+        `then ask Jarvis to draft the proposal separately.`,
+    );
+    this.name = "JarvisTurnTimeoutError";
+  }
+}
+
+function withDeadline<T>(promise: PromiseLike<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new JarvisTurnTimeoutError(timeoutMs)), timeoutMs);
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 const SYSTEM_PROMPT = `You are Jarvis, the AI assistant embedded in World Construction Inc's operating
 system (WCI OS) — a Buildertrend-style platform for running residential construction
 jobs: estimates and proposals, budgets, purchase orders and bills, invoicing,
@@ -130,24 +180,30 @@ export async function runJarvisTurn(
 
   let finalMessage: Anthropic.Beta.Messages.BetaMessage;
   try {
-    finalMessage = await runToolTurn({
-      model: "claude-opus-5",
-      max_tokens: 4_096,
-      system,
-      tools: [...tools],
-      messages: messages.map((message, index) => {
-        const role = message.role === "USER" ? ("user" as const) : ("assistant" as const);
-        if (index === lastIndex && role === "user" && images && images.length > 0) {
-          const imageBlocks: Anthropic.Beta.Messages.BetaContentBlockParam[] = images.map((image) => ({
-            type: "image",
-            source: { type: "base64", media_type: image.mediaType, data: image.base64Data },
-          }));
-          return { role, content: [...imageBlocks, { type: "text", text: message.content }] };
-        }
-        return { role, content: message.content };
+    finalMessage = await withDeadline(
+      runToolTurn({
+        model: "claude-opus-5",
+        max_tokens: 4_096,
+        system,
+        tools: [...tools],
+        messages: messages.map((message, index) => {
+          const role = message.role === "USER" ? ("user" as const) : ("assistant" as const);
+          if (index === lastIndex && role === "user" && images && images.length > 0) {
+            const imageBlocks: Anthropic.Beta.Messages.BetaContentBlockParam[] = images.map((image) => ({
+              type: "image",
+              source: { type: "base64", media_type: image.mediaType, data: image.base64Data },
+            }));
+            return { role, content: [...imageBlocks, { type: "text", text: message.content }] };
+          }
+          return { role, content: message.content };
+        }),
       }),
-    });
+      getJarvisTurnTimeoutMs(),
+    );
   } catch (error) {
+    if (error instanceof JarvisTurnTimeoutError) {
+      throw error;
+    }
     if (error instanceof Anthropic.APIError) {
       // The message shown to a person is deliberately generic — "Jarvis couldn't
       // reply: 403 status code (no body)" says nothing anyone can act on. The
