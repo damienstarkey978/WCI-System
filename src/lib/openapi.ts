@@ -76,6 +76,7 @@ import {
   registerFileSchema,
   requestApprovalLinkSchema,
   requestVendorApprovalLinkSchema,
+  runWeeklyReconciliationSchema,
   scheduleWarrantyAppointmentSchema,
   setChecklistItemDoneSchema,
   submitBidSchema,
@@ -366,6 +367,27 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Bills", "AI"],
     scopes: ["bills:write"],
     requestSchema: aiOcrBillSchema,
+    successStatus: 201,
+  },
+
+  // --- Reconciliation (Duke) --------------------------------------------------
+  {
+    method: "get",
+    path: "/reconciliation/weekly",
+    summary: "List recent weekly reconciliation runs",
+    description: "Most recent first. Returns each run's already-computed transaction classifications without recomputing anything.",
+    tags: ["Reconciliation", "Bills", "Purchase Orders"],
+    scopes: ["bills:read", "purchase-orders:read"],
+  },
+  {
+    method: "post",
+    path: "/reconciliation/weekly",
+    summary: "Run Duke's weekly reconciliation now",
+    description:
+      "Pulls the period's QuickBooks Purchase transactions (Amex/Regions activity, via the org's existing QuickBooksConnection — no new QBO connection), then classifies each one as MATCHED (an existing Bill already accounts for it), JOB_SUGGESTED (no Bill yet, but the road-name matcher — the same one behind POST /purchase-orders/match-by-road-name — found a confident job), or UNMATCHED (raises bill.unmatched_transaction, same as Duke's live escalation path). periodStart/periodEnd default to the last 7 days. The same run also fires automatically every Monday via a scheduled job. Returns 503 if QuickBooks is not connected.",
+    tags: ["Reconciliation", "Bills", "Purchase Orders"],
+    scopes: ["bills:read", "purchase-orders:read"],
+    requestSchema: runWeeklyReconciliationSchema,
     successStatus: 201,
   },
 

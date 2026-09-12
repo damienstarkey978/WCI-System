@@ -198,6 +198,17 @@ export const matchByRoadNameSchema = z.object({
   limit: z.number().int().min(1).max(25).optional(),
 });
 
+export const runWeeklyReconciliationSchema = z
+  .object({
+    /** Both optional — default to the last 7 days when omitted. */
+    periodStart: z.coerce.date().optional(),
+    periodEnd: z.coerce.date().optional(),
+  })
+  .refine((value) => !value.periodStart || !value.periodEnd || value.periodStart < value.periodEnd, {
+    message: "periodStart must be before periodEnd.",
+    path: ["periodStart"],
+  });
+
 export const createWebhookSubscriptionSchema = z.object({
   name: z.string().trim().min(1).max(64),
   targetUrl: z.string().url().max(2_000),

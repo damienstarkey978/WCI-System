@@ -26,6 +26,7 @@ describe("event types", () => {
     // load-bearing for their workflows.
     expect(WEBHOOK_EVENT_TYPES).toContain("bill.unmatched_transaction");
     expect(WEBHOOK_EVENT_TYPES).toContain("permit.milestone_reached");
+    expect(WEBHOOK_EVENT_TYPES).toContain("reconciliation.weekly_completed");
   });
 });
 

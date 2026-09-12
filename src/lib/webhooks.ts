@@ -63,6 +63,9 @@ export const WEBHOOK_EVENT_TYPES = [
   "warranty_claim.client_accepted",
   "survey.response_requested",
   "survey.response_submitted",
+  /// Raised once Duke's weekly reconciliation job finishes a run, so Jarvis/Duke can
+  /// react instead of polling GET /api/v1/reconciliation/weekly.
+  "reconciliation.weekly_completed",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];

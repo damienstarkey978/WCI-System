@@ -643,3 +643,63 @@ Record every architectural decision that departs from the above, with the reason
   `<Protect>` was removed the same way (replaced by the same `<Show>`
   component); neither is used anywhere in this codebase, but avoid both in
   new code.
+- **Duke's weekly reconciliation job pulls QBO `Purchase` transactions
+  directly — there is no local "bank transaction" table to query instead:**
+  CLAUDE.md 2.5 lists "QBO Expenses: QBO → WCI OS (into Budget, near-real-
+  time)" as a target sync direction, but nothing implemented it before this
+  change — Amex/Regions activity only exists inside the connected QBO
+  company file, as QBO `Purchase` entities (the one entity QBO uses for
+  both credit-card and bank-account spend). `src/lib/quickbooks/
+  transactions.ts`'s `getWeeklyPurchases()` queries that entity live via
+  the existing `QuickBooksConnection`/`getValidAccessToken()` for a given
+  date window and normalizes it — no new QuickBooks connection, per the
+  task, and no persisted transaction table, since nothing here claims to
+  own that data or push it anywhere; it is read fresh each run.
+- **A QBO transaction is matched to an already-created Bill by vendor name
+  + amount + a ±10-day window, not a direct foreign key:** a card
+  transaction and the Bill Duke later enters for it are two independently
+  created records with no field linking them — reconciliation is
+  inherently a heuristic match, not a lookup. `classifyTransaction()`
+  (`src/lib/reconciliation/weekly-service.ts`) normalizes vendor names
+  (lowercase, alphanumeric-only, substring containment either direction)
+  and requires an exact cents match on amount, closest date wins on a tie.
+  When no Bill matches, it falls back to the same road-name matcher behind
+  `POST /purchase-orders/match-by-road-name`
+  (`src/lib/matching/road-name.ts`) run against the transaction's
+  payee/memo/line-description text, rather than a second copy of that
+  heuristic — a job suggestion never auto-creates a Bill (CLAUDE.md 2.3's
+  "conversions are explicit actions" principle: Duke turns a
+  `JOB_SUGGESTED` transaction into a Bill deliberately, the job matcher
+  never does it for him). Anything left over is `UNMATCHED` and raises
+  `bill.unmatched_transaction` — the same event Duke already raises for a
+  single transaction in real time, just covering everything in the run in
+  one batch.
+- **Added `ReconciliationRun` rather than reusing `QboSyncLog`:**
+  `QboSyncLog` is one row per sync *attempt* on one WCI record being pushed
+  to or pulled from QBO; a reconciliation run isn't syncing anything, it's
+  auditing a whole week's transactions against Bills that may or may not
+  exist yet. A new model keeps that distinction honest and gives the run
+  itself an id events and the list endpoint can reference, at the cost of
+  one more table doing something adjacent to what `QboSyncLog` already
+  does.
+- **The weekly run is both cron-scheduled and on-demand, following the
+  `webhooks/process` precedent instead of introducing a new pattern:**
+  `POST /api/v1/reconciliation/weekly` lets Duke (or Jarvis on his behalf)
+  trigger a run immediately, scoped to `bills:read`+`purchase-orders:read`
+  — scopes his key already carries, so no `AGENT_DEFAULT_SCOPES` change was
+  needed. `/api/v1/cron/weekly-reconciliation` is the scheduled path
+  (`vercel.json`, Mondays), gated by the same shared `CRON_SECRET` as
+  `/api/v1/webhooks/process` rather than a per-org API key, since a
+  scheduler call isn't scoped to one organization; it loops every org with
+  an active `QuickBooksConnection` and records per-org failures without
+  failing the whole batch. Both paths call the same
+  `runWeeklyReconciliation()`, so "run it now" and "the schedule ran it"
+  behave identically.
+- **No live verification against a real QuickBooks company file:** same
+  constraint as AI estimate drafting (Phase 1) and Phase 8's AI features —
+  this sandbox has no `QuickBooksConnection` to a real sandbox/production
+  company file. Verified instead: unit tests for `normalizeQboPurchase()`
+  against fixture QBO `Purchase` JSON, and for `classifyTransaction()`'s
+  MATCHED/JOB_SUGGESTED/UNMATCHED heuristic (including the ambiguous-match
+  and date/amount-tolerance edge cases) against fabricated transactions,
+  bills, and jobs — no database or network call in either test file.
