@@ -149,6 +149,21 @@ export async function runJarvisTurn(
     });
   } catch (error) {
     if (error instanceof Anthropic.APIError) {
+      // The message shown to a person is deliberately generic — "Jarvis couldn't
+      // reply: 403 status code (no body)" says nothing anyone can act on. The
+      // request id (when the API even returned one) is the one thing that lets
+      // Anthropic support or the Console actually look up what happened, and a
+      // bare 403 with no error body is itself informative: Anthropic's own
+      // documented error responses always carry a JSON body, so one that doesn't
+      // usually means the response never reached their application layer at all —
+      // this is logged in full rather than reduced to the SDK's one-line summary.
+      console.error("[jarvis] Anthropic API call failed", {
+        status: error.status,
+        requestId: error.requestID,
+        type: error.type,
+        errorBody: error.error,
+        message: error.message,
+      });
       throw new JarvisReplyError(`Jarvis couldn't reply: ${error.message}`, { cause: error });
     }
     throw error;
