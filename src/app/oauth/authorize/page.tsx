@@ -155,8 +155,8 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
       </div>
 
       <p className="text-sm text-[var(--bt-muted)]">
-        It cannot send anything to a client, move money, or change a job. You can disconnect it at any time from
-        Settings.
+        It cannot send anything to a client, move money, or change a job. You can disconnect it at any time under
+        Settings → Connected applications.
       </p>
 
       <div className="flex gap-3">

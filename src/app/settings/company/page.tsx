@@ -134,6 +134,7 @@ export default async function CompanySettingsPage() {
         </SettingsGroup>
 
         <SettingsGroup title="Developer">
+          <SettingsLink href="/settings/connections" label="Connected applications" />
           <SettingsLink href="/settings/api-keys" label="API keys" />
         </SettingsGroup>
       </div>
