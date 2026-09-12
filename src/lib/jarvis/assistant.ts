@@ -65,9 +65,22 @@ export class JarvisTurnTimeoutError extends JarvisReplyError {
   }
 }
 
-function withDeadline<T>(promise: PromiseLike<T>, timeoutMs: number): Promise<T> {
+/**
+ * `onTimeout` matters as much as the rejection itself: a bare Promise.race abandons
+ * the real in-flight request instead of cancelling it, and in a serverless
+ * environment that reuses warm containers between invocations, a dangling promise
+ * from a *previous*, already-responded-to request can resolve or reject during a
+ * later, unrelated one — a real source of the intermittent "nothing happens at all"
+ * reports this deadline exists to prevent in the first place. Passing an
+ * AbortController's abort() here (see runJarvisTurn) turns the abandoned request
+ * into an actually-cancelled one instead of a merely-ignored one.
+ */
+function withDeadline<T>(promise: PromiseLike<T>, timeoutMs: number, onTimeout?: () => void): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new JarvisTurnTimeoutError(timeoutMs)), timeoutMs);
+    const timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new JarvisTurnTimeoutError(timeoutMs));
+    }, timeoutMs);
     Promise.resolve(promise).then(
       (value) => {
         clearTimeout(timer);
@@ -147,11 +160,12 @@ interface RunToolTurnParams {
   messages: { role: "user" | "assistant"; content: string | Anthropic.Beta.Messages.BetaContentBlockParam[] }[];
 }
 
-/** A single non-overloaded function type, so a test fake can just be `vi.fn().mockResolvedValue(...)`. */
-export type JarvisToolRunnerFn = (params: RunToolTurnParams) => PromiseLike<Anthropic.Beta.Messages.BetaMessage>;
+/** A single non-overloaded function type, so a test fake can just be `vi.fn().mockResolvedValue(...)`.
+ *  `signal` is optional so existing test fakes that ignore it keep working unchanged. */
+export type JarvisToolRunnerFn = (params: RunToolTurnParams, signal?: AbortSignal) => PromiseLike<Anthropic.Beta.Messages.BetaMessage>;
 
-function defaultToolRunner(params: RunToolTurnParams): PromiseLike<Anthropic.Beta.Messages.BetaMessage> {
-  return getClient().beta.messages.toolRunner(params);
+function defaultToolRunner(params: RunToolTurnParams, signal?: AbortSignal): PromiseLike<Anthropic.Beta.Messages.BetaMessage> {
+  return getClient().beta.messages.toolRunner(params, { signal });
 }
 
 /**
@@ -178,27 +192,32 @@ export async function runJarvisTurn(
   const system = contextNote ? `${SYSTEM_PROMPT}\n\n${contextNote}` : SYSTEM_PROMPT;
   const lastIndex = messages.length - 1;
 
+  const abortController = new AbortController();
   let finalMessage: Anthropic.Beta.Messages.BetaMessage;
   try {
     finalMessage = await withDeadline(
-      runToolTurn({
-        model: "claude-opus-5",
-        max_tokens: 4_096,
-        system,
-        tools: [...tools],
-        messages: messages.map((message, index) => {
-          const role = message.role === "USER" ? ("user" as const) : ("assistant" as const);
-          if (index === lastIndex && role === "user" && images && images.length > 0) {
-            const imageBlocks: Anthropic.Beta.Messages.BetaContentBlockParam[] = images.map((image) => ({
-              type: "image",
-              source: { type: "base64", media_type: image.mediaType, data: image.base64Data },
-            }));
-            return { role, content: [...imageBlocks, { type: "text", text: message.content }] };
-          }
-          return { role, content: message.content };
-        }),
-      }),
+      runToolTurn(
+        {
+          model: "claude-opus-5",
+          max_tokens: 4_096,
+          system,
+          tools: [...tools],
+          messages: messages.map((message, index) => {
+            const role = message.role === "USER" ? ("user" as const) : ("assistant" as const);
+            if (index === lastIndex && role === "user" && images && images.length > 0) {
+              const imageBlocks: Anthropic.Beta.Messages.BetaContentBlockParam[] = images.map((image) => ({
+                type: "image",
+                source: { type: "base64", media_type: image.mediaType, data: image.base64Data },
+              }));
+              return { role, content: [...imageBlocks, { type: "text", text: message.content }] };
+            }
+            return { role, content: message.content };
+          }),
+        },
+        abortController.signal,
+      ),
       getJarvisTurnTimeoutMs(),
+      () => abortController.abort(),
     );
   } catch (error) {
     if (error instanceof JarvisTurnTimeoutError) {

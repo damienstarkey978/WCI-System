@@ -97,5 +97,33 @@ describe("runJarvisTurn", () => {
 
       expect(reply).toBe("Done.");
     });
+
+    it(
+      "aborts the in-flight request on timeout, rather than merely abandoning it",
+      async () => {
+        // A bare Promise.race that never cancels the real request is itself a bug
+        // source in a serverless environment that reuses warm containers between
+        // invocations: the abandoned promise can settle during a *later*, unrelated
+        // request. Passing an AbortSignal through and calling abort() on timeout
+        // (src/lib/jarvis/assistant.ts's withDeadline) turns "abandoned" into
+        // "actually cancelled" — this asserts the signal Jarvis received really
+        // fires when the deadline hits.
+        process.env.ANTHROPIC_API_KEY = "test-key";
+        process.env.JARVIS_TURN_TIMEOUT_MS = "50";
+
+        let receivedSignal: AbortSignal | undefined;
+        const neverResolves = vi.fn().mockImplementation((_params: unknown, signal?: AbortSignal) => {
+          receivedSignal = signal;
+          return new Promise(() => {});
+        });
+
+        const result = runJarvisTurn([{ role: "USER", content: "create a client, a lead, and a proposal" }], [], neverResolves);
+        await expect(result).rejects.toBeInstanceOf(JarvisTurnTimeoutError);
+
+        expect(receivedSignal).toBeInstanceOf(AbortSignal);
+        expect(receivedSignal?.aborted).toBe(true);
+      },
+      2_000,
+    );
   });
 });
