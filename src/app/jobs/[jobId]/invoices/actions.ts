@@ -29,6 +29,7 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
 
   const jobId = String(formData.get("jobId") ?? "");
   const invoiceNumber = String(formData.get("invoiceNumber") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim() || null;
   const typeRaw = String(formData.get("type") ?? "FLAT");
   const type = typeRaw === "LINE_ITEM" ? InvoiceType.LINE_ITEM : InvoiceType.FLAT;
   const dueOnRaw = String(formData.get("dueOn") ?? "");
@@ -48,6 +49,7 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
         jobId,
         type,
         invoiceNumber,
+        title,
         dueOn: dueOnRaw ? new Date(dueOnRaw) : null,
         amountCents,
       });
@@ -88,6 +90,7 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
         jobId,
         type,
         invoiceNumber,
+        title,
         dueOn: dueOnRaw ? new Date(dueOnRaw) : null,
         taxRateBasisPoints,
         lineItems,

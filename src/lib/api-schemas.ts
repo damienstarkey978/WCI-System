@@ -246,6 +246,7 @@ export const createInvoiceSchema = z.object({
   jobId: z.string().min(1).max(64),
   type: z.enum(InvoiceType),
   invoiceNumber: z.string().trim().min(1).max(64),
+  title: z.string().trim().min(1).max(255).nullish(),
   issuedOn: z.coerce.date().nullish(),
   dueOn: z.coerce.date().nullish(),
   amountCents: cents.optional(),

@@ -85,10 +85,50 @@ function Head({ columns }: { columns: readonly string[] }) {
 }
 
 /**
- * What the office needs to know about a job's billing before opening anything: how
- * much has been billed, how much came in, what is still owed, and how much of that
- * is late. Overdue is called out separately from outstanding because they prompt
- * different actions — one is waiting, the other is chasing.
+ * The Buildertrend-style equation at the top of a job's Invoices screen: the
+ * contract's Original price minus Payments received equals the Remaining balance —
+ * a different number from the "Outstanding" tile below, which is only what has
+ * actually been invoiced so far and may be less than the full contract.
+ */
+function ContractEquation({ contractPriceCents, paidCents }: { contractPriceCents: number; paidCents: number }) {
+  const remainingCents = contractPriceCents - paidCents;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-4 rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3 sm:gap-6"
+      style={{ borderColor: "var(--bt-border)" }}
+    >
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Original price</div>
+        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(contractPriceCents)}</div>
+      </div>
+      <span className="text-lg text-[var(--bt-muted)]">−</span>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Payments</div>
+        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(paidCents)}</div>
+      </div>
+      <span className="text-lg text-[var(--bt-muted)]">=</span>
+      <div>
+        <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+          Remaining balance
+          <span
+            title="The job's revised contract price minus every payment received so far. This is what the client still owes overall — it isn't the same as what has been invoiced yet, below."
+            className="cursor-help rounded-full border text-[10px] leading-3"
+            style={{ borderColor: "var(--bt-border)", width: "14px", height: "14px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+          >
+            i
+          </span>
+        </div>
+        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(remainingCents)}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What the office needs to know about invoices billed so far on this job: how much
+ * has been billed, how much came in against those invoices, what's still owed, and
+ * how much of that is late. Overdue is called out separately from outstanding
+ * because they prompt different actions — one is waiting, the other is chasing.
  */
 function SummaryStrip({
   billedCents,
@@ -113,11 +153,11 @@ function SummaryStrip({
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
       {tiles.map((tile) => (
-        <div key={tile.label} className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
-          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{tile.label}</div>
-          <div className="mt-1 text-lg font-semibold" style={{ color: tile.danger ? "var(--bt-danger)" : "var(--bt-text)" }}>
+        <div key={tile.label} className="rounded-lg border bg-[var(--bt-panel-bg)] px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{tile.label}</div>
+          <div className="mt-0.5 text-sm font-semibold" style={{ color: tile.danger ? "var(--bt-danger)" : "var(--bt-text)" }}>
             {tile.value}
           </div>
         </div>
@@ -204,6 +244,8 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Invoicing — {job.name}</h1>
 
+      <ContractEquation contractPriceCents={contractPriceCents} paidCents={paidCents} />
+
       <SummaryStrip
         billedCents={billedCents}
         paidCents={paidCents}
@@ -238,7 +280,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
             <EmptyState title="No invoices yet" description="Invoices created for this job will appear here." />
           ) : (
             <Panel>
-              <Head columns={["Invoice #", "Status", "Terms", "Due", "~Amount", "~Paid", "~Balance", "Client viewed", "Actions"]} />
+              <Head columns={["Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Due", "Actions"]} />
               <tbody>
                 {invoices.map((invoice) => {
                   const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
@@ -248,15 +290,23 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                   const canAct = invoice.status !== "VOID" && invoice.status !== "PAID";
                   return (
                     <tr key={invoice.id} className="border-b align-top last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                      <td className="px-4 py-3 text-[var(--bt-muted)]">{job.name}</td>
                       <td className="px-4 py-3 font-medium">
                         <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
                           {invoice.invoiceNumber}
                         </Link>
+                        <div className="mt-0.5 flex flex-col text-[10px] text-[var(--bt-muted)]">
+                          <span>{PAYMENT_TERMS_LABELS[invoice.paymentTerms]}</span>
+                          <span>{invoice.clientLastViewedAt ? `Viewed ${formatDate(invoice.clientLastViewedAt)}` : "Not viewed yet"}</span>
+                        </div>
                       </td>
+                      <td className="px-4 py-3 text-[var(--bt-text)]">{invoice.title ?? "—"}</td>
                       <td className="px-4 py-3">
                         <Badge status={invoice.status} />
                       </td>
-                      <td className="px-4 py-3 text-[var(--bt-muted)]">{PAYMENT_TERMS_LABELS[invoice.paymentTerms]}</td>
+                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(invoice.amountCents)}</td>
+                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(paid)}</td>
+                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(balance)}</td>
                       <td className="px-4 py-3 text-[var(--bt-muted)]">
                         {formatDate(invoice.dueOn)}
                         {late ? (
@@ -264,12 +314,6 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                             {late}d late
                           </span>
                         ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(invoice.amountCents)}</td>
-                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(paid)}</td>
-                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(balance)}</td>
-                      <td className="px-4 py-3 text-xs text-[var(--bt-muted)]">
-                        {invoice.clientLastViewedAt ? formatDate(invoice.clientLastViewedAt) : "Not yet"}
                       </td>
                       <td className="px-4 py-3">
                         {canAct ? (
@@ -283,6 +327,17 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)" }}>
+                  <td className="px-4 py-3" colSpan={4}>
+                    Totals
+                  </td>
+                  <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(billedCents)}</td>
+                  <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(paidCents)}</td>
+                  <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(billedCents - paidCents - creditedCents)}</td>
+                  <td className="px-4 py-3" colSpan={2} />
+                </tr>
+              </tfoot>
             </Panel>
           )}
         </>

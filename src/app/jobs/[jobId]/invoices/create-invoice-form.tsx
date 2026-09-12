@@ -21,12 +21,21 @@ export function CreateInvoiceForm({ jobId }: { jobId: string }) {
       <input type="hidden" name="jobId" value={jobId} />
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">New invoice</h2>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="grid gap-1 text-sm">
           <span className="text-xs font-medium text-[var(--bt-muted)]">Invoice #</span>
           <input
             name="invoiceNumber"
             required
+            className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="text-xs font-medium text-[var(--bt-muted)]">Title</span>
+          <input
+            name="title"
+            placeholder="e.g. Deposit, Draw 2"
             className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
             style={{ borderColor: "var(--bt-border)" }}
           />

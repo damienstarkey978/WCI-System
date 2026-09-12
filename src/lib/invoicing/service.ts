@@ -91,6 +91,8 @@ export interface CreateInvoiceInput {
   readonly jobId: string;
   readonly type: InvoiceType;
   readonly invoiceNumber: string;
+  /** Freeform label distinct from invoiceNumber, e.g. "Deposit" — see Invoice.title. */
+  readonly title?: string | null;
   readonly issuedOn?: Date | null;
   readonly dueOn?: Date | null;
   /** Required for FLAT; ignored (computed from lineItems) for LINE_ITEM/PROGRESS. */
@@ -144,6 +146,7 @@ export async function createInvoice(input: CreateInvoiceInput) {
       jobId: input.jobId,
       type: input.type,
       invoiceNumber: input.invoiceNumber,
+      title: input.title ?? null,
       amountCents: totals.totalCents,
       taxCents: totals.taxCents,
       taxRateBasisPoints,
@@ -340,6 +343,7 @@ export async function generateDraftInvoiceForDraw(organizationId: string, drawId
       jobId: draw.drawSchedule.jobId,
       type: InvoiceType.PROGRESS,
       invoiceNumber: `DRAW-${drawIndex}-${draw.id.slice(-6)}`,
+      title: draw.title,
       amountCents,
       drawId: draw.id,
     },

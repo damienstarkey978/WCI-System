@@ -1278,6 +1278,12 @@ model Invoice {
   status        InvoiceStatus @default(DRAFT)
   invoiceNumber String
 
+  /// Freeform label distinct from invoiceNumber — "Deposit", "Draw 2 - Change Order
+  /// 1", matching what Buildertrend's own Invoices list shows in its own Title
+  /// column. Set automatically from the Draw's title when generated from one
+  /// (generateDraftInvoiceForDraw); optional on a hand-created invoice.
+  title String?
+
   /// Authoritative total the client owes, tax included. For LINE_ITEM/PROGRESS this
   /// must equal the sum of lineItems plus taxCents — enforced in
   /// src/lib/invoicing/service.ts, not by a DB constraint.
