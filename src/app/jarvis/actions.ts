@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { requireAppUser } from "@/lib/auth";
+import { AttachmentLimitError, assertAttachmentsWithinLimits } from "@/lib/jarvis/attachments";
 import { AiNotConfiguredError, JarvisReplyError, type JarvisImageInput } from "@/lib/jarvis/assistant";
 import {
   PendingActionNotFoundError,
@@ -23,6 +24,15 @@ const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "
  *  Part 3.4) — photos/screenshots attached to one message, vision input only. */
 async function filesToImageInputs(formData: FormData, field: string): Promise<JarvisImageInput[]> {
   const files = formData.getAll(field).filter((value): value is File => value instanceof File && value.size > 0);
+
+  // Checked before any file is read, not after: the point is to fail cheaply on a
+  // batch that is too large, not to spend the work decoding it first. The client
+  // compresses and pre-checks the same limits (src/lib/client/compress-image.ts,
+  // JarvisChatPanel/ChatInputForm), so this is the backstop for a client that
+  // skipped that step — a slow connection, an old cached page, a client this
+  // server action didn't anticipate — never the first line of defense.
+  assertAttachmentsWithinLimits(files.map((file) => file.size));
+
   const images: JarvisImageInput[] = [];
   for (const file of files) {
     if (!ACCEPTED_IMAGE_TYPES.has(file.type)) continue;
@@ -37,9 +47,16 @@ export async function sendJarvisMessageAction(_previous: ActionState, formData: 
 
   const text = String(formData.get("text") ?? "").trim();
   const conversationId = String(formData.get("conversationId") ?? "") || undefined;
-  const images = await filesToImageInputs(formData, "attachments");
 
   if (!text) return { error: "Type a message first." };
+
+  let images: JarvisImageInput[];
+  try {
+    images = await filesToImageInputs(formData, "attachments");
+  } catch (error) {
+    if (error instanceof AttachmentLimitError) return { error: error.message };
+    throw error;
+  }
 
   let resultConversationId: string;
   try {
@@ -82,9 +99,16 @@ export async function sendJarvisLauncherMessageAction(_previous: LauncherActionS
   const text = String(formData.get("text") ?? "").trim();
   const conversationId = String(formData.get("conversationId") ?? "") || undefined;
   const contextRaw = String(formData.get("context") ?? "");
-  const images = await filesToImageInputs(formData, "attachments");
 
   if (!text) return { error: "Type a message first.", conversationId };
+
+  let images: JarvisImageInput[];
+  try {
+    images = await filesToImageInputs(formData, "attachments");
+  } catch (error) {
+    if (error instanceof AttachmentLimitError) return { error: error.message, conversationId };
+    throw error;
+  }
 
   let context: unknown;
   if (contextRaw) {

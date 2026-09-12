@@ -15,6 +15,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { sendJarvisLauncherMessageAction, type LauncherActionState } from "@/app/jarvis/actions";
+import { prepareJarvisAttachments } from "@/lib/client/prepare-jarvis-attachments";
 import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
 import { JarvisVoiceButton } from "@/components/jarvis/JarvisVoiceButton";
 import { useFunUi } from "@/components/jarvis/useFunUi";
@@ -66,6 +67,11 @@ function JarvisChatBody({
   });
   const formRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Covers compressing photos in the browser, which happens before formAction (and
+  // therefore useActionState's own `pending`) ever starts — see chat-input-form.tsx's
+  // identical note.
+  const [preparing, setPreparing] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.conversationId) sessionStorage.setItem(storageKeyFull, state.conversationId);
@@ -207,8 +213,15 @@ function JarvisChatBody({
 
       <form
         ref={formRef}
-        action={(formData) => {
-          formAction(formData);
+        action={async (formData) => {
+          setAttachmentError(null);
+          setPreparing(true);
+          const prepared = await prepareJarvisAttachments(formData).finally(() => setPreparing(false));
+          if (prepared.error) {
+            setAttachmentError(prepared.error);
+            return;
+          }
+          formAction(prepared.formData);
           formRef.current?.reset();
         }}
         className="flex flex-col gap-1.5 border-t p-2.5"
@@ -231,11 +244,11 @@ function JarvisChatBody({
           />
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || preparing}
             className={`px-3.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 disabled:shadow-none ${funUi ? "wci-fun-chunky-btn rounded-xl py-2.5 active:scale-95" : "rounded py-1.5"}`}
             style={{ background: "var(--bt-primary)" }}
           >
-            {pending ? "…" : "Send"}
+            {preparing ? "…" : pending ? "…" : "Send"}
           </button>
         </div>
         <label className="flex items-center gap-1.5 text-xs text-[var(--bt-muted)]">
@@ -243,7 +256,10 @@ function JarvisChatBody({
           <input type="file" name="attachments" multiple accept="image/jpeg,image/png,image/webp,image/gif" className="text-xs" />
         </label>
       </form>
-      {state.error ? <p className="px-2.5 pb-2 text-xs text-red-600">{state.error}</p> : null}
+      {preparing ? <p className="px-2.5 pb-2 text-xs text-[var(--bt-muted)]">Preparing photos…</p> : null}
+      {attachmentError ?? state.error ? (
+        <p className="px-2.5 pb-2 text-xs text-red-600">{attachmentError ?? state.error}</p>
+      ) : null}
     </div>
   );
 }

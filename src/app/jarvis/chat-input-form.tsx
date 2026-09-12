@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useRef } from "react";
+import { useActionState, useRef, useState } from "react";
 
 import { JarvisVoiceButton } from "@/components/jarvis/JarvisVoiceButton";
 import { useFunUi } from "@/components/jarvis/useFunUi";
+import { prepareJarvisAttachments } from "@/lib/client/prepare-jarvis-attachments";
 import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 import { sendJarvisMessageAction, type ActionState } from "./actions";
@@ -14,6 +15,15 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
   const [state, formAction, pending] = useActionState(sendJarvisMessageAction, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
   const funUi = useFunUi();
+  // Separate from `pending`: this covers compressing photos in the browser, which
+  // happens *before* formAction (and therefore useActionState's own pending flag)
+  // ever starts — without it, attaching a big batch of photos looks like nothing is
+  // happening for however long the compression takes.
+  const [preparing, setPreparing] = useState(false);
+  // Set when a batch is rejected before it's ever submitted (too many photos, still
+  // too large after compression) — shown the same way as a server-side error, but
+  // without the round trip that error would otherwise cost.
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   function fillSuggestion(suggestion: string) {
     const textarea = formRef.current?.elements.namedItem("text");
@@ -34,8 +44,15 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
   return (
     <form
       ref={formRef}
-      action={(formData) => {
-        formAction(formData);
+      action={async (formData) => {
+        setAttachmentError(null);
+        setPreparing(true);
+        const prepared = await prepareJarvisAttachments(formData).finally(() => setPreparing(false));
+        if (prepared.error) {
+          setAttachmentError(prepared.error);
+          return;
+        }
+        formAction(prepared.formData);
         formRef.current?.reset();
       }}
       className="flex flex-col gap-2 border-t bg-[var(--bt-panel-bg)] p-3"
@@ -71,20 +88,20 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
         />
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || preparing}
           className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
           style={{ background: "var(--bt-primary)" }}
         >
-          {pending ? "Thinking…" : "Send"}
+          {preparing ? "Preparing photos…" : pending ? "Thinking…" : "Send"}
         </button>
       </div>
       <label className="flex items-center gap-1.5 text-xs text-[var(--bt-muted)]">
         <span>Attach photos:</span>
         <input type="file" name="attachments" multiple accept="image/jpeg,image/png,image/webp,image/gif" className="text-xs" />
       </label>
-      {state.error ? (
+      {attachmentError ?? state.error ? (
         <p role="alert" className="text-xs text-red-600">
-          {state.error}
+          {attachmentError ?? state.error}
         </p>
       ) : null}
     </form>
