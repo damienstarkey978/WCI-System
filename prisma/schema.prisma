@@ -97,48 +97,51 @@ model Organization {
   apiKeys      ApiKey[]
   oauthClients OAuthClient[]
 
-  estimates             Estimate[]
-  estimateTemplates     EstimateTemplate[]
-  poAgreementTemplates  POAgreementTemplate[]
-  lienWaivers           LienWaiver[]
-  purchaseOrders        PurchaseOrder[]
-  bills                 Bill[]
-  webhookSubscriptions  WebhookSubscription[]
-  invoices              Invoice[]
-  drawSchedules         DrawSchedule[]
-  payments              Payment[]
-  timeClockEntries      TimeClockEntry[]
-  nonWorkingDays        NonWorkingDay[]
-  schedules             Schedule[]
-  changeOrders          ChangeOrder[]
-  dailyLogs             DailyLog[]
-  todos                 Todo[]
-  rfis                  Rfi[]
-  files                 File[]
-  comments              Comment[]
-  notifications         Notification[]
-  clients               Client[]
-  clientActionTokens    ClientActionToken[]
-  allowances            Allowance[]
-  selections            Selection[]
-  vendors               Vendor[]
-  vendorActionTokens    VendorActionToken[]
-  bidPackages           BidPackage[]
-  leads                 Lead[]
-  leadActivities        LeadActivity[]
-  proposals             Proposal[]
-  specifications        Specification[]
-  submittals            Submittal[]
-  warrantyClaims        WarrantyClaim[]
-  surveys               Survey[]
-  clientUpdateSummaries ClientUpdateSummary[]
-  materialCatalogItems  MaterialCatalogItem[]
-  jarvisConversations   JarvisConversation[]
-  quickBooksConnection  QuickBooksConnection?
-  qboSyncLogs           QboSyncLog[]
-  creditMemos           CreditMemo[]
-  deposits              Deposit[]
-  inboundEmails         InboundEmail[]
+  estimates               Estimate[]
+  estimateTemplates       EstimateTemplate[]
+  poAgreementTemplates    POAgreementTemplate[]
+  lienWaivers             LienWaiver[]
+  purchaseOrders          PurchaseOrder[]
+  bills                   Bill[]
+  webhookSubscriptions    WebhookSubscription[]
+  invoices                Invoice[]
+  drawSchedules           DrawSchedule[]
+  payments                Payment[]
+  timeClockEntries        TimeClockEntry[]
+  nonWorkingDays          NonWorkingDay[]
+  schedules               Schedule[]
+  changeOrders            ChangeOrder[]
+  dailyLogs               DailyLog[]
+  todos                   Todo[]
+  rfis                    Rfi[]
+  files                   File[]
+  comments                Comment[]
+  notifications           Notification[]
+  clients                 Client[]
+  clientActionTokens      ClientActionToken[]
+  allowances              Allowance[]
+  selections              Selection[]
+  vendors                 Vendor[]
+  vendorActionTokens      VendorActionToken[]
+  bidPackages             BidPackage[]
+  leads                   Lead[]
+  leadActivities          LeadActivity[]
+  proposals               Proposal[]
+  specifications          Specification[]
+  submittals              Submittal[]
+  warrantyClaims          WarrantyClaim[]
+  surveys                 Survey[]
+  clientUpdateSummaries   ClientUpdateSummary[]
+  materialCatalogItems    MaterialCatalogItem[]
+  jarvisConversations     JarvisConversation[]
+  quickBooksConnection    QuickBooksConnection?
+  qboSyncLogs             QboSyncLog[]
+  creditMemos             CreditMemo[]
+  deposits                Deposit[]
+  inboundEmails           InboundEmail[]
+  oauthAuthorizationCodes OAuthAuthorizationCode[]
+  oauthAccessTokens       OAuthAccessToken[]
+  oauthRefreshTokens      OAuthRefreshToken[]
 }
 
 model User {
@@ -164,14 +167,14 @@ model User {
   updatedAt DateTime @updatedAt
 
   jobGrants                 JobAccessGrant[]
-  createdApiKeys            ApiKey[]             @relation("ApiKeyCreatedBy")
+  createdApiKeys            ApiKey[]                 @relation("ApiKeyCreatedBy")
   jobStatusEvents           JobStatusEvent[]
   purchaseOrderEvents       PurchaseOrderEvent[]
-  createdBills              Bill[]               @relation("BillCreatedBy")
-  billApprovals             BillApproval[]       @relation("BillApprover")
-  timeClockEntries          TimeClockEntry[]     @relation("TimeClockEntryUser")
-  approvedTimeClockEntries  TimeClockEntry[]     @relation("TimeClockEntryApprovedBy")
-  clockedInTimeClockEntries TimeClockEntry[]     @relation("TimeClockEntryClockedInBy")
+  createdBills              Bill[]                   @relation("BillCreatedBy")
+  billApprovals             BillApproval[]           @relation("BillApprover")
+  timeClockEntries          TimeClockEntry[]         @relation("TimeClockEntryUser")
+  approvedTimeClockEntries  TimeClockEntry[]         @relation("TimeClockEntryApprovedBy")
+  clockedInTimeClockEntries TimeClockEntry[]         @relation("TimeClockEntryClockedInBy")
   authoredDailyLogs         DailyLog[]
   assignedTodos             Todo[]
   assignedRfis              Rfi[]
@@ -181,6 +184,9 @@ model User {
   assignedLeads             Lead[]
   leadActivities            LeadActivity[]
   jarvisConversations       JarvisConversation[]
+  oauthAuthorizationCodes   OAuthAuthorizationCode[]
+  oauthAccessTokens         OAuthAccessToken[]
+  oauthRefreshTokens        OAuthRefreshToken[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -436,9 +442,14 @@ model ApiKey {
 /// OAuth2 client-credentials consumer. Modelled in Phase 0; the token endpoint lands
 /// with the full public API in Phase 1.
 model OAuthClient {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+
+  /// Null for a client that registered itself (Claude, ChatGPT). Such a client belongs
+  /// to nobody until a person authorizes it, and which organization it then acts for
+  /// comes from that person, not from the registration — the same registered client is
+  /// used by every WCI OS customer.
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   name               String
   agentKind          AgentKind?
@@ -446,11 +457,119 @@ model OAuthClient {
   hashedClientSecret String
   scopes             String[]
 
+  /// RFC 7591 dynamic client registration. `redirectUris` is the allowlist an
+  /// authorization request is checked against — an exact match, never a prefix, which
+  /// is what stops a registered client from being used to redirect a code elsewhere.
+  redirectUris            String[] @default([])
+  /// "none" for a public client using PKCE (both Claude and ChatGPT), "client_secret_post"
+  /// for a confidential one.
+  tokenEndpointAuthMethod String   @default("client_secret_post")
+  /// True when this client registered itself rather than being created by an admin.
+  selfRegistered          Boolean  @default(false)
+  clientUri               String?
+  logoUri                 String?
+
+  authorizationCodes OAuthAuthorizationCode[]
+  accessTokens       OAuthAccessToken[]
+  refreshTokens      OAuthRefreshToken[]
+
   revokedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   @@index([organizationId])
+}
+
+/// One authorization code, issued when a person approves a client at /oauth/authorize
+/// and redeemed once at the token endpoint. Short-lived and single-use: `consumedAt`
+/// is set on redemption, and a second attempt with the same code is refused rather
+/// than silently issuing another token.
+model OAuthAuthorizationCode {
+  id           String @id @default(cuid())
+  /// Same `wci_<tokenId>_<secret>` shape as an API key: the id is indexed and safe to
+  /// log, only the secret's hash is stored.
+  tokenId      String @unique
+  hashedSecret String
+
+  oauthClientId String
+  client        OAuthClient @relation(fields: [oauthClientId], references: [id], onDelete: Cascade)
+
+  /// Who approved it, and which of their organizations it acts for.
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  scopes      String[]
+  /// Pinned at issue and re-checked at redemption: a code is only valid for the exact
+  /// redirect it was issued against.
+  redirectUri String
+
+  /// PKCE (RFC 7636), required of every client here including confidential ones.
+  codeChallenge       String
+  codeChallengeMethod String
+
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([oauthClientId])
+  @@index([expiresAt])
+}
+
+/// A bearer token an MCP client presents on every request. Scoped to one person acting
+/// for one organization, which is the point of OAuth here — a shared API key can only
+/// say which key called, never who.
+model OAuthAccessToken {
+  id           String @id @default(cuid())
+  tokenId      String @unique
+  hashedSecret String
+
+  oauthClientId String
+  client        OAuthClient @relation(fields: [oauthClientId], references: [id], onDelete: Cascade)
+
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  scopes String[]
+
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([oauthClientId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Exchanged for a fresh access token once the short-lived one expires. Rotated on
+/// every use: the old one is revoked and `rotatedToId` points at its replacement, so a
+/// refresh token that turns up again after rotation is a sign it was stolen.
+model OAuthRefreshToken {
+  id           String @id @default(cuid())
+  tokenId      String @unique
+  hashedSecret String
+
+  oauthClientId String
+  client        OAuthClient @relation(fields: [oauthClientId], references: [id], onDelete: Cascade)
+
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  scopes String[]
+
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  rotatedToId String?
+  createdAt   DateTime  @default(now())
+
+  @@index([oauthClientId])
+  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------
