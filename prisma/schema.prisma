@@ -2717,9 +2717,39 @@ model Proposal {
   options  ProposalOption[]  @relation("ProposalOptions")
   sections ProposalSection[]
 
+  /// The payment milestones the client is agreeing to as part of accepting this
+  /// proposal — deposit, rough-in, final, etc., each a percent of whatever the
+  /// contract ends up costing. Percent rather than a dollar amount for the same
+  /// reason a Draw is: the exact contract price isn't fixed until an option is
+  /// picked, and a client-facing option change or later change order shouldn't
+  /// require re-typing the schedule.
+  ///
+  /// This is the proposal's *offer* of a schedule, not a job's real one — nothing
+  /// bills against these rows directly. acceptProposal() copies them into a real
+  /// DrawSchedule on the Job it creates, which is what invoicing actually runs
+  /// against (src/lib/invoicing/service.ts) — the same split PurchaseOrder/Bill
+  /// keep between a commitment and what actually gets billed.
+  draws ProposalDraw[]
+
   @@index([jobId])
   @@index([leadId])
   @@index([organizationId, status])
+}
+
+/// One payment milestone in a Proposal's payment schedule. See Proposal.draws.
+model ProposalDraw {
+  id         String   @id @default(cuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  title                    String
+  pctOfContractBasisPoints Int
+  sortOrder                Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([proposalId, sortOrder])
 }
 
 /// One priced option within a Proposal (CLAUDE.md 3/task #116: up to 5 per

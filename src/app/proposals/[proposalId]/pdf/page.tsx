@@ -41,6 +41,7 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
           select: { id: true, label: true, estimate: { select: { lineItems: { select: { quantityMilli: true, unitCostCents: true, rateMode: true, rateBasisPoints: true } } } } },
         },
         sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
+        draws: { orderBy: { sortOrder: "asc" } },
       },
     }),
     db.organization.findUnique({
@@ -146,6 +147,20 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
               </ul>
             </div>
           ))}
+        </section>
+      ) : null}
+
+      {proposal.draws.length > 0 ? (
+        <section className="mt-8 break-inside-avoid">
+          <h2 className="border-b border-[#ddd] pb-1 text-sm font-semibold uppercase tracking-wide text-[#1a1a1a]">Payment schedule</h2>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            {proposal.draws.map((draw) => (
+              <li key={draw.id} className="flex items-center justify-between">
+                <span>{draw.title}</span>
+                <span className="font-medium">{(draw.pctOfContractBasisPoints / 100).toFixed(2)}%</span>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

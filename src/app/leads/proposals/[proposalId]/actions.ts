@@ -22,6 +22,8 @@ import {
   EstimateJobMismatchError as ProposalOptionEstimateJobMismatchError,
   EstimateNotFoundError as ProposalOptionEstimateNotFoundError,
   LastOptionError,
+  ProposalDrawNotFoundError,
+  ProposalDrawOverallocatedError,
   ProposalNotDraftError,
   ProposalNotEditableError,
   ProposalNotFoundError,
@@ -30,10 +32,12 @@ import {
   ProposalSectionBulletNotFoundError,
   ProposalSectionNotFoundError,
   TooManyOptionsError,
+  addProposalDraw,
   addProposalOption,
   addProposalSection,
   addProposalSectionBullet,
   declineProposal,
+  deleteProposalDraw,
   deleteProposalSection,
   deleteProposalSectionBullet,
   removeProposalOption,
@@ -64,6 +68,8 @@ const KNOWN_ERRORS = [
   ProposalOptionNotFoundError,
   ProposalOptionEstimateNotFoundError,
   ProposalOptionEstimateJobMismatchError,
+  ProposalDrawNotFoundError,
+  ProposalDrawOverallocatedError,
   TooManyOptionsError,
   LastOptionError,
   MoneyError,
@@ -141,6 +147,47 @@ export async function deleteSectionAction(formData: FormData): Promise<void> {
 
   try {
     await deleteProposalSection(user.organizationId, sectionId);
+  } catch (error) {
+    if (!handled(error)) throw error;
+  }
+
+  revalidate(proposalId);
+}
+
+export async function addProposalDrawAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const percentRaw = String(formData.get("percent") ?? "").trim();
+  if (!title) return { error: "A payment milestone needs a title, e.g. \"Deposit\"." };
+
+  let pctOfContractBasisPoints: number;
+  try {
+    pctOfContractBasisPoints = parsePercentToBasisPoints(percentRaw);
+  } catch (error) {
+    if (error instanceof MoneyError) return { error: error.message };
+    throw error;
+  }
+
+  try {
+    await addProposalDraw(user.organizationId, proposalId, { title, pctOfContractBasisPoints });
+  } catch (error) {
+    const message = handled(error);
+    if (message) return { error: message };
+    throw error;
+  }
+
+  revalidate(proposalId);
+  return { ok: true };
+}
+
+export async function deleteProposalDrawAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  const drawId = String(formData.get("drawId") ?? "");
+
+  try {
+    await deleteProposalDraw(user.organizationId, drawId);
   } catch (error) {
     if (!handled(error)) throw error;
   }

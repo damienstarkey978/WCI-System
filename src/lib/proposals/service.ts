@@ -16,7 +16,9 @@
 import { ContractType, EstimateStatus, JobStatus, ProposalStatus } from "@/generated/prisma/enums";
 import { sendEstimateToBudget } from "@/lib/budget/send-to-budget";
 import { db } from "@/lib/db";
+import { totalDrawPercentage } from "@/lib/invoicing/calc";
 import { transitionJobStatus } from "@/lib/jobs";
+import type { BasisPoints } from "@/lib/money";
 import { emitEvent } from "@/lib/webhooks";
 
 export class JobNotFoundError extends Error {
@@ -132,6 +134,23 @@ export class OptionSelectionRequiredError extends Error {
   constructor(proposalId: string) {
     super(`Proposal ${proposalId} has more than one option — choose which one to accept.`);
     this.name = "OptionSelectionRequiredError";
+  }
+}
+
+export class ProposalDrawNotFoundError extends Error {
+  constructor(drawId: string) {
+    super(`No payment schedule milestone ${drawId} on this proposal.`);
+    this.name = "ProposalDrawNotFoundError";
+  }
+}
+
+/** Mirrors DrawScheduleOverallocatedError (src/lib/invoicing/service.ts) — same rule,
+ *  checked a step earlier since a proposal's schedule is what a Job's real one gets
+ *  copied from at acceptance. */
+export class ProposalDrawOverallocatedError extends Error {
+  constructor(totalBasisPoints: number) {
+    super(`This payment schedule totals ${(totalBasisPoints / 100).toFixed(2)}% — it can't bill more than 100% of the contract.`);
+    this.name = "ProposalDrawOverallocatedError";
   }
 }
 
@@ -382,6 +401,44 @@ export async function deleteProposalSectionBullet(organizationId: string, bullet
   await db.proposalSectionBullet.delete({ where: { id: bulletId } });
 }
 
+// --- Payment schedule (the proposal's offer — see Proposal.draws) ----------------
+
+export async function listProposalDraws(organizationId: string, proposalId: string) {
+  const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId }, select: { id: true } });
+  if (!proposal) throw new ProposalNotFoundError(proposalId);
+  return db.proposalDraw.findMany({ where: { proposalId }, orderBy: { sortOrder: "asc" } });
+}
+
+export interface AddProposalDrawInput {
+  readonly title: string;
+  readonly pctOfContractBasisPoints: BasisPoints;
+}
+
+export async function addProposalDraw(organizationId: string, proposalId: string, input: AddProposalDrawInput) {
+  await requireEditableProposal(organizationId, proposalId);
+
+  const existing = await db.proposalDraw.findMany({ where: { proposalId }, select: { pctOfContractBasisPoints: true, sortOrder: true } });
+  const total = totalDrawPercentage([...existing.map((draw) => draw.pctOfContractBasisPoints), input.pctOfContractBasisPoints]);
+  if (total > 10_000) throw new ProposalDrawOverallocatedError(total);
+
+  const lastSortOrder = existing.reduce((max, draw) => Math.max(max, draw.sortOrder), -1);
+  return db.proposalDraw.create({
+    data: { proposalId, title: input.title, pctOfContractBasisPoints: input.pctOfContractBasisPoints, sortOrder: lastSortOrder + 1 },
+  });
+}
+
+async function findProposalDrawForOrg(organizationId: string, drawId: string) {
+  const draw = await db.proposalDraw.findFirst({ where: { id: drawId, proposal: { organizationId } }, include: { proposal: true } });
+  if (!draw) throw new ProposalDrawNotFoundError(drawId);
+  if (draw.proposal.status !== ProposalStatus.DRAFT) throw new ProposalNotEditableError(draw.proposal.id, draw.proposal.status);
+  return draw;
+}
+
+export async function deleteProposalDraw(organizationId: string, drawId: string) {
+  await findProposalDrawForOrg(organizationId, drawId);
+  await db.proposalDraw.delete({ where: { id: drawId } });
+}
+
 export async function sendProposal(organizationId: string, proposalId: string) {
   const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId } });
   if (!proposal) throw new ProposalNotFoundError(proposalId);
@@ -434,6 +491,7 @@ export async function acceptProposal(input: AcceptProposalInput) {
       job: { select: { status: true } },
       lead: { select: { id: true, name: true, title: true, addressLine1: true, city: true, state: true, postalCode: true } },
       options: true,
+      draws: { orderBy: { sortOrder: "asc" } },
     },
   });
   if (!proposal) throw new ProposalNotFoundError(input.proposalId);
@@ -514,6 +572,29 @@ export async function acceptProposal(input: AcceptProposalInput) {
         },
         update: {},
       });
+
+      // Copy the proposal's offered payment schedule into a real one on the new Job —
+      // the same milestones the client just signed off on, now what invoicing (src/
+      // lib/invoicing/service.ts) actually bills against. Nothing to do if the
+      // proposal never had one; the office can still build one by hand later, same
+      // as any job whose proposal predates this feature.
+      if (proposal.draws.length > 0) {
+        await tx.drawSchedule.create({
+          data: {
+            organizationId: input.organizationId,
+            jobId: job.id,
+            name: "Draw Schedule",
+            draws: {
+              create: proposal.draws.map((draw) => ({
+                title: draw.title,
+                pctOfContractBasisPoints: draw.pctOfContractBasisPoints,
+                sortOrder: draw.sortOrder,
+              })),
+            },
+          },
+        });
+      }
+
       return job;
     });
     jobId = newJob.id;

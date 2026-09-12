@@ -16,6 +16,7 @@ import { BrandingForm } from "./branding-form";
 import { CoverMessageEditor } from "./cover-message-editor";
 import { EstimateLineItemRow } from "./estimate-line-item-row";
 import { OptionTabs } from "./option-tabs";
+import { PaymentScheduleEditor } from "./payment-schedule-editor";
 import { ProposalSectionEditor } from "./proposal-section-editor";
 import { ReviewLinkButton } from "./review-link-button";
 import { declineProposalPageAction, sendProposalPageAction } from "./actions";
@@ -62,6 +63,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
           include: { estimate: { include: { lineItems: { include: { costCode: true }, orderBy: { sortOrder: "asc" } } } } },
         },
         sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
+        draws: { orderBy: { sortOrder: "asc" } },
       },
     }),
     db.organization.findUnique({
@@ -323,6 +325,12 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
           {editable ? <AddSectionForm proposalId={proposal.id} /> : null}
         </div>
       </div>
+
+      {editable || proposal.draws.length > 0 ? (
+        <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+          <PaymentScheduleEditor proposalId={proposal.id} draws={proposal.draws} editable={editable} />
+        </div>
+      ) : null}
 
       {editable ? (
         <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>

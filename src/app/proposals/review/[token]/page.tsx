@@ -50,6 +50,7 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
       client: { select: { name: true } },
       options: { orderBy: { sortOrder: "asc" }, include: { estimate: { include: { lineItems: true } } } },
       sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
+      draws: { orderBy: { sortOrder: "asc" } },
     },
   });
   if (!proposal || proposal.clientId !== resolved.clientId) {
@@ -106,6 +107,22 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
               </ul>
             </div>
           ))}
+        </section>
+      ) : null}
+
+      {proposal.draws.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="border-b pb-1 text-sm font-semibold uppercase tracking-wide" style={{ borderColor: "#ddd" }}>
+            Payment schedule
+          </h2>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            {proposal.draws.map((draw) => (
+              <li key={draw.id} className="flex items-center justify-between">
+                <span>{draw.title}</span>
+                <span className="font-medium">{(draw.pctOfContractBasisPoints / 100).toFixed(2)}%</span>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 
