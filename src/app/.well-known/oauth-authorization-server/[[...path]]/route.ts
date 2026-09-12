@@ -4,10 +4,15 @@
  * the resource path.
  */
 
+import { preflight } from "@/lib/oauth/cors";
 import { authorizationServerMetadata, metadataResponse, originOf } from "@/lib/oauth/metadata";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
   return metadataResponse(authorizationServerMetadata(originOf(request)));
+}
+
+export async function OPTIONS(): Promise<Response> {
+  return preflight("GET");
 }

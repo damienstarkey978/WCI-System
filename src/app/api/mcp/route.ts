@@ -17,6 +17,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import type { ApiKeyContext } from "@/lib/api-auth";
 import { authenticateApiKey, extractToken } from "@/lib/api-auth";
 import { buildMcpServer } from "@/lib/mcp/tools";
+import { corsHeaders, preflight } from "@/lib/oauth/cors";
 import { originOf } from "@/lib/oauth/metadata";
 import { authenticateOAuthAccessToken } from "@/lib/oauth/service";
 
@@ -35,6 +36,7 @@ function unauthorizedWithDiscovery(request: Request): Response {
     {
       status: 401,
       headers: {
+        ...CORS,
         "www-authenticate": `Bearer realm="WCI OS", resource_metadata="${resourceMetadata}"`,
       },
     },
@@ -66,10 +68,16 @@ async function authenticate(request: Request): Promise<ApiKeyContext | null> {
   return apiKey.ok ? apiKey.context : null;
 }
 
+const CORS = corsHeaders("POST, GET, DELETE");
+
+export async function OPTIONS(): Promise<Response> {
+  return preflight("POST, GET, DELETE");
+}
+
 function methodNotAllowed(): Response {
   return Response.json(
     { jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed. Use POST for MCP requests." }, id: null },
-    { status: 405 },
+    { status: 405, headers: CORS },
   );
 }
 
@@ -87,12 +95,16 @@ export async function POST(request: Request): Promise<Response> {
   try {
     server = buildMcpServer(auth);
     await server.connect(transport);
-    return await transport.handleRequest(request);
+    const response = await transport.handleRequest(request);
+    // The transport builds its own response, so the cross-origin headers have to be
+    // added to it rather than declared alongside it.
+    for (const [header, value] of Object.entries(CORS)) response.headers.set(header, value);
+    return response;
   } catch (error) {
     console.error("Error handling MCP request:", error);
     return Response.json(
       { jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null },
-      { status: 500 },
+      { status: 500, headers: CORS },
     );
   } finally {
     await transport.close();

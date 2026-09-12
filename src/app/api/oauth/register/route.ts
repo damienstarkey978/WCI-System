@@ -11,12 +11,22 @@
  * hold. The worst an unwanted registration does is leave an unused row.
  */
 
+import { corsHeaders, preflight } from "@/lib/oauth/cors";
 import { OAuthError, registerClient } from "@/lib/oauth/service";
 
 export const dynamic = "force-dynamic";
 
+const CORS = corsHeaders("POST");
+
 function oauthError(error: OAuthError): Response {
-  return Response.json({ error: error.code, error_description: error.message }, { status: error.status });
+  return Response.json(
+    { error: error.code, error_description: error.message },
+    { status: error.status, headers: CORS },
+  );
+}
+
+export async function OPTIONS(): Promise<Response> {
+  return preflight("POST");
 }
 
 function asStringArray(value: unknown): string[] {
@@ -30,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     return Response.json(
       { error: "invalid_client_metadata", error_description: "Body must be JSON." },
-      { status: 400 },
+      { status: 400, headers: CORS },
     );
   }
 
@@ -62,11 +72,14 @@ export async function POST(request: Request): Promise<Response> {
         response_types: ["code"],
         scope: registered.scopes.join(" "),
       },
-      { status: 201 },
+      { status: 201, headers: CORS },
     );
   } catch (error) {
     if (error instanceof OAuthError) return oauthError(error);
     console.error("[oauth] client registration failed", error);
-    return Response.json({ error: "server_error", error_description: "Registration failed." }, { status: 500 });
+    return Response.json(
+      { error: "server_error", error_description: "Registration failed." },
+      { status: 500, headers: CORS },
+    );
   }
 }

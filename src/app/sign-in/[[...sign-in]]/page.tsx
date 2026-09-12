@@ -10,10 +10,31 @@ import { AuthShell, CLERK_APPEARANCE } from "@/components/shell/AuthShell";
  * identity to a pre-created User row by matching email — there is no invite
  * link to click, just this page.
  */
-export default function SignInPage() {
+/**
+ * Only a path within WCI OS is accepted as a return target. Anything else — an
+ * absolute URL, a protocol-relative one — would turn this page into an open redirect,
+ * which is exactly the tool a phishing link wants: our real sign-in form, then a bounce
+ * to somebody else's site.
+ */
+function safeReturnPath(value: string | string[] | undefined): string | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) return undefined;
+  return candidate;
+}
+
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // Set when someone was sent here mid-flow — connecting an assistant at
+  // /oauth/authorize is the case that needs it, since that URL carries the entire
+  // request and losing it strands the client waiting on a callback.
+  const returnTo = safeReturnPath((await searchParams).redirect_url);
+
   return (
     <AuthShell>
-      <SignIn appearance={CLERK_APPEARANCE} />
+      <SignIn appearance={CLERK_APPEARANCE} fallbackRedirectUrl={returnTo} forceRedirectUrl={returnTo} />
     </AuthShell>
   );
 }

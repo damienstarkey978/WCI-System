@@ -12,7 +12,9 @@
  * mid-authorization and leave the client waiting on a callback that never arrives.
  */
 
-import { currentAppUserOrRedirect } from "@/lib/auth";
+import { redirect } from "next/navigation";
+
+import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { OAuthError, validateAuthorizationRequest } from "@/lib/oauth/service";
 import type { Scope } from "@/lib/api-scopes";
@@ -56,7 +58,21 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
 
   // Signed in first: the whole point is to attach the grant to a named person, and
   // there is nothing to show until we know who that is.
-  const user = await currentAppUserOrRedirect();
+  //
+  // Not currentAppUserOrRedirect() — that drops the caller at /sign-in with no way
+  // back, and this request cannot survive that. Every parameter the client sent lives
+  // in this URL, so signing in has to return to this exact URL or the connector is
+  // left waiting on a callback that will never come. Which is how it would fail for
+  // everyone who is not already signed in, meaning almost everyone connecting for the
+  // first time.
+  const user = await currentAppUser();
+  if (!user) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (typeof value === "string") query.set(key, value);
+    }
+    redirect(`/sign-in?redirect_url=${encodeURIComponent(`/oauth/authorize?${query.toString()}`)}`);
+  }
 
   const clientId = single(params.client_id);
   const redirectUri = single(params.redirect_uri);

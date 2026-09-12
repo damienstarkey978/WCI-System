@@ -7,10 +7,15 @@
  * Clients differ on which form they try, and there is one resource either way.
  */
 
+import { preflight } from "@/lib/oauth/cors";
 import { metadataResponse, originOf, protectedResourceMetadata } from "@/lib/oauth/metadata";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
   return metadataResponse(protectedResourceMetadata(originOf(request)));
+}
+
+export async function OPTIONS(): Promise<Response> {
+  return preflight("GET");
 }
