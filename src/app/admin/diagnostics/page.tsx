@@ -10,6 +10,7 @@ import {
   CreateMissingCostCodesButton,
   DeleteTestLeadButton,
   JarvisIsolationPanel,
+  ReparentMiscategorizedCostCodesButton,
 } from "./diagnostics-panels";
 
 export const dynamic = "force-dynamic";
@@ -93,6 +94,7 @@ export default async function DiagnosticsPage() {
         <CostCodeFixButton looksBad={costCodeReport.looksBad} />
         <CreateMissingCostCodesButton hasMissing={costCodeFixPreview.notFoundNames.length > 0} />
         <ArchiveInactiveCostCodesButton />
+        <ReparentMiscategorizedCostCodesButton />
       </div>
 
       <div className={PANEL}>

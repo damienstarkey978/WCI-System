@@ -8,6 +8,7 @@ import {
   archiveInactiveCostCodesAction,
   createMissingCostCodesAction,
   deleteTestJarvisPhotoQaLeadAction,
+  reparentMiscategorizedCostCodesAction,
   runCostCodeFixAction,
   runJarvis403CheckAction,
   type ArchiveInactiveCostCodesActionState,
@@ -15,6 +16,7 @@ import {
   type CreateMissingCostCodesActionState,
   type DeleteTestLeadActionState,
   type Jarvis403ActionState,
+  type ReparentMiscategorizedCostCodesActionState,
 } from "./actions";
 
 const PANEL = "rounded-lg border border-black/10 p-4 dark:border-white/15";
@@ -254,6 +256,55 @@ export function ArchiveInactiveCostCodesButton() {
       </button>
       {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
       {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
+      {state.mismatchedIds && state.mismatchedIds.length > 0 ? (
+        <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+          {state.mismatchedIds.length} row(s) skipped — current name no longer matches what was verified, left untouched.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+const INITIAL_REPARENT_STATE: ReparentMiscategorizedCostCodesActionState = {};
+
+/** Reparents TRIM, HVAC, and FLOOR-LVP under the Buildertrend category they plainly
+ *  belong to — see KNOWN_MISCATEGORIZED_COST_CODES' own doc comment. Always enabled,
+ *  same reasoning as the archive button: every row is re-verified before writing. */
+export function ReparentMiscategorizedCostCodesButton() {
+  const { state, pending, run } = useDirectServerAction(reparentMiscategorizedCostCodesAction, INITIAL_REPARENT_STATE);
+  const confirmStep = useTwoStepConfirm();
+
+  const handleConfirm = async () => {
+    await run();
+    confirmStep.disarm();
+  };
+
+  if (confirmStep.armed) {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm">Move TRIM under Trim Carpentry, HVAC under Mechanical, and LVP Flooring under Flooring? This writes to production.</span>
+        <button type="button" disabled={pending} onClick={handleConfirm} className={BUTTON}>
+          {pending ? "Reparenting…" : "Yes, reparent them"}
+        </button>
+        <button type="button" disabled={pending} onClick={confirmStep.disarm} className={CANCEL_BUTTON}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3">
+      <button type="button" onClick={confirmStep.arm} className={BUTTON}>
+        Fix TRIM / HVAC / LVP Flooring categorization
+      </button>
+      {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
+      {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
+      {state.parentNotFoundIds && state.parentNotFoundIds.length > 0 ? (
+        <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+          {state.parentNotFoundIds.length} row(s) skipped — target category not live yet. Run &quot;Run the fix&quot; first.
+        </p>
+      ) : null}
       {state.mismatchedIds && state.mismatchedIds.length > 0 ? (
         <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
           {state.mismatchedIds.length} row(s) skipped — current name no longer matches what was verified, left untouched.

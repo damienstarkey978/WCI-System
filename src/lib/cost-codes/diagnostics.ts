@@ -264,3 +264,96 @@ export async function archiveKnownBuildertrendInactiveCostCodes(
 
   return { archivedCount: archived, alreadyInactiveCount: alreadyInactive, mismatchedIds: mismatched, missingIds: missing, dryRun: options.dryRun };
 }
+
+/**
+ * 3 of Bucket 5's 4 rows (2026-09-13 mapping proposal) have no exact Buildertrend
+ * item match, but Buildertrend's own category structure — already verified and
+ * baked into CANONICAL_COST_CODES — makes where each one actually belongs
+ * unambiguous: TRIM is plainly Trim Carpentry (17), HVAC is plainly Mechanical (13),
+ * and FLOOR-LVP ("LVP Flooring", unqualified) belongs under Flooring (16) alongside
+ * the dedicated LVP Flooring Labor/Materials rows rather than sitting as an orphan
+ * top-level code. This only ever sets `parentId` — never `code`, `name`, or
+ * `defaultCostType` — so no existing Estimate/PO/Bill/Budget line's cost type or
+ * code changes, only which category it rolls up under. The 4th row (the
+ * "Bathroom Remodel" category itself) has no proposed fix here — Cowork flagged it
+ * as possibly just extra/harmless, and reparenting a whole category is a bigger
+ * change than three individual codes; that one is still Damien's call.
+ *
+ * Depends on fixCostCodes' Bucket-1 renames already having run (the parent lookup
+ * matches by the "NN "-prefixed canonical name) — same ordering already required by
+ * archiveKnownBuildertrendInactiveCostCodes and the createMissing path.
+ */
+export const KNOWN_MISCATEGORIZED_COST_CODES: readonly { readonly id: string; readonly expectedName: string; readonly parentCanonicalCode: string }[] = [
+  { id: "cc15a697-1b7a-4952-b0b7-3c9db5869f3f", expectedName: "Trim", parentCanonicalCode: "17" },
+  { id: "9f7045d9-7d18-4ea0-865a-b716c6f2c3e2", expectedName: "HVAC", parentCanonicalCode: "13" },
+  { id: "07194f8b-306c-4d29-9c4a-2d5e6a60c5ac", expectedName: "LVP Flooring", parentCanonicalCode: "16" },
+];
+
+export interface ReparentMiscategorizedCostCodesResult {
+  readonly reparentedCount: number;
+  readonly alreadyCorrectCount: number;
+  /** id existed but its current name no longer matches what was verified — skipped. */
+  readonly mismatchedIds: readonly string[];
+  /** id from the list wasn't found for this org at all. */
+  readonly missingIds: readonly string[];
+  /** the target category isn't live yet under its expected name — usually means
+   *  Bucket 1's renames (fixCostCodes) haven't been run for this org yet. */
+  readonly parentNotFoundIds: readonly string[];
+  readonly dryRun: boolean;
+}
+
+export async function reparentKnownMiscategorizedCostCodes(
+  organizationId: string,
+  options: { dryRun: boolean },
+): Promise<ReparentMiscategorizedCostCodesResult> {
+  const canonicalByCode = new Map(CANONICAL_COST_CODES.map((entry) => [entry.code, entry]));
+  const ids = KNOWN_MISCATEGORIZED_COST_CODES.map((entry) => entry.id);
+
+  const [targetRows, allLive] = await Promise.all([
+    db.costCode.findMany({ where: { id: { in: ids }, organizationId }, select: { id: true, name: true, parentId: true } }),
+    db.costCode.findMany({ where: { organizationId }, select: { id: true, name: true } }),
+  ]);
+  const targetById = new Map(targetRows.map((row) => [row.id, row]));
+  const liveByName = new Map(allLive.map((row) => [row.name.trim().toLowerCase(), row]));
+
+  let reparented = 0;
+  let alreadyCorrect = 0;
+  const mismatched: string[] = [];
+  const missing: string[] = [];
+  const parentNotFound: string[] = [];
+
+  for (const entry of KNOWN_MISCATEGORIZED_COST_CODES) {
+    const live = targetById.get(entry.id);
+    if (!live) {
+      missing.push(entry.id);
+      continue;
+    }
+    if (live.name.trim().toLowerCase() !== entry.expectedName.trim().toLowerCase()) {
+      mismatched.push(entry.id);
+      continue;
+    }
+    const parentCanonicalName = canonicalByCode.get(entry.parentCanonicalCode)?.name;
+    const parentLive = parentCanonicalName ? liveByName.get(parentCanonicalName.trim().toLowerCase()) : undefined;
+    if (!parentLive) {
+      parentNotFound.push(entry.id);
+      continue;
+    }
+    if (live.parentId === parentLive.id) {
+      alreadyCorrect += 1;
+      continue;
+    }
+    if (!options.dryRun) {
+      await db.costCode.update({ where: { id: entry.id }, data: { parentId: parentLive.id } });
+    }
+    reparented += 1;
+  }
+
+  return {
+    reparentedCount: reparented,
+    alreadyCorrectCount: alreadyCorrect,
+    mismatchedIds: mismatched,
+    missingIds: missing,
+    parentNotFoundIds: parentNotFound,
+    dryRun: options.dryRun,
+  };
+}

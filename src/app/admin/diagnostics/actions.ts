@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/lib/auth";
 import { UserRole } from "@/generated/prisma/enums";
-import { archiveKnownBuildertrendInactiveCostCodes, fixCostCodes } from "@/lib/cost-codes/diagnostics";
+import { archiveKnownBuildertrendInactiveCostCodes, fixCostCodes, reparentKnownMiscategorizedCostCodes } from "@/lib/cost-codes/diagnostics";
 import { deleteTestRecordsByEmail } from "@/lib/admin/test-data-cleanup";
 import { runJarvis403Isolation, type Jarvis403CheckResult } from "@/lib/jarvis/diagnostics";
 
@@ -104,6 +104,34 @@ export async function archiveInactiveCostCodesAction(
     if (result.mismatchedIds.length > 0) parts.push(`${result.mismatchedIds.length} skipped (name changed since verified)`);
     if (result.missingIds.length > 0) parts.push(`${result.missingIds.length} not found`);
     return { summary: parts.join(", ") + ".", mismatchedIds: result.mismatchedIds };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export interface ReparentMiscategorizedCostCodesActionState {
+  readonly summary?: string;
+  readonly mismatchedIds?: readonly string[];
+  readonly parentNotFoundIds?: readonly string[];
+  readonly error?: string;
+}
+
+/** Reparents TRIM, HVAC, and FLOOR-LVP under the Buildertrend category they plainly
+ *  belong to — see KNOWN_MISCATEGORIZED_COST_CODES' own doc comment for why these
+ *  three (of Bucket 5's four) have a defensible fix despite no exact item match. */
+export async function reparentMiscategorizedCostCodesAction(
+  _previous: ReparentMiscategorizedCostCodesActionState,
+  _formData: FormData,
+): Promise<ReparentMiscategorizedCostCodesActionState> {
+  const user = await requireRole(UserRole.ADMIN);
+  try {
+    const result = await reparentKnownMiscategorizedCostCodes(user.organizationId, { dryRun: false });
+    revalidatePath("/admin/diagnostics");
+    revalidatePath("/admin/cost-codes");
+    const parts = [`${result.reparentedCount} row(s) reparented`, `${result.alreadyCorrectCount} already correct`];
+    if (result.parentNotFoundIds.length > 0) parts.push(`${result.parentNotFoundIds.length} skipped (run "Run the fix" first)`);
+    if (result.mismatchedIds.length > 0) parts.push(`${result.mismatchedIds.length} skipped (name changed since verified)`);
+    return { summary: parts.join(", ") + ".", mismatchedIds: result.mismatchedIds, parentNotFoundIds: result.parentNotFoundIds };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
