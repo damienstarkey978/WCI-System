@@ -42,11 +42,11 @@ export class JarvisReplyError extends Error {
  * confirmed against production (see the bug report this constant was added for).
  *
  * This deadline fires *before* that limit, so runJarvisTurn always gets a chance to
- * throw a real, catchable JarvisReplyError instead. It must stay comfortably under
- * whatever the platform's synchronous function timeout actually is — Netlify's is
- * 10s on Starter and up to 26s on Pro and above — so the safe default here is
- * deliberately conservative; raise JARVIS_TURN_TIMEOUT_MS only after confirming the
- * platform's own limit is higher.
+ * throw a real, catchable JarvisReplyError instead. Confirmed against this project's
+ * actual Netlify account: the function timeout is 60s flat, not configurable, on
+ * every plan — this only covers the Anthropic call itself, though; see
+ * src/lib/jarvis/service.ts's getJarvisRequestTimeoutMs for the outer deadline that
+ * covers the rest of the request (DB work before and after this call).
  */
 /** Read at call time, not module load, so a test (or a future runtime env change) can
  *  override it without needing to re-import the module. */
@@ -75,7 +75,7 @@ export class JarvisTurnTimeoutError extends JarvisReplyError {
  * AbortController's abort() here (see runJarvisTurn) turns the abandoned request
  * into an actually-cancelled one instead of a merely-ignored one.
  */
-function withDeadline<T>(promise: PromiseLike<T>, timeoutMs: number, onTimeout?: () => void): Promise<T> {
+export function withDeadline<T>(promise: PromiseLike<T>, timeoutMs: number, onTimeout?: () => void): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       onTimeout?.();

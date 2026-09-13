@@ -6,8 +6,29 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { runJarvisTurn, type JarvisChatMessage, type JarvisImageInput } from "@/lib/jarvis/assistant";
+import { runJarvisTurn, withDeadline, type JarvisChatMessage, type JarvisImageInput } from "@/lib/jarvis/assistant";
 import { buildJarvisTools } from "@/lib/jarvis/tools";
+
+/**
+ * The inner Anthropic-call deadline (JARVIS_TURN_TIMEOUT_MS, assistant.ts) only
+ * covers runJarvisTurn — it doesn't start counting until that call begins, and
+ * everything else sendJarvisMessage does (the conversation lookup/create, the
+ * initial message write, building the tool registry, then saving the reply and
+ * re-reading the conversation afterward) runs completely outside it. Under load —
+ * exactly the condition a burst of retries creates — any one of those DB steps can
+ * be slow enough that the *whole* request blows past the hosting platform's actual
+ * function ceiling before the inner deadline ever gets a chance to fire, producing
+ * the same "zero response, not even an error" symptom the inner deadline was built
+ * to prevent, just from a different cause. This wraps the entire function as a
+ * backstop, so no matter *where* the time goes, the Server Action calling this
+ * always gets a response — success or a clear, catchable error — well under
+ * whatever that real ceiling is.
+ */
+/** Exported only so a test can assert the env var name and default without needing
+ *  a live database — sendJarvisMessage below is the only real caller. */
+export function getJarvisRequestTimeoutMs(): number {
+  return Number(process.env.JARVIS_REQUEST_TIMEOUT_MS) || 50_000;
+}
 
 export class ConversationNotFoundError extends Error {
   constructor(conversationId: string) {
@@ -73,8 +94,14 @@ function formatContextNote(context: unknown): string | undefined {
  * Append the user's message, ask Jarvis for a reply against the full thread history,
  * and append that too. Always returns the conversation with every message so the
  * caller can just re-render — no separate "was this a new conversation" branching.
+ *
+ * Wrapped in the whole-request deadline described above — see getJarvisRequestTimeoutMs.
  */
 export async function sendJarvisMessage(input: SendJarvisMessageInput) {
+  return withDeadline(sendJarvisMessageInner(input), getJarvisRequestTimeoutMs());
+}
+
+async function sendJarvisMessageInner(input: SendJarvisMessageInput) {
   const conversation = input.conversationId
     ? await db.jarvisConversation.findFirst({
         where: { id: input.conversationId, organizationId: input.organizationId, userId: input.userId },
