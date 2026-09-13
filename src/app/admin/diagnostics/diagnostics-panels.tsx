@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import {
   deleteTestJarvisPhotoQaLeadAction,
@@ -13,6 +13,24 @@ import {
 
 const PANEL = "rounded-lg border border-black/10 p-4 dark:border-white/15";
 const BUTTON = "rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black";
+const CANCEL_BUTTON = "rounded border border-black/20 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/25";
+
+/**
+ * An inline two-step confirm instead of window.confirm() — a native confirm()
+ * dialog blocks the tab's entire main thread until dismissed, which is fine for a
+ * person clicking through it but reproducibly hangs any browser-automation tool
+ * that doesn't have a JS-dialog handler wired up (confirmed against this exact
+ * page: "Run the fix" appeared to freeze the tab because the dialog was sitting
+ * there with nothing to dismiss it). This never opens a native dialog at all.
+ */
+function useTwoStepConfirm() {
+  const [armed, setArmed] = useState(false);
+  return {
+    armed,
+    arm: () => setArmed(true),
+    disarm: () => setArmed(false),
+  };
+}
 
 const INITIAL_JARVIS_STATE: Jarvis403ActionState = {};
 
@@ -56,22 +74,31 @@ const INITIAL_FIX_STATE: CostCodeFixActionState = {};
 
 export function CostCodeFixButton({ looksBad }: { looksBad: boolean }) {
   const [state, formAction, pending] = useActionState(runCostCodeFixAction, INITIAL_FIX_STATE);
+  const confirmStep = useTwoStepConfirm();
+
+  if (confirmStep.armed) {
+    return (
+      <form action={formAction} className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm">Repair cost code catalog codes/parent links in place? This writes to production.</span>
+        <button type="submit" disabled={pending} className={BUTTON}>
+          {pending ? "Fixing…" : "Yes, run the fix"}
+        </button>
+        <button type="button" disabled={pending} onClick={confirmStep.disarm} className={CANCEL_BUTTON}>
+          Cancel
+        </button>
+      </form>
+    );
+  }
 
   return (
-    <form
-      action={formAction}
-      onSubmit={(event) => {
-        if (!confirm("Repair cost code catalog codes/parent links in place? This writes to production.")) event.preventDefault();
-      }}
-      className="mt-3"
-    >
-      <button type="submit" disabled={pending || !looksBad} className={BUTTON}>
-        {pending ? "Fixing…" : "Run the fix"}
+    <div className="mt-3">
+      <button type="button" onClick={confirmStep.arm} disabled={!looksBad} className={BUTTON}>
+        Run the fix
       </button>
       {!looksBad ? <span className="ml-2 text-xs text-black/50 dark:text-white/50">Nothing looks wrong — button disabled.</span> : null}
       {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
       {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
-    </form>
+    </div>
   );
 }
 
@@ -79,24 +106,33 @@ const INITIAL_DELETE_STATE: DeleteTestLeadActionState = {};
 
 export function DeleteTestLeadButton({ hasRecords }: { hasRecords: boolean }) {
   const [state, formAction, pending] = useActionState(deleteTestJarvisPhotoQaLeadAction, INITIAL_DELETE_STATE);
+  const confirmStep = useTwoStepConfirm();
 
   if (!hasRecords && !state.summary) {
     return <p className="mt-3 text-sm text-black/60 dark:text-white/60">Nothing found — already cleaned up, or never created here.</p>;
   }
 
+  if (confirmStep.armed) {
+    return (
+      <form action={formAction} className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm">Delete the &quot;TEST Jarvis PhotoQA&quot; client/lead? This cannot be undone.</span>
+        <button type="submit" disabled={pending} className={BUTTON}>
+          {pending ? "Deleting…" : "Yes, delete"}
+        </button>
+        <button type="button" disabled={pending} onClick={confirmStep.disarm} className={CANCEL_BUTTON}>
+          Cancel
+        </button>
+      </form>
+    );
+  }
+
   return (
-    <form
-      action={formAction}
-      onSubmit={(event) => {
-        if (!confirm('Delete the "TEST Jarvis PhotoQA" client/lead? This cannot be undone.')) event.preventDefault();
-      }}
-      className="mt-3"
-    >
-      <button type="submit" disabled={pending || !hasRecords} className={BUTTON}>
-        {pending ? "Deleting…" : "Delete test records"}
+    <div className="mt-3">
+      <button type="button" onClick={confirmStep.arm} disabled={!hasRecords} className={BUTTON}>
+        Delete test records
       </button>
       {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
       {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
-    </form>
+    </div>
   );
 }
