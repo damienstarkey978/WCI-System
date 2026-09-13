@@ -70,12 +70,25 @@ export interface CostCodeFixResult {
   readonly parentsFixedCount: number;
   readonly alreadyCorrectCount: number;
   readonly notFoundNames: readonly string[];
+  /** Canonical entries with no live match that were created this run — only ever
+   *  populated when `createMissing` is set; see fixCostCodes' own doc comment. */
+  readonly createdNames: readonly string[];
   readonly unmatchedLiveRows: readonly { id: string; code: string; name: string }[];
   readonly fixedDetail: readonly string[];
   readonly dryRun: boolean;
 }
 
-export async function fixCostCodes(organizationId: string, options: { dryRun: boolean }): Promise<CostCodeFixResult> {
+/**
+ * `createMissing` creates a live row for a canonical entry with no live match at all,
+ * instead of only reporting it — deliberately opt-in (default false, matching every
+ * other write in this file) because "no live row" and "a live row exists under an
+ * unexpected name" look identical from this function's own name-matching alone, and
+ * only a human (or, here, Cowork's own cross-check against the real Buildertrend
+ * cost-code settings and QuickBooks catalog, 2026-09-13) can tell them apart safely —
+ * see canonical.ts's own comment on the same date for which canonical names were
+ * confirmed genuinely absent versus renamed to match Buildertrend's live data.
+ */
+export async function fixCostCodes(organizationId: string, options: { dryRun: boolean; createMissing?: boolean }): Promise<CostCodeFixResult> {
   const org = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { name: true } });
 
   const liveRows = await db.costCode.findMany({
@@ -90,12 +103,24 @@ export async function fixCostCodes(organizationId: string, options: { dryRun: bo
   let fixed = 0;
   let alreadyCorrect = 0;
   const notFound: string[] = [];
+  const created: string[] = [];
   const fixedDetail: string[] = [];
 
   for (const entry of CANONICAL_COST_CODES) {
     const live = liveByName.get(entry.name.trim().toLowerCase());
     if (!live) {
-      notFound.push(entry.name);
+      if (options.createMissing) {
+        fixedDetail.push(`"${entry.name}" — created new row (code ${JSON.stringify(entry.code)})`);
+        if (!options.dryRun) {
+          const newRow = await db.costCode.create({
+            data: { organizationId, code: entry.code, name: entry.name, defaultCostType: entry.defaultCostType, isActive: true },
+          });
+          idByCanonicalCode.set(entry.code, newRow.id);
+        }
+        created.push(entry.name);
+      } else {
+        notFound.push(entry.name);
+      }
       continue;
     }
     idByCanonicalCode.set(entry.code, live.id);
@@ -138,8 +163,104 @@ export async function fixCostCodes(organizationId: string, options: { dryRun: bo
     parentsFixedCount: parentsFixed,
     alreadyCorrectCount: alreadyCorrect,
     notFoundNames: notFound,
+    createdNames: created,
     unmatchedLiveRows: unmatchedLive.map((row) => ({ id: row.id, code: row.code, name: row.name })),
     fixedDetail,
     dryRun: options.dryRun,
   };
+}
+
+/**
+ * 30 live CostCode rows confirmed (2026-09-13, Cowork cross-check against World
+ * Construction's live Buildertrend Cost Codes settings with the Inactive filter on)
+ * to each match a cost code Buildertrend itself already has marked Inactive — several
+ * split into multiple rows during the CSV migration (e.g. Buildertrend's one inactive
+ * "Baseboard, Casing, Sills, Crown" became 4 separate MIG-* rows here). Not a data
+ * problem, just retired Buildertrend codes that came along in the import — hardcoded
+ * by id (not a name search) so this can only ever touch rows verified by hand, and
+ * the `expectedName` is checked again at run time before writing, so a ProdCode
+ * whose name changed since this list was compiled is skipped rather than silently
+ * archived.
+ */
+export const BUILDERTREND_INACTIVE_COST_CODES: readonly { readonly id: string; readonly expectedName: string }[] = [
+  { id: "cmtw7p73e000m09jm6ksb28ly", expectedName: "Room Remodel" },
+  { id: "cmtw7p743000209juypsajhsn", expectedName: "Mirror" },
+  { id: "cmtw7p172000a09jmapku29ey", expectedName: "Accesories" },
+  { id: "cmtw7p76x000309junujc49ye", expectedName: "Vanity" },
+  { id: "cmtw7p79p000409juhl4mx9m1", expectedName: "Toilet" },
+  { id: "6a95b06e-396b-4e07-848a-dd9b9919a89e", expectedName: "Concrete/ Foundation Materials:" },
+  { id: "06723dda-7d8c-4360-8936-e1f6fd80003c", expectedName: "Exterior Painting" },
+  { id: "cf794d3f-2a09-440b-a2da-9ca882a468be", expectedName: "Interior Painting" },
+  { id: "c9af504c-d446-425e-81d8-04167a8af79e", expectedName: "Ext Doors" },
+  { id: "971de56e-5302-4284-8b4c-9d3447535fe9", expectedName: "Windows" },
+  { id: "b29ac179-68ec-4d8b-bbaf-e3add2bac29c", expectedName: "Batt Insulation" },
+  { id: "6a9c8275-dc31-4448-b8b0-6b5087d34830", expectedName: "Interior Doors, hinges and handles" },
+  { id: "cmtw7p7c4000509juz9vju7ms", expectedName: "hinges and handles" },
+  { id: "8187b93f-c9f9-4b1e-ae53-ee37b6b49d17", expectedName: "Tile and Grout" },
+  { id: "ae9c046f-1525-4342-a4aa-f6e111c2e36b", expectedName: "Plumbing L&M" },
+  { id: "7aa69914-b623-4728-8e28-27012ac10730", expectedName: "Electrical L&M" },
+  { id: "33d27e53-d642-41db-99d1-f2bbae91231d", expectedName: "Mechanical L&M" },
+  { id: "60530140-71f0-44fc-89c1-a92440f4ad69", expectedName: "Kitchen (General)" },
+  { id: "c61c7b1c-c89d-483f-af4d-b7dc40fcf50a", expectedName: "LVP, Hardwood, Laminate" },
+  { id: "cmtw7p65i000i09jmiyxiy2fm", expectedName: "Hardwood" },
+  { id: "cmtw7p6e5000109ju525ews84", expectedName: "LVP" },
+  { id: "cmtw7p7c1000o09jmpl1nio9s", expectedName: "Laminate" },
+  { id: "03d68b6e-e5aa-4fce-8767-4d431c3efc8a", expectedName: "Baseboard, Casing, Sills, Crown" },
+  { id: "cmtw7p1be000c09jmn5klt66b", expectedName: "Baseboard" },
+  { id: "cmtw7p1ej000f09jmn7eiuiu2", expectedName: "Casing" },
+  { id: "cmtw7p1fs000h09jm56sdxhjd", expectedName: "Crown" },
+  { id: "cmtw7pb0r000009ifzmv6a7kh", expectedName: "Sills" },
+  { id: "5b70238c-12e6-4046-bae3-d4343b8145d0", expectedName: "Framing L&M" },
+  { id: "0176858b-e499-4d2a-a8fc-b788893a98f4", expectedName: "Structural Repairs" },
+  { id: "bcfa0084-dbbe-4dfe-a541-a26f1c7ef780", expectedName: "Bathroom (General)" },
+];
+
+export interface ArchiveInactiveCostCodesResult {
+  readonly archivedCount: number;
+  readonly alreadyInactiveCount: number;
+  /** id existed in this org but its current name no longer matches what was verified
+   *  — skipped rather than archived, so a since-repurposed row is never touched. */
+  readonly mismatchedIds: readonly string[];
+  /** id from the list wasn't found for this org at all (wrong org, already deleted). */
+  readonly missingIds: readonly string[];
+  readonly dryRun: boolean;
+}
+
+export async function archiveKnownBuildertrendInactiveCostCodes(
+  organizationId: string,
+  options: { dryRun: boolean },
+): Promise<ArchiveInactiveCostCodesResult> {
+  const ids = BUILDERTREND_INACTIVE_COST_CODES.map((entry) => entry.id);
+  const liveRows = await db.costCode.findMany({
+    where: { id: { in: ids }, organizationId },
+    select: { id: true, name: true, isActive: true },
+  });
+  const liveById = new Map(liveRows.map((row) => [row.id, row]));
+
+  let archived = 0;
+  let alreadyInactive = 0;
+  const mismatched: string[] = [];
+  const missing: string[] = [];
+
+  for (const entry of BUILDERTREND_INACTIVE_COST_CODES) {
+    const live = liveById.get(entry.id);
+    if (!live) {
+      missing.push(entry.id);
+      continue;
+    }
+    if (live.name.trim().toLowerCase() !== entry.expectedName.trim().toLowerCase()) {
+      mismatched.push(entry.id);
+      continue;
+    }
+    if (!live.isActive) {
+      alreadyInactive += 1;
+      continue;
+    }
+    if (!options.dryRun) {
+      await db.costCode.update({ where: { id: entry.id }, data: { isActive: false } });
+    }
+    archived += 1;
+  }
+
+  return { archivedCount: archived, alreadyInactiveCount: alreadyInactive, mismatchedIds: mismatched, missingIds: missing, dryRun: options.dryRun };
 }

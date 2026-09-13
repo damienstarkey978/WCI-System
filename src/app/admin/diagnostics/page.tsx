@@ -1,10 +1,16 @@
 import { AuthConfigurationError, requireRole } from "@/lib/auth";
 import { UserRole } from "@/generated/prisma/enums";
-import { diagnoseCostCodes } from "@/lib/cost-codes/diagnostics";
+import { diagnoseCostCodes, fixCostCodes } from "@/lib/cost-codes/diagnostics";
 import { findTestRecordsByEmail } from "@/lib/admin/test-data-cleanup";
 
 import { SetupNotice } from "../setup-notice";
-import { CostCodeFixButton, DeleteTestLeadButton, JarvisIsolationPanel } from "./diagnostics-panels";
+import {
+  ArchiveInactiveCostCodesButton,
+  CostCodeFixButton,
+  CreateMissingCostCodesButton,
+  DeleteTestLeadButton,
+  JarvisIsolationPanel,
+} from "./diagnostics-panels";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +35,9 @@ export default async function DiagnosticsPage() {
     throw error;
   }
 
-  const [costCodeReport, testRecords] = await Promise.all([
+  const [costCodeReport, costCodeFixPreview, testRecords] = await Promise.all([
     diagnoseCostCodes(user.organizationId),
+    fixCostCodes(user.organizationId, { dryRun: true }),
     findTestRecordsByEmail(TEST_JARVIS_PHOTOQA_EMAIL),
   ]);
 
@@ -84,6 +91,8 @@ export default async function DiagnosticsPage() {
         </p>
 
         <CostCodeFixButton looksBad={costCodeReport.looksBad} />
+        <CreateMissingCostCodesButton hasMissing={costCodeFixPreview.notFoundNames.length > 0} />
+        <ArchiveInactiveCostCodesButton />
       </div>
 
       <div className={PANEL}>

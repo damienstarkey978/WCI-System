@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/lib/auth";
 import { UserRole } from "@/generated/prisma/enums";
-import { fixCostCodes } from "@/lib/cost-codes/diagnostics";
+import { archiveKnownBuildertrendInactiveCostCodes, fixCostCodes } from "@/lib/cost-codes/diagnostics";
 import { deleteTestRecordsByEmail } from "@/lib/admin/test-data-cleanup";
 import { runJarvis403Isolation, type Jarvis403CheckResult } from "@/lib/jarvis/diagnostics";
 
@@ -50,6 +50,60 @@ export async function runCostCodeFixAction(_previous: CostCodeFixActionState, _f
     if (result.notFoundNames.length > 0) parts.push(`${result.notFoundNames.length} canonical name(s) not found — need creating by hand`);
     if (result.unmatchedLiveRows.length > 0) parts.push(`${result.unmatchedLiveRows.length} live row(s) not in the canonical list — left untouched`);
     return { summary: parts.join(", ") + ".", notFoundNames: result.notFoundNames, unmatchedLiveRows: result.unmatchedLiveRows };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export interface CreateMissingCostCodesActionState {
+  readonly summary?: string;
+  readonly createdNames?: readonly string[];
+  readonly error?: string;
+}
+
+/** Creates a live row for every canonical entry with no live match at all —
+ *  deliberately a separate button from "Run the fix" (which never creates rows) so
+ *  the two dry-run-free actions can't be triggered by the same click; see
+ *  fixCostCodes' own doc comment for why creating is opt-in. */
+export async function createMissingCostCodesAction(
+  _previous: CreateMissingCostCodesActionState,
+  _formData: FormData,
+): Promise<CreateMissingCostCodesActionState> {
+  const user = await requireRole(UserRole.ADMIN);
+  try {
+    const result = await fixCostCodes(user.organizationId, { dryRun: false, createMissing: true });
+    revalidatePath("/admin/diagnostics");
+    revalidatePath("/admin/cost-codes");
+    return {
+      summary: `${result.createdNames.length} cost code(s) created, ${result.fixedCount} code/type fix(es), ${result.parentsFixedCount} parent link(s).`,
+      createdNames: result.createdNames,
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export interface ArchiveInactiveCostCodesActionState {
+  readonly summary?: string;
+  readonly mismatchedIds?: readonly string[];
+  readonly error?: string;
+}
+
+/** Marks the 30 hand-verified Buildertrend-inactive cost codes inactive — see
+ *  BUILDERTREND_INACTIVE_COST_CODES' own doc comment for how these were verified. */
+export async function archiveInactiveCostCodesAction(
+  _previous: ArchiveInactiveCostCodesActionState,
+  _formData: FormData,
+): Promise<ArchiveInactiveCostCodesActionState> {
+  const user = await requireRole(UserRole.ADMIN);
+  try {
+    const result = await archiveKnownBuildertrendInactiveCostCodes(user.organizationId, { dryRun: false });
+    revalidatePath("/admin/diagnostics");
+    revalidatePath("/admin/cost-codes");
+    const parts = [`${result.archivedCount} row(s) marked inactive`, `${result.alreadyInactiveCount} already inactive`];
+    if (result.mismatchedIds.length > 0) parts.push(`${result.mismatchedIds.length} skipped (name changed since verified)`);
+    if (result.missingIds.length > 0) parts.push(`${result.missingIds.length} not found`);
+    return { summary: parts.join(", ") + ".", mismatchedIds: result.mismatchedIds };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }

@@ -16,25 +16,34 @@ export interface CanonicalCostCodeEntry {
 }
 
 export const CANONICAL_COST_CODES: readonly CanonicalCostCodeEntry[] = [
-  { code: "01", name: "Pre Construction", defaultCostType: CostType.NONE },
+  // The 11 top-level names below carry Buildertrend's own "NN " prefix (confirmed
+  // 2026-09-13 against World Construction's live Buildertrend Cost Codes settings) so
+  // the fix in diagnostics.ts matches by name against the real imported rows instead
+  // of reporting both "not found" (this canonical entry) and "unmatched" (the live
+  // BT-CAT-NN-* row) for the same category. The other 8 numbered categories (02, 03,
+  // 05, 07, 08, 09, 12, 16) are NOT renamed here — Buildertrend also has live BT-CAT-*
+  // rows for those, but a differently-named row already satisfies each of those
+  // canonical entries, so the BT-CAT-* one is a likely duplicate needing a manual DB
+  // check before either renaming or removing it.
+  { code: "01", name: "01 Pre Construction", defaultCostType: CostType.NONE },
   { code: "02", name: "Concrete/ Foundations", defaultCostType: CostType.NONE },
   { code: "03", name: "Siding/ Soffit", defaultCostType: CostType.NONE },
-  { code: "04", name: "Roofing", defaultCostType: CostType.NONE },
+  { code: "04", name: "04 Roofing", defaultCostType: CostType.NONE },
   { code: "05", name: "Painting", defaultCostType: CostType.NONE },
-  { code: "06", name: "Ext Doors and Windows", defaultCostType: CostType.NONE },
+  { code: "06", name: "06 Ext Doors and Windows", defaultCostType: CostType.NONE },
   { code: "07", name: "Insulation", defaultCostType: CostType.NONE },
   { code: "08", name: "Drywall", defaultCostType: CostType.NONE },
   { code: "09", name: "Interior Doors", defaultCostType: CostType.NONE },
-  { code: "10", name: "Tile", defaultCostType: CostType.NONE },
-  { code: "11", name: "Plumbing", defaultCostType: CostType.NONE },
+  { code: "10", name: "10 Tile", defaultCostType: CostType.NONE },
+  { code: "11", name: "11 Plumbing", defaultCostType: CostType.NONE },
   { code: "12", name: "Electrical", defaultCostType: CostType.NONE },
-  { code: "13", name: "Mechanical", defaultCostType: CostType.NONE },
-  { code: "14", name: "Bathroom Fixtures", defaultCostType: CostType.NONE },
-  { code: "15", name: "Kitchen", defaultCostType: CostType.NONE },
+  { code: "13", name: "13 Mechanical", defaultCostType: CostType.NONE },
+  { code: "14", name: "14 Bathroom Fixtures", defaultCostType: CostType.NONE },
+  { code: "15", name: "15 Kitchen", defaultCostType: CostType.NONE },
   { code: "16", name: "Flooring", defaultCostType: CostType.NONE },
-  { code: "17", name: "Trim Carpentry", defaultCostType: CostType.NONE },
-  { code: "18", name: "Waste Removal", defaultCostType: CostType.NONE },
-  { code: "19", name: "Framing", defaultCostType: CostType.NONE },
+  { code: "17", name: "17 Trim Carpentry", defaultCostType: CostType.NONE },
+  { code: "18", name: "18 Waste Removal", defaultCostType: CostType.NONE },
+  { code: "19", name: "19 Framing", defaultCostType: CostType.NONE },
   { code: "BUILDERTREND-DEFAULT", name: "Buildertrend Default", defaultCostType: CostType.NONE },
   { code: "EXTERIOR", name: "Exterior", defaultCostType: CostType.NONE },
   { code: "FINANCIAL", name: "Financial", defaultCostType: CostType.NONE },

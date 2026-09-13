@@ -3,10 +3,14 @@
 import { useActionState, useState } from "react";
 
 import {
+  archiveInactiveCostCodesAction,
+  createMissingCostCodesAction,
   deleteTestJarvisPhotoQaLeadAction,
   runCostCodeFixAction,
   runJarvis403CheckAction,
+  type ArchiveInactiveCostCodesActionState,
   type CostCodeFixActionState,
+  type CreateMissingCostCodesActionState,
   type DeleteTestLeadActionState,
   type Jarvis403ActionState,
 } from "./actions";
@@ -163,6 +167,91 @@ export function CostCodeFixButton({ looksBad }: { looksBad: boolean }) {
             ))}
           </div>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+const INITIAL_CREATE_MISSING_STATE: CreateMissingCostCodesActionState = {};
+
+/** Separate from "Run the fix" (which never creates rows) — see fixCostCodes' own
+ *  doc comment for why creating a canonical entry with no live match is a distinct,
+ *  opt-in step rather than something the plain fix does automatically. */
+export function CreateMissingCostCodesButton({ hasMissing }: { hasMissing: boolean }) {
+  const { state, pending, run } = useDirectServerAction(createMissingCostCodesAction, INITIAL_CREATE_MISSING_STATE);
+  const confirmStep = useTwoStepConfirm();
+
+  const handleConfirm = async () => {
+    await run();
+    confirmStep.disarm();
+  };
+
+  if (confirmStep.armed) {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm">Create a new cost code row for every canonical name still missing? This writes to production.</span>
+        <button type="button" disabled={pending} onClick={handleConfirm} className={BUTTON}>
+          {pending ? "Creating…" : "Yes, create them"}
+        </button>
+        <button type="button" disabled={pending} onClick={confirmStep.disarm} className={CANCEL_BUTTON}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3">
+      <button type="button" onClick={confirmStep.arm} disabled={!hasMissing} className={BUTTON}>
+        Create missing canonical cost codes
+      </button>
+      {!hasMissing ? <span className="ml-2 text-xs text-black/50 dark:text-white/50">Nothing missing — button disabled.</span> : null}
+      {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
+      {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
+    </div>
+  );
+}
+
+const INITIAL_ARCHIVE_STATE: ArchiveInactiveCostCodesActionState = {};
+
+/** Marks the 30 hand-verified Buildertrend-inactive rows inactive — always enabled
+ *  (unlike the other two buttons) since it's safe to click even when it has nothing
+ *  left to do: every row is re-verified by id and name before being touched, so a
+ *  second run just reports "already inactive" for everything. */
+export function ArchiveInactiveCostCodesButton() {
+  const { state, pending, run } = useDirectServerAction(archiveInactiveCostCodesAction, INITIAL_ARCHIVE_STATE);
+  const confirmStep = useTwoStepConfirm();
+
+  const handleConfirm = async () => {
+    await run();
+    confirmStep.disarm();
+  };
+
+  if (confirmStep.armed) {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm">Mark the 30 confirmed Buildertrend-inactive cost codes inactive here too? This writes to production.</span>
+        <button type="button" disabled={pending} onClick={handleConfirm} className={BUTTON}>
+          {pending ? "Archiving…" : "Yes, archive them"}
+        </button>
+        <button type="button" disabled={pending} onClick={confirmStep.disarm} className={CANCEL_BUTTON}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3">
+      <button type="button" onClick={confirmStep.arm} className={BUTTON}>
+        Archive known Buildertrend-inactive codes
+      </button>
+      {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
+      {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
+      {state.mismatchedIds && state.mismatchedIds.length > 0 ? (
+        <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+          {state.mismatchedIds.length} row(s) skipped — current name no longer matches what was verified, left untouched.
+        </p>
       ) : null}
     </div>
   );
