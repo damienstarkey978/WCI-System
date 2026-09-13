@@ -28,6 +28,14 @@ export async function runJarvis403CheckAction(_previous: Jarvis403ActionState, _
 
 export interface CostCodeFixActionState {
   readonly summary?: string;
+  /** Canonical entries with no matching live row by name — need creating by hand. */
+  readonly notFoundNames?: readonly string[];
+  /** Live rows with no matching canonical entry by name — left untouched by the fix,
+   *  since it only ever repairs rows it can identify by name; commonly Buildertrend-
+   *  imported cost codes outside the original seed list (see the 2026-09-13 retest:
+   *  TRIM and HVAC surfaced here, not in notFoundNames, because their exact names
+   *  were never in the canonical list to begin with). */
+  readonly unmatchedLiveRows?: readonly { id: string; code: string; name: string }[];
   readonly error?: string;
 }
 
@@ -41,7 +49,7 @@ export async function runCostCodeFixAction(_previous: CostCodeFixActionState, _f
     const parts = [`${result.fixedCount} code/type fix(es)`, `${result.parentsFixedCount} parent link(s)`, `${result.alreadyCorrectCount} already correct`];
     if (result.notFoundNames.length > 0) parts.push(`${result.notFoundNames.length} canonical name(s) not found — need creating by hand`);
     if (result.unmatchedLiveRows.length > 0) parts.push(`${result.unmatchedLiveRows.length} live row(s) not in the canonical list — left untouched`);
-    return { summary: parts.join(", ") + "." };
+    return { summary: parts.join(", ") + ".", notFoundNames: result.notFoundNames, unmatchedLiveRows: result.unmatchedLiveRows };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }

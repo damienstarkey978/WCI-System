@@ -98,6 +98,30 @@ export function CostCodeFixButton({ looksBad }: { looksBad: boolean }) {
       {!looksBad ? <span className="ml-2 text-xs text-black/50 dark:text-white/50">Nothing looks wrong — button disabled.</span> : null}
       {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
       {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
+      {state.unmatchedLiveRows && state.unmatchedLiveRows.length > 0 ? (
+        <div className="mt-3">
+          <p className="text-xs font-medium">Live rows not in the canonical list (left untouched):</p>
+          <div className="mt-1 max-h-48 overflow-y-auto rounded border border-black/10 font-mono text-xs dark:border-white/15">
+            {state.unmatchedLiveRows.map((row) => (
+              <div key={row.id} className="border-b border-black/5 px-2 py-1 last:border-0 dark:border-white/10">
+                {row.id} — code={JSON.stringify(row.code)} name={JSON.stringify(row.name)}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {state.notFoundNames && state.notFoundNames.length > 0 ? (
+        <div className="mt-3">
+          <p className="text-xs font-medium">Canonical names not found live (need creating by hand):</p>
+          <div className="mt-1 max-h-48 overflow-y-auto rounded border border-black/10 font-mono text-xs dark:border-white/15">
+            {state.notFoundNames.map((name) => (
+              <div key={name} className="border-b border-black/5 px-2 py-1 last:border-0 dark:border-white/10">
+                {name}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

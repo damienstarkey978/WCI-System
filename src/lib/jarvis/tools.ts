@@ -113,6 +113,14 @@ export interface JarvisToolContext {
    *  into the actual estimate-drafting AI call for real photo grounding, not just let
    *  the chat model describe them secondhand in its "notes" argument. */
   readonly images?: readonly JarvisImageInput[];
+  /** Shared, mutable log for this one turn — a tool that writes real data outside the
+   *  confirm-gate (create_lead, create_client, draft_lead_proposal, convert_lead_to_job)
+   *  pushes a one-line description here right after its write succeeds. Confirmed
+   *  necessary against production: the write itself can succeed and a *later* round
+   *  trip to Anthropic in the same tool-calling turn can still fail, which without
+   *  this reports a plain error while leaving the actual write both real and
+   *  unmentioned. See assistant.ts's describePartialFailure. */
+  readonly sideEffects: string[];
 }
 
 async function requireJob(organizationId: string, jobId: string) {
@@ -943,6 +951,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         source: input.source ?? null,
         notes: input.notes ?? null,
       });
+      ctx.sideEffects.push(`Created lead "${lead.name}" (id ${lead.id})`);
       return `Created lead "${lead.name}", stage NEW.`;
     },
   });
@@ -983,6 +992,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         name: input.jobName,
         contractType: input.contractType as ContractType,
       });
+      ctx.sideEffects.push(`Converted lead ${input.leadId} to job "${job.name}" (id ${job.id})`);
       return `Converted the lead to job "${job.name}" (${job.id}), status PRE_SALE.`;
     },
   });
@@ -1007,6 +1017,9 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         clientEmail: input.clientEmail ?? null,
         clientPhone: input.clientPhone ?? null,
       });
+      ctx.sideEffects.push(
+        `Drafted proposal "${proposal.title}" (id ${proposal.id}) for lead ${input.leadId} — converted the lead to a job and created/linked a Client record as part of this`,
+      );
       return `Drafted proposal "${proposal.title}" for the lead — status DRAFT, view it at /leads/proposals/${proposal.id}. A human needs to review and send it.`;
     },
   });
@@ -1480,6 +1493,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     }),
     run: async (input) => {
       const client = await createClient({ organizationId: ctx.organizationId, name: input.name, email: input.email, phone: input.phone ?? null });
+      ctx.sideEffects.push(`Created client "${client.name}" (${client.email}, id ${client.id})`);
       return `Created client "${client.name}" (${client.email}).`;
     },
   });

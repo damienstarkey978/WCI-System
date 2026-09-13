@@ -98,6 +98,27 @@ describe("runJarvisTurn", () => {
       expect(reply).toBe("Done.");
     });
 
+    it("returns a reply describing recorded side effects instead of throwing, when any were recorded before the failure", async () => {
+      process.env.ANTHROPIC_API_KEY = "test-key";
+      process.env.JARVIS_TURN_TIMEOUT_MS = "50000";
+      const runner = vi.fn().mockRejectedValue(new Error("Connection error"));
+      const sideEffects = [`Created client "TEST Jarvis Retest4" (test@example.com, id abc123)`, `Created lead "Retest4 - Kitchen Remodel" (id def456)`];
+
+      const reply = await runJarvisTurn([{ role: "USER", content: "create a client and a lead" }], [], runner, undefined, undefined, sideEffects);
+
+      expect(reply).toContain("Connection error");
+      expect(reply).toContain('Created client "TEST Jarvis Retest4"');
+      expect(reply).toContain('Created lead "Retest4 - Kitchen Remodel"');
+    });
+
+    it("still throws (doesn't fabricate a reply) when nothing was recorded before the failure", async () => {
+      process.env.ANTHROPIC_API_KEY = "test-key";
+      process.env.JARVIS_TURN_TIMEOUT_MS = "50000";
+      const runner = vi.fn().mockRejectedValue(new Error("Connection error"));
+
+      await expect(runJarvisTurn([{ role: "USER", content: "hi" }], [], runner, undefined, undefined, [])).rejects.toThrow("Connection error");
+    });
+
     it(
       "aborts the in-flight request on timeout, rather than merely abandoning it",
       async () => {

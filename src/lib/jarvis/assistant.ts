@@ -54,6 +54,28 @@ function getJarvisTurnTimeoutMs(): number {
   return Number(process.env.JARVIS_TURN_TIMEOUT_MS) || 22_000;
 }
 
+/**
+ * Confirmed against production (2026-09-13 retest): a tool like create_lead or
+ * create_client runs and commits its write synchronously, inside the Anthropic SDK's
+ * own tool-calling loop — but the *next* round trip to Anthropic (sending the tool
+ * result back, asking for the next step or the final reply) is a separate network
+ * call that can still fail (timeout, a dropped connection) after that write already
+ * landed. Left alone, that turns into exactly what got reported: the user sees
+ * "Jarvis couldn't reply: Connection error" while a Client and a Lead sit in the
+ * database with no acknowledgment they exist — a silent write the user is actively
+ * told didn't happen, the inverse of (and just as dangerous as) claiming to have
+ * done something that didn't. When any tool recorded a side effect before the
+ * failure, this returns a real reply describing both instead of throwing, so the
+ * user is told the truth and doesn't retry into a duplicate.
+ */
+function describePartialFailure(sideEffects: readonly string[], errorMessage: string): string {
+  const bullets = sideEffects.map((effect) => `- ${effect}`).join("\n");
+  return (
+    `Something went wrong before I could finish: ${errorMessage}\n\n` +
+    `Before that happened, I did already do this — check before retrying so you don't end up with duplicates:\n${bullets}`
+  );
+}
+
 export class JarvisTurnTimeoutError extends JarvisReplyError {
   constructor(timeoutMs: number) {
     super(
@@ -184,6 +206,11 @@ export async function runJarvisTurn(
   /** Photos/images attached to the *latest* message only (Part 3.4's file-grounded
    *  Q&A) — attached as image blocks alongside that message's text. */
   images?: readonly JarvisImageInput[],
+  /** The same array passed as JarvisToolContext.sideEffects when the tools were built
+   *  (src/lib/jarvis/tools.ts) — tools that write data outside the confirm-gate push a
+   *  one-line description here as they run. Read only after a failure (see
+   *  describePartialFailure above); untouched on a normal successful reply. */
+  sideEffects?: readonly string[],
 ): Promise<string> {
   if (!isAnthropicConfigured()) {
     throw new AiNotConfiguredError();
@@ -220,7 +247,10 @@ export async function runJarvisTurn(
       () => abortController.abort(),
     );
   } catch (error) {
+    const effects = sideEffects ?? [];
+
     if (error instanceof JarvisTurnTimeoutError) {
+      if (effects.length > 0) return describePartialFailure(effects, error.message);
       throw error;
     }
     if (error instanceof Anthropic.APIError) {
@@ -239,7 +269,12 @@ export async function runJarvisTurn(
         errorBody: error.error,
         message: error.message,
       });
-      throw new JarvisReplyError(`Jarvis couldn't reply: ${error.message}`, { cause: error });
+      const message = `Jarvis couldn't reply: ${error.message}`;
+      if (effects.length > 0) return describePartialFailure(effects, message);
+      throw new JarvisReplyError(message, { cause: error });
+    }
+    if (effects.length > 0) {
+      return describePartialFailure(effects, error instanceof Error ? error.message : String(error));
     }
     throw error;
   }

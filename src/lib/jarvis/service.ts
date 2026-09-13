@@ -128,8 +128,14 @@ async function sendJarvisMessageInner(input: SendJarvisMessageInput) {
   });
 
   const history: JarvisChatMessage[] = [...(conversation?.messages ?? []), { role: "USER", content: input.text }];
-  const tools = buildJarvisTools({ organizationId: input.organizationId, conversationId, userId: input.userId, images: input.images });
-  const reply = await runJarvisTurn(history, tools, undefined, formatContextNote(input.context), input.images);
+  // Shared with buildJarvisTools below — tools that write outside the confirm-gate
+  // (create_lead, create_client, draft_lead_proposal, ...) push a one-line note here
+  // as they run. runJarvisTurn reads it only if the Anthropic call itself then fails,
+  // so a write that already landed is never reported to the user as if it hadn't
+  // (see assistant.ts's describePartialFailure for why this exists).
+  const sideEffects: string[] = [];
+  const tools = buildJarvisTools({ organizationId: input.organizationId, conversationId, userId: input.userId, images: input.images, sideEffects });
+  const reply = await runJarvisTurn(history, tools, undefined, formatContextNote(input.context), input.images, sideEffects);
 
   await db.jarvisMessage.create({ data: { conversationId, role: "ASSISTANT", content: reply } });
   await db.jarvisConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });

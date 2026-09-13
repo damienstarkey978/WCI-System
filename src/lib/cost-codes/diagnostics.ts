@@ -23,6 +23,20 @@ export interface CostCodeDiagnosis {
   readonly looksBad: boolean;
 }
 
+/**
+ * A handful of canonical entries — EXTERIOR/Exterior, FINANCIAL/Financial,
+ * INTERIOR/Interior — are top-level categories whose code intentionally equals their
+ * name; that's correct, not a data problem. Confirmed against production
+ * (2026-09-13): without this exclusion the "code === name" count includes these
+ * alongside genuinely miscoded rows (TRIM, HVAC), which sent Cowork chasing two rows
+ * that were never broken.
+ */
+const CANONICAL_CODE_EQUALS_NAME_LOWER = new Set(
+  CANONICAL_COST_CODES.filter((entry) => entry.code.trim().toLowerCase() === entry.name.trim().toLowerCase()).map((entry) =>
+    entry.name.trim().toLowerCase(),
+  ),
+);
+
 export async function diagnoseCostCodes(organizationId: string): Promise<CostCodeDiagnosis> {
   const org = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { name: true } });
 
@@ -32,7 +46,9 @@ export async function diagnoseCostCodes(organizationId: string): Promise<CostCod
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 
-  const codeEqualsNameRows = costCodes.filter((c) => c.code.trim().toLowerCase() === c.name.trim().toLowerCase());
+  const codeEqualsNameRows = costCodes.filter(
+    (c) => c.code.trim().toLowerCase() === c.name.trim().toLowerCase() && !CANONICAL_CODE_EQUALS_NAME_LOWER.has(c.name.trim().toLowerCase()),
+  );
   const blankCode = costCodes.filter((c) => c.code.trim().length === 0);
   const canonicalLooking = costCodes.filter((c) => /^[A-Z0-9]+(-[A-Z0-9-]+)*$/.test(c.code) && c.code !== c.name);
 
