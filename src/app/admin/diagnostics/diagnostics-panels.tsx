@@ -32,6 +32,43 @@ function useTwoStepConfirm() {
   };
 }
 
+/**
+ * Calls a Server Action directly (not via <form action>) and tracks pending/result
+ * with plain state, so a platform-level failure — the request never reaching this
+ * server at all (a Netlify 503, a dropped connection) — surfaces as a real error
+ * instead of leaving the button silently armed with no feedback. Confirmed against
+ * production (2026-09-13): the previous <form action={formAction}> wiring, driven by
+ * useActionState, has no error path at all for a failure below our own try/catch —
+ * useActionState only ever updates state with what the action *returns*, so a 503
+ * that stops the action from running just leaves the last state in place, which
+ * looked from the screen alone like nothing happened. Same honesty principle as
+ * assistant.ts's describePartialFailure: never let a failure read as silence.
+ */
+function useDirectServerAction<State extends { error?: string }>(
+  action: (previous: State, formData: FormData) => Promise<State>,
+  initialState: State,
+) {
+  const [state, setState] = useState<State>(initialState);
+  const [pending, setPending] = useState(false);
+
+  const run = async () => {
+    setPending(true);
+    try {
+      const result = await action(state, new FormData());
+      setState(result);
+    } catch (error) {
+      setState({
+        ...state,
+        error: `Request failed before completing: ${error instanceof Error ? error.message : String(error)}. This usually means a platform-level failure (e.g. a 503) rather than a problem with the action itself — nothing is confirmed changed; check status and try again.`,
+      });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return { state, pending, run };
+}
+
 const INITIAL_JARVIS_STATE: Jarvis403ActionState = {};
 
 export function JarvisIsolationPanel() {
@@ -73,20 +110,25 @@ export function JarvisIsolationPanel() {
 const INITIAL_FIX_STATE: CostCodeFixActionState = {};
 
 export function CostCodeFixButton({ looksBad }: { looksBad: boolean }) {
-  const [state, formAction, pending] = useActionState(runCostCodeFixAction, INITIAL_FIX_STATE);
+  const { state, pending, run } = useDirectServerAction(runCostCodeFixAction, INITIAL_FIX_STATE);
   const confirmStep = useTwoStepConfirm();
+
+  const handleConfirm = async () => {
+    await run();
+    confirmStep.disarm();
+  };
 
   if (confirmStep.armed) {
     return (
-      <form action={formAction} className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="text-sm">Repair cost code catalog codes/parent links in place? This writes to production.</span>
-        <button type="submit" disabled={pending} className={BUTTON}>
+        <button type="button" disabled={pending} onClick={handleConfirm} className={BUTTON}>
           {pending ? "Fixing…" : "Yes, run the fix"}
         </button>
         <button type="button" disabled={pending} onClick={confirmStep.disarm} className={CANCEL_BUTTON}>
           Cancel
         </button>
-      </form>
+      </div>
     );
   }
 
@@ -129,8 +171,13 @@ export function CostCodeFixButton({ looksBad }: { looksBad: boolean }) {
 const INITIAL_DELETE_STATE: DeleteTestLeadActionState = {};
 
 export function DeleteTestLeadButton({ hasRecords }: { hasRecords: boolean }) {
-  const [state, formAction, pending] = useActionState(deleteTestJarvisPhotoQaLeadAction, INITIAL_DELETE_STATE);
+  const { state, pending, run } = useDirectServerAction(deleteTestJarvisPhotoQaLeadAction, INITIAL_DELETE_STATE);
   const confirmStep = useTwoStepConfirm();
+
+  const handleConfirm = async () => {
+    await run();
+    confirmStep.disarm();
+  };
 
   if (!hasRecords && !state.summary) {
     return <p className="mt-3 text-sm text-black/60 dark:text-white/60">Nothing found — already cleaned up, or never created here.</p>;
@@ -138,15 +185,15 @@ export function DeleteTestLeadButton({ hasRecords }: { hasRecords: boolean }) {
 
   if (confirmStep.armed) {
     return (
-      <form action={formAction} className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="text-sm">Delete the &quot;TEST Jarvis PhotoQA&quot; client/lead? This cannot be undone.</span>
-        <button type="submit" disabled={pending} className={BUTTON}>
+        <button type="button" disabled={pending} onClick={handleConfirm} className={BUTTON}>
           {pending ? "Deleting…" : "Yes, delete"}
         </button>
         <button type="button" disabled={pending} onClick={confirmStep.disarm} className={CANCEL_BUTTON}>
           Cancel
         </button>
-      </form>
+      </div>
     );
   }
 
