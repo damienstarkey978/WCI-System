@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 
+import { isStaleServerActionError } from "@/lib/errors/stale-server-action";
+
 import {
   archiveInactiveCostCodesAction,
   createMissingCostCodesAction,
@@ -61,10 +63,14 @@ function useDirectServerAction<State extends { error?: string }>(
       const result = await action(state, new FormData());
       setState(result);
     } catch (error) {
-      setState({
-        ...state,
-        error: `Request failed before completing: ${error instanceof Error ? error.message : String(error)}. This usually means a platform-level failure (e.g. a 503) rather than a problem with the action itself — nothing is confirmed changed; check status and try again.`,
-      });
+      // Called directly (not via <form action>), so a stale-Server-Action error
+      // (src/lib/errors/stale-server-action.ts) lands here instead of the root error
+      // boundary — check for it explicitly so this doesn't get mislabeled as a
+      // platform-level failure when a plain reload is actually the fix.
+      const message = isStaleServerActionError(error)
+        ? "This page was left open across a deploy, so the action it just tried to run doesn't exist anymore on the server. Reload the page and try again."
+        : `Request failed before completing: ${error instanceof Error ? error.message : String(error)}. This usually means a platform-level failure (e.g. a 503) rather than a problem with the action itself — nothing is confirmed changed; check status and try again.`;
+      setState({ ...state, error: message });
     } finally {
       setPending(false);
     }
