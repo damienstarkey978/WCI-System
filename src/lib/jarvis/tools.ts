@@ -45,7 +45,7 @@ import { createChangeOrder } from "@/lib/change-orders/service";
 import { createClient, grantJobAccess } from "@/lib/client-portal/service";
 import { createVendor } from "@/lib/vendor-portal/service";
 import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/service";
-import { draftLeadProposalFromNotes } from "@/lib/crm/lead-proposal";
+import { queueProposalDraftJob } from "@/lib/jarvis/proposal-draft-jobs";
 import { db } from "@/lib/db";
 import {
   addProposalDraw,
@@ -1000,7 +1000,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const draftLeadProposalTool = betaZodTool({
     name: "draft_lead_proposal",
     description:
-      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a full estimate + client-facing proposal narrative — created as DRAFT, never sent. Converts the lead to a job if not already converted, and creates/links a Client record with portal permissions provisioned (the client still can't log in until someone separately sends them a portal invite — this does not do that). Pass the lead's id from list_leads.",
+      "Give Jarvis the scope of work, measurements, and notes for a lead, and it queues a full estimate + client-facing proposal narrative to be drafted — created as DRAFT, never sent. This does not run inline: drafting against the full cost code catalog can take longer than one chat turn allows, so it's queued and the result is posted back into this same conversation once it's ready (usually within a couple minutes) — converting the lead to a job if not already converted, and creating/linking a Client record with portal permissions provisioned (the client still can't log in until someone separately sends them a portal invite — this does not do that). Pass the lead's id from list_leads.",
     inputSchema: z.object({
       leadId: z.string().describe("The lead's id, from list_leads"),
       notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),
@@ -1008,19 +1008,18 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       clientPhone: z.string().optional(),
     }),
     run: async (input) => {
-      const proposal = await draftLeadProposalFromNotes({
+      const job = await queueProposalDraftJob({
         organizationId: ctx.organizationId,
         leadId: input.leadId,
         userId: ctx.userId,
+        conversationId: ctx.conversationId,
         notes: input.notes,
         images: ctx.images,
         clientEmail: input.clientEmail ?? null,
         clientPhone: input.clientPhone ?? null,
       });
-      ctx.sideEffects.push(
-        `Drafted proposal "${proposal.title}" (id ${proposal.id}) for lead ${input.leadId} — converted the lead to a job and created/linked a Client record as part of this`,
-      );
-      return `Drafted proposal "${proposal.title}" for the lead — status DRAFT, view it at /leads/proposals/${proposal.id}. A human needs to review and send it.`;
+      ctx.sideEffects.push(`Queued a proposal draft (job ${job.id}) for lead ${input.leadId} — not drafted yet`);
+      return "Queued that up — drafting the estimate and proposal now against the full cost code catalog, which takes longer than I can wait on in one reply. I'll post the result right here once it's done, usually within a couple minutes.";
     },
   });
 

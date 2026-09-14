@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/v1/webhooks/process", "schedule": "0 * * * *" }
+    { "path": "/api/v1/webhooks/process", "schedule": "0 * * * *" },
+    { "path": "/api/v1/workers/proposal-drafts", "schedule": "*/2 * * * *" }
   ]
 }

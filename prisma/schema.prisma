@@ -134,6 +134,7 @@ model Organization {
   clientUpdateSummaries   ClientUpdateSummary[]
   materialCatalogItems    MaterialCatalogItem[]
   jarvisConversations     JarvisConversation[]
+  proposalDraftJobs       ProposalDraftJob[]
   quickBooksConnection    QuickBooksConnection?
   qboSyncLogs             QboSyncLog[]
   creditMemos             CreditMemo[]
@@ -184,6 +185,7 @@ model User {
   assignedLeads             Lead[]
   leadActivities            LeadActivity[]
   jarvisConversations       JarvisConversation[]
+  proposalDraftJobs         ProposalDraftJob[]
   oauthAuthorizationCodes   OAuthAuthorizationCode[]
   oauthAccessTokens         OAuthAccessToken[]
   oauthRefreshTokens        OAuthRefreshToken[]
@@ -2614,9 +2616,10 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  proposals  Proposal[]
-  estimates  Estimate[]
-  activities LeadActivity[]
+  proposals         Proposal[]
+  estimates         Estimate[]
+  activities        LeadActivity[]
+  proposalDraftJobs ProposalDraftJob[]
 
   @@index([organizationId, stage])
   @@index([contactClientId])
@@ -3142,8 +3145,9 @@ model JarvisConversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  messages       JarvisMessage[]
-  pendingActions JarvisPendingAction[]
+  messages          JarvisMessage[]
+  pendingActions    JarvisPendingAction[]
+  proposalDraftJobs ProposalDraftJob[]
 
   @@index([organizationId, userId, updatedAt])
 }
@@ -3196,6 +3200,63 @@ model JarvisPendingAction {
   resolvedAt DateTime?
 
   @@index([conversationId, createdAt])
+}
+
+enum ProposalDraftJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+/// A draft_lead_proposal request queued instead of run inline inside the Jarvis chat
+/// turn (src/lib/jarvis/tools.ts). Why: the underlying draft call (src/lib/ai/
+/// estimate-assistant.ts, up to 16,000 output tokens against the full active cost
+/// code + materials catalog) can legitimately run past Netlify's non-configurable
+/// 60s function execution ceiling on a complex job — a wall that applies no matter
+/// how tightly the *interactive* request's own JARVIS_TURN_TIMEOUT_MS/
+/// JARVIS_REQUEST_TIMEOUT_MS deadlines are tuned, since it's a platform limit, not
+/// an app-level one. The worker route (POST /api/v1/workers/proposal-drafts, same
+/// CRON_SECRET-gated, external-scheduler-polled pattern /api/v1/webhooks/process
+/// already uses — see that route's own doc comment) picks these up outside any
+/// Jarvis-turn deadline entirely and posts the result back into `conversation` as
+/// an ordinary JarvisMessage once done, same as a normal Jarvis reply.
+model ProposalDraftJob {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  conversationId String
+  conversation   JarvisConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  notes       String
+  clientEmail String?
+  clientPhone String?
+  /// Photos attached when the job was queued (JarvisImageInput shape) — same
+  /// ephemeral, this-turn-only vision input draft_lead_proposal always took inline;
+  /// stored here only because the worker runs in a later request than the one that
+  /// received them.
+  images      Json?
+
+  status ProposalDraftJobStatus @default(QUEUED)
+
+  /// Set once SUCCEEDED.
+  resultProposalId String?
+  /// Set once FAILED — the same message a synchronous failure would have shown.
+  errorMessage     String?
+
+  createdAt  DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([organizationId, leadId])
 }
 
 /// Every email delivered to a per-org bills inbox address, whether or not it
