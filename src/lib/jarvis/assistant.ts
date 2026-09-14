@@ -49,9 +49,23 @@ export class JarvisReplyError extends Error {
  * covers the rest of the request (DB work before and after this call).
  */
 /** Read at call time, not module load, so a test (or a future runtime env change) can
- *  override it without needing to re-import the module. */
+ *  override it without needing to re-import the module.
+ *
+ *  Was 22_000 — far too tight for a turn that calls draft_lead_proposal: that tool's
+ *  own run() makes a second, separate Anthropic call of its own (estimate-assistant.ts,
+ *  max_tokens 16,000 against the full active cost code catalog) *inside* this one
+ *  deadline's window, on top of the two ordinary round trips (send the tool result,
+ *  get the final reply) this deadline already has to cover. Confirmed in production
+ *  (2026-09-14): draft_lead_proposal missed this deadline 3/3 attempts, including one
+ *  with an almost-empty message — ruling out message size/complexity as the cause,
+ *  since the time is spent inside the tool's own call, not in reading the request.
+ *  40s leaves the same ~10s margin under JARVIS_REQUEST_TIMEOUT_MS (service.ts,
+ *  default 50s) that that deadline itself leaves under Netlify's non-configurable 60s
+ *  function ceiling. This alone doesn't guarantee draft_lead_proposal always finishes
+ *  in time for a large estimate — see that tool's own comment for why a synchronous
+ *  request/response cycle may need to become async regardless. */
 function getJarvisTurnTimeoutMs(): number {
-  return Number(process.env.JARVIS_TURN_TIMEOUT_MS) || 22_000;
+  return Number(process.env.JARVIS_TURN_TIMEOUT_MS) || 40_000;
 }
 
 /**

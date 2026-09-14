@@ -34,7 +34,8 @@ const VALID_PARSED_OUTPUT = {
 };
 
 function fakeClient(response: unknown) {
-  return { parse: vi.fn().mockResolvedValue(response) };
+  const stream = vi.fn().mockReturnValue({ finalMessage: vi.fn().mockResolvedValue(response) });
+  return { stream };
 }
 
 describe("draftEstimateFromNotes", () => {
@@ -71,7 +72,7 @@ describe("draftEstimateFromNotes", () => {
 
     await draftEstimateFromNotes({ jobName: "Test job", notes: "notes", costCodes: CODES }, client);
 
-    const call = client.parse.mock.calls[0][0];
+    const call = client.stream.mock.calls[0][0];
     expect(call.messages[0].content).toContain("cc_paint_labor");
     expect(call.messages[0].content).toContain("PAINT-INT-L");
     expect(call.model).toBe("claude-opus-5");

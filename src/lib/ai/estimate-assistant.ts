@@ -107,12 +107,22 @@ export interface DraftEstimateInput {
 
 /**
  * Call Claude to draft an estimate + its proposal narrative. `client` is injectable
- * so callers (and tests) can supply a fake with a `messages.parse` method instead of
+ * so callers (and tests) can supply a fake with a `messages.stream` method instead of
  * hitting the real API.
+ *
+ * Streamed rather than a single blocking `messages.parse()` call: with max_tokens up
+ * to 16,000 and a full cost code + materials catalog in the prompt, this routinely
+ * runs well past the 20-30s a non-streaming call can sit with zero response bytes —
+ * long enough for an intermediate proxy or the hosting platform's own connection
+ * handling to kill it as if it had died (confirmed in production as a raw 503 on
+ * draft_lead_proposal, distinct from Jarvis's own JARVIS_TURN_TIMEOUT_MS deadline
+ * firing — src/lib/jarvis/assistant.ts). Streaming keeps bytes flowing the whole
+ * time so nothing in the path mistakes an in-progress generation for a dead one; it
+ * does not by itself make the generation faster.
  */
 export async function draftEstimateFromNotes(
   input: DraftEstimateInput,
-  client: Pick<Anthropic["messages"], "parse"> = getClient().messages,
+  client: Pick<Anthropic["messages"], "stream"> = getClient().messages,
 ): Promise<NormalizedEstimateDraft> {
   if (!isAnthropicConfigured()) {
     throw new AiNotConfiguredError();
@@ -152,13 +162,15 @@ export async function draftEstimateFromNotes(
 
   let response;
   try {
-    response = await client.parse({
-      model: "claude-opus-5",
-      max_tokens: 16_000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userContent }],
-      output_config: { format: zodOutputFormat(schema) },
-    });
+    response = await client
+      .stream({
+        model: "claude-opus-5",
+        max_tokens: 16_000,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userContent }],
+        output_config: { format: zodOutputFormat(schema) },
+      })
+      .finalMessage();
   } catch (error) {
     if (error instanceof Anthropic.APIError) {
       throw new DraftGenerationError(`The AI estimate assistant call failed: ${error.message}`, { cause: error });
