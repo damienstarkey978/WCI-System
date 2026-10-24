@@ -19,7 +19,12 @@ export interface Jarvis403CheckResult {
 
 function detailOf(error: unknown): string {
   if (error instanceof Anthropic.APIError) {
-    return `status=${error.status} request_id=${error.requestID ?? "none"} type=${error.type ?? "none"} body=${JSON.stringify(error.error)}`;
+    // Headers included alongside status/body: a real Anthropic response always
+    // carries a request-id header, so their presence or absence is what actually
+    // tells you whether this reached Anthropic at all versus being rejected by
+    // something in front of it (e.g. a platform-level AI gateway/proxy).
+    const headers = error.headers ? Object.fromEntries(error.headers.entries()) : null;
+    return `status=${error.status} request_id=${error.requestID ?? "none"} type=${error.type ?? "none"} body=${JSON.stringify(error.error)} headers=${JSON.stringify(headers)}`;
   }
   return String(error);
 }

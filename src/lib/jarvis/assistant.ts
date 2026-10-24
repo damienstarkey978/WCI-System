@@ -276,12 +276,19 @@ export async function runJarvisTurn(
       // documented error responses always carry a JSON body, so one that doesn't
       // usually means the response never reached their application layer at all —
       // this is logged in full rather than reduced to the SDK's one-line summary.
+      // The response headers are the one thing that can actually confirm that: a
+      // real Anthropic response always carries a request-id; a bare 403 with
+      // neither a request-id nor any of Anthropic's other response headers
+      // present likely never reached Anthropic at all — e.g. an intermediary
+      // (a platform-level AI gateway/proxy sitting in front of the outbound
+      // call) rejecting it first.
       console.error("[jarvis] Anthropic API call failed", {
         status: error.status,
         requestId: error.requestID,
         type: error.type,
         errorBody: error.error,
         message: error.message,
+        headers: error.headers ? Object.fromEntries(error.headers.entries()) : null,
       });
       const message = `Jarvis couldn't reply: ${error.message}`;
       if (effects.length > 0) return describePartialFailure(effects, message);
