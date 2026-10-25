@@ -10,19 +10,11 @@ import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
-import { formatDate, formatMoney } from "@/lib/format";
 
-import { approveChangeOrderAction, declineChangeOrderAction } from "./actions";
+import { ChangeOrdersGrid } from "./change-orders-grid";
 import { CreateChangeOrderForm } from "./create-change-order-form";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  PENDING_APPROVAL: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  APPROVED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
-};
 
 function clientPriceCents(changeOrder: {
   mode: string;
@@ -66,7 +58,7 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
   ]);
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <PageHeader
         jobName={job.name}
         title="Change Orders"
@@ -92,59 +84,17 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
       {changeOrders.length === 0 ? (
         <EmptyState title="No change orders yet" description="Change orders created for this job will appear here." />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Mode</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3 text-right">Client price</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {changeOrders.map((co) => {
-                const style = STATUS_STYLE[co.status] ?? STATUS_STYLE.DRAFT;
-                const canDecide = co.status === "DRAFT" || co.status === "PENDING_APPROVAL";
-                return (
-                  <tr key={co.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                    <td className="px-4 py-3 font-medium text-[var(--bt-text)]">{co.title}</td>
-                    <td className="px-4 py-3 text-[var(--bt-muted)]">{co.mode === "FLAT" ? "Flat" : "Itemized"}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-                        {co.status.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(co.createdAt)}</td>
-                    <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(clientPriceCents(co))}</td>
-                    <td className="px-4 py-3">
-                      {canDecide ? (
-                        <div className="flex gap-2">
-                          <form action={approveChangeOrderAction}>
-                            <input type="hidden" name="jobId" value={job.id} />
-                            <input type="hidden" name="changeOrderId" value={co.id} />
-                            <button type="submit" className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
-                              Approve
-                            </button>
-                          </form>
-                          <form action={declineChangeOrderAction}>
-                            <input type="hidden" name="jobId" value={job.id} />
-                            <input type="hidden" name="changeOrderId" value={co.id} />
-                            <button type="submit" className="text-xs text-[var(--bt-muted)] hover:text-red-600 hover:underline">
-                              Decline
-                            </button>
-                          </form>
-                        </div>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ChangeOrdersGrid
+          rows={changeOrders.map((co) => ({
+            id: co.id,
+            jobId: job.id,
+            title: co.title,
+            mode: co.mode,
+            status: co.status,
+            createdAt: co.createdAt.toISOString(),
+            clientPriceCents: clientPriceCents(co),
+          }))}
+        />
       )}
     </div>
   );
