@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -47,9 +49,18 @@ export default async function WarrantiesPage({ params }: PageProps<"/jobs/[jobId
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Warranties — {job.name}</h1>
+      <PageHeader
+        jobName={job.name}
+        title="Warranties"
+        action={
+          <div className="flex items-center gap-2">
+            <CreateModal triggerLabel="+ Warranty claim" title="New warranty claim">
+              <CreateClaimForm jobId={job.id} clients={clients} />
+            </CreateModal>
+          </div>
+        }
+      />
 
-      <CreateClaimForm jobId={job.id} clients={clients} />
 
       {claims.length === 0 ? (
         <EmptyState title="No warranty claims yet" description="Claims submitted for this job will appear here." />

@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { PhotoStrip } from "@/components/files/PhotoStrip";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -54,14 +56,23 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Daily logs — {job.name}</h1>
+      <PageHeader
+        jobName={job.name}
+        title="Daily Logs"
+        action={
+          <div className="flex items-center gap-2">
+            <CreateModal triggerLabel="+ Daily Log" title="New daily log">
+              <DailyLogForm jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />
+            </CreateModal>
+          </div>
+        }
+      />
 
-      <DailyLogForm jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />
 
       <div className="flex flex-col gap-3">
         {logs.length === 0 ? (
           <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-            No daily logs yet — add the first one above.
+            No daily logs yet. Use + Daily Log to add the first one.
           </p>
         ) : (
           logsWithPhotos.map((log) => {

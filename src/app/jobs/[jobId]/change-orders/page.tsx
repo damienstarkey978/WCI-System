@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { currentAppUser } from "@/lib/auth";
@@ -65,7 +67,17 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Change orders — {job.name}</h1>
+      <PageHeader
+        jobName={job.name}
+        title="Change Orders"
+        action={
+          <div className="flex items-center gap-2">
+            <CreateModal triggerLabel="+ Change Order" title="New change order">
+              <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
+            </CreateModal>
+          </div>
+        }
+      />
 
       {isAnthropicConfigured() && isJarvisUiEnabled() ? (
         <JarvisChatPanel
@@ -76,7 +88,6 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
         />
       ) : null}
 
-      <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
 
       {changeOrders.length === 0 ? (
         <EmptyState title="No change orders yet" description="Change orders created for this job will appear here." />

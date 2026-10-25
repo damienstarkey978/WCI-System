@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -33,10 +34,7 @@ export default async function ClientUpdatesPage({ params }: PageProps<"/jobs/[jo
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Client updates — {job.name}</h1>
-        <GenerateSummaryButton jobId={job.id} />
-      </div>
+      <PageHeader jobName={job.name} title="Client Updates" action={<GenerateSummaryButton jobId={job.id} />} />
 
       {summaries.length === 0 ? (
         <EmptyState title="No client updates yet" description="Weekly AI-generated client update summaries for this job will appear here." />

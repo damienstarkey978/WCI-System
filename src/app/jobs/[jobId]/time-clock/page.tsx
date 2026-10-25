@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -48,7 +49,10 @@ export default async function TimeClockPage({ params }: PageProps<"/jobs/[jobId]
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Time clock — {job.name}</h1>
+      <PageHeader
+        jobName={job.name}
+        title="Time Clock"
+      />
 
       {entries.length === 0 ? (
         <EmptyState title="No time clock entries yet" description="Clock-ins from the field app for this job will appear here." />

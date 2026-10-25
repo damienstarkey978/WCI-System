@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -46,9 +48,18 @@ export default async function SubmittalsPage({ params }: PageProps<"/jobs/[jobId
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Submittals — {job.name}</h1>
+      <PageHeader
+        jobName={job.name}
+        title="Submittals"
+        action={
+          <div className="flex items-center gap-2">
+            <CreateModal triggerLabel="+ Submittal" title="New submittal">
+              <CreateSubmittalForm jobId={job.id} />
+            </CreateModal>
+          </div>
+        }
+      />
 
-      <CreateSubmittalForm jobId={job.id} />
 
       {submittals.length === 0 ? (
         <EmptyState title="No submittals yet" description="Material specs and shop drawings for this job will appear here." />

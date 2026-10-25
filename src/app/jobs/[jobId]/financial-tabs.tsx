@@ -33,19 +33,4 @@ export function PurchaseOrdersBillsTabs({ jobId, active }: { jobId: string; acti
   );
 }
 
-/**
- * Buildertrend's page header: a small grey job-name line above the bold page
- * title, with a right-aligned slot for the primary create button (and, later,
- * the toolbar icons — filter/export/settings — as pages pick those up too).
- */
-export function FinancialPageHeader({ jobName, title, action }: { jobName: string; title: string; action?: React.ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <div className="text-xs text-[var(--bt-muted)]">{jobName}</div>
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">{title}</h1>
-      </div>
-      {action}
-    </div>
-  );
-}
+export { PageHeader as FinancialPageHeader } from "@/components/shell/PageHeader";

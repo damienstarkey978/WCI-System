@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -38,7 +40,7 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
   if (!scheduleRow) {
     return (
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Schedule — {job.name}</h1>
+        <PageHeader jobName={job.name} title="Schedule" />
         <div className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center" style={{ borderColor: "var(--bt-border)" }}>
           <p className="mb-3 text-sm text-[var(--bt-muted)]">No schedule yet.</p>
           <CreateScheduleButton jobId={job.id} />
@@ -52,8 +54,15 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
   if (items.length === 0) {
     return (
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Schedule — {job.name}</h1>
-        <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={[]} />
+        <PageHeader
+          jobName={job.name}
+          title="Schedule"
+          action={
+            <CreateModal triggerLabel="New Schedule Item" title="New schedule item">
+              <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={[]} />
+            </CreateModal>
+          }
+        />
         <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
           No schedule items yet.
         </p>
@@ -69,17 +78,21 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Schedule — {job.name}</h1>
-        <div className="flex items-center gap-3">
-          {projectFinishDate ? (
-            <span className="text-sm text-[var(--bt-muted)]">Projected finish: {formatDate(projectFinishDate)}</span>
-          ) : null}
-          <SnapshotBaselineButton jobId={job.id} scheduleId={scheduleRow.id} hasBaseline={hasBaseline} />
-        </div>
-      </div>
-
-      <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={items.map((item) => ({ id: item.id, title: item.title }))} />
+      <PageHeader
+        jobName={job.name}
+        title="Schedule"
+        action={
+          <div className="flex items-center gap-3">
+            {projectFinishDate ? (
+              <span className="text-sm text-[var(--bt-muted)]">Projected finish: {formatDate(projectFinishDate)}</span>
+            ) : null}
+            <SnapshotBaselineButton jobId={job.id} scheduleId={scheduleRow.id} hasBaseline={hasBaseline} />
+            <CreateModal triggerLabel="New Schedule Item" title="New schedule item">
+              <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={items.map((item) => ({ id: item.id, title: item.title }))} />
+            </CreateModal>
+          </div>
+        }
+      />
 
       <div className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>

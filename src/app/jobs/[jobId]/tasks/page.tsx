@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -42,9 +44,18 @@ export default async function TasksPage({ params }: PageProps<"/jobs/[jobId]/tas
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">To-dos — {job.name}</h1>
+      <PageHeader
+        jobName={job.name}
+        title="Tasks"
+        action={
+          <div className="flex items-center gap-2">
+            <CreateModal triggerLabel="+ Task" title="New task">
+              <TodoForm jobId={job.id} />
+            </CreateModal>
+          </div>
+        }
+      />
 
-      <TodoForm jobId={job.id} />
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
