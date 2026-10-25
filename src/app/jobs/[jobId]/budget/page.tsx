@@ -4,6 +4,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUser } from "@/lib/auth";
 import { getJobBudget, JobNotFoundError } from "@/lib/budget/service";
 import type { FunnelLine, FunnelSubtotal, FunnelTotals } from "@/lib/budget/funnel";
+import { BUDGET_COLUMN_LABELS } from "@/lib/budget/export";
 import { groupFunnelLines } from "@/lib/budget/grouping";
 import { BUDGET_VIEWS, budgetViewByKey, type BudgetColumnId } from "@/lib/contract-type";
 import { formatMoney, formatPercent } from "@/lib/format";
@@ -13,22 +14,6 @@ import { BudgetViewSelect } from "./budget-view-select";
 import { FinancialPageHeader } from "../financial-tabs";
 
 export const dynamic = "force-dynamic";
-
-const COLUMN_LABELS: Record<BudgetColumnId, string> = {
-  originalBudgetCost: "Original budget",
-  revisedBudgetCost: "Revised budget",
-  pendingCost: "Pending cost",
-  committedCost: "Committed cost",
-  actualCost: "Actual cost",
-  projectedCost: "Projected cost",
-  costToComplete: "Cost to complete",
-  originalClientPrice: "Original price",
-  revisedClientPrice: "Revised price",
-  amountInvoiced: "Amount invoiced",
-  remainingToInvoice: "Remaining to invoice",
-  projectedProfit: "Projected profit",
-  projectedMarginPct: "Margin",
-};
 
 function lineCell(line: FunnelLine, columnId: BudgetColumnId): GridCell {
   // An unbudgeted line is "over budget" against a budget of zero, which is true but
@@ -199,11 +184,21 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
         jobName={view.job.name}
         title="Job Costing Budget"
         action={
-          <span className="text-xs text-[var(--bt-muted)]">
-            {view.job.projectionReference === "GREATEST"
-              ? "Projected at worst of budget/committed/actual"
-              : view.job.projectionReference}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[var(--bt-muted)]">
+              {view.job.projectionReference === "GREATEST"
+                ? "Projected at worst of budget/committed/actual"
+                : view.job.projectionReference}
+            </span>
+            {/* A download, not a page: a plain anchor, so no client-side navigation. */}
+            <a
+              href={`/jobs/${jobId}/budget/export?view=${selectedBudgetView.key}`}
+              className="rounded border px-3 py-2 text-sm font-medium text-[var(--bt-text)]"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
+              Export
+            </a>
+          </div>
         }
       />
 
@@ -216,7 +211,7 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
       />
 
       <BudgetGrid
-        columnLabels={columns.map((columnId) => COLUMN_LABELS[columnId])}
+        columnLabels={columns.map((columnId) => BUDGET_COLUMN_LABELS[columnId])}
         groups={groups}
         totalCells={columns.map((columnId) => totalsCell(view.funnel.totals, columnId))}
       />
