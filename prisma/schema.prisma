@@ -1744,6 +1744,11 @@ model ScheduleItem {
   baselineStart DateTime?
   baselineEnd   DateTime?
 
+  /// How much of this task is done, in basis points (10000 = 100%). Staff-entered
+  /// progress; nothing derives it. The "Schedule percent complete by job" report
+  /// weights it by durationDays (src/lib/scheduling/progress.ts).
+  percentCompleteBasisPoints Int @default(0)
+
   confirmationStatus ScheduleItemConfirmationStatus @default(UNCONFIRMED)
   clientVisible      Boolean                        @default(true)
   subVisible         Boolean                        @default(true)

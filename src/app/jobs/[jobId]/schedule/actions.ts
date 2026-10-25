@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAppUser } from "@/lib/auth";
-import { addScheduleItem, createSchedule, JobNotFoundError, ScheduleNotFoundError, snapshotBaseline } from "@/lib/scheduling/service";
+import {
+  addScheduleItem,
+  createSchedule,
+  JobNotFoundError,
+  ScheduleItemNotFoundError,
+  ScheduleNotFoundError,
+  snapshotBaseline,
+  updateScheduleItem,
+} from "@/lib/scheduling/service";
 
 export interface ActionState {
   readonly error?: string;
@@ -76,6 +84,25 @@ export async function addScheduleItemAction(_previous: ActionState, formData: Fo
     });
   } catch (error) {
     if (error instanceof ScheduleNotFoundError) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/schedule`);
+  return { ok: true };
+}
+
+export async function setScheduleItemProgressAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const itemId = String(formData.get("itemId") ?? "");
+  const percent = Number(String(formData.get("percent") ?? ""));
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return { error: "Enter 0 to 100." };
+
+  try {
+    await updateScheduleItem({ organizationId: user.organizationId, itemId, percentCompleteBasisPoints: Math.round(percent * 100) });
+  } catch (error) {
+    if (error instanceof ScheduleItemNotFoundError) return { error: error.message };
     throw error;
   }
 

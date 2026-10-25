@@ -133,6 +133,8 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
             floatDays: item.floatDays,
             isCriticalPath: item.isCriticalPath,
             confirmed: item.confirmationStatus !== "UNCONFIRMED",
+            jobId: job.id,
+            percentComplete: item.percentCompleteBasisPoints / 100,
           }))}
         />
       ) : null}

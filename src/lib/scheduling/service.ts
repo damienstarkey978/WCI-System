@@ -4,6 +4,7 @@
  */
 
 import { db } from "@/lib/db";
+import { clampBasisPoints } from "@/lib/scheduling/progress";
 import { computeSchedule, projectFinishDate, type ScheduleItemInput } from "@/lib/scheduling/cpm";
 
 export class JobNotFoundError extends Error {
@@ -96,6 +97,8 @@ export interface UpdateScheduleItemInput {
   readonly clientVisible?: boolean;
   readonly subVisible?: boolean;
   readonly assigneeUserIds?: readonly string[];
+  /** Basis points, 0 to 10000; clamped. */
+  readonly percentCompleteBasisPoints?: number;
 }
 
 export async function updateScheduleItem(input: UpdateScheduleItemInput) {
@@ -116,6 +119,7 @@ export async function updateScheduleItem(input: UpdateScheduleItemInput) {
       ...(input.clientVisible !== undefined ? { clientVisible: input.clientVisible } : {}),
       ...(input.subVisible !== undefined ? { subVisible: input.subVisible } : {}),
       ...(input.assigneeUserIds !== undefined ? { assigneeUserIds: [...input.assigneeUserIds] } : {}),
+      ...(input.percentCompleteBasisPoints !== undefined ? { percentCompleteBasisPoints: clampBasisPoints(input.percentCompleteBasisPoints) } : {}),
     },
   });
 }

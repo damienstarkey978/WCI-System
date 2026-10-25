@@ -22,6 +22,7 @@ import {
   getLeadCountBySalespersonReport,
   getLeadStatusBySourceReport,
   getProfitabilityReport,
+  getSchedulePercentCompleteByJobReport,
   getWipReport,
 } from "@/lib/reports/service";
 
@@ -38,6 +39,7 @@ const REPORTS = [
   { key: "labor", label: "Labor Actuals vs Budgeted", category: "Financial", description: "Actual labor hours and cost against what was budgeted." },
   { key: "cash-flow", label: "Cash Flow", category: "Financial", description: "Cash in and cash out across jobs." },
   { key: "change-order-profit", label: "Change Order Profit", category: "Project Management", description: "Approved change orders with their cost, price and profit." },
+  { key: "schedule-percent-complete", label: "Schedule Percent Complete by Job", category: "Project Management", description: "How much of each active job's schedule is done, weighted by task duration." },
   { key: "baseline-duration", label: "Baseline vs Actual Duration", category: "Project Management", description: "Baseline schedule length compared with the actual start and end of each job." },
   { key: "daily-log-by-user", label: "Daily Log Count by User", category: "Project Management", description: "How many daily logs each team member has written." },
   { key: "daily-log-by-job", label: "Daily Log Creation by Job", category: "Project Management", description: "How many daily logs each job has, and when the last one was added." },
@@ -176,6 +178,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           {active === "labor" ? <LaborTable organizationId={user.organizationId} /> : null}
           {active === "cash-flow" ? <CashFlowTable organizationId={user.organizationId} /> : null}
           {active === "change-order-profit" ? <ChangeOrderProfitTable organizationId={user.organizationId} /> : null}
+          {active === "schedule-percent-complete" ? <SchedulePercentCompleteTable organizationId={user.organizationId} /> : null}
           {active === "baseline-duration" ? <BaselineDurationTable organizationId={user.organizationId} /> : null}
           {active === "daily-log-by-user" ? <DailyLogByUserTable organizationId={user.organizationId} /> : null}
           {active === "daily-log-by-job" ? <DailyLogByJobTable organizationId={user.organizationId} /> : null}
@@ -405,6 +408,33 @@ async function ChangeOrderProfitTable({ organizationId }: { organizationId: stri
           </tr>
         ))}
         {rows.length === 0 ? <EmptyRow colSpan={5} label="No approved change orders." /> : null}
+      </tbody>
+    </table>
+  );
+}
+
+async function SchedulePercentCompleteTable({ organizationId }: { organizationId: string }) {
+  const rows = await getSchedulePercentCompleteByJobReport(organizationId);
+  return (
+    <table className="w-full min-w-max text-sm">
+      <thead>
+        <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+          <Th>Job</Th>
+          <Th right>Schedule items</Th>
+          <Th right>Items complete</Th>
+          <Th right>% complete</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.jobId} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+            <Td>{row.jobName}</Td>
+            <Td right>{row.itemCount}</Td>
+            <Td right>{row.completedItemCount}</Td>
+            <Td right>{row.percentCompleteBasisPoints === null ? "No schedule" : formatPercent(row.percentCompleteBasisPoints)}</Td>
+          </tr>
+        ))}
+        {rows.length === 0 ? <EmptyRow colSpan={4} /> : null}
       </tbody>
     </table>
   );

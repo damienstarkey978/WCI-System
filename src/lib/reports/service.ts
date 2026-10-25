@@ -23,6 +23,7 @@ import {
 } from "@/lib/reports/calc";
 import { db } from "@/lib/db";
 import { ACTIVE_JOB_STATUSES } from "@/lib/job-status";
+import { weightedPercentComplete } from "@/lib/scheduling/progress";
 import { baseLaborCostCents, workedHours } from "@/lib/time-clock/hours";
 import { computeWeeklyOvertime, type DailyHours } from "@/lib/time-clock/overtime";
 
@@ -480,4 +481,28 @@ export async function getLeadStatusBySourceReport(organizationId: string) {
   return Array.from(bySource.entries())
     .map(([source, row]) => ({ source, counts: row.counts, total: row.total }))
     .sort((a, b) => b.total - a.total);
+}
+
+/** Buildertrend's "Schedule percent complete by job": duration weighted progress across each active job's schedule items. */
+export async function getSchedulePercentCompleteByJobReport(organizationId: string) {
+  const jobs = await db.job.findMany({
+    where: { organizationId, isTemplate: false, status: { in: [...ACTIVE_JOB_STATUSES] } },
+    select: {
+      id: true,
+      name: true,
+      schedules: { select: { items: { select: { durationDays: true, percentCompleteBasisPoints: true } } } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return jobs.map((job) => {
+    const items = job.schedules.flatMap((schedule) => schedule.items);
+    return {
+      jobId: job.id,
+      jobName: job.name,
+      itemCount: items.length,
+      completedItemCount: items.filter((item) => item.percentCompleteBasisPoints >= 10_000).length,
+      percentCompleteBasisPoints: weightedPercentComplete(items),
+    };
+  });
 }
