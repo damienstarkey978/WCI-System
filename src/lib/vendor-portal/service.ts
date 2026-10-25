@@ -27,8 +27,12 @@ export interface CreateVendorInput {
   readonly organizationId: string;
   readonly name: string;
   readonly tradeType?: string | null;
-  readonly email: string;
+  /** Optional — a vendor with no email on file (common for imported subs) just can't be invited to the portal. */
+  readonly email?: string | null;
   readonly phone?: string | null;
+  readonly cellPhone?: string | null;
+  readonly primaryContact?: string | null;
+  readonly divisions?: readonly string[];
   readonly addressLine1?: string | null;
   readonly city?: string | null;
   readonly state?: string | null;
@@ -41,8 +45,11 @@ export async function createVendor(input: CreateVendorInput) {
       organizationId: input.organizationId,
       name: input.name,
       tradeType: input.tradeType ?? null,
-      email: input.email,
+      email: input.email ?? null,
       phone: input.phone ?? null,
+      cellPhone: input.cellPhone ?? null,
+      primaryContact: input.primaryContact ?? null,
+      divisions: input.divisions ? [...input.divisions] : [],
       addressLine1: input.addressLine1 ?? null,
       city: input.city ?? null,
       state: input.state ?? null,

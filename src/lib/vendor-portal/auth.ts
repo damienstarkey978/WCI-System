@@ -39,6 +39,13 @@ export class VendorNotFoundError extends Error {
   }
 }
 
+export class VendorMissingEmailError extends Error {
+  constructor(vendorName: string) {
+    super(`${vendorName} has no email on file, so they can't be invited to the vendor portal. Add an email first.`);
+    this.name = "VendorMissingEmailError";
+  }
+}
+
 /**
  * Issue a portal login invite for a vendor (staff/agent-authenticated action —
  * CLAUDE.md 2.3's "invited" state). Returns the raw token exactly once, same
@@ -47,6 +54,7 @@ export class VendorNotFoundError extends Error {
 export async function issuePortalLoginInvite(organizationId: string, vendorId: string) {
   const vendor = await db.vendor.findFirst({ where: { id: vendorId, organizationId } });
   if (!vendor) throw new VendorNotFoundError(vendorId);
+  if (!vendor.email) throw new VendorMissingEmailError(vendor.name);
 
   const generated = generateSecureToken(ACTION_TOKEN_PREFIX);
   await db.$transaction([

@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { UserRole } from "@/generated/prisma/enums";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { vendorTradeLabel } from "@/lib/vendor-portal/labels";
 
 import { AdvancedSettingsForm } from "./advanced-settings-form";
 import { ClientsTab } from "./clients-tab";
@@ -58,7 +59,7 @@ export default async function JobSettingsPage({ params, searchParams }: PageProp
       select: { id: true, name: true, email: true, role: true },
     }),
     db.vendorJobAccess.findMany({ where: { jobId: job.id }, include: { vendor: true }, orderBy: { vendor: { name: "asc" } } }),
-    db.vendor.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true, tradeType: true } }),
+    db.vendor.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true, tradeType: true, divisions: true } }),
   ]);
 
   return (
@@ -139,13 +140,13 @@ export default async function JobSettingsPage({ params, searchParams }: PageProp
           access={vendorAccess.map((a) => ({
             vendorId: a.vendorId,
             name: a.vendor.name,
-            tradeType: a.vendor.tradeType,
+            tradeType: vendorTradeLabel(a.vendor),
             scheduleScope: a.scheduleScope,
             canViewDocuments: a.canViewDocuments,
             canViewPurchaseOrders: a.canViewPurchaseOrders,
             canViewBills: a.canViewBills,
           }))}
-          availableVendors={allVendors.filter((v) => !vendorAccess.some((a) => a.vendorId === v.id))}
+          availableVendors={allVendors.filter((v) => !vendorAccess.some((a) => a.vendorId === v.id)).map((v) => ({ id: v.id, name: v.name, tradeType: vendorTradeLabel(v) }))}
         />
       ) : null}
 

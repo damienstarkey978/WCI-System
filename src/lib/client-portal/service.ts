@@ -28,6 +28,11 @@ export interface CreateClientInput {
   readonly name: string;
   readonly email: string;
   readonly phone?: string | null;
+  readonly cellPhone?: string | null;
+  readonly addressLine1?: string | null;
+  readonly city?: string | null;
+  readonly state?: string | null;
+  readonly postalCode?: string | null;
 }
 
 export async function createClient(input: CreateClientInput) {
@@ -37,6 +42,11 @@ export async function createClient(input: CreateClientInput) {
       name: input.name,
       email: input.email,
       phone: input.phone ?? null,
+      cellPhone: input.cellPhone ?? null,
+      addressLine1: input.addressLine1 ?? null,
+      city: input.city ?? null,
+      state: input.state ?? null,
+      postalCode: input.postalCode ?? null,
     },
   });
 }

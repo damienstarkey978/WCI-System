@@ -2085,9 +2085,17 @@ model Client {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  name  String
-  email String
-  phone String?
+  name      String
+  email     String
+  phone     String?
+  /// Mobile number, separate from `phone` (the primary line) like Buildertrend's
+  /// Client Contacts list.
+  cellPhone String?
+
+  addressLine1 String?
+  city         String?
+  state        String?
+  postalCode   String?
 
   /// Set when a staff member/agent issues a portal invite; null until then.
   invitedAt   DateTime?
@@ -2297,10 +2305,23 @@ model Vendor {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  name      String
-  tradeType String?
-  email     String
-  phone     String?
+  name           String
+  tradeType      String?
+  /// Null for a vendor imported from Buildertrend without an email on file (shown as
+  /// "No Email" in the Subs/Vendors list) — such a vendor can't be invited to the
+  /// portal or pushed to QuickBooks with an email until one is added. Postgres treats
+  /// NULLs as distinct, so the (organizationId, email) uniqueness below only ever
+  /// applies to vendors that actually have one.
+  email          String?
+  phone          String?
+  /// Mobile number, kept separate from `phone` (the office/primary line) the way
+  /// Buildertrend's Subs report does.
+  cellPhone      String?
+  /// Name of the person to contact at the company — Buildertrend's "Primary contact".
+  primaryContact String?
+  /// Buildertrend's "Sub/vendor divisions" (e.g. "Special Construction", "Mechanical").
+  /// A vendor can belong to several; `tradeType` remains the single free-text trade.
+  divisions      String[] @default([])
 
   addressLine1 String?
   city         String?

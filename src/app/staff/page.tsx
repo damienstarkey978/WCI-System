@@ -1,8 +1,11 @@
 import Link from "next/link";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { DirectoryHeader } from "@/components/directory/directory-controls";
+import { DirectoryTable, type DirectoryColumn } from "@/components/directory/directory-table";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
+import { parseDirectoryParams } from "@/lib/directory/params";
 import { ROLE_DESCRIPTIONS } from "@/lib/staff/role-descriptions";
 import { listStaffMembers } from "@/lib/staff/service";
 
@@ -10,17 +13,31 @@ import { InviteStaffForm } from "./invite-staff-form";
 
 export const dynamic = "force-dynamic";
 
-function loginStatus(member: { clerkUserId: string | null; isActive: boolean }): { label: string; className: string } {
-  if (!member.isActive) return { label: "INACTIVE", className: "text-[var(--bt-muted)]" };
-  if (member.clerkUserId) return { label: "ACTIVE", className: "text-emerald-700" };
-  return { label: "PENDING", className: "text-amber-700" };
+type StaffRow = Awaited<ReturnType<typeof listStaffMembers>>[number];
+
+const BADGE = "inline-block rounded px-2 py-0.5 text-xs font-bold tracking-wide";
+
+function loginBadge(member: StaffRow) {
+  if (!member.isActive) return <span className={`${BADGE} bg-gray-200 text-gray-700 dark:bg-white/10 dark:text-gray-300`}>INACTIVE</span>;
+  if (member.clerkUserId) return <span className={`${BADGE} bg-green-100 text-green-800 dark:bg-green-400/15 dark:text-green-300`}>ACTIVE</span>;
+  return <span className={`${BADGE} bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300`}>PENDING</span>;
+}
+
+/** Company settings (/settings/company) are admin-only everywhere else in the app, so this column just reflects the role. */
+function companySettingsBadge(member: StaffRow) {
+  return member.role === UserRole.ADMIN ? (
+    <span className={`${BADGE} bg-green-100 text-green-800 dark:bg-green-400/15 dark:text-green-300`}>ACCESS</span>
+  ) : (
+    <span className={`${BADGE} bg-red-100 text-red-700 dark:bg-red-400/15 dark:text-red-300`}>NO ACCESS</span>
+  );
 }
 
 /**
- * Buildertrend-style "Internal Users" directory. Gated to admins — this is the
- * screen that actually performs staff invites/role changes/deactivation
- * directly (unlike Jarvis's confirm-gated tools, a human is already explicitly
- * inside an admin-only screen here).
+ * Buildertrend-style "Internal Users" directory. Everyone signed in can see the team
+ * (the old People page already showed it read-only); only admins get the + Internal
+ * user button and links into a member's account — that's the screen that actually
+ * performs invites, role changes and deactivation (unlike Jarvis's confirm-gated tools,
+ * a human is already explicitly inside an admin-only screen there).
  */
 export default async function StaffPage() {
   let user;
@@ -32,58 +49,54 @@ export default async function StaffPage() {
   if (!user) {
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
-  if (user.role !== UserRole.ADMIN) {
-    return (
-      <div className="mx-auto max-w-2xl p-6">
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-          Only an admin can manage staff accounts. Ask an admin to make changes here.
-        </div>
-      </div>
-    );
-  }
 
-  const staff = await listStaffMembers(user.organizationId);
+  const isAdmin = user.role === UserRole.ADMIN;
+  const staff = [...(await listStaffMembers(user.organizationId))].sort((a, b) => {
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+    return (a.name ?? a.email).toLowerCase().localeCompare((b.name ?? b.email).toLowerCase());
+  });
+
+  const columns: readonly DirectoryColumn<StaffRow>[] = [
+    {
+      key: "name",
+      label: "Name",
+      render: (member) =>
+        isAdmin ? (
+          <Link href={`/staff/${member.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
+            {member.name ?? member.email}
+          </Link>
+        ) : (
+          <span className="font-medium">{member.name ?? member.email}</span>
+        ),
+    },
+    { key: "role", label: "Role", render: (member) => member.title ?? ROLE_DESCRIPTIONS[member.role].label },
+    { key: "companySettings", label: "Company Settings", render: companySettingsBadge },
+    { key: "login", label: "Login", render: loginBadge },
+    { key: "email", label: "Email", render: (member) => member.email },
+    {
+      key: "phone",
+      label: "Phone",
+      render: (member) =>
+        member.phone ? (
+          <a href={`tel:${member.phone.replace(/[^\d+]/g, "")}`} className="whitespace-nowrap text-[var(--bt-primary)] hover:underline">
+            {member.phone}
+          </a>
+        ) : null,
+    },
+  ];
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Internal Users</h1>
-        <p className="text-sm text-[var(--bt-muted)]">Your team&apos;s accounts, roles, and login status.</p>
-      </div>
+    <div className="mx-auto flex max-w-[110rem] flex-col gap-4 p-6">
+      <DirectoryHeader
+        title="Internal Users"
+        panels={isAdmin ? [{ id: "invite", label: "Internal user", variant: "primary", content: <InviteStaffForm /> }] : []}
+      />
 
-      <InviteStaffForm />
+      <DirectoryTable basePath="/staff" params={parseDirectoryParams({}, [])} columns={columns} rows={staff} rowKey={(member) => member.id} emptyMessage="No internal users yet." />
 
-      <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Login</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Phone</th>
-            </tr>
-          </thead>
-          <tbody>
-            {staff.map((member) => {
-              const status = loginStatus(member);
-              return (
-                <tr key={member.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                  <td className="px-4 py-3">
-                    <Link href={`/staff/${member.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
-                      {member.name ?? member.email}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--bt-muted)]">{member.title ?? ROLE_DESCRIPTIONS[member.role].label}</td>
-                  <td className={`px-4 py-3 text-xs font-semibold ${status.className}`}>{status.label}</td>
-                  <td className="px-4 py-3 text-[var(--bt-muted)]">{member.email}</td>
-                  <td className="px-4 py-3 text-[var(--bt-muted)]">{member.phone ?? "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <p className="text-right text-sm text-[var(--bt-text)]">
+        {staff.length === 0 ? 0 : 1}-{staff.length} of {staff.length} items
+      </p>
     </div>
   );
 }

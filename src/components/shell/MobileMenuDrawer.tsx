@@ -9,6 +9,7 @@ import {
   FINANCIAL_NAV,
   JOBS_NAV,
   MESSAGING_NAV,
+  PEOPLE_NAV,
   PROJECT_MANAGEMENT_NAV,
   REPORTS_HREF,
   SALES_NAV,
@@ -17,7 +18,7 @@ import {
 } from "@/lib/buildertrend-nav";
 
 import type { SidebarJob } from "./JobSidebar";
-import { CloseIcon, PeopleIcon, SparkleIcon } from "./icons";
+import { CloseIcon, SparkleIcon } from "./icons";
 
 const SECTION_SUMMARY_CLASS = "flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-[var(--bt-text)] marker:content-none";
 const SECTION_ITEM_CLASS = "block px-6 py-2 text-sm text-[var(--bt-text)] hover:bg-black/5";
@@ -179,9 +180,7 @@ export function MobileMenuDrawer({
           <Link href="/jarvis" onClick={onClose} className="flex items-center gap-2 border-b px-4 py-3 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
             <SparkleIcon className="h-4 w-4" /> Jarvis
           </Link>
-          <Link href="/people" onClick={onClose} className="flex items-center gap-2 border-b px-4 py-3 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
-            <PeopleIcon className="h-4 w-4" /> People
-          </Link>
+          <FlatSection label="People" items={PEOPLE_NAV} onNavigate={onClose} />
 
           <div className="px-4 py-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Jump to job</div>

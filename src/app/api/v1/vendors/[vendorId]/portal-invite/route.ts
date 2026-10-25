@@ -4,7 +4,7 @@
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { issuePortalLoginInvite, VendorNotFoundError } from "@/lib/vendor-portal/auth";
+import { issuePortalLoginInvite, VendorMissingEmailError, VendorNotFoundError } from "@/lib/vendor-portal/auth";
 
 type Context = { params: Promise<{ vendorId: string }> };
 
@@ -16,6 +16,7 @@ export const POST = withApiAuth<Context>(["vendors:write"], async (_request, aut
     return Response.json({ data: { token } }, { status: 201 });
   } catch (error) {
     if (error instanceof VendorNotFoundError) return apiError(404, "not_found", error.message);
+    if (error instanceof VendorMissingEmailError) return apiError(422, "vendor_missing_email", error.message);
     throw error;
   }
 });

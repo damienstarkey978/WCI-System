@@ -75,7 +75,7 @@ export async function searchStaffApp(
   return {
     jobs: jobResults,
     clients: clients.map((client) => ({ id: client.id, label: client.name, sublabel: client.email, href: `/clients/${client.id}` })),
-    vendors: vendors.map((vendor) => ({ id: vendor.id, label: vendor.name, sublabel: vendor.email, href: `/vendors/${vendor.id}` })),
+    vendors: vendors.map((vendor) => ({ id: vendor.id, label: vendor.name, sublabel: vendor.email ?? undefined, href: `/vendors/${vendor.id}` })),
     leads: leads.map((lead) => ({ id: lead.id, label: lead.name, sublabel: lead.email ?? undefined, href: `/leads/${lead.id}` })),
   };
 }

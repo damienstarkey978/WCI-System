@@ -11,6 +11,7 @@ import {
   FINANCIAL_NAV,
   JOBS_NAV,
   MESSAGING_NAV,
+  PEOPLE_NAV,
   PROJECT_MANAGEMENT_NAV,
   REPORTS_HREF,
   SALES_NAV,
@@ -26,7 +27,9 @@ import {
   BellIcon,
   BuildingIcon,
   ChevronDownIcon,
+  ClientHomeIcon,
   GearIcon,
+  HammerIcon,
   HelpIcon,
   MenuIcon,
   PeopleIcon,
@@ -104,6 +107,54 @@ function NotificationBell({ notifications, unreadCount }: { notifications: reado
               ))
             )}
           </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const PEOPLE_ICONS = { users: PeopleIcon, hammer: HammerIcon, home: ClientHomeIcon } as const;
+
+/**
+ * The People icon's dropdown — Internal Users / Subs-Vendors / Client Contacts, each
+ * its own full directory page (previously this icon went to a single summary page).
+ * Highlighted while open or while any of the three pages is showing.
+ */
+function PeopleDropdown({ pathname }: { pathname: string | null }) {
+  const [open, setOpen] = useState(false);
+  const onPeoplePage = PEOPLE_NAV.some((item) => pathname?.startsWith(item.href));
+
+  return (
+    <div className="relative hidden sm:block">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="rounded p-2 transition hover:bg-white/10"
+        style={open || onPeoplePage ? { background: "var(--bt-nav-hover)" } : undefined}
+        aria-label="People"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <PeopleIcon className="h-4.5 w-4.5" />
+      </button>
+      {open ? (
+        <div role="menu" className="absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-black/10 bg-[var(--bt-panel-bg)] py-2 text-sm text-[var(--bt-text)] shadow-lg">
+          {PEOPLE_NAV.map((item) => {
+            const Icon = PEOPLE_ICONS[item.icon];
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 font-medium hover:bg-black/5"
+              >
+                <Icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -323,9 +374,7 @@ export function TopNav({
         >
           <SparkleIcon className="h-4.5 w-4.5" />
         </Link>
-        <Link href="/people" className="hidden rounded p-2 transition hover:bg-white/10 sm:block" aria-label="People">
-          <PeopleIcon className="h-4.5 w-4.5" />
-        </Link>
+        <PeopleDropdown pathname={pathname} />
         <button type="button" className="hidden rounded p-2 transition hover:bg-white/10 sm:block" aria-label="Help">
           <HelpIcon className="h-4.5 w-4.5" />
         </button>

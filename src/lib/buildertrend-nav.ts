@@ -59,6 +59,17 @@ export const SALES_NAV = [
   { label: "Materials Catalog", href: "/materials" },
 ] as const;
 
+/**
+ * The People icon's dropdown (top-right of the bar) — Buildertrend's three contact
+ * directories. `icon` picks the glyph in TopNav's PeopleDropdown; kept as a string key
+ * here so this file stays free of React imports.
+ */
+export const PEOPLE_NAV = [
+  { label: "Internal Users", href: "/staff", icon: "users" },
+  { label: "Subs/Vendors", href: "/vendors", icon: "hammer" },
+  { label: "Client Contacts", href: "/clients", icon: "home" },
+] as const;
+
 /** The "Project Management" dropdown — every one of these is scoped to whichever job is selected. */
 export const PROJECT_MANAGEMENT_NAV: readonly JobNavLink[] = [
   { label: "Schedule", path: "/schedule" },

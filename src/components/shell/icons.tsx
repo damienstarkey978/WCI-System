@@ -203,3 +203,24 @@ export function BuildingIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function HammerIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M11.5 3.5 16.5 8.5 14.6 10.4 9.6 5.4Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M8.6 6.4 4 11a1 1 0 0 0 0 1.4l.1.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M12.6 9.4 6.2 15.8a1.4 1.4 0 0 1-2-2l6.4-6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** House with a door — the Client Contacts glyph (HomeIcon has no door and is used elsewhere). */
+export function ClientHomeIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M2.5 9.2 10 3l7.5 6.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4.5 8v8.5h11V8" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M8.2 16.5v-4a1.8 1.8 0 0 1 3.6 0v4" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}

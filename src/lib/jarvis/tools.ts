@@ -43,6 +43,7 @@ import { createBidPackage, lockBidSubmission } from "@/lib/bids/service";
 import { createBill } from "@/lib/bills/service";
 import { createChangeOrder } from "@/lib/change-orders/service";
 import { createClient, grantJobAccess } from "@/lib/client-portal/service";
+import { vendorTradeLabel } from "@/lib/vendor-portal/labels";
 import { createVendor } from "@/lib/vendor-portal/service";
 import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/service";
 import { queueProposalDraftJob } from "@/lib/jarvis/proposal-draft-jobs";
@@ -809,11 +810,11 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     run: async () => {
       const vendors = await db.vendor.findMany({
         where: { organizationId: ctx.organizationId },
-        select: { id: true, name: true, tradeType: true },
+        select: { id: true, name: true, tradeType: true, divisions: true },
         orderBy: { name: "asc" },
       });
       if (vendors.length === 0) return "This organization has no vendors yet.";
-      return vendors.map((vendor) => `${vendor.id} | ${vendor.name} | ${vendor.tradeType ?? "no trade listed"}`).join("\n");
+      return vendors.map((vendor) => `${vendor.id} | ${vendor.name} | ${vendorTradeLabel(vendor) ?? "no trade listed"}`).join("\n");
     },
   });
 
@@ -823,7 +824,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       "Create a new vendor/subcontractor record. This does NOT invite them to the vendor portal or notify them — it's just the record. Needed before inviting a vendor to bid or granting them job access.",
     inputSchema: z.object({
       name: z.string(),
-      email: z.string().describe("Must be unique within this organization"),
+      email: z.string().optional().describe("Must be unique within this organization when given; omit if unknown (the vendor just can't be invited to the portal until one is added)"),
       tradeType: z.string().optional().describe("e.g. Electrical, Plumbing, Framing"),
       phone: z.string().optional(),
       addressLine1: z.string().optional(),
@@ -835,7 +836,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       const vendor = await createVendor({
         organizationId: ctx.organizationId,
         name: input.name,
-        email: input.email,
+        email: input.email?.trim() || null,
         tradeType: input.tradeType ?? null,
         phone: input.phone ?? null,
         addressLine1: input.addressLine1 ?? null,
@@ -843,7 +844,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         state: input.state ?? null,
         postalCode: input.postalCode ?? null,
       });
-      return `Created vendor "${vendor.name}" (${vendor.email}).`;
+      return `Created vendor "${vendor.name}" (${vendor.email ?? "no email"}).`;
     },
   });
 
@@ -2073,6 +2074,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     run: async (input) => {
       const vendor = await db.vendor.findFirst({ where: { id: input.vendorId, organizationId: ctx.organizationId }, select: { name: true, email: true } });
       if (!vendor) return `No vendor found with id ${input.vendorId} in this organization.`;
+      if (!vendor.email) return `${vendor.name} has no email on file, so they can't be invited to the vendor portal. Add an email to the vendor first.`;
 
       await createPendingAction({
         conversationId: ctx.conversationId,

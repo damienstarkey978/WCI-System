@@ -59,7 +59,7 @@ async function pushVendor(
   vendor: {
     readonly id: string;
     readonly name: string;
-    readonly email: string;
+    readonly email: string | null;
     readonly phone: string | null;
     readonly addressLine1: string | null;
     readonly city: string | null;
@@ -70,7 +70,7 @@ async function pushVendor(
 ): Promise<string> {
   const vendorFields = {
     DisplayName: vendor.name,
-    PrimaryEmailAddr: { Address: vendor.email },
+    ...(vendor.email ? { PrimaryEmailAddr: { Address: vendor.email } } : {}),
     ...(vendor.phone ? { PrimaryPhone: { FreeFormNumber: vendor.phone } } : {}),
     ...(vendor.addressLine1
       ? {

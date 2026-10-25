@@ -48,8 +48,7 @@ export default async function VendorDetailPage({ params }: PageProps<"/vendors/[
       <div>
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">{vendor.name}</h1>
         <p className="text-sm text-[var(--bt-muted)]">
-          {vendor.tradeType ?? "No trade set"} · {vendor.email}
-          {vendor.phone ? ` · ${vendor.phone}` : ""}
+          {[vendor.tradeType ?? "No trade set", vendor.email ?? "No email on file", vendor.phone].filter(Boolean).join(" · ")}
         </p>
         <p className="mt-1 text-xs text-[var(--bt-muted)]">
           {vendor.activatedAt ? `Activated ${formatDate(vendor.activatedAt)}` : vendor.invitedAt ? `Invited ${formatDate(vendor.invitedAt)}, not yet activated` : "Not invited to the vendor portal yet"}

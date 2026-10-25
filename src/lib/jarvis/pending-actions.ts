@@ -59,7 +59,11 @@ import {
   StaffMemberNotFoundError,
   updateStaffRole,
 } from "@/lib/staff/service";
-import { issuePortalLoginInvite as issueVendorPortalInvite, VendorNotFoundError as VendorPortalVendorNotFoundError } from "@/lib/vendor-portal/auth";
+import {
+  issuePortalLoginInvite as issueVendorPortalInvite,
+  VendorMissingEmailError,
+  VendorNotFoundError as VendorPortalVendorNotFoundError,
+} from "@/lib/vendor-portal/auth";
 
 export class PendingActionNotFoundError extends Error {
   constructor(actionId: string) {
@@ -256,6 +260,7 @@ export async function confirmPendingAction(organizationId: string, actionId: str
       error instanceof BidSubmissionNotAcceptedError ||
       error instanceof ClientNotFoundError ||
       error instanceof VendorPortalVendorNotFoundError ||
+      error instanceof VendorMissingEmailError ||
       error instanceof DuplicateStaffEmailError ||
       error instanceof StaffMemberNotFoundError ||
       error instanceof LastAdminError
