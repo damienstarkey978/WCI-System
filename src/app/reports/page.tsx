@@ -31,22 +31,22 @@ const CATEGORIES = ["All", "Financial", "Project Management", "Sales"] as const;
 type Category = (typeof CATEGORIES)[number];
 
 const REPORTS = [
-  { key: "wip", label: "WIP", category: "Financial" },
-  { key: "budget-variance", label: "Budgeted vs Projected", category: "Financial" },
-  { key: "profitability", label: "Profitability", category: "Financial" },
-  { key: "invoicing", label: "Invoicing", category: "Financial" },
-  { key: "labor", label: "Labor Actuals vs Budgeted", category: "Financial" },
-  { key: "cash-flow", label: "Cash Flow", category: "Financial" },
-  { key: "change-order-profit", label: "Change Order Profit", category: "Project Management" },
-  { key: "baseline-duration", label: "Baseline vs Actual Duration", category: "Project Management" },
-  { key: "daily-log-by-user", label: "Daily Log Count by User", category: "Project Management" },
-  { key: "daily-log-by-job", label: "Daily Log Creation by Job", category: "Project Management" },
-  { key: "hours-by-employee", label: "Hours Worked, by Employee", category: "Project Management" },
-  { key: "hours-by-job", label: "Hours Worked, by Job", category: "Project Management" },
-  { key: "lead-activities-by-salesperson", label: "Lead Activities by Salesperson", category: "Sales" },
-  { key: "lead-count-by-salesperson", label: "Lead Count by Salesperson", category: "Sales" },
-  { key: "lead-status-by-source", label: "Lead Status by Source", category: "Sales" },
-] as const satisfies readonly { key: string; label: string; category: Exclude<Category, "All"> }[];
+  { key: "wip", label: "WIP", category: "Financial", description: "Contract price, percent complete, earned revenue and over/under billing for each active job." },
+  { key: "budget-variance", label: "Budgeted vs Projected", category: "Financial", description: "Original, revised and projected cost per job so you can spot overruns early." },
+  { key: "profitability", label: "Profitability", category: "Financial", description: "Projected profit and margin for each active job." },
+  { key: "invoicing", label: "Invoicing", category: "Financial", description: "What has been invoiced, what is paid and what is still to bill per job." },
+  { key: "labor", label: "Labor Actuals vs Budgeted", category: "Financial", description: "Actual labor hours and cost against what was budgeted." },
+  { key: "cash-flow", label: "Cash Flow", category: "Financial", description: "Cash in and cash out across jobs." },
+  { key: "change-order-profit", label: "Change Order Profit", category: "Project Management", description: "Approved change orders with their cost, price and profit." },
+  { key: "baseline-duration", label: "Baseline vs Actual Duration", category: "Project Management", description: "Baseline schedule length compared with the actual start and end of each job." },
+  { key: "daily-log-by-user", label: "Daily Log Count by User", category: "Project Management", description: "How many daily logs each team member has written." },
+  { key: "daily-log-by-job", label: "Daily Log Creation by Job", category: "Project Management", description: "How many daily logs each job has, and when the last one was added." },
+  { key: "hours-by-employee", label: "Hours Worked, by Employee", category: "Project Management", description: "Time clock hours worked by each employee." },
+  { key: "hours-by-job", label: "Hours Worked, by Job", category: "Project Management", description: "Time clock hours worked on each job." },
+  { key: "lead-activities-by-salesperson", label: "Lead Activities by Salesperson", category: "Sales", description: "Activities logged against leads, by salesperson." },
+  { key: "lead-count-by-salesperson", label: "Lead Count by Salesperson", category: "Sales", description: "Number of leads owned by each salesperson." },
+  { key: "lead-status-by-source", label: "Lead Status by Source", category: "Sales", description: "Where leads come from and how far each source gets." },
+] as const satisfies readonly { key: string; label: string; category: Exclude<Category, "All">; description: string }[];
 
 type ReportKey = (typeof REPORTS)[number]["key"];
 
@@ -110,7 +110,8 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   const { report, category: categoryParam } = await searchParams;
   const category: Category = CATEGORIES.includes(categoryParam as Category) ? (categoryParam as Category) : "All";
   const visibleReports = category === "All" ? REPORTS : REPORTS.filter((r) => r.category === category);
-  const active: ReportKey = REPORTS.some((r) => r.key === report) ? (report as ReportKey) : visibleReports[0].key;
+  // No report picked: show the landing list (Buildertrend's Reports page); picking one opens it.
+  const active: ReportKey | null = REPORTS.some((r) => r.key === report) ? (report as ReportKey) : null;
 
   return (
     <AppShell jobs={jobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
@@ -133,20 +134,41 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           ))}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {visibleReports.map((r) => (
-            <Link
-              key={r.key}
-              href={`/reports?category=${category}&report=${r.key}`}
-              className="rounded px-3 py-1.5 text-sm font-medium"
-              style={active === r.key ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" } : { background: "var(--bt-panel-bg)", color: "var(--bt-muted)" }}
-            >
-              {r.label}
+        {active === null ? (
+          <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+                  <Th>Report</Th>
+                  <Th>Description</Th>
+                  <Th>Category</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleReports.map((r) => (
+                  <tr key={r.key} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                    <Td>
+                      <Link href={`/reports?category=${category}&report=${r.key}`} className="font-medium text-[var(--bt-primary)] hover:underline">
+                        {r.label}
+                      </Link>
+                    </Td>
+                    <td className="px-4 py-2 text-[var(--bt-muted)]">{r.description}</td>
+                    <td className="px-4 py-2 text-[var(--bt-muted)]">{r.category}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <Link href={`/reports?category=${category}`} className="text-sm font-medium text-[var(--bt-primary)] hover:underline">
+              ← All reports
             </Link>
-          ))}
-        </div>
+            <h2 className="text-base font-semibold text-[var(--bt-text)]">{REPORTS.find((r) => r.key === active)?.label}</h2>
+          </div>
+        )}
 
-        <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+        <div className={active === null ? "hidden" : "overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]"} style={{ borderColor: "var(--bt-border)" }}>
           {active === "wip" ? <WipTable organizationId={user.organizationId} /> : null}
           {active === "budget-variance" ? <BudgetVarianceTable organizationId={user.organizationId} /> : null}
           {active === "profitability" ? <ProfitabilityTable organizationId={user.organizationId} /> : null}
