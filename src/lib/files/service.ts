@@ -61,6 +61,7 @@ export interface RegisterFileInput {
   readonly clientVisible?: boolean;
   readonly subVisible?: boolean;
   readonly dailyLogId?: string | null;
+  readonly folderId?: string | null;
 }
 
 export async function registerFile(input: RegisterFileInput) {
@@ -79,6 +80,7 @@ export async function registerFile(input: RegisterFileInput) {
       clientVisible: input.clientVisible ?? true,
       subVisible: input.subVisible ?? true,
       dailyLogId: input.dailyLogId ?? null,
+      folderId: await validFolderId(input.organizationId, input.jobId, input.folderId),
     },
   });
 }
@@ -95,6 +97,8 @@ export interface UploadAndRegisterFileInput {
   readonly clientVisible?: boolean;
   readonly subVisible?: boolean;
   readonly dailyLogId?: string | null;
+  /** Must be a folder on the same job; ignored (unfiled) if it is not. */
+  readonly folderId?: string | null;
 }
 
 /** Uploads the bytes to the job-files bucket, then registers the resulting File row. */
@@ -127,8 +131,15 @@ export async function uploadAndRegisterFile(input: UploadAndRegisterFileInput) {
       clientVisible: input.clientVisible ?? true,
       subVisible: input.subVisible ?? true,
       dailyLogId: input.dailyLogId ?? null,
+      folderId: await validFolderId(input.organizationId, input.jobId, input.folderId),
     },
   });
+}
+
+async function validFolderId(organizationId: string, jobId: string, folderId: string | null | undefined): Promise<string | null> {
+  if (!folderId) return null;
+  const folder = await db.fileFolder.findFirst({ where: { id: folderId, organizationId, jobId }, select: { id: true } });
+  return folder?.id ?? null;
 }
 
 /** Turns a File.url value into something actually fetchable — see the file-level comment. */

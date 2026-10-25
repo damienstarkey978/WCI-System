@@ -116,6 +116,7 @@ model Organization {
   todos                   Todo[]
   rfis                    Rfi[]
   files                   File[]
+  fileFolders             FileFolder[]
   comments                Comment[]
   notifications           Notification[]
   clients                 Client[]
@@ -288,6 +289,7 @@ model Job {
   todos                 Todo[]
   rfis                  Rfi[]
   files                 File[]
+  fileFolders           FileFolder[]
   clientAccess          ClientJobAccess[]
   allowances            Allowance[]
   selections            Selection[]
@@ -2004,17 +2006,47 @@ model File {
   invoiceId String?
   invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
+  /// The Documents folder this file sits in, if any (Buildertrend's Files > Documents
+  /// folders). Null means unfiled. Deleting a folder unfiles its files, never deletes them.
+  folderId String?
+  folder   FileFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   /// Set when this file is a generated lien-waiver PDF.
   lienWaivers LienWaiver[]
 
   createdAt DateTime @default(now())
 
   @@index([jobId, category])
+  @@index([folderId])
   @@index([dailyLogId])
   @@index([selectionOptionId])
   @@index([billId])
   @@index([purchaseOrderId])
   @@index([invoiceId])
+}
+
+/// A job's Documents folder (Buildertrend's Files > Documents). One level only: BT's
+/// own list is flat in practice, and nesting can be added later without touching File.
+/// Visibility here is the folder's default for who is shown it; each File still carries
+/// its own clientVisible/subVisible, which is what portals actually filter on.
+model FileFolder {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  name          String
+  clientVisible Boolean @default(true)
+  subVisible    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files File[]
+
+  @@unique([jobId, name])
+  @@index([organizationId])
 }
 
 // ---------------------------------------------------------------------------
@@ -2790,8 +2822,8 @@ model ProposalTemplate {
   name         String
   description  String?
   coverMessage String?
-  sections     Json         @default("[]")
-  draws        Json         @default("[]")
+  sections     Json    @default("[]")
+  draws        Json    @default("[]")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

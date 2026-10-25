@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAppUser } from "@/lib/auth";
+import { createFolder, deleteFolder, FolderNameTakenError, FolderNotFoundError, moveFileToFolder, setFolderVisibility } from "@/lib/files/folders";
 import {
   deleteFile,
   FileNotFoundError,
@@ -29,6 +30,7 @@ export async function uploadFilesAction(_previous: ActionState, formData: FormDa
     : "DOCUMENT";
   const clientVisible = formData.get("clientVisible") === "on";
   const subVisible = formData.get("subVisible") === "on";
+  const folderId = String(formData.get("folderId") ?? "") || null;
 
   const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (files.length === 0) {
@@ -49,6 +51,7 @@ export async function uploadFilesAction(_previous: ActionState, formData: FormDa
         category,
         clientVisible,
         subVisible,
+        folderId,
       });
     }
   } catch (error) {
@@ -94,5 +97,60 @@ export async function updateFileVisibilityAction(formData: FormData): Promise<vo
     throw error;
   }
 
+  revalidatePath(`/jobs/${jobId}/files`);
+}
+
+export async function createFolderAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const name = String(formData.get("name") ?? "");
+
+  try {
+    await createFolder(user.organizationId, jobId, name);
+  } catch (error) {
+    if (error instanceof FolderNameTakenError) return { error: error.message };
+    if (error instanceof Error && error.message === "Folder name is required.") return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/files`);
+  return { ok: true };
+}
+
+export async function deleteFolderAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  try {
+    await deleteFolder(user.organizationId, String(formData.get("folderId") ?? ""));
+  } catch (error) {
+    if (!(error instanceof FolderNotFoundError)) throw error;
+  }
+  revalidatePath(`/jobs/${jobId}/files`);
+}
+
+export async function updateFolderVisibilityAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const field = String(formData.get("field") ?? "");
+  if (field !== "clientVisible" && field !== "subVisible") return;
+
+  try {
+    await setFolderVisibility(user.organizationId, String(formData.get("folderId") ?? ""), { [field]: formData.get("value") === "true" });
+  } catch (error) {
+    if (!(error instanceof FolderNotFoundError)) throw error;
+  }
+  revalidatePath(`/jobs/${jobId}/files`);
+}
+
+export async function moveFileAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const folderId = String(formData.get("folderId") ?? "") || null;
+
+  try {
+    await moveFileToFolder(user.organizationId, String(formData.get("fileId") ?? ""), folderId);
+  } catch (error) {
+    if (!(error instanceof FolderNotFoundError)) throw error;
+  }
   revalidatePath(`/jobs/${jobId}/files`);
 }

@@ -6,7 +6,7 @@ import { uploadFilesAction, type ActionState } from "./actions";
 
 const INITIAL: ActionState = {};
 
-export function UploadForm({ jobId }: { jobId: string }) {
+export function UploadForm({ jobId, folderId }: { jobId: string; folderId?: string }) {
   const [state, formAction, pending] = useActionState(uploadFilesAction, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -25,6 +25,7 @@ export function UploadForm({ jobId }: { jobId: string }) {
       style={{ borderColor: "var(--bt-border)" }}
     >
       <input type="hidden" name="jobId" value={jobId} />
+      {folderId ? <input type="hidden" name="folderId" value={folderId} /> : null}
 
       <div
         onDragOver={(event) => {

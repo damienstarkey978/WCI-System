@@ -1,6 +1,6 @@
 "use client";
 
-import { deleteFileAction, updateFileVisibilityAction } from "./actions";
+import { deleteFileAction, moveFileAction, updateFileVisibilityAction } from "./actions";
 
 export interface FileCardData {
   readonly id: string;
@@ -14,6 +14,12 @@ export interface FileCardData {
   readonly subVisible: boolean;
   readonly uploaderEmail: string;
   readonly uploadedAt: string;
+  readonly folderId?: string | null;
+}
+
+export interface FolderOption {
+  readonly id: string;
+  readonly name: string;
 }
 
 function formatBytes(bytes: number | null): string {
@@ -42,7 +48,7 @@ function VisibilityToggle({ jobId, fileId, field, checked, label }: { jobId: str
   );
 }
 
-export function FileCard({ jobId, file }: { jobId: string; file: FileCardData }) {
+export function FileCard({ jobId, file, folders = [] }: { jobId: string; file: FileCardData; folders?: readonly FolderOption[] }) {
   const isPhoto = file.category === "PHOTO" || file.category === "PRESALE_PHOTO";
   // A file whose storage object can't be signed still renders — as an unavailable
   // card with a working Delete, since these are usually orphan rows left by a failed
@@ -89,6 +95,23 @@ export function FileCard({ jobId, file }: { jobId: string; file: FileCardData })
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <VisibilityToggle jobId={jobId} fileId={file.id} field="clientVisible" checked={file.clientVisible} label="Client" />
           <VisibilityToggle jobId={jobId} fileId={file.id} field="subVisible" checked={file.subVisible} label="Sub" />
+          {folders.length > 0 ? (
+            <form action={moveFileAction} className="flex items-center gap-1">
+              <input type="hidden" name="jobId" value={jobId} />
+              <input type="hidden" name="fileId" value={file.id} />
+              <select name="folderId" defaultValue={file.folderId ?? ""} aria-label="Folder" className="max-w-28 rounded border px-1 py-0.5 text-[11px]" style={{ borderColor: "var(--bt-border)" }}>
+                <option value="">No folder</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="text-[11px] font-semibold text-[var(--bt-primary)] hover:underline">
+                Move
+              </button>
+            </form>
+          ) : null}
           <form action={deleteFileAction} className="ml-auto">
             <input type="hidden" name="jobId" value={jobId} />
             <input type="hidden" name="fileId" value={file.id} />
