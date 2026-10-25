@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -11,6 +12,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { approveSelectionOptionAction } from "./actions";
 import { CreateAllowanceForm } from "./create-allowance-form";
 import { CreateSelectionForm } from "./create-selection-form";
+import { AllowancesGrid, SelectionsListGrid } from "./selections-grids";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +22,17 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
-export default async function SelectionsPage({ params }: PageProps<"/jobs/[jobId]/selections">) {
+const VIEWS = [
+  { key: "cards", label: "Card view" },
+  { key: "list", label: "List view" },
+  { key: "allowances", label: "Allowances" },
+] as const;
+type ViewKey = (typeof VIEWS)[number]["key"];
+
+export default async function SelectionsPage({ params, searchParams }: PageProps<"/jobs/[jobId]/selections">) {
   const { jobId } = await params;
+  const { view: viewParam } = await searchParams;
+  const view: ViewKey = VIEWS.some((v) => v.key === viewParam) ? (viewParam as ViewKey) : "cards";
 
   let user;
   try {
@@ -42,7 +53,11 @@ export default async function SelectionsPage({ params }: PageProps<"/jobs/[jobId
       orderBy: { dueDate: "asc" },
       include: { options: { orderBy: { sortOrder: "asc" } } },
     }),
-    db.allowance.findMany({ where: { jobId: job.id }, orderBy: { title: "asc" }, select: { id: true, title: true } }),
+    db.allowance.findMany({
+      where: { jobId: job.id },
+      orderBy: { title: "asc" },
+      select: { id: true, title: true, amountCents: true, clientPriceCents: true, costCode: { select: { code: true, name: true } }, _count: { select: { selections: true } } },
+    }),
     db.costCode.findMany({
       where: { organizationId: user.organizationId, isActive: true },
       orderBy: { sortOrder: "asc" },
@@ -51,7 +66,7 @@ export default async function SelectionsPage({ params }: PageProps<"/jobs/[jobId
   ]);
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <PageHeader
         jobName={job.name}
         title="Selections"
@@ -68,7 +83,47 @@ export default async function SelectionsPage({ params }: PageProps<"/jobs/[jobId
       />
 
 
-      {selections.length === 0 ? (
+      <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+        {VIEWS.map((v) => (
+          <Link
+            key={v.key}
+            href={`/jobs/${job.id}/selections?view=${v.key}`}
+            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+            style={{ borderColor: v.key === view ? "var(--bt-primary)" : "transparent", color: v.key === view ? "var(--bt-primary)" : "var(--bt-muted)" }}
+          >
+            {v.label}
+          </Link>
+        ))}
+      </nav>
+
+      {view === "allowances" ? (
+        <AllowancesGrid
+          rows={allowances.map((allowance) => ({
+            id: allowance.id,
+            title: allowance.title,
+            costCode: `${allowance.costCode.code} ${allowance.costCode.name}`,
+            amountCents: allowance.amountCents,
+            clientPriceCents: allowance.clientPriceCents,
+            selectionCount: allowance._count.selections,
+          }))}
+        />
+      ) : view === "list" ? (
+        <SelectionsListGrid
+          rows={selections.map((selection) => {
+            const approved = selection.options.find((option) => option.status === "APPROVED");
+            const status = approved ? "Approved" : selection.options.some((option) => option.status === "DECLINED") && !selection.options.some((o) => o.status === "PENDING") ? "Declined" : "Pending";
+            return {
+              id: selection.id,
+              title: selection.title,
+              allowanceTitle: allowances.find((allowance) => allowance.id === selection.allowanceId)?.title ?? null,
+              dueDate: selection.dueDate ? selection.dueDate.toISOString() : null,
+              status,
+              optionCount: selection.options.length,
+              approvedPriceCents: approved ? approved.clientPriceCents : null,
+            };
+          })}
+        />
+      ) : selections.length === 0 ? (
         <EmptyState title="No selections yet" description="Selections created for this job will appear here for the client to choose from." />
       ) : (
         <div className="flex flex-col gap-4">
