@@ -1,29 +1,25 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate } from "@/lib/format";
 import { workedHours } from "@/lib/time-clock/hours";
 
-import { reviewTimeClockEntryAction } from "./actions";
+import { ShiftsGrid } from "./shifts-grid";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  PENDING: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  APPROVED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  REJECTED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
-};
+const TABS = [
+  { key: "all", label: "Shifts" },
+  { key: "pending", label: "Needs approval" },
+] as const;
 
-function formatHours(hours: number): string {
-  return `${hours.toFixed(2)} hrs`;
-}
-
-export default async function TimeClockPage({ params }: PageProps<"/jobs/[jobId]/time-clock">) {
+export default async function TimeClockPage({ params, searchParams }: PageProps<"/jobs/[jobId]/time-clock">) {
   const { jobId } = await params;
+  const { tab: tabParam } = await searchParams;
+  const tab = tabParam === "pending" ? "pending" : "all";
 
   let user;
   try {
@@ -39,7 +35,7 @@ export default async function TimeClockPage({ params }: PageProps<"/jobs/[jobId]
   if (!job) notFound();
 
   const entries = await db.timeClockEntry.findMany({
-    where: { jobId: job.id },
+    where: { jobId: job.id, ...(tab === "pending" ? { approvalStatus: "PENDING" as const, clockOutAt: { not: null } } : {}) },
     orderBy: { clockInAt: "desc" },
     take: 100,
     include: { user: true, costCode: true, breaks: true },
@@ -48,73 +44,48 @@ export default async function TimeClockPage({ params }: PageProps<"/jobs/[jobId]
   const canReview = user.role === "ADMIN" || user.role === "PM";
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <PageHeader
         jobName={job.name}
         title="Time Clock"
+        action={
+          <Link
+            href="/field/time-clock"
+            className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
+            style={{ background: "var(--bt-primary)" }}
+          >
+            Clock in
+          </Link>
+        }
       />
 
-      {entries.length === 0 ? (
-        <EmptyState title="No time clock entries yet" description="Clock-ins from the field app for this job will appear here." />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-          <table className="w-full min-w-max text-left text-sm">
-            <thead>
-              <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-                <th className="px-4 py-3">Worker</th>
-                <th className="px-4 py-3">Cost code</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Hours</th>
-                <th className="px-4 py-3">Status</th>
-                {canReview ? <th className="px-4 py-3">Review</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => {
-                const style = STATUS_STYLE[entry.approvalStatus] ?? STATUS_STYLE.PENDING;
-                const hours = workedHours(entry.clockInAt, entry.clockOutAt, entry.breaks);
-                return (
-                  <tr key={entry.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                    <td className="px-4 py-3 text-[var(--bt-text)]">{entry.user.email}</td>
-                    <td className="px-4 py-3 text-[var(--bt-muted)]">{entry.costCode.name}</td>
-                    <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(entry.clockInAt)}</td>
-                    <td className="px-4 py-3 text-[var(--bt-text)]">{entry.clockOutAt ? formatHours(hours) : "In progress"}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-                        {entry.approvalStatus}
-                      </span>
-                    </td>
-                    {canReview ? (
-                      <td className="px-4 py-3">
-                        {entry.approvalStatus === "PENDING" && entry.clockOutAt ? (
-                          <div className="flex gap-2">
-                            <form action={reviewTimeClockEntryAction}>
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <input type="hidden" name="entryId" value={entry.id} />
-                              <input type="hidden" name="decision" value="approve" />
-                              <button type="submit" className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
-                                Approve
-                              </button>
-                            </form>
-                            <form action={reviewTimeClockEntryAction}>
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <input type="hidden" name="entryId" value={entry.id} />
-                              <input type="hidden" name="decision" value="reject" />
-                              <button type="submit" className="rounded border px-2 py-1 text-xs font-semibold text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-                                Reject
-                              </button>
-                            </form>
-                          </div>
-                        ) : null}
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+        {TABS.map((t) => (
+          <Link
+            key={t.key}
+            href={`/jobs/${job.id}/time-clock${t.key === "all" ? "" : `?tab=${t.key}`}`}
+            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+            style={{ borderColor: t.key === tab ? "var(--bt-primary)" : "transparent", color: t.key === tab ? "var(--bt-primary)" : "var(--bt-muted)" }}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+
+      <ShiftsGrid
+        canReview={canReview}
+        rows={entries.map((entry) => ({
+          id: entry.id,
+          jobId: job.id,
+          worker: entry.user.email,
+          costCode: entry.costCode.name,
+          clockInAt: entry.clockInAt.toISOString(),
+          inProgress: entry.clockOutAt === null,
+          // workedHours() throws for a shift that has not clocked out yet.
+          hours: entry.clockOutAt ? workedHours(entry.clockInAt, entry.clockOutAt, entry.breaks) : 0,
+          approvalStatus: entry.approvalStatus,
+        }))}
+      />
     </div>
   );
 }
