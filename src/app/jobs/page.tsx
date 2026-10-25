@@ -3,17 +3,14 @@ import Link from "next/link";
 import { AppShell } from "@/components/shell/AppShell";
 import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
+import { db } from "@/lib/db";
+
+import { JobsGrid } from "./jobs-grid";
 
 // Reads live data on every request — never prerendered at build time.
 export const dynamic = "force-dynamic";
-
-const STATUS_LABEL: Record<string, string> = {
-  PRE_SALE: "Pre-sale",
-  OPEN: "Open",
-  WARRANTY: "Warranty",
-  CLOSED: "Closed",
-};
 
 export default async function JobsIndexPage() {
   let user;
@@ -23,13 +20,36 @@ export default async function JobsIndexPage() {
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
 
-  const [jobs, bell] = await Promise.all([
+  // The index lists every non-template job, pre-sale included (the sidebar hides
+  // PRE_SALE on purpose; see sidebarJobsForOrg). FIELD users only see granted jobs.
+  const [jobs, sidebarJobs, bell] = await Promise.all([
+    db.job.findMany({
+      where: {
+        organizationId: user.organizationId,
+        isTemplate: false,
+        ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      include: { jobGroup: true },
+    }),
     sidebarJobsForOrg(user.organizationId, user),
     notificationBellDataForUser(user.organizationId, user.id),
   ]);
 
+  const rows = jobs.map((job) => ({
+    id: job.id,
+    name: job.name,
+    prefix: job.prefix,
+    status: job.status,
+    groupName: job.jobGroup?.name ?? "General",
+    address: [job.addressLine1, job.city, job.state].filter(Boolean).join(", ") || null,
+    contractType: job.contractType,
+    projectedStart: job.projectedStart ? job.projectedStart.toISOString() : null,
+    projectedEnd: job.projectedEnd ? job.projectedEnd.toISOString() : null,
+  }));
+
   return (
-    <AppShell jobs={jobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
+    <AppShell jobs={sidebarJobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-[var(--bt-text)]">Jobs</h1>
@@ -42,48 +62,7 @@ export default async function JobsIndexPage() {
           </Link>
         </div>
 
-        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr
-                className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
-                style={{ borderColor: "var(--bt-border)" }}
-              >
-                <th className="px-4 py-3">Job</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Group</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <tr key={job.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                  <td className="px-4 py-3">
-                    <Link href={`/jobs/${job.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
-                      {job.prefix ? <span className="mr-1.5 font-mono text-xs text-[var(--bt-muted)]">{job.prefix}</span> : null}
-                      {job.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="rounded px-1.5 py-0.5 text-xs font-semibold"
-                      style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
-                    >
-                      {STATUS_LABEL[job.status] ?? job.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--bt-muted)]">{job.groupName}</td>
-                </tr>
-              ))}
-              {jobs.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-[var(--bt-muted)]">
-                    No jobs yet. Create one with the button above.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+        <JobsGrid rows={rows} />
       </div>
     </AppShell>
   );
