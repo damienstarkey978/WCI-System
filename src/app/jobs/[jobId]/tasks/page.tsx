@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -5,21 +6,24 @@ import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate } from "@/lib/format";
 
-import { setTodoStatusAction } from "./actions";
 import { TodoForm } from "./todo-form";
+import { TasksGrid } from "./tasks-grid";
 
 export const dynamic = "force-dynamic";
 
-const PRIORITY_STYLE: Record<string, { bg: string; text: string }> = {
-  HIGH: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
-  MEDIUM: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  LOW: { bg: "#e5e7eb", text: "#374151" },
-};
+const TABS = [
+  { key: "mine", label: "My tasks" },
+  { key: "all", label: "All tasks" },
+  { key: "punch", label: "Punch list" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
 
-export default async function TasksPage({ params }: PageProps<"/jobs/[jobId]/tasks">) {
+export default async function TasksPage({ params, searchParams }: PageProps<"/jobs/[jobId]/tasks">) {
   const { jobId } = await params;
+  const { tab: tabParam, completed } = await searchParams;
+  const tab: TabKey = TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : "all";
+  const showCompleted = completed === "1";
 
   let user;
   try {
@@ -35,15 +39,31 @@ export default async function TasksPage({ params }: PageProps<"/jobs/[jobId]/tas
   if (!job) notFound();
 
   const todos = await db.todo.findMany({
-    where: { jobId: job.id },
+    where: {
+      jobId: job.id,
+      ...(tab === "mine" ? { assigneeUserId: user.id } : {}),
+      ...(tab === "punch" ? { category: { equals: "punch", mode: "insensitive" as const } } : {}),
+      ...(showCompleted ? {} : { status: { not: "DONE" as const } }),
+    },
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+    include: { assigneeUser: { select: { email: true } } },
   });
 
-  const open = todos.filter((todo) => todo.status !== "DONE");
-  const done = todos.filter((todo) => todo.status === "DONE");
+  const rows = todos.map((todo) => ({
+    id: todo.id,
+    jobId: job.id,
+    title: todo.title,
+    category: todo.category,
+    priority: todo.priority,
+    status: todo.status,
+    assignee: todo.assigneeUser?.email ?? null,
+    dueDate: todo.dueDate ? todo.dueDate.toISOString() : null,
+  }));
+
+  const href = (nextTab: TabKey, nextCompleted: boolean) => `/jobs/${job.id}/tasks?tab=${nextTab}${nextCompleted ? "&completed=1" : ""}`;
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <PageHeader
         jobName={job.name}
         title="Tasks"
@@ -56,72 +76,25 @@ export default async function TasksPage({ params }: PageProps<"/jobs/[jobId]/tas
         }
       />
 
+      <div className="flex items-end justify-between gap-3 border-b" style={{ borderColor: "var(--bt-border)" }}>
+        <nav className="flex gap-1">
+          {TABS.map((t) => (
+            <Link
+              key={t.key}
+              href={href(t.key, showCompleted)}
+              className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+              style={{ borderColor: t.key === tab ? "var(--bt-primary)" : "transparent", color: t.key === tab ? "var(--bt-primary)" : "var(--bt-muted)" }}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+        <Link href={href(tab, !showCompleted)} className="pb-2 text-xs font-medium text-[var(--bt-primary)] hover:underline">
+          {showCompleted ? "Hide completed" : "Show completed"}
+        </Link>
+      </div>
 
-      <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-        <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
-          <h2 className="text-sm font-semibold text-[var(--bt-text)]">Open ({open.length})</h2>
-        </header>
-        <div className="divide-y" style={{ borderColor: "var(--bt-border)" }}>
-          {open.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-[var(--bt-muted)]">Nothing open.</p>
-          ) : (
-            open.map((todo) => {
-              const style = PRIORITY_STYLE[todo.priority] ?? PRIORITY_STYLE.MEDIUM;
-              return (
-                <div key={todo.id} className="flex items-center gap-3 px-4 py-3">
-                  <form action={setTodoStatusAction}>
-                    <input type="hidden" name="jobId" value={job.id} />
-                    <input type="hidden" name="todoId" value={todo.id} />
-                    <input type="hidden" name="status" value="DONE" />
-                    <button
-                      type="submit"
-                      aria-label="Mark done"
-                      className="h-4 w-4 shrink-0 rounded border-2"
-                      style={{ borderColor: "var(--bt-muted)" }}
-                    />
-                  </form>
-                  <div className="flex-1">
-                    <div className="text-sm text-[var(--bt-text)]">{todo.title}</div>
-                    {todo.category ? <div className="text-xs text-[var(--bt-muted)]">{todo.category}</div> : null}
-                  </div>
-                  <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-                    {todo.priority}
-                  </span>
-                  <span className="w-20 shrink-0 text-right text-xs text-[var(--bt-muted)]">{formatDate(todo.dueDate)}</span>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </section>
-
-      {done.length > 0 ? (
-        <section className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-          <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
-            <h2 className="text-sm font-semibold text-[var(--bt-text)]">Done ({done.length})</h2>
-          </header>
-          <div className="divide-y" style={{ borderColor: "var(--bt-border)" }}>
-            {done.map((todo) => (
-              <div key={todo.id} className="flex items-center gap-3 px-4 py-3">
-                <form action={setTodoStatusAction}>
-                  <input type="hidden" name="jobId" value={job.id} />
-                  <input type="hidden" name="todoId" value={todo.id} />
-                  <input type="hidden" name="status" value="OPEN" />
-                  <button
-                    type="submit"
-                    aria-label="Reopen"
-                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[var(--bt-on-primary)]"
-                    style={{ background: "var(--bt-primary)" }}
-                  >
-                    ✓
-                  </button>
-                </form>
-                <div className="flex-1 text-sm text-[var(--bt-muted)] line-through">{todo.title}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <TasksGrid rows={rows} emptyMessage={tab === "punch" ? "No punch list items. Tag a task \"punch\" to add it here." : "No tasks to show."} />
     </div>
   );
 }
