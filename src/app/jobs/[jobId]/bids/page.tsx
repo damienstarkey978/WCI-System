@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -10,6 +11,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { acceptBidSubmissionAction, declineBidSubmissionAction } from "./actions";
 import { CreateBidPackageForm } from "./create-bid-package-form";
 import { DraftPanel } from "./draft-panel";
+import { FinancialPageHeader } from "../financial-tabs";
 import { InviteVendorForm } from "./invite-vendor-form";
 import { SubmitBidOnBehalfForm } from "./submit-bid-on-behalf-form";
 
@@ -58,11 +60,26 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
     db.vendor.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
+  const totalApprovedCents = bidPackages.reduce(
+    (total, pkg) => total + pkg.submissions.filter((s) => s.status === "ACCEPTED").reduce((sum, s) => sum + (s.totalCents ?? 0), 0),
+    0,
+  );
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Bid board — {job.name}</h1>
+      <FinancialPageHeader
+        jobName={job.name}
+        title="Bid Packages"
+        action={
+          <CreateModal triggerLabel="+ Bid Package" title="New bid package">
+            <CreateBidPackageForm jobId={job.id} />
+          </CreateModal>
+        }
+      />
 
-      <CreateBidPackageForm jobId={job.id} />
+      <div className="text-sm text-[var(--bt-muted)]">
+        Total approved Bid Packages amount: <span className="font-semibold text-[var(--bt-text)]">{formatMoney(totalApprovedCents)}</span>
+      </div>
 
       {bidPackages.length === 0 ? (
         <EmptyState title="No bid packages yet" description="Bid packages sent out for this job will appear here." />
