@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -10,6 +9,8 @@ import { BUDGET_VIEWS, budgetViewByKey, type BudgetColumnId } from "@/lib/contra
 import { formatMoney, formatPercent } from "@/lib/format";
 
 import { BudgetGrid, type GridCell } from "./budget-grid";
+import { BudgetViewSelect } from "./budget-view-select";
+import { FinancialPageHeader } from "../financial-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -194,33 +195,25 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
 
   return (
     <div className="flex flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Job costing — {view.job.name}</h1>
-        <span className="text-xs text-[var(--bt-muted)]">
-          {view.job.projectionReference === "GREATEST"
-            ? "Projected at worst of budget/committed/actual"
-            : view.job.projectionReference}
-        </span>
-      </div>
+      <FinancialPageHeader
+        jobName={view.job.name}
+        title="Job Costing Budget"
+        action={
+          <span className="text-xs text-[var(--bt-muted)]">
+            {view.job.projectionReference === "GREATEST"
+              ? "Projected at worst of budget/committed/actual"
+              : view.job.projectionReference}
+          </span>
+        }
+      />
 
       <SummaryStrip totals={view.funnel.totals} />
 
-      <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: "var(--bt-border)" }}>
-        {BUDGET_VIEWS.map((budgetView) => (
-          <Link
-            key={budgetView.key}
-            href={`/jobs/${jobId}/budget?view=${budgetView.key}`}
-            className="rounded px-3 py-1.5 text-sm font-medium"
-            style={
-              selectedBudgetView.key === budgetView.key
-                ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" }
-                : { color: "var(--bt-muted)" }
-            }
-          >
-            {budgetView.label}
-          </Link>
-        ))}
-      </div>
+      <BudgetViewSelect
+        jobId={jobId}
+        views={BUDGET_VIEWS.map((v) => ({ key: v.key, label: v.label }))}
+        selectedKey={selectedBudgetView.key}
+      />
 
       <BudgetGrid
         columnLabels={columns.map((columnId) => COLUMN_LABELS[columnId])}
