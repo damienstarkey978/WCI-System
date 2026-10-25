@@ -99,6 +99,7 @@ model Organization {
 
   estimates               Estimate[]
   estimateTemplates       EstimateTemplate[]
+  proposalTemplates       ProposalTemplate[]
   poAgreementTemplates    POAgreementTemplate[]
   lienWaivers             LienWaiver[]
   purchaseOrders          PurchaseOrder[]
@@ -2764,6 +2765,33 @@ model Proposal {
   @@index([jobId])
   @@index([leadId])
   @@index([organizationId, status])
+}
+
+/// A reusable proposal shell (Buildertrend's Proposal Templates): cover message,
+/// narrative sections with bullets, and a payment schedule, with NO pricing. Pricing
+/// stays on Estimates (CLAUDE.md 5), so a template can never drift from the numbers.
+/// "Apply template" is an explicit action that copies these into a DRAFT proposal;
+/// the proposal keeps no back-reference and edits independently afterwards.
+///
+/// sections/draws are Json validated by src/lib/proposal-templates/service.ts
+/// (sections: [{ title, bullets: string[] }], draws: [{ title,
+/// pctOfContractBasisPoints }]) rather than child tables: they are only ever read
+/// and written whole, never queried by row.
+model ProposalTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name         String
+  description  String?
+  coverMessage String?
+  sections     Json         @default("[]")
+  draws        Json         @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
 }
 
 /// One payment milestone in a Proposal's payment schedule. See Proposal.draws.

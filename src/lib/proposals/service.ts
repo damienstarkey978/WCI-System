@@ -17,6 +17,8 @@ import { ContractType, EstimateStatus, JobStatus, ProposalStatus } from "@/gener
 import { sendEstimateToBudget } from "@/lib/budget/send-to-budget";
 import { db } from "@/lib/db";
 import { totalDrawPercentage } from "@/lib/invoicing/calc";
+import { readTemplateDraws, readTemplateSections } from "@/lib/proposal-templates/content";
+import { getProposalTemplate } from "@/lib/proposal-templates/service";
 import { transitionJobStatus } from "@/lib/jobs";
 import type { BasisPoints } from "@/lib/money";
 import { emitEvent } from "@/lib/webhooks";
@@ -636,4 +638,57 @@ export async function declineProposal(organizationId: string, proposalId: string
   await emitEvent(organizationId, "proposal.declined", { proposalId: updated.id, jobId: updated.jobId });
 
   return updated;
+}
+
+// --- Proposal templates ----------------------------------------------------------
+
+export interface ApplyProposalTemplateResult {
+  readonly coverMessageSet: boolean;
+  readonly sectionsAdded: number;
+  readonly drawsAdded: number;
+}
+
+/**
+ * Copies a ProposalTemplate into a DRAFT proposal as an explicit action (CLAUDE.md
+ * 2.3's conversion pattern): nothing is linked back, so editing the proposal never
+ * touches the template and vice versa. Additive by design, so a template never wipes
+ * work already on the proposal: sections are appended; the cover message is only set
+ * when the proposal has none; the payment schedule is only copied when the proposal
+ * has none yet (two schedules summed would blow past 100%).
+ */
+export async function applyProposalTemplate(organizationId: string, proposalId: string, templateId: string): Promise<ApplyProposalTemplateResult> {
+  const proposal = await requireEditableProposal(organizationId, proposalId);
+  const template = await getProposalTemplate(organizationId, templateId);
+
+  const sections = readTemplateSections(template.sections);
+  const draws = readTemplateDraws(template.draws);
+
+  const [lastSection, existingDrawCount] = await Promise.all([
+    db.proposalSection.findFirst({ where: { proposalId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } }),
+    db.proposalDraw.count({ where: { proposalId } }),
+  ]);
+  const firstSortOrder = (lastSection?.sortOrder ?? -1) + 1;
+  const setCoverMessage = Boolean(template.coverMessage) && !proposal.coverMessage;
+  const copyDraws = existingDrawCount === 0 && draws.length > 0;
+
+  await db.$transaction([
+    ...(setCoverMessage ? [db.proposal.update({ where: { id: proposalId }, data: { coverMessage: template.coverMessage } })] : []),
+    ...sections.map((section, index) =>
+      db.proposalSection.create({
+        data: {
+          proposalId,
+          title: section.title,
+          sortOrder: firstSortOrder + index,
+          bullets: { create: section.bullets.map((text, bulletIndex) => ({ text, sortOrder: bulletIndex })) },
+        },
+      }),
+    ),
+    ...(copyDraws
+      ? draws.map((draw, index) =>
+          db.proposalDraw.create({ data: { proposalId, title: draw.title, pctOfContractBasisPoints: draw.pctOfContractBasisPoints, sortOrder: index } }),
+        )
+      : []),
+  ]);
+
+  return { coverMessageSet: setCoverMessage, sectionsAdded: sections.length, drawsAdded: copyDraws ? draws.length : 0 };
 }

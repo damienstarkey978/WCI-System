@@ -13,6 +13,7 @@ import { MAX_PROPOSAL_OPTIONS } from "@/lib/proposals/service";
 import { AddLineItemForm } from "./add-line-item-form";
 import { AddSectionForm } from "./add-section-form";
 import { BrandingForm } from "./branding-form";
+import { ApplyTemplateForm } from "./apply-template-form";
 import { CoverMessageEditor } from "./cover-message-editor";
 import { EstimateLineItemRow } from "./estimate-line-item-row";
 import { OptionTabs } from "./option-tabs";
@@ -52,7 +53,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
 
-  const [proposal, organization, costCodes] = await Promise.all([
+  const [proposal, organization, costCodes, templates] = await Promise.all([
     db.proposal.findFirst({
       where: { id: proposalId, organizationId: user.organizationId },
       include: {
@@ -75,6 +76,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
       orderBy: { sortOrder: "asc" },
       select: { id: true, code: true, name: true },
     }),
+    db.proposalTemplate.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   if (!proposal) notFound();
 
@@ -298,6 +300,8 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               </div>
             </div>
           ) : null}
+
+          {editable && templates.length > 0 ? <ApplyTemplateForm proposalId={proposal.id} templates={templates} /> : null}
 
           {editable ? (
             <CoverMessageEditor proposalId={proposal.id} coverMessage={proposal.coverMessage ?? ""} />

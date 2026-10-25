@@ -48,8 +48,11 @@ import { createVendor } from "@/lib/vendor-portal/service";
 import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/service";
 import { queueProposalDraftJob } from "@/lib/jarvis/proposal-draft-jobs";
 import { db } from "@/lib/db";
+import { ProposalTemplateNotFoundError } from "@/lib/proposal-templates/service";
+import { readTemplateDraws, readTemplateSections } from "@/lib/proposal-templates/content";
 import {
   addProposalDraw,
+  applyProposalTemplate,
   addProposalOption,
   addProposalSection,
   addProposalSectionBullet,
@@ -169,6 +172,7 @@ function proposalEditErrorMessage(error: unknown): string | null {
     error instanceof EstimateNotFoundError ||
     error instanceof EstimateJobMismatchError ||
     error instanceof LastOptionError ||
+    error instanceof ProposalTemplateNotFoundError ||
     error instanceof TooManyOptionsError
   ) {
     return error.message;
@@ -1025,6 +1029,50 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   });
 
   // --- AUTO: Proposals (read + draft editing) ---------------------------------------
+
+  const listProposalTemplatesTool = betaZodTool({
+    name: "list_proposal_templates",
+    description:
+      "List this organization's saved proposal templates (reusable cover message, scope sections and payment schedule, no pricing). Check these before writing a proposal's narrative from scratch, then use apply_proposal_template on a DRAFT proposal.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const templates = await db.proposalTemplate.findMany({ where: { organizationId: ctx.organizationId }, orderBy: { name: "asc" } });
+      if (templates.length === 0) return "No proposal templates saved yet.";
+      return templates
+        .map((template) => {
+          const sections = readTemplateSections(template.sections);
+          const draws = readTemplateDraws(template.draws);
+          const schedule = draws.map((draw) => `${draw.title} ${draw.pctOfContractBasisPoints / 100}%`).join(", ");
+          return `${template.id} | ${template.name}${template.description ? ` | ${template.description}` : ""} | sections: ${
+            sections.map((section) => section.title).join("; ") || "none"
+          } | payment schedule: ${schedule || "none"}`;
+        })
+        .join("\n");
+    },
+  });
+
+  const applyProposalTemplateTool = betaZodTool({
+    name: "apply_proposal_template",
+    description:
+      "Copy a saved proposal template into a DRAFT proposal: appends its scope sections, sets the cover message if the proposal has none, and copies the payment schedule if the proposal has none. Never changes pricing. Pass the proposal id from list_proposals and the template id from list_proposal_templates.",
+    inputSchema: z.object({
+      proposalId: z.string().describe("The proposal's id, from list_proposals"),
+      templateId: z.string().describe("The template's id, from list_proposal_templates"),
+    }),
+    run: async (input) => {
+      try {
+        const result = await applyProposalTemplate(ctx.organizationId, input.proposalId, input.templateId);
+        ctx.sideEffects.push(`Applied proposal template ${input.templateId} to proposal ${input.proposalId}`);
+        return `Applied the template: ${result.sectionsAdded} section(s) added, cover message ${
+          result.coverMessageSet ? "set" : "left as it was"
+        }, ${result.drawsAdded} payment milestone(s) added.`;
+      } catch (error) {
+        const message = proposalEditErrorMessage(error);
+        if (message) return message;
+        throw error;
+      }
+    },
+  });
 
   const listProposalsTool = betaZodTool({
     name: "list_proposals",
@@ -2230,6 +2278,8 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     convertLeadToJobTool,
     draftLeadProposalTool,
     listProposalsTool,
+    listProposalTemplatesTool,
+    applyProposalTemplateTool,
     getProposalTool,
     updateProposalCoverMessageTool,
     addProposalSectionTool,

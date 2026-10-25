@@ -643,3 +643,15 @@ Record every architectural decision that departs from the above, with the reason
   `<Protect>` was removed the same way (replaced by the same `<Show>`
   component); neither is used anywhere in this codebase, but avoid both in
   new code.
+- **Proposal Templates store sections and payment schedule as Json, and applying
+  one is additive (UI parity pass):** `ProposalTemplate.sections`/`.draws` are
+  `Json` columns validated by `src/lib/proposal-templates/content.ts`, not child
+  tables, because they are only ever read and written whole. A template carries
+  no pricing (pricing stays on Estimates). `applyProposalTemplate()` is an
+  explicit copy into a DRAFT proposal with no back-reference: it appends
+  sections, sets the cover message only if the proposal has none, and copies the
+  payment schedule only if the proposal has none, so it can never wipe work or
+  push the schedule past 100%. The same service backs the `/leads/proposal-
+  templates` UI, `/api/v1/proposal-templates` plus `/proposals/{id}/apply-
+  template` (reusing the `proposals:read`/`proposals:write` scopes), and the
+  Jarvis tools `list_proposal_templates` / `apply_proposal_template`.

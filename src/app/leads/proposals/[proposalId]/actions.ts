@@ -17,6 +17,7 @@ import {
   deleteEstimateLineItem,
   updateEstimateLineItem,
 } from "@/lib/estimates/service";
+import { ProposalTemplateNotFoundError } from "@/lib/proposal-templates/service";
 import { MoneyError, parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
 import {
   EstimateJobMismatchError as ProposalOptionEstimateJobMismatchError,
@@ -36,6 +37,7 @@ import {
   addProposalOption,
   addProposalSection,
   addProposalSectionBullet,
+  applyProposalTemplate,
   declineProposal,
   deleteProposalDraw,
   deleteProposalSection,
@@ -72,6 +74,7 @@ const KNOWN_ERRORS = [
   ProposalDrawOverallocatedError,
   TooManyOptionsError,
   LastOptionError,
+  ProposalTemplateNotFoundError,
   MoneyError,
 ];
 
@@ -93,6 +96,24 @@ export async function updateCoverMessageAction(_previous: ActionState, formData:
 
   try {
     await updateProposalCoverMessage(user.organizationId, proposalId, coverMessage || null);
+  } catch (error) {
+    const message = handled(error);
+    if (message) return { error: message };
+    throw error;
+  }
+
+  revalidate(proposalId);
+  return { ok: true };
+}
+
+export async function applyTemplateAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  const templateId = String(formData.get("templateId") ?? "");
+  if (!templateId) return { error: "Pick a template to apply." };
+
+  try {
+    await applyProposalTemplate(user.organizationId, proposalId, templateId);
   } catch (error) {
     const message = handled(error);
     if (message) return { error: message };

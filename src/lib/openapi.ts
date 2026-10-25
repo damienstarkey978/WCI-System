@@ -88,6 +88,7 @@ import {
   updateTodoStatusSchema,
 } from "@/lib/api-schemas";
 import { AGENT_DEFAULT_SCOPES, SCOPES } from "@/lib/api-scopes";
+import { proposalTemplateContentSchema } from "@/lib/proposal-templates/content";
 
 /** Convert a Zod schema to a JSON Schema object suitable for embedding in OpenAPI 3.1. */
 function schemaOf(schema: z.ZodType): Record<string, unknown> {
@@ -113,7 +114,7 @@ const ERROR_SCHEMA = {
 } as const;
 
 interface EndpointDef {
-  readonly method: "get" | "post" | "delete";
+  readonly method: "get" | "post" | "put" | "delete";
   readonly path: string;
   readonly summary: string;
   readonly description?: string;
@@ -1482,6 +1483,61 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["proposals:write"],
     requestSchema: createProposalSchema,
     successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/proposal-templates",
+    summary: "List proposal templates (cover message, sections, payment schedule; no pricing)",
+    tags: ["CRM"],
+    scopes: ["proposals:read"],
+  },
+  {
+    method: "post",
+    path: "/proposal-templates",
+    summary: "Create a proposal template",
+    description: "sections is [{ title, bullets[] }]; draws is [{ title, pctOfContractBasisPoints }] and must total at most 10000.",
+    tags: ["CRM"],
+    scopes: ["proposals:write"],
+    requestSchema: proposalTemplateContentSchema,
+    successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/proposal-templates/{templateId}",
+    summary: "Get one proposal template",
+    tags: ["CRM"],
+    scopes: ["proposals:read"],
+    pathParams: ["templateId"],
+  },
+  {
+    method: "put",
+    path: "/proposal-templates/{templateId}",
+    summary: "Replace a proposal template",
+    tags: ["CRM"],
+    scopes: ["proposals:write"],
+    pathParams: ["templateId"],
+    requestSchema: proposalTemplateContentSchema,
+  },
+  {
+    method: "delete",
+    path: "/proposal-templates/{templateId}",
+    summary: "Delete a proposal template",
+    tags: ["CRM"],
+    scopes: ["proposals:write"],
+    pathParams: ["templateId"],
+    successStatus: 204,
+  },
+  {
+    method: "post",
+    path: "/proposals/{proposalId}/apply-template",
+    summary: "Copy a proposal template into a DRAFT proposal",
+    description:
+      "Additive: appends the template's sections, sets the cover message only if the proposal has none, and copies the payment " +
+      "schedule only if the proposal has none. Returns what was added.",
+    tags: ["CRM"],
+    scopes: ["proposals:write"],
+    pathParams: ["proposalId"],
+    requestSchema: z.object({ templateId: z.string().min(1).max(64) }),
   },
   {
     method: "post",
