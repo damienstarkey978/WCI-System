@@ -14,6 +14,7 @@ import {
   updateLeadDetails,
   updateLeadStage,
 } from "@/lib/crm/service";
+import { importLeads, InvalidLeadSheetError, parseLeadSheet, type LeadImportSummary } from "@/lib/crm/import";
 import { MoneyError, parseDollarsToCents } from "@/lib/money";
 
 export interface ActionState {
@@ -155,4 +156,28 @@ export async function convertLeadAction(_previous: ActionState, formData: FormDa
   }
 
   redirect(`/jobs/${jobId}`);
+}
+
+export interface ImportLeadsState {
+  readonly error?: string;
+  readonly summary?: LeadImportSummary;
+}
+
+export async function importLeadsAction(_previous: ImportLeadsState, formData: FormData): Promise<ImportLeadsState> {
+  const user = await requireAppUser();
+
+  const file = formData.get("sheet");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV file to import." };
+  if (/\.xlsx?$/i.test(file.name)) {
+    return { error: "That's an Excel file. Open it in Excel (or Numbers) and use File, Save As or Export, CSV, then upload the CSV." };
+  }
+
+  try {
+    const summary = await importLeads(user.organizationId, parseLeadSheet(await file.text()));
+    revalidatePath("/leads");
+    return { summary };
+  } catch (error) {
+    if (error instanceof InvalidLeadSheetError) return { error: error.message };
+    throw error;
+  }
 }

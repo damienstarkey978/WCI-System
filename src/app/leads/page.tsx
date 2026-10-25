@@ -1,8 +1,10 @@
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 import { AddLeadOpportunityModal } from "./add-lead-opportunity-modal";
+import { ImportLeadsForm } from "./import-leads-form";
 import { LeadsGrid } from "./leads-grid";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +40,12 @@ export default async function LeadsPage() {
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead opportunities</h1>
       </div>
 
-      <AddLeadOpportunityModal clients={clients} />
+      <div className="flex items-center gap-2">
+        <AddLeadOpportunityModal clients={clients} />
+        <CreateModal triggerLabel="Import Leads" title="Import leads from CSV" variant="secondary">
+          <ImportLeadsForm />
+        </CreateModal>
+      </div>
 
       <LeadsGrid
         rows={leads.map((lead) => ({
