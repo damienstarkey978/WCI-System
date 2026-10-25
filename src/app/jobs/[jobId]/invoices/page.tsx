@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -18,6 +19,7 @@ import {
   type OpenInvoiceOption,
 } from "./credit-deposit-panels";
 import { CreateDrawScheduleForm, GenerateDrawInvoiceButton } from "./draw-panels";
+import { FinancialPageHeader } from "../financial-tabs";
 import { RecordPaymentForm } from "./record-payment-form";
 import { VoidInvoiceButton } from "./void-invoice-button";
 
@@ -36,18 +38,22 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   REFUNDED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
 
+// "schedule" isn't in this tab row — Buildertrend puts Payment Schedule behind its
+// own header button instead of a tab (see the header's "Payment schedule" link
+// below), but it's still reached the same way internally (?tab=schedule), so no
+// link to it breaks.
 const TABS = [
   { key: "invoices", label: "Invoices" },
-  { key: "schedule", label: "Payment schedule" },
   { key: "payments", label: "Payments" },
   { key: "credits", label: "Credit memos" },
   { key: "deposits", label: "Deposits" },
 ] as const;
 
-type TabKey = (typeof TABS)[number]["key"];
+const ALL_TAB_KEYS = [...TABS.map((tab) => tab.key), "schedule"] as const;
+type TabKey = (typeof ALL_TAB_KEYS)[number];
 
 function isTabKey(value: string | undefined): value is TabKey {
-  return TABS.some((tab) => tab.key === value);
+  return ALL_TAB_KEYS.some((key) => key === value);
 }
 
 function Badge({ status }: { status: string }) {
@@ -242,7 +248,24 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Invoicing — {job.name}</h1>
+      <FinancialPageHeader
+        jobName={job.name}
+        title="Invoices"
+        action={
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/jobs/${job.id}/invoices?tab=schedule`}
+              className="rounded border px-3 py-2 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5"
+              style={activeTab === "schedule" ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" } : { borderColor: "var(--bt-border)" }}
+            >
+              Payment schedule
+            </Link>
+            <CreateModal triggerLabel="+ Invoice" title="New invoice">
+              <CreateInvoiceForm jobId={job.id} />
+            </CreateModal>
+          </div>
+        }
+      />
 
       <ContractEquation contractPriceCents={contractPriceCents} paidCents={paidCents} />
 
@@ -275,7 +298,6 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
 
       {activeTab === "invoices" ? (
         <>
-          <CreateInvoiceForm jobId={job.id} />
           {invoices.length === 0 ? (
             <EmptyState title="No invoices yet" description="Invoices created for this job will appear here." />
           ) : (
