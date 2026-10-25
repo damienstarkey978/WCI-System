@@ -456,7 +456,7 @@ export const registerFileSchema = z.object({
   url: z.string().url().max(2_000),
   mimeType: z.string().trim().max(255).nullish(),
   sizeBytes: z.number().int().positive().max(10_000_000_000).nullish(),
-  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO"]).optional(),
+  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO", "PLAN"]).optional(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
   dailyLogId: z.string().min(1).max(64).nullish(),
@@ -805,7 +805,7 @@ const migrationAttachmentSchema = z.object({
   fileName: z.string().trim().min(1).max(255),
   mimeType: z.string().trim().max(255).nullish(),
   sizeBytes: z.number().int().positive().max(10_000_000_000).nullish(),
-  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO"]).optional(),
+  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO", "PLAN"]).optional(),
   createdAt: z.coerce.date().optional(),
 });
 

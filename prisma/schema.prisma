@@ -1962,6 +1962,8 @@ enum FileCategory {
   /// under this category — a distinct folder, not a separate storage location that
   /// needs to be migrated when the lead converts.
   PRESALE_PHOTO
+  /// A blueprint/plan set on Plans and Specs > Plans. Kept out of the Documents tab.
+  PLAN
 }
 
 model File {

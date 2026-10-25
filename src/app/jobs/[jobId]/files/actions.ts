@@ -18,7 +18,7 @@ export interface ActionState {
   readonly ok?: boolean;
 }
 
-const CATEGORIES = ["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO"] as const;
+const CATEGORIES = ["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO", "PLAN"] as const;
 
 export async function uploadFilesAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();

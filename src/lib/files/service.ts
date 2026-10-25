@@ -47,7 +47,7 @@ async function assertJobAndDailyLog(organizationId: string, jobId: string, daily
   }
 }
 
-export type FileCategoryInput = "DOCUMENT" | "PHOTO" | "VIDEO" | "PRESALE_PHOTO";
+export type FileCategoryInput = "DOCUMENT" | "PHOTO" | "VIDEO" | "PRESALE_PHOTO" | "PLAN";
 
 export interface RegisterFileInput {
   readonly organizationId: string;

@@ -6,7 +6,7 @@ import { uploadFilesAction, type ActionState } from "./actions";
 
 const INITIAL: ActionState = {};
 
-export function UploadForm({ jobId, folderId }: { jobId: string; folderId?: string }) {
+export function UploadForm({ jobId, folderId, fixedCategory }: { jobId: string; folderId?: string; fixedCategory?: "PLAN" }) {
   const [state, formAction, pending] = useActionState(uploadFilesAction, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -68,7 +68,8 @@ export function UploadForm({ jobId, folderId }: { jobId: string; folderId?: stri
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-4">
-        <label className="grid gap-1 text-xs">
+        {fixedCategory ? <input type="hidden" name="category" value={fixedCategory} /> : null}
+        <label className="grid gap-1 text-xs" hidden={Boolean(fixedCategory)}>
           <span className="font-medium text-[var(--bt-muted)]">Category</span>
           <select name="category" defaultValue="DOCUMENT" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }}>
             <option value="DOCUMENT">Document</option>
