@@ -5,7 +5,20 @@ import { revalidatePath } from "next/cache";
 import { RateMode } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { InvalidCsvError, parseEstimateCsv, UnknownCostCodesInCsvError } from "@/lib/estimates/csv-import";
-import { createEstimate, JobNotFoundError, UnknownCostCodeError } from "@/lib/estimates/service";
+import {
+  EmptyEstimateError,
+  EstimateAlreadyLockedError,
+  EstimateNotFoundError as BudgetEstimateNotFoundError,
+  sendEstimateToBudget,
+} from "@/lib/budget/send-to-budget";
+import {
+  addEstimateLineItem,
+  createEstimate,
+  deleteEstimateLineItem,
+  EstimateNotEditableError,
+  JobNotFoundError,
+  UnknownCostCodeError,
+} from "@/lib/estimates/service";
 import {
   createEstimateFromTemplate,
   createEstimateTemplateFromEstimate,
@@ -13,7 +26,8 @@ import {
   EstimateTemplateNotFoundError,
 } from "@/lib/estimates/templates";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
-import { parsePercentToBasisPoints } from "@/lib/money";
+import { MoneyError, parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
+import { emitEvent } from "@/lib/webhooks";
 
 export interface ActionState {
   readonly error?: string;
@@ -132,5 +146,85 @@ export async function createEstimateFromTemplateAction(_previous: ActionState, f
   }
 
   revalidatePath(`/jobs/${jobId}/estimates`);
+  return { ok: true };
+}
+
+export async function addJobEstimateLineItemAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const estimateId = String(formData.get("estimateId") ?? "");
+  const costCodeId = String(formData.get("costCodeId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const groupLabel = String(formData.get("groupLabel") ?? "").trim();
+  const quantity = Number(String(formData.get("quantity") ?? "1") || "1");
+
+  if (!costCodeId) return { error: "Choose a cost code." };
+  if (!title) return { error: "Title is required." };
+  if (!Number.isFinite(quantity) || quantity <= 0) return { error: "Quantity must be greater than zero." };
+
+  try {
+    await addEstimateLineItem({
+      organizationId: user.organizationId,
+      estimateId,
+      costCodeId,
+      title,
+      groupLabel: groupLabel || null,
+      quantityMilli: Math.round(quantity * 1_000),
+      unitCostCents: parseDollarsToCents(String(formData.get("unitCost") ?? "0") || "0"),
+      rateBasisPoints: parsePercentToBasisPoints(String(formData.get("ratePercent") ?? "0") || "0"),
+    });
+  } catch (error) {
+    if (error instanceof EstimateNotEditableError || error instanceof UnknownCostCodeError || error instanceof EstimateNotFoundError || error instanceof MoneyError) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/estimates/${estimateId}`);
+  revalidatePath(`/jobs/${jobId}/estimates`);
+  return { ok: true };
+}
+
+export async function deleteJobEstimateLineItemAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const estimateId = String(formData.get("estimateId") ?? "");
+  const lineItemId = String(formData.get("lineItemId") ?? "");
+
+  try {
+    await deleteEstimateLineItem(user.organizationId, estimateId, lineItemId);
+  } catch (error) {
+    if (!(error instanceof EstimateNotEditableError)) throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/estimates/${estimateId}`);
+  revalidatePath(`/jobs/${jobId}/estimates`);
+}
+
+/** The explicit Estimate -> Budget conversion (CLAUDE.md 2.3); same call and webhook as POST /api/v1/estimates/{id}/send-to-budget. */
+export async function sendEstimateToBudgetAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const estimateId = String(formData.get("estimateId") ?? "");
+
+  try {
+    const result = await sendEstimateToBudget({ estimateId, organizationId: user.organizationId, allowResend: false });
+    await emitEvent(user.organizationId, "estimate.sent_to_budget", {
+      estimateId: result.estimateId,
+      jobId: result.jobId,
+      budgetLinesWritten: result.budgetLinesWritten,
+      totalCostCents: result.totalCostCents,
+      totalClientPriceCents: result.totalClientPriceCents,
+    });
+  } catch (error) {
+    if (error instanceof EstimateAlreadyLockedError || error instanceof EmptyEstimateError || error instanceof BudgetEstimateNotFoundError) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/estimates/${estimateId}`);
+  revalidatePath(`/jobs/${jobId}/estimates`);
+  revalidatePath(`/jobs/${jobId}/budget`);
   return { ok: true };
 }

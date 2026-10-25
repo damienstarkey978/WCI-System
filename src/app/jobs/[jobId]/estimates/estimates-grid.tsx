@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
 import { formatDate, formatMoney } from "@/lib/format";
 
@@ -24,7 +26,12 @@ export interface EstimateRow {
 /** Client half of the Estimates page; see purchase-orders-grid.tsx for why the split exists. */
 export function EstimatesGrid({ rows }: { rows: readonly EstimateRow[] }) {
   const columns: DataGridColumn<EstimateRow>[] = [
-    { key: "title", header: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title}</span> },
+    { key: "title", header: "Title", sortable: true, render: (row) => (
+        <Link href={`/jobs/${row.jobId}/estimates/${row.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
+          {row.title}
+        </Link>
+      ),
+    },
     {
       key: "status",
       header: "Status",
