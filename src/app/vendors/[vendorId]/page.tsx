@@ -8,7 +8,10 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 
 import { AddCertificationForm } from "./add-certification-form";
+import { isTransactionalEmailConfigured } from "@/lib/env";
+
 import { EditVendorContactForm } from "./edit-contact-form";
+import { InvitePortalButton } from "./invite-portal-button";
 import { GrantJobAccessForm } from "./grant-job-access-form";
 import { SyncToQuickBooksButton } from "./sync-to-quickbooks-button";
 
@@ -57,6 +60,14 @@ export default async function VendorDetailPage({ params }: PageProps<"/vendors/[
       </div>
 
       <EditVendorContactForm vendor={vendor} />
+
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <h2 className="text-sm font-semibold text-[var(--bt-text)]">Portal access</h2>
+        <p className="mb-3 mt-1 text-xs text-[var(--bt-muted)]">
+          The portal is where a sub sees the jobs they&apos;re assigned to, their purchase orders and bid requests. Invite links work once and expire after 7 days.
+        </p>
+        <InvitePortalButton vendorId={vendor.id} hasEmail={Boolean(vendor.email)} alreadyInvited={Boolean(vendor.invitedAt)} emailConfigured={isTransactionalEmailConfigured()} />
+      </section>
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Job access</h2>

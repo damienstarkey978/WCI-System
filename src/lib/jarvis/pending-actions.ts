@@ -59,8 +59,9 @@ import {
   StaffMemberNotFoundError,
   updateStaffRole,
 } from "@/lib/staff/service";
+import { appBaseUrl } from "@/lib/app-url";
+import { inviteVendorToPortal } from "@/lib/vendor-portal/invite";
 import {
-  issuePortalLoginInvite as issueVendorPortalInvite,
   VendorMissingEmailError,
   VendorNotFoundError as VendorPortalVendorNotFoundError,
 } from "@/lib/vendor-portal/auth";
@@ -199,8 +200,12 @@ async function executePendingAction(organizationId: string, toolName: string, in
     }
     case "invite_vendor_to_portal": {
       const { vendorId } = input as { vendorId: string };
-      await issueVendorPortalInvite(organizationId, vendorId);
-      return "Invited the vendor to the portal.";
+      const invite = await inviteVendorToPortal(organizationId, vendorId, await appBaseUrl());
+      if (invite.emailed) return `Emailed ${invite.vendorName} (${invite.email}) a one-time sign-in link for the vendor portal.`;
+      return (
+        `Created ${invite.vendorName}'s one-time vendor portal link${invite.emailError ? ` (the email failed: ${invite.emailError})` : " (email sending isn't set up yet)"}` +
+        ` — send it to them yourself: ${invite.link}`
+      );
     }
     case "invite_staff_member": {
       const { email, name, title, role } = input as { email: string; name: string | null; title?: string | null; role: UserRole };

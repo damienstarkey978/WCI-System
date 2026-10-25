@@ -193,3 +193,26 @@ export function quickBooksTokenEncryptionKey(): string {
 export function quickBooksWebhookVerifierToken(): string | undefined {
   return optional("QBO_WEBHOOK_VERIFIER_TOKEN");
 }
+
+/**
+ * Transactional email (vendor portal invites). Resend's HTTP API
+ * (https://resend.com): EMAIL_PROVIDER_API_KEY is the API key, EMAIL_FROM the verified
+ * sender, e.g. `World Construction Inc <office@worldconstructioninc.com>`. Needs both —
+ * and a verified sending domain on the Resend side. Without them, invites fall back to
+ * showing the one-time login link for a person to send by hand (the client portal's
+ * existing behavior).
+ */
+export function isTransactionalEmailConfigured(): boolean {
+  return optional("EMAIL_PROVIDER_API_KEY") !== undefined && optional("EMAIL_FROM") !== undefined;
+}
+
+export function transactionalEmailSettings(): { apiKey: string; from: string } | null {
+  const apiKey = optional("EMAIL_PROVIDER_API_KEY");
+  const from = optional("EMAIL_FROM");
+  return apiKey && from ? { apiKey, from } : null;
+}
+
+/** Public origin of this deployment (no trailing slash), for links that leave the app — e.g. https://app.worldconstructionjax.com. */
+export function appBaseUrlFromEnv(): string | undefined {
+  return optional("APP_BASE_URL")?.replace(/\/+$/, "");
+}

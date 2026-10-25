@@ -7,6 +7,9 @@ import { requireAppUser } from "@/lib/auth";
 import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
 import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
 import { syncVendorToQuickBooks } from "@/lib/quickbooks/sync/vendors";
+import { appBaseUrl } from "@/lib/app-url";
+import { inviteVendorToPortal, type VendorInviteResult } from "@/lib/vendor-portal/invite";
+import { VendorMissingEmailError } from "@/lib/vendor-portal/auth";
 import { addCertification, grantVendorJobAccess, JobNotFoundError, updateVendorContact, VendorNotFoundError } from "@/lib/vendor-portal/service";
 
 export interface ActionState {
@@ -121,4 +124,24 @@ export async function updateVendorContactAction(_previous: ActionState, formData
   revalidatePath(`/vendors/${vendorId}`);
   revalidatePath("/vendors");
   return { ok: true };
+}
+
+export interface InviteVendorState {
+  readonly error?: string;
+  readonly invite?: VendorInviteResult;
+}
+
+export async function inviteVendorAction(_previous: InviteVendorState, formData: FormData): Promise<InviteVendorState> {
+  const user = await requireAppUser();
+  const vendorId = String(formData.get("vendorId") ?? "");
+
+  try {
+    const invite = await inviteVendorToPortal(user.organizationId, vendorId, await appBaseUrl());
+    revalidatePath(`/vendors/${vendorId}`);
+    revalidatePath("/vendors");
+    return { invite };
+  } catch (error) {
+    if (error instanceof VendorNotFoundError || error instanceof VendorMissingEmailError) return { error: error.message };
+    throw error;
+  }
 }
