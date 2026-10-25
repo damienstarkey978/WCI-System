@@ -16,6 +16,7 @@ export const GET = withApiAuth(["files:read"], async (request, auth) => {
   const files = await db.file.findMany({
     where: {
       organizationId: auth.organizationId,
+      deletedAt: null,
       ...(jobId ? { jobId } : {}),
       ...(category ? { category: category as never } : {}),
     },

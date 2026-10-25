@@ -2050,6 +2050,10 @@ model File {
   /// Set when this file is a generated lien-waiver PDF.
   lienWaivers LienWaiver[]
 
+  /// Soft delete (Buildertrend's View trash). Every read of files must filter deletedAt: null;
+  /// "Delete forever" is the only thing that removes the row and the stored object.
+  deletedAt DateTime?
+
   createdAt DateTime @default(now())
 
   @@index([jobId, category])

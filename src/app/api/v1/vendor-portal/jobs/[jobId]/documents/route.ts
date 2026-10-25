@@ -13,7 +13,7 @@ export async function GET(request: Request, context: Context) {
     const vendor = await authenticatePortalJobRequest(request, jobId, "canViewDocuments");
 
     const files = await db.file.findMany({
-      where: { organizationId: vendor.organizationId, jobId, subVisible: true },
+      where: { organizationId: vendor.organizationId, jobId, subVisible: true, deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: 200,
     });

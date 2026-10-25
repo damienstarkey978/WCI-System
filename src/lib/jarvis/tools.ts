@@ -291,7 +291,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       if (!job) return `No job found with id ${input.jobId} in this organization.`;
 
       const files = await db.file.findMany({
-        where: { jobId: job.id, fileName: { contains: input.searchText, mode: "insensitive" } },
+        where: { jobId: job.id, deletedAt: null, fileName: { contains: input.searchText, mode: "insensitive" } },
         select: { fileName: true, url: true },
         take: 10,
       });

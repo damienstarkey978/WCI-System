@@ -84,7 +84,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
   // (no Job yet) can't have any pre-sale photos filed against it either.
   const preSalePhotoFiles = proposal.jobId
     ? await db.file.findMany({
-        where: { jobId: proposal.jobId, category: "PRESALE_PHOTO" },
+        where: { jobId: proposal.jobId, category: "PRESALE_PHOTO", deletedAt: null },
         orderBy: { createdAt: "asc" },
         select: { id: true, fileName: true, url: true },
       })

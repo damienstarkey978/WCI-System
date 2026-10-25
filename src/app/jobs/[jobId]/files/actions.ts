@@ -5,10 +5,12 @@ import { revalidatePath } from "next/cache";
 import { requireAppUser } from "@/lib/auth";
 import { createFolder, deleteFolder, FolderNameTakenError, FolderNotFoundError, moveFileToFolder, setFolderVisibility } from "@/lib/files/folders";
 import {
-  deleteFile,
   FileNotFoundError,
   JobNotFoundError,
+  purgeFile,
+  restoreFile,
   setFileVisibility,
+  trashFile,
   uploadAndRegisterFile,
 } from "@/lib/files/service";
 import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
@@ -71,12 +73,34 @@ export async function deleteFileAction(formData: FormData): Promise<void> {
   const fileId = String(formData.get("fileId") ?? "");
 
   try {
-    await deleteFile(user.organizationId, fileId);
+    await trashFile(user.organizationId, fileId);
   } catch (error) {
     if (error instanceof FileNotFoundError) return;
     throw error;
   }
 
+  revalidatePath(`/jobs/${jobId}/files`);
+}
+
+export async function restoreFileAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  try {
+    await restoreFile(user.organizationId, String(formData.get("fileId") ?? ""));
+  } catch (error) {
+    if (!(error instanceof FileNotFoundError)) throw error;
+  }
+  revalidatePath(`/jobs/${jobId}/files`);
+}
+
+export async function purgeFileAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  try {
+    await purgeFile(user.organizationId, String(formData.get("fileId") ?? ""));
+  } catch (error) {
+    if (!(error instanceof FileNotFoundError)) throw error;
+  }
   revalidatePath(`/jobs/${jobId}/files`);
 }
 

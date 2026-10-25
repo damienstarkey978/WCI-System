@@ -15,7 +15,7 @@ export async function GET(request: Request, context: Context) {
       where: { organizationId: client.organizationId, jobId, clientVisible: true },
       orderBy: { createdAt: "desc" },
       take: 100,
-      include: { files: { where: { clientVisible: true } } },
+      include: { files: { where: { clientVisible: true, deletedAt: null } } },
     });
 
     return Response.json({ data: dailyLogs });

@@ -42,7 +42,7 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
   const logs = await db.dailyLog.findMany({
     where: { jobId: job.id },
     orderBy: { createdAt: "desc" },
-    include: { authorUser: true, files: true },
+    include: { authorUser: true, files: { where: { deletedAt: null } } },
   });
 
   const logsWithPhotos = await Promise.all(

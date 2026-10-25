@@ -172,6 +172,26 @@ export async function resolveFileUrlSafe(url: string): Promise<string | null> {
   }
 }
 
+/** Moves a file to the job's trash. Nothing is removed from storage until purgeFile(). */
+export async function trashFile(organizationId: string, fileId: string): Promise<void> {
+  const file = await db.file.findFirst({ where: { id: fileId, organizationId, deletedAt: null }, select: { id: true } });
+  if (!file) throw new FileNotFoundError(fileId);
+  await db.file.update({ where: { id: file.id }, data: { deletedAt: new Date() } });
+}
+
+export async function restoreFile(organizationId: string, fileId: string): Promise<void> {
+  const file = await db.file.findFirst({ where: { id: fileId, organizationId, deletedAt: { not: null } }, select: { id: true } });
+  if (!file) throw new FileNotFoundError(fileId);
+  await db.file.update({ where: { id: file.id }, data: { deletedAt: null } });
+}
+
+/** "Delete forever": only for a file already in the trash. */
+export async function purgeFile(organizationId: string, fileId: string): Promise<void> {
+  const file = await db.file.findFirst({ where: { id: fileId, organizationId, deletedAt: { not: null } } });
+  if (!file) throw new FileNotFoundError(fileId);
+  await deleteFile(organizationId, file.id);
+}
+
 export async function deleteFile(organizationId: string, fileId: string): Promise<void> {
   const file = await db.file.findFirst({ where: { id: fileId, organizationId } });
   if (!file) throw new FileNotFoundError(fileId);

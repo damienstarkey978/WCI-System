@@ -17,7 +17,7 @@ export const GET = withApiAuth(["daily-logs:read"], async (request, auth) => {
     where: { organizationId: auth.organizationId, ...(jobId ? { jobId } : {}) },
     orderBy: { createdAt: "desc" },
     take: limit,
-    include: { files: true },
+    include: { files: { where: { deletedAt: null } } },
   });
 
   return Response.json({ data: dailyLogs });

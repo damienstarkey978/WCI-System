@@ -58,7 +58,7 @@ export default async function BillDetailPage({ params }: PageProps<"/jobs/[jobId
       linkedScheduleItem: { select: { id: true, title: true } },
       createdByUser: { select: { name: true, email: true } },
       lineItems: { orderBy: { sortOrder: "asc" }, include: { costCode: { select: { code: true, name: true } } } },
-      files: { select: { id: true, fileName: true, url: true } },
+      files: { where: { deletedAt: null }, select: { id: true, fileName: true, url: true } },
       approvals: { include: { approverUser: { select: { name: true, email: true } } } },
       lienWaivers: { orderBy: { createdAt: "desc" }, take: 1 },
       invoiceLines: { include: { invoice: { select: { id: true, invoiceNumber: true, status: true } } } },

@@ -89,7 +89,7 @@ export default async function LeadDetailPage({
 
   const preSalePhotoFiles = lead.convertedJob
     ? await db.file.findMany({
-        where: { jobId: lead.convertedJob.id, category: "PRESALE_PHOTO" },
+        where: { jobId: lead.convertedJob.id, category: "PRESALE_PHOTO", deletedAt: null },
         orderBy: { createdAt: "asc" },
         select: { id: true, fileName: true, url: true },
       })

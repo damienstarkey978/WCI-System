@@ -12,7 +12,7 @@ import { resolveFileUrlSafe } from "@/lib/files/service";
 
 import { listFolders } from "@/lib/files/folders";
 
-import { deleteFolderAction, updateFolderVisibilityAction } from "./actions";
+import { deleteFolderAction, purgeFileAction, restoreFileAction, updateFolderVisibilityAction } from "./actions";
 import { FileCard } from "./file-card";
 import { FolderForm } from "./folder-form";
 import { UploadForm } from "./upload-form";
@@ -46,7 +46,8 @@ export default async function FilesPage({
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const { category, folder: folderParam } = await searchParams;
+  const { category, folder: folderParam, view: viewParam } = await searchParams;
+  const trashView = viewParam === "trash";
   // Documents is the landing tab, as in Buildertrend; "All" is an explicit tab.
   const activeCategory = typeof category === "string" && CATEGORIES.some((c) => c.value === category) ? category : "DOCUMENT";
 
@@ -57,7 +58,10 @@ export default async function FilesPage({
   const files = await db.file.findMany({
     where: {
       jobId: job.id,
-      ...(openFolder
+      deletedAt: trashView ? { not: null } : null,
+      ...(trashView
+        ? {}
+        : openFolder
         ? { folderId: openFolder.id }
         : activeCategory === "DOCUMENT"
           ? { category: "DOCUMENT" as const, folderId: null }
@@ -95,6 +99,9 @@ export default async function FilesPage({
         title="Files"
         action={
           <div className="flex items-center gap-2">
+            <Link href={`/jobs/${job.id}/files${trashView ? "" : "?view=trash"}`} className="rounded border px-3 py-2 text-sm font-medium text-[var(--bt-text)]" style={{ borderColor: "var(--bt-border)" }}>
+              {trashView ? "Back to files" : "View trash"}
+            </Link>
             <CreateModal triggerLabel="+ Upload" title="Upload a file" variant="secondary">
               <UploadForm jobId={job.id} folderId={openFolder?.id} />
             </CreateModal>
@@ -121,7 +128,56 @@ export default async function FilesPage({
         ))}
       </nav>
 
-      {openFolder ? (
+      {trashView ? (
+        <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Added</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {filesWithUrls.map((file) => (
+                <tr key={file.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                  <td className="px-4 py-3 font-medium">{file.fileName}</td>
+                  <td className="px-4 py-3 text-[var(--bt-muted)]">{file.category.replace(/_/g, " ").toLowerCase()}</td>
+                  <td className="px-4 py-3 text-[var(--bt-muted)]">{file.uploadedAt}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-3">
+                      <form action={restoreFileAction}>
+                        <input type="hidden" name="jobId" value={job.id} />
+                        <input type="hidden" name="fileId" value={file.id} />
+                        <button type="submit" className="text-xs font-semibold text-[var(--bt-primary)] hover:underline">
+                          Restore
+                        </button>
+                      </form>
+                      <form action={purgeFileAction}>
+                        <input type="hidden" name="jobId" value={job.id} />
+                        <input type="hidden" name="fileId" value={file.id} />
+                        <button type="submit" className="text-xs font-semibold text-red-600 hover:underline">
+                          Delete forever
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filesWithUrls.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-[var(--bt-muted)]">
+                    The trash is empty.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {openFolder && !trashView ? (
         <div className="flex items-center gap-2 text-sm">
           <Link href={`/jobs/${job.id}/files`} className="font-medium text-[var(--bt-primary)] hover:underline">
             Documents
@@ -131,7 +187,7 @@ export default async function FilesPage({
         </div>
       ) : null}
 
-      {showFolderTable ? (
+      {showFolderTable && !trashView ? (
         <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">
             <thead>
@@ -202,9 +258,9 @@ export default async function FilesPage({
         </div>
       ) : null}
 
-      {showFolderTable && filesWithUrls.length > 0 ? <h2 className="text-sm font-semibold text-[var(--bt-text)]">Documents not in a folder</h2> : null}
+      {showFolderTable && !trashView && filesWithUrls.length > 0 ? <h2 className="text-sm font-semibold text-[var(--bt-text)]">Documents not in a folder</h2> : null}
 
-      {filesWithUrls.length === 0 && !(showFolderTable && folders.length > 0) ? (
+      {trashView ? null : filesWithUrls.length === 0 && !(showFolderTable && folders.length > 0) ? (
         <EmptyState title="No files yet" description="Documents, photos, and videos attached to this job will appear here." />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

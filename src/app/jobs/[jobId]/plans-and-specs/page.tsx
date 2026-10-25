@@ -41,7 +41,7 @@ export default async function PlansAndSpecsPage({ params, searchParams }: PagePr
   if (!job) notFound();
 
   const planRows = await db.file.findMany({
-    where: { jobId: job.id, category: "PLAN" },
+    where: { jobId: job.id, category: "PLAN", deletedAt: null },
     orderBy: { createdAt: "desc" },
     include: { uploadedByUser: true },
   });

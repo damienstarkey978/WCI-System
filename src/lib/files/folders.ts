@@ -35,7 +35,7 @@ export async function listFolders(organizationId: string, jobId: string) {
   const folders = await db.fileFolder.findMany({
     where: { organizationId, jobId },
     orderBy: { name: "asc" },
-    include: { _count: { select: { files: true } } },
+    include: { _count: { select: { files: { where: { deletedAt: null } } } } },
   });
   return folders.map((folder) => ({
     id: folder.id,

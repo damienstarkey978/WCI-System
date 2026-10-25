@@ -45,7 +45,7 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
       : Promise.resolve(null),
     access.canViewSchedule ? db.schedule.findFirst({ where: { organizationId: session.organizationId, jobId } }) : Promise.resolve(null),
     access.canViewDocuments
-      ? db.file.findMany({ where: { organizationId: session.organizationId, jobId, clientVisible: true }, orderBy: { createdAt: "desc" }, take: 10 })
+      ? db.file.findMany({ where: { organizationId: session.organizationId, jobId, clientVisible: true, deletedAt: null }, orderBy: { createdAt: "desc" }, take: 10 })
       : Promise.resolve(null),
     access.canViewInvoices
       ? // Drafts and voids are deliberately excluded. A draft hasn't been sent, and a

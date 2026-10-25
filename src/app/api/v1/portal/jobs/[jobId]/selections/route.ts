@@ -15,7 +15,7 @@ export async function GET(request: Request, context: Context) {
       where: { organizationId: client.organizationId, jobId },
       orderBy: { createdAt: "desc" },
       take: 200,
-      include: { options: { orderBy: { sortOrder: "asc" }, include: { files: true } } },
+      include: { options: { orderBy: { sortOrder: "asc" }, include: { files: { where: { deletedAt: null } } } } },
     });
 
     return Response.json({ data: selections });
