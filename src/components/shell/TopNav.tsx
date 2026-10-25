@@ -11,10 +11,12 @@ import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import {
   FILES_NAV,
   FINANCIAL_NAV,
+  HELP_MENU_ITEMS,
   JOBS_NAV,
   MESSAGING_NAV,
   PEOPLE_NAV,
   PROJECT_MANAGEMENT_NAV,
+  QUICK_ADD_NAV,
   REPORTS_HREF,
   SALES_NAV,
   type JobNavLink,
@@ -28,13 +30,16 @@ import { MobileMenuDrawer } from "./MobileMenuDrawer";
 import {
   BellIcon,
   BuildingIcon,
+  ChatIcon,
   ChevronDownIcon,
   ClientHomeIcon,
   GearIcon,
+  GlobeIcon,
   HammerIcon,
   HelpIcon,
   MenuIcon,
   PeopleIcon,
+  PlusIcon,
   SparkleIcon,
 } from "./icons";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "./notification-actions";
@@ -240,6 +245,36 @@ function FlatNavDropdown({ label, items }: { label: string; items: readonly { la
  * hasn't built yet ("soon" — shown, not silently dropped, so the menu still visually
  * matches Buildertrend's, but disabled until the feature exists).
  */
+/** One row in a JobsMenuItem dropdown — shared by MixedNavDropdown and QuickAddMenu below. */
+function JobsMenuItemRow({ item, activeJobId, onNavigate }: { item: JobsMenuItem; activeJobId?: string; onNavigate?: () => void }) {
+  if (item.kind === "global") {
+    return (
+      <Link key={item.label} href={item.href!} onClick={onNavigate} className="block px-3 py-2 hover:bg-black/5">
+        {item.label}
+      </Link>
+    );
+  }
+  if (item.kind === "job") {
+    if (!activeJobId) {
+      return (
+        <span key={item.label} className="block px-3 py-2 text-[var(--bt-muted)]" title="Select a job first">
+          {item.label}
+        </span>
+      );
+    }
+    return (
+      <Link key={item.label} href={`/jobs/${activeJobId}${item.jobPath}`} onClick={onNavigate} className="block px-3 py-2 hover:bg-black/5">
+        {item.label}
+      </Link>
+    );
+  }
+  return (
+    <span key={item.label} className="block px-3 py-2 text-[var(--bt-muted)]" title="Coming soon">
+      {item.label}
+    </span>
+  );
+}
+
 /** Shared by the Jobs and Messaging dropdowns — both mix job-scoped and org-wide items (JobsMenuItem's "job"/"global"/"soon" kinds). */
 function MixedNavDropdown({ label, items, activeJobId }: { label: string; items: readonly JobsMenuItem[]; activeJobId?: string }) {
   const [open, setOpen] = useState(false);
@@ -258,34 +293,74 @@ function MixedNavDropdown({ label, items, activeJobId }: { label: string; items:
       </button>
       {open ? (
         <div className="absolute left-0 top-full z-30 mt-1 w-56 rounded-md border border-black/10 bg-[var(--bt-panel-bg)] py-1 text-sm text-[var(--bt-text)] shadow-lg">
-          {items.map((item) => {
-            if (item.kind === "global") {
-              return (
-                <Link key={item.label} href={item.href!} className="block px-3 py-2 hover:bg-black/5">
-                  {item.label}
-                </Link>
-              );
-            }
-            if (item.kind === "job") {
-              if (!activeJobId) {
-                return (
-                  <span key={item.label} className="block px-3 py-2 text-[var(--bt-muted)]">
-                    {item.label}
-                  </span>
-                );
-              }
-              return (
-                <Link key={item.label} href={`/jobs/${activeJobId}${item.jobPath}`} className="block px-3 py-2 hover:bg-black/5">
-                  {item.label}
-                </Link>
-              );
-            }
-            return (
-              <span key={item.label} className="block px-3 py-2 text-[var(--bt-muted)]" title="Coming soon">
-                {item.label}
-              </span>
-            );
-          })}
+          {items.map((item) => (
+            <JobsMenuItemRow key={item.label} item={item} activeJobId={activeJobId} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The top bar's "+" quick-add button (Buildertrend's own order, QUICK_ADD_NAV). A
+ * scrollable panel since the real list runs to 19 items — wider than the other
+ * dropdowns since several labels ("Time Clock Shift", "Warranty Claim") run long.
+ */
+function QuickAddMenu({ activeJobId }: { activeJobId?: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="flex items-center justify-center rounded p-2 transition hover:bg-white/10"
+        aria-label="Quick add"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <PlusIcon className="h-5 w-5" />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-30 mt-2 max-h-[28rem] w-64 overflow-y-auto rounded-lg border border-black/10 bg-[var(--bt-panel-bg)] py-1 text-sm text-[var(--bt-text)] shadow-lg"
+        >
+          {QUICK_ADD_NAV.map((item) => (
+            <JobsMenuItemRow key={item.label} item={item} activeJobId={activeJobId} onNavigate={() => setOpen(false)} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The top bar's Help (?) menu — HELP_MENU_ITEMS' own doc comment explains why none of these have a real destination yet. */
+function HelpMenu() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative hidden sm:block">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="rounded p-2 transition hover:bg-white/10"
+        aria-label="Help"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <HelpIcon className="h-4.5 w-4.5" />
+      </button>
+      {open ? (
+        <div role="menu" className="absolute right-0 top-full z-30 mt-2 w-48 rounded-lg border border-black/10 bg-[var(--bt-panel-bg)] py-2 text-sm text-[var(--bt-text)] shadow-lg">
+          {HELP_MENU_ITEMS.map((label) => (
+            <span key={label} className="block px-4 py-2 text-[var(--bt-muted)]" title="Coming soon">
+              {label}
+            </span>
+          ))}
         </div>
       ) : null}
     </div>
@@ -364,9 +439,25 @@ export function TopNav({
         </nav>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <GlobalSearch />
+        <QuickAddMenu activeJobId={activeJobId} />
         <NotificationBell notifications={notifications} unreadCount={unreadCount} />
+        {activeJobId ? (
+          <Link
+            href={`/jobs/${activeJobId}/messages`}
+            className="hidden rounded p-2 transition hover:bg-white/10 sm:block"
+            style={pathname?.endsWith("/messages") ? { background: "var(--bt-nav-hover)" } : undefined}
+            aria-label="Messages"
+            title="Messages"
+          >
+            <ChatIcon className="h-4.5 w-4.5" />
+          </Link>
+        ) : (
+          <span className="hidden rounded p-2 text-white/40 sm:block" aria-label="Messages" title="Select a job first">
+            <ChatIcon className="h-4.5 w-4.5" />
+          </span>
+        )}
         {isJarvisUiEnabled() ? (
           <Link
             href="/jarvis"
@@ -379,9 +470,7 @@ export function TopNav({
           </Link>
         ) : null}
         <PeopleDropdown pathname={pathname} />
-        <button type="button" className="hidden rounded p-2 transition hover:bg-white/10 sm:block" aria-label="Help">
-          <HelpIcon className="h-4.5 w-4.5" />
-        </button>
+        <HelpMenu />
         {clerkConfigured ? (
           <div className="ml-2">
             <UserButton>
@@ -390,6 +479,7 @@ export function TopNav({
                 {isAdmin ? (
                   <UserButton.Link label="Company settings" href="/settings/company" labelIcon={<BuildingIcon className="h-4 w-4" />} />
                 ) : null}
+                <UserButton.Link label="Integrations" href="/settings/connections" labelIcon={<GlobeIcon className="h-4 w-4" />} />
               </UserButton.MenuItems>
             </UserButton>
           </div>

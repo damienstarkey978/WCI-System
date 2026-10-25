@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { ChevronDownIcon, HomeIcon } from "./icons";
+import { ChevronDownIcon, FilterIcon, HomeIcon, SortIcon } from "./icons";
 
 export interface SidebarJob {
   readonly id: string;
@@ -16,6 +16,19 @@ export interface SidebarJob {
   /** The first client with portal access on this job, if any — shown on the active job's mini-card. */
   readonly clientName: string | null;
   readonly address: string | null;
+  /** True once this job has a QuickBooks Customer Id (qboCustomerId) — shows BT's "QB" badge. */
+  readonly qboLinked: boolean;
+}
+
+type SortMode = "recent" | "name";
+
+/** Small "QB" chip Buildertrend shows on a job once it's linked to QuickBooks. */
+function QbBadge() {
+  return (
+    <span className="shrink-0 rounded bg-[#2ca01c]/15 px-1 py-0.5 text-[9px] font-bold text-[#2ca01c]" title="Linked to QuickBooks">
+      QB
+    </span>
+  );
 }
 
 const COLLAPSE_STORAGE_KEY = "wci-job-sidebar-collapsed";
@@ -43,7 +56,16 @@ const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
  * column has no reasonable place on a phone-width screen): TopNav's hamburger
  * opens MobileMenuDrawer instead, which has its own simpler job jump-list.
  */
-export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJobId?: string }) {
+export function JobSidebar({
+  jobs,
+  templateJobs = [],
+  activeJobId,
+}: {
+  jobs: SidebarJob[];
+  /** Buildertrend's "Templates" tab — Job.isTemplate rows. Defaults to empty for any caller not yet passing it. */
+  templateJobs?: SidebarJob[];
+  activeJobId?: string;
+}) {
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -52,8 +74,10 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
       return false;
     }
   });
+  const [tab, setTab] = useState<"jobs" | "templates">("jobs");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
 
   function toggleCollapsed() {
     setCollapsed((value) => {
@@ -87,12 +111,15 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
 
   const filteredJobs = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return jobs.filter((job) => {
-      if (statusFilter !== "ALL" && job.status !== statusFilter) return false;
+    const source = tab === "templates" ? templateJobs : jobs;
+    const filtered = source.filter((job) => {
+      if (tab === "jobs" && statusFilter !== "ALL" && job.status !== statusFilter) return false;
       if (!q) return true;
       return job.name.toLowerCase().includes(q) || (job.prefix?.toLowerCase().includes(q) ?? false);
     });
-  }, [jobs, query, statusFilter]);
+    if (sortMode === "name") return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+    return filtered;
+  }, [jobs, templateJobs, tab, query, statusFilter, sortMode]);
 
   const groups = useMemo(() => {
     const map = new Map<string, SidebarJob[]>();
@@ -135,7 +162,10 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
               <HomeIcon className="h-3.5 w-3.5 shrink-0" />
               Current job
             </div>
-            <div className="truncate text-sm font-semibold text-[var(--bt-text)]">{activeJob.name}</div>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-sm font-semibold text-[var(--bt-text)]">{activeJob.name}</span>
+              {activeJob.qboLinked ? <QbBadge /> : null}
+            </div>
             {activeJob.clientName ? <div className="truncate text-xs text-[var(--bt-muted)]">{activeJob.clientName}</div> : null}
             {activeJob.address ? <div className="truncate text-xs text-[var(--bt-muted)]">{activeJob.address}</div> : null}
             <span
@@ -159,31 +189,76 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
         </button>
       </div>
 
-      <div className="flex flex-col gap-2 border-b px-3 py-2.5" style={{ borderColor: "var(--bt-border)" }}>
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search jobs…"
-          className="rounded border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--bt-primary)]"
-          style={{ borderColor: "var(--bt-border)" }}
-        />
-        <select
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-          className="rounded border px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bt-primary)]"
-          style={{ borderColor: "var(--bt-border)" }}
+      <div className="flex items-center justify-between border-b px-3 pt-2" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="flex gap-3 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setTab("jobs")}
+            className="border-b-2 pb-2"
+            style={tab === "jobs" ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" } : { borderColor: "transparent", color: "var(--bt-muted)" }}
+          >
+            Jobs
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("templates")}
+            className="border-b-2 pb-2"
+            style={tab === "templates" ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" } : { borderColor: "transparent", color: "var(--bt-muted)" }}
+          >
+            Templates
+          </button>
+        </div>
+        <Link
+          href="/jobs/new"
+          className="mb-1.5 rounded px-2.5 py-1 text-xs font-semibold text-[var(--bt-on-primary)]"
+          style={{ background: "var(--bt-primary)" }}
         >
-          {STATUS_FILTERS.map((status) => (
-            <option key={status} value={status}>
-              {STATUS_FILTER_LABEL[status]} jobs
-            </option>
-          ))}
-        </select>
+          + Job
+        </Link>
+      </div>
+
+      <div className="flex flex-col gap-2 border-b px-3 py-2.5" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="flex items-center gap-1.5">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search jobs…"
+            className="flex-1 rounded border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--bt-primary)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+          <button
+            type="button"
+            onClick={() => setSortMode((mode) => (mode === "recent" ? "name" : "recent"))}
+            aria-label="Sort"
+            title={sortMode === "recent" ? "Sorted by most recent — click to sort by name" : "Sorted by name — click to sort by most recent"}
+            className="shrink-0 rounded border p-1.5 text-[var(--bt-muted)] hover:bg-black/5"
+            style={{ borderColor: "var(--bt-border)" }}
+          >
+            <SortIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {tab === "jobs" ? (
+          <div className="flex items-center gap-1.5">
+            <FilterIcon className="h-3.5 w-3.5 shrink-0 text-[var(--bt-muted)]" />
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+              className="flex-1 rounded border px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bt-primary)]"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
+              {STATUS_FILTERS.map((status) => (
+                <option key={status} value={status}>
+                  {STATUS_FILTER_LABEL[status]} jobs
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </div>
 
       <div className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
-        {filteredJobs.length} {statusFilter === "ALL" ? "" : `${STATUS_FILTER_LABEL[statusFilter].toLowerCase()} `}job
-        {filteredJobs.length === 1 ? "" : "s"}
+        ALL {filteredJobs.length} {tab === "templates" ? "TEMPLATE" : statusFilter === "ALL" ? "" : STATUS_FILTER_LABEL[statusFilter].toUpperCase()} JOB
+        {filteredJobs.length === 1 ? "" : "S"}
       </div>
 
       <div className="flex-1 overflow-y-auto pb-2">
@@ -198,22 +273,25 @@ export function JobSidebar({ jobs, activeJobId }: { jobs: SidebarJob[]; activeJo
                 <Link
                   key={job.id}
                   href={jobHref(job.id)}
-                  className={`block truncate px-4 py-1.5 text-sm transition ${isActive ? "" : "hover:bg-black/5"}`}
+                  className={`flex items-center gap-1.5 truncate px-4 py-1.5 text-sm transition ${isActive ? "" : "hover:bg-black/5"}`}
                   style={
                     isActive
                       ? { background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)", color: "var(--bt-primary)" }
                       : { color: "var(--bt-text)" }
                   }
                 >
-                  {job.prefix ? <span className="mr-1.5 font-mono text-xs text-[var(--bt-muted)]">{job.prefix}</span> : null}
-                  {job.name}
+                  <span className="truncate">
+                    {job.prefix ? <span className="mr-1.5 font-mono text-xs text-[var(--bt-muted)]">{job.prefix}</span> : null}
+                    {job.name}
+                  </span>
+                  {job.qboLinked ? <QbBadge /> : null}
                 </Link>
               );
             })}
           </div>
         ))}
 
-        {filteredJobs.length === 0 ? <p className="px-4 py-2 text-sm text-[var(--bt-muted)]">No jobs match.</p> : null}
+        {filteredJobs.length === 0 ? <p className="px-4 py-2 text-sm text-[var(--bt-muted)]">{tab === "templates" ? "No templates match." : "No jobs match."}</p> : null}
       </div>
     </aside>
   );

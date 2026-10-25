@@ -123,3 +123,50 @@ export const FINANCIAL_NAV: readonly JobNavLink[] = [
 ];
 
 export const REPORTS_HREF = "/reports";
+
+/**
+ * The top bar's "+" quick-add button — Buildertrend's full list, in Buildertrend's
+ * own order. Each item either jumps straight to the page that already has the real
+ * create action on it (job-scoped items need an active job, same "job"/"global"
+ * split as JOBS_NAV), or — once each page gets its own modal/drawer per the shell
+ * parity pass — opens that create form directly. Reuses JobsMenuItem's shape rather
+ * than inventing a fourth nav-item type.
+ */
+export const QUICK_ADD_NAV: readonly JobsMenuItem[] = [
+  { label: "Bid Package", kind: "job", jobPath: "/bids" },
+  { label: "Change Order", kind: "job", jobPath: "/change-orders" },
+  { label: "Client Contact", kind: "global", href: "/clients" },
+  { label: "Daily Log", kind: "job", jobPath: "/daily-logs" },
+  { label: "Internal User", kind: "global", href: "/staff" },
+  { label: "Invoice", kind: "job", jobPath: "/invoices" },
+  { label: "Lead Activity", kind: "global", href: "/leads/activities" },
+  { label: "Lead Opportunity", kind: "global", href: "/leads" },
+  { label: "Lead Proposal", kind: "global", href: "/leads/proposals" },
+  { label: "Message", kind: "job", jobPath: "/messages" },
+  { label: "Purchase Order", kind: "job", jobPath: "/purchase-orders" },
+  { label: "Receipt", kind: "job", jobPath: "/cost-inbox" },
+  { label: "RFI", kind: "job", jobPath: "/rfis" },
+  { label: "Schedule Item", kind: "job", jobPath: "/schedule" },
+  { label: "Selection", kind: "job", jobPath: "/selections" },
+  { label: "Specifications", kind: "job", jobPath: "/plans-and-specs" },
+  { label: "Sub/Vendor", kind: "global", href: "/vendors" },
+  { label: "Time Clock Shift", kind: "job", jobPath: "/time-clock" },
+  { label: "Warranty Claim", kind: "job", jobPath: "/warranties" },
+];
+
+/**
+ * The top bar's Help (?) menu — Buildertrend's own support surface (its community,
+ * learning academy, and support chat are Buildertrend's SaaS resources, not
+ * something WCI OS has an equivalent of). Shown for visual parity, same "real BT
+ * item with nothing behind it yet" treatment as JOBS_NAV's "New Job From Template" —
+ * not silently dropped, but inert until/unless a real destination exists for one.
+ */
+export const HELP_MENU_ITEMS: readonly string[] = [
+  "Contact us",
+  "Support Chat",
+  "Community",
+  "Learning Academy",
+  "Help Center",
+  "Product Feedback",
+  "Legal",
+];

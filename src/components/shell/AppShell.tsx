@@ -6,6 +6,7 @@ import { currentAppUser } from "@/lib/auth";
 import { isAnthropicConfigured, isClerkConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
+import { sidebarTemplateJobsForOrg } from "./data";
 import { JobSidebar, type SidebarJob } from "./JobSidebar";
 import { TopNav, type BellNotification } from "./TopNav";
 
@@ -34,6 +35,10 @@ export async function AppShell({
   children: ReactNode;
 }) {
   const user = await currentAppUser().catch(() => null);
+  // Templates tab (JobSidebar.tsx) — fetched here rather than threaded through as a
+  // prop so the ~80 existing AppShell callers, which already fetch and pass `jobs`
+  // themselves, don't all need updating just to add this one tab.
+  const templateJobs = user ? await sidebarTemplateJobsForOrg(user.organizationId) : [];
 
   return (
     <div className="flex h-screen flex-col">
@@ -46,7 +51,7 @@ export async function AppShell({
         jobs={jobs}
       />
       <div className="flex flex-1 overflow-hidden">
-        <JobSidebar jobs={jobs} activeJobId={activeJobId} />
+        <JobSidebar jobs={jobs} templateJobs={templateJobs} activeJobId={activeJobId} />
         <main className="flex-1 overflow-y-auto bg-[var(--bt-page-bg)]">{children}</main>
       </div>
       {isAnthropicConfigured() && isJarvisUiEnabled() ? <JarvisLauncher /> : null}

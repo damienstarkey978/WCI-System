@@ -41,6 +41,27 @@ export async function sidebarJobsForOrg(organizationId: string, user: { readonly
     groupName: job.jobGroup?.name ?? "General",
     clientName: job.clientAccess[0]?.client.name ?? null,
     address: [job.addressLine1, job.city].filter(Boolean).join(", ") || null,
+    qboLinked: job.qboCustomerId !== null,
+  }));
+}
+
+/** The job sidebar's "Templates" tab (JobSidebar.tsx) — Job.isTemplate rows, same shape as the real-job list above. */
+export async function sidebarTemplateJobsForOrg(organizationId: string): Promise<SidebarJob[]> {
+  const jobs = await db.job.findMany({
+    where: { organizationId, isTemplate: true },
+    orderBy: { createdAt: "desc" },
+    include: { jobGroup: true, clientAccess: { take: 1, include: { client: true } } },
+  });
+
+  return jobs.map((job) => ({
+    id: job.id,
+    name: job.name,
+    prefix: job.prefix,
+    status: job.status,
+    groupName: job.jobGroup?.name ?? "General",
+    clientName: job.clientAccess[0]?.client.name ?? null,
+    address: [job.addressLine1, job.city].filter(Boolean).join(", ") || null,
+    qboLinked: job.qboCustomerId !== null,
   }));
 }
 
