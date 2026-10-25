@@ -54,7 +54,7 @@ export function ChangeOrdersGrid({ rows }: { rows: readonly ChangeOrderRow[] }) 
     <DataGrid
       columns={columns}
       rows={rows}
-      rowKey={(row) => row.id}
+      rowKey={(row) => row.id} viewKey="change-orders"
       selectable
       showTotals
       rowActions={(row) =>

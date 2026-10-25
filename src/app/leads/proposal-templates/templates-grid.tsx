@@ -33,5 +33,5 @@ export function TemplatesGrid({ rows }: { rows: readonly TemplateRow[] }) {
     { key: "updatedAt", header: "Updated", sortable: true, render: (row) => formatDate(new Date(row.updatedAt)) },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable emptyMessage="No proposal templates yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="proposal-templates" selectable emptyMessage="No proposal templates yet." />;
 }

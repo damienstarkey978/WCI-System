@@ -60,7 +60,7 @@ export function ClaimsGrid({ rows, vendors }: { rows: readonly ClaimRow[]; vendo
     <DataGrid
       columns={columns}
       rows={rows}
-      rowKey={(row) => row.id}
+      rowKey={(row) => row.id} viewKey="warranty-claims"
       selectable
       rowActions={(row) => (row.status === "SUBMITTED" ? <ScheduleAppointmentForm jobId={row.jobId} claimId={row.id} vendors={vendors} /> : null)}
       emptyMessage="No warranty claims yet."

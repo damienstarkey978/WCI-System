@@ -70,5 +70,5 @@ export function TasksGrid({ rows, emptyMessage }: { rows: readonly TaskRow[]; em
     { key: "dueDate", header: "Due", sortable: true, render: (row) => (row.dueDate ? formatDate(new Date(row.dueDate)) : "") },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable emptyMessage={emptyMessage} />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="tasks" selectable emptyMessage={emptyMessage} />;
 }

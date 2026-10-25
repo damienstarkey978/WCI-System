@@ -76,7 +76,7 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
         );
       },
     },
-    { key: "date", header: "Invoice date", sortable: true, render: (row) => formatDate(new Date(row.dateLabel)) },
+    { key: "date", header: "Invoice date", sortable: true, sortValue: (row) => row.dateLabel, render: (row) => formatDate(new Date(row.dateLabel)) },
     {
       key: "totalCents",
       header: "Amount",
@@ -98,5 +98,5 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
       : []),
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable showTotals emptyMessage="No bills yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="bills" selectable showTotals emptyMessage="No bills yet." />;
 }

@@ -49,12 +49,13 @@ export function LeadsGrid({ rows }: { rows: readonly LeadRow[] }) {
     },
     { key: "createdAt", header: "Created date", sortable: true, render: (row) => formatDate(new Date(row.createdAt)) },
     { key: "stage", header: "Lead status", render: (row) => <StageSelect leadId={row.id} stage={row.stage} /> },
-    { key: "age", header: "Age", align: "right", sortable: true, render: (row) => `${row.ageDays} days` },
+    { key: "age", header: "Age", align: "right", sortable: true, sortValue: (row) => row.ageDays, render: (row) => `${row.ageDays} days` },
     {
       key: "confidence",
       header: "Confidence",
       align: "right",
       sortable: true,
+      sortValue: (row) => row.confidencePercent,
       render: (row) => (
         <div className="flex items-center justify-end gap-2">
           <div className="h-1.5 w-16 overflow-hidden rounded-full bg-black/10">
@@ -68,5 +69,5 @@ export function LeadsGrid({ rows }: { rows: readonly LeadRow[] }) {
     { key: "revenueMax", header: "Est. revenue max", align: "right", render: (row) => (row.revenueMaxCents !== null ? formatMoney(row.revenueMaxCents) : "") },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable emptyMessage="No lead opportunities yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable viewKey="lead-opportunities" emptyMessage="No lead opportunities yet." />;
 }

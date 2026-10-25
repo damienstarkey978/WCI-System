@@ -52,7 +52,7 @@ export function SelectionsListGrid({ rows }: { rows: readonly SelectionRow[] }) 
       total: formatMoney(rows.reduce((sum, row) => sum + (row.approvedPriceCents ?? 0), 0)),
     },
   ];
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable showTotals emptyMessage="No selections yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="selections" selectable showTotals emptyMessage="No selections yet." />;
 }
 
 export function AllowancesGrid({ rows }: { rows: readonly AllowanceRow[] }) {
@@ -75,5 +75,5 @@ export function AllowancesGrid({ rows }: { rows: readonly AllowanceRow[] }) {
     },
     { key: "selections", header: "Selections", align: "right", render: (row) => row.selectionCount },
   ];
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable showTotals emptyMessage="No allowances yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="allowances" selectable showTotals emptyMessage="No allowances yet." />;
 }

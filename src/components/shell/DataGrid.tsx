@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { sortRows } from "./data-grid-sort";
 import { CheckIcon, SortArrowsIcon } from "./icons";
 
 export interface DataGridColumn<T> {
@@ -9,6 +10,8 @@ export interface DataGridColumn<T> {
   readonly header: string;
   readonly align?: "left" | "right" | "center";
   readonly sortable?: boolean;
+  /** What to sort by. Defaults to row[key] when that is a string or number. */
+  readonly sortValue?: (row: T) => string | number | null;
   readonly render: (row: T) => ReactNode;
   /** Rendered in the totals row, under this column. Omit columns that have no total. */
   readonly total?: ReactNode;
@@ -22,16 +25,14 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
  * shared component — every financial/PM list page is meant to render through this
  * rather than its own one-off <table>.
  *
- * Deliberately NOT in scope yet: the column chooser and the "Standard View" saved-
- * view dropdown. Both need a real per-page column spec (which columns exist to
- * choose from) and, for saved views, somewhere to persist the choice — those get
- * designed against an actual page's real columns when that page is wired up
- * (Steps 3-8), not invented generically here.
+ * Sorting: clicking a sortable header sorts `rows` in place (ascending, then
+ * descending) using the column's `sortValue`, falling back to row[key]. A caller that
+ * wants to own sorting passes `sort`/`onSortChange` instead and gets the click only.
  *
- * Sorting is presentational only: `onSortChange` just tells the caller which
- * column/direction was clicked. This component doesn't sort `rows` itself, since
- * for most of these pages the "right" sort (e.g. by money, by a nested field) needs
- * real comparator logic the caller already has reasons to own.
+ * Column chooser / "Standard View": pass `viewKey` and the grid shows a Standard View
+ * menu where columns can be hidden. The choice is remembered per browser in
+ * localStorage under that key. It is not shared across devices or users; a server
+ * saved view would need its own table, which nothing has asked for yet.
  */
 export function DataGrid<T>({
   columns,
@@ -46,6 +47,7 @@ export function DataGrid<T>({
   rowActions,
   emptyMessage = "No results.",
   pageSize: initialPageSize = 50,
+  viewKey,
 }: {
   columns: readonly DataGridColumn<T>[];
   rows: readonly T[];
@@ -59,33 +61,91 @@ export function DataGrid<T>({
   rowActions?: (row: T) => ReactNode;
   emptyMessage?: string;
   pageSize?: number;
+  /** Enables the Standard View column chooser, remembered per browser under this key. */
+  viewKey?: string;
 }) {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<number>(initialPageSize);
 
-  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
-  const clampedPage = Math.min(page, pageCount - 1);
-  const pageRows = useMemo(() => rows.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize), [rows, clampedPage, pageSize]);
+  // Selection and sort are controlled when the caller passes them, otherwise kept here,
+  // so a grid that just says `selectable` still has working checkboxes and sortable headers.
+  const [ownSelected, setOwnSelected] = useState<ReadonlySet<string>>(new Set());
+  const [ownSort, setOwnSort] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+  const [hiddenKeys, setHiddenKeys] = useState<readonly string[]>([]);
+  const [chooserOpen, setChooserOpen] = useState(false);
 
-  const allOnPageSelected = selectable && pageRows.length > 0 && pageRows.every((row) => selectedKeys?.has(rowKey(row)));
+  const storageKey = viewKey ? `wci.grid.${viewKey}` : null;
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reading the saved view needs the browser, so it can only happen after mount
+      if (Array.isArray(parsed)) setHiddenKeys(parsed.filter((value): value is string => typeof value === "string"));
+    } catch {
+      // Storage can be blocked or hold junk; the grid just shows every column.
+    }
+  }, [storageKey]);
+
+  function saveHidden(next: readonly string[]) {
+    setHiddenKeys(next);
+    if (!storageKey) return;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch {
+      // Not remembered this time; the choice still applies for this visit.
+    }
+  }
+
+  const visibleColumns = columns.filter((column) => !hiddenKeys.includes(column.key));
+  const effectiveSelected = selectedKeys ?? ownSelected;
+  const effectiveSort = sort ?? ownSort;
+
+  const sortedRows = useMemo(() => {
+    if (!effectiveSort || sort) return rows; // a controlled `sort` means the caller already ordered the rows
+    const column = columns.find((candidate) => candidate.key === effectiveSort.key);
+    if (!column) return rows;
+    const valueOf = (row: T): string | number | null => {
+      if (column.sortValue) return column.sortValue(row);
+      const raw = (row as Record<string, unknown>)[column.key];
+      return typeof raw === "string" || typeof raw === "number" ? raw : null;
+    };
+    return sortRows(rows, valueOf, effectiveSort.direction);
+  }, [rows, columns, effectiveSort, sort]);
+
+  function handleSort(key: string) {
+    if (onSortChange) onSortChange(key);
+    if (sort) return;
+    setOwnSort((current) => (current?.key === key && current.direction === "asc" ? { key, direction: "desc" } : { key, direction: "asc" }));
+    setPage(0);
+  }
+
+  function updateSelected(next: ReadonlySet<string>) {
+    onSelectedKeysChange?.(next);
+    if (!selectedKeys) setOwnSelected(next);
+  }
+
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const clampedPage = Math.min(page, pageCount - 1);
+  const pageRows = useMemo(() => sortedRows.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize), [sortedRows, clampedPage, pageSize]);
+
+  const allOnPageSelected = selectable && pageRows.length > 0 && pageRows.every((row) => effectiveSelected.has(rowKey(row)));
 
   function toggleRow(key: string) {
-    if (!onSelectedKeysChange) return;
-    const next = new Set(selectedKeys ?? []);
+    const next = new Set(effectiveSelected);
     if (next.has(key)) next.delete(key);
     else next.add(key);
-    onSelectedKeysChange(next);
+    updateSelected(next);
   }
 
   function toggleAllOnPage() {
-    if (!onSelectedKeysChange) return;
-    const next = new Set(selectedKeys ?? []);
+    const next = new Set(effectiveSelected);
     if (allOnPageSelected) {
       for (const row of pageRows) next.delete(rowKey(row));
     } else {
       for (const row of pageRows) next.add(rowKey(row));
     }
-    onSelectedKeysChange(next);
+    updateSelected(next);
   }
 
   if (rows.length === 0) {
@@ -96,6 +156,46 @@ export function DataGrid<T>({
 
   return (
     <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+      {viewKey ? (
+        <div className="relative flex items-center justify-end border-b px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
+          <button
+            type="button"
+            onClick={() => setChooserOpen((open) => !open)}
+            aria-expanded={chooserOpen}
+            className="rounded border px-3 py-1 text-xs font-medium text-[var(--bt-text)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          >
+            {hiddenKeys.length > 0 ? "Custom view" : "Standard view"}
+          </button>
+          {chooserOpen ? (
+            <div className="absolute right-3 top-full z-20 mt-1 w-56 rounded-lg border bg-[var(--bt-panel-bg)] p-2 shadow-lg" style={{ borderColor: "var(--bt-border)" }}>
+              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Columns</div>
+              {columns.map((column) => {
+                const shown = !hiddenKeys.includes(column.key);
+                return (
+                  <label key={column.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-black/5">
+                    <input
+                      type="checkbox"
+                      checked={shown}
+                      onChange={() => {
+                        // Never let the last visible column be hidden, or the grid would be blank.
+                        if (shown && visibleColumns.length === 1) return;
+                        saveHidden(shown ? [...hiddenKeys, column.key] : hiddenKeys.filter((key) => key !== column.key));
+                      }}
+                    />
+                    {column.header || column.key}
+                  </label>
+                );
+              })}
+              {hiddenKeys.length > 0 ? (
+                <button type="button" onClick={() => saveHidden([])} className="mt-1 w-full rounded px-2 py-1 text-left text-xs font-medium text-[var(--bt-primary)] hover:bg-black/5">
+                  Back to Standard view
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="max-h-[36rem] overflow-auto">
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 z-10 bg-[var(--bt-panel-bg)]">
@@ -107,12 +207,12 @@ export function DataGrid<T>({
                   </button>
                 </th>
               ) : null}
-              {columns.map((column) => (
+              {visibleColumns.map((column) => (
                 <th key={column.key} className={`px-4 py-3 ${alignClass(column.align)}`}>
                   {column.sortable ? (
-                    <button type="button" onClick={() => onSortChange?.(column.key)} className="inline-flex items-center gap-1 hover:text-[var(--bt-text)]">
+                    <button type="button" onClick={() => handleSort(column.key)} className="inline-flex items-center gap-1 hover:text-[var(--bt-text)]">
                       {column.header}
-                      <SortArrowsIcon className={`h-3 w-3 ${sort?.key === column.key ? "text-[var(--bt-primary)]" : ""}`} />
+                      <SortArrowsIcon className={`h-3 w-3 ${effectiveSort?.key === column.key ? "text-[var(--bt-primary)]" : ""}`} />
                     </button>
                   ) : (
                     column.header
@@ -125,7 +225,7 @@ export function DataGrid<T>({
           <tbody>
             {pageRows.map((row) => {
               const key = rowKey(row);
-              const isSelected = selectedKeys?.has(key) ?? false;
+              const isSelected = effectiveSelected.has(key);
               return (
                 <tr key={key} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
                   {selectable ? (
@@ -135,7 +235,7 @@ export function DataGrid<T>({
                       </button>
                     </td>
                   ) : null}
-                  {columns.map((column) => (
+                  {visibleColumns.map((column) => (
                     <td key={column.key} className={`px-4 py-3 text-[var(--bt-text)] ${alignClass(column.align)}`}>
                       {column.render(row)}
                     </td>
@@ -149,7 +249,7 @@ export function DataGrid<T>({
             <tfoot>
               <tr className="border-t text-sm font-semibold" style={{ borderColor: "var(--bt-border)" }}>
                 {selectable ? <td className="px-3 py-3" /> : null}
-                {columns.map((column) => (
+                {visibleColumns.map((column) => (
                   <td key={column.key} className={`px-4 py-3 text-[var(--bt-text)] ${alignClass(column.align)}`}>
                     {column.total}
                   </td>
@@ -163,7 +263,7 @@ export function DataGrid<T>({
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5 text-xs text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
         <span>
-          {clampedPage * pageSize + 1}-{Math.min(rows.length, clampedPage * pageSize + pageRows.length)} of {rows.length} items
+          {clampedPage * pageSize + 1}-{Math.min(sortedRows.length, clampedPage * pageSize + pageRows.length)} of {sortedRows.length} items{effectiveSelected.size > 0 ? `, ${effectiveSelected.size} selected` : ""}
         </span>
         <div className="flex items-center gap-2">
           <select

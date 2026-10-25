@@ -68,7 +68,7 @@ export function LineItemsGrid({ jobId, estimateId, rows, editable }: { jobId: st
     <DataGrid
       columns={columns}
       rows={rows}
-      rowKey={(row) => row.id}
+      rowKey={(row) => row.id} viewKey="estimate-line-items"
       selectable
       showTotals
       pageSize={100}

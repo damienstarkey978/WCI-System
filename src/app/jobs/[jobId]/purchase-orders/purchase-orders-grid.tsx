@@ -76,5 +76,5 @@ export function PurchaseOrdersGrid({ rows }: { rows: readonly PurchaseOrderRow[]
     },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable showTotals emptyMessage="No purchase orders yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="purchase-orders" selectable showTotals emptyMessage="No purchase orders yet." />;
 }

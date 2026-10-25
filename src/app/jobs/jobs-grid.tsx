@@ -54,5 +54,5 @@ export function JobsGrid({ rows }: { rows: readonly JobRow[] }) {
     { key: "projectedEnd", header: "Projected end", sortable: true, render: (row) => (row.projectedEnd ? formatDate(new Date(row.projectedEnd)) : "") },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable emptyMessage="No jobs yet. Create one with the button above." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="jobs" selectable emptyMessage="No jobs yet. Create one with the button above." />;
 }

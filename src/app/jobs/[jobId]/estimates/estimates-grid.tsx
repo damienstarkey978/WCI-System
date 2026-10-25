@@ -59,7 +59,7 @@ export function EstimatesGrid({ rows }: { rows: readonly EstimateRow[] }) {
     <DataGrid
       columns={columns}
       rows={rows}
-      rowKey={(row) => row.id}
+      rowKey={(row) => row.id} viewKey="estimates"
       selectable
       showTotals
       rowActions={(row) => <SaveAsTemplateForm jobId={row.jobId} estimateId={row.id} />}

@@ -27,7 +27,7 @@ export function ShiftsGrid({ rows, canReview }: { rows: readonly ShiftRow[]; can
   const columns: DataGridColumn<ShiftRow>[] = [
     { key: "worker", header: "Worker", sortable: true, render: (row) => row.worker },
     { key: "costCode", header: "Cost code", render: (row) => row.costCode },
-    { key: "date", header: "Date", sortable: true, render: (row) => formatDate(new Date(row.clockInAt)) },
+    { key: "date", header: "Date", sortable: true, sortValue: (row) => row.clockInAt, render: (row) => formatDate(new Date(row.clockInAt)) },
     {
       key: "hours",
       header: "Hours",
@@ -56,6 +56,7 @@ export function ShiftsGrid({ rows, canReview }: { rows: readonly ShiftRow[]; can
       rows={rows}
       rowKey={(row) => row.id}
       selectable
+      viewKey="time-clock-shifts"
       showTotals
       rowActions={
         canReview

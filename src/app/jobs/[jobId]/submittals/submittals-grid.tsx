@@ -48,5 +48,5 @@ export function SubmittalsGrid({ rows }: { rows: readonly SubmittalRow[] }) {
     },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable emptyMessage="No submittals yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="submittals" selectable emptyMessage="No submittals yet." />;
 }

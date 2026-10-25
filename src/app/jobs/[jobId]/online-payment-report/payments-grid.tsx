@@ -29,5 +29,5 @@ export function OnlinePaymentsGrid({ rows }: { rows: readonly OnlinePaymentRow[]
     },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable showTotals emptyMessage="No online payments yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="payments" selectable showTotals emptyMessage="No online payments yet." />;
 }

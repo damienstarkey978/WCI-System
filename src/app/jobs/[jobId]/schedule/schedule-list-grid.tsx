@@ -55,8 +55,8 @@ function ProgressCell({ jobId, itemId, percent }: { jobId: string; itemId: strin
 export function ScheduleListGrid({ rows, phases, showPhases }: { rows: readonly ScheduleListRow[]; phases: readonly PhaseOption[]; showPhases: boolean }) {
   const columns: DataGridColumn<ScheduleListRow>[] = [
     { key: "title", header: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title}</span> },
-    { key: "start", header: "Start", sortable: true, render: (row) => formatDateUtc(new Date(row.startDate)) },
-    { key: "end", header: "End", sortable: true, render: (row) => formatDateUtc(new Date(row.endDate)) },
+    { key: "start", header: "Start", sortable: true, sortValue: (row) => row.startDate, render: (row) => formatDateUtc(new Date(row.startDate)) },
+    { key: "end", header: "End", sortable: true, sortValue: (row) => row.endDate, render: (row) => formatDateUtc(new Date(row.endDate)) },
     { key: "duration", header: "Duration", align: "right", render: (row) => `${row.durationDays} ${row.durationDays === 1 ? "day" : "days"}` },
     { key: "float", header: "Float", align: "right", render: (row) => `${row.floatDays} ${row.floatDays === 1 ? "day" : "days"}` },
     {
@@ -108,5 +108,5 @@ export function ScheduleListGrid({ rows, phases, showPhases }: { rows: readonly 
       render: (row) => (row.confirmed ? "Confirmed" : <span className="text-[var(--bt-hazard)]">Unconfirmed</span>),
     },
   ];
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable emptyMessage="No schedule items yet." />;
+  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable viewKey="schedule-list" emptyMessage="No schedule items yet." />;
 }
