@@ -117,6 +117,7 @@ model Organization {
   rfis                    Rfi[]
   files                   File[]
   fileFolders             FileFolder[]
+  messageThreads          MessageThread[]
   comments                Comment[]
   notifications           Notification[]
   clients                 Client[]
@@ -188,6 +189,7 @@ model User {
   assignedLeads             Lead[]
   leadActivities            LeadActivity[]
   uploadedLeadAttachments   LeadAttachment[]
+  startedMessageThreads     MessageThread[]
   jarvisConversations       JarvisConversation[]
   proposalDraftJobs         ProposalDraftJob[]
   oauthAuthorizationCodes   OAuthAuthorizationCode[]
@@ -292,6 +294,7 @@ model Job {
   rfis                  Rfi[]
   files                 File[]
   fileFolders           FileFolder[]
+  messageThreads        MessageThread[]
   clientAccess          ClientJobAccess[]
   allowances            Allowance[]
   selections            Selection[]
@@ -2942,6 +2945,29 @@ model ProposalSectionBullet {
   sortOrder Int    @default(0)
 
   @@index([sectionId, sortOrder])
+}
+
+/// A conversation on a job (Buildertrend's Messaging). The messages themselves are
+/// Comment rows (featureType "MessageThread", featureId = this id), the same unified
+/// comment table every module uses, so mentions and notifications keep working.
+/// Messages written before threads existed live on the job itself (featureType "Job")
+/// and are shown as the "General" conversation.
+model MessageThread {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  subject String
+
+  startedByUserId String
+  startedByUser   User   @relation(fields: [startedByUserId], references: [id], onDelete: Restrict)
+
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([jobId, lastMessageAt])
 }
 
 /// A file attached to a Lead before any Job exists (Buildertrend's lead Attachments).
