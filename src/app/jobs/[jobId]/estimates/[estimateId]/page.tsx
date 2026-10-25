@@ -13,6 +13,7 @@ import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { AddLineItemForm } from "./add-line-item-form";
 import { LineItemsGrid } from "./line-items-grid";
 import { SendToBudgetButton } from "./send-to-budget-button";
+import { UnlockButton } from "./unlock-button";
 
 export const dynamic = "force-dynamic";
 
@@ -67,8 +68,11 @@ export default async function EstimateWorksheetPage({ params }: PageProps<"/jobs
   // Margin is profit over price; shown to one decimal via the shared basis-point formatter.
   const marginBasisPoints = totalPrice > 0 ? Math.round((profit / totalPrice) * 10_000) : 0;
 
-  const locked = estimate.lockedAt !== null;
-  const canSend = (user.role === UserRole.ADMIN || user.role === UserRole.PM) && !locked && rows.length > 0;
+  // Editable only while DRAFT (src/lib/estimates/service.ts); anything else is locked or already with a client.
+  const locked = estimate.status !== "DRAFT";
+  const canManage = user.role === UserRole.ADMIN || user.role === UserRole.PM;
+  const canSend = canManage && !locked && rows.length > 0;
+  const canUnlock = canManage && estimate.status === "LOCKED";
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
@@ -77,7 +81,8 @@ export default async function EstimateWorksheetPage({ params }: PageProps<"/jobs
         title={estimate.title}
         action={
           <div className="flex items-center gap-2">
-            {canSend ? <SendToBudgetButton jobId={job.id} estimateId={estimate.id} /> : null}
+            {canUnlock ? <UnlockButton jobId={job.id} estimateId={estimate.id} /> : null}
+            {canSend ? <SendToBudgetButton jobId={job.id} estimateId={estimate.id} resend={estimate.sentToBudgetAt !== null} /> : null}
             {locked ? null : (
               <CreateModal triggerLabel="+ Line item" title="New line item">
                 <AddLineItemForm jobId={job.id} estimateId={estimate.id} costCodes={costCodes} />
@@ -92,8 +97,8 @@ export default async function EstimateWorksheetPage({ params }: PageProps<"/jobs
           ← All estimates
         </Link>
         <span className="text-xs text-[var(--bt-muted)]">
-          {estimate.status}
-          {locked && estimate.lockedAt ? `, locked ${formatDate(estimate.lockedAt)}` : ""}
+          {estimate.status}, revision {estimate.version}
+          {estimate.lockedAt ? `, locked ${formatDate(estimate.lockedAt)}` : ""}
         </span>
       </div>
 

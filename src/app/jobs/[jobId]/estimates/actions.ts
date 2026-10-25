@@ -16,7 +16,9 @@ import {
   createEstimate,
   deleteEstimateLineItem,
   EstimateNotEditableError,
+  EstimateNotLockedError,
   JobNotFoundError,
+  unlockEstimateForRevision,
   UnknownCostCodeError,
 } from "@/lib/estimates/service";
 import {
@@ -208,7 +210,7 @@ export async function sendEstimateToBudgetAction(_previous: ActionState, formDat
   const estimateId = String(formData.get("estimateId") ?? "");
 
   try {
-    const result = await sendEstimateToBudget({ estimateId, organizationId: user.organizationId, allowResend: false });
+    const result = await sendEstimateToBudget({ estimateId, organizationId: user.organizationId, allowResend: formData.get("resend") === "true" });
     await emitEvent(user.organizationId, "estimate.sent_to_budget", {
       estimateId: result.estimateId,
       jobId: result.jobId,
@@ -226,5 +228,22 @@ export async function sendEstimateToBudgetAction(_previous: ActionState, formDat
   revalidatePath(`/jobs/${jobId}/estimates/${estimateId}`);
   revalidatePath(`/jobs/${jobId}/estimates`);
   revalidatePath(`/jobs/${jobId}/budget`);
+  return { ok: true };
+}
+
+export async function unlockEstimateAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const estimateId = String(formData.get("estimateId") ?? "");
+
+  try {
+    await unlockEstimateForRevision(user.organizationId, estimateId);
+  } catch (error) {
+    if (error instanceof EstimateNotLockedError || error instanceof EstimateNotFoundError) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/estimates/${estimateId}`);
+  revalidatePath(`/jobs/${jobId}/estimates`);
   return { ok: true };
 }

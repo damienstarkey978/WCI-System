@@ -144,6 +144,29 @@ async function requireEditableEstimate(organizationId: string, estimateId: strin
   return estimate;
 }
 
+export class EstimateNotLockedError extends Error {
+  constructor(estimateId: string, status: string) {
+    super(`Estimate ${estimateId} is ${status}, only a locked estimate can be unlocked for revision.`);
+    this.name = "EstimateNotLockedError";
+  }
+}
+
+/**
+ * Reopens a locked estimate for editing as a new revision. The budget it already wrote
+ * is untouched until the revised estimate is sent again (sendEstimateToBudget with
+ * allowResend), which updates revised figures and never the original baseline.
+ */
+export async function unlockEstimateForRevision(organizationId: string, estimateId: string) {
+  const estimate = await db.estimate.findFirst({ where: { id: estimateId, organizationId } });
+  if (!estimate) throw new EstimateNotFoundError(estimateId);
+  if (estimate.status !== "LOCKED") throw new EstimateNotLockedError(estimateId, estimate.status);
+
+  return db.estimate.update({
+    where: { id: estimate.id },
+    data: { status: "DRAFT", lockedAt: null, version: { increment: 1 } },
+  });
+}
+
 export interface AddEstimateLineItemInput extends CreateEstimateLineItemInput {
   readonly organizationId: string;
   readonly estimateId: string;
