@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -10,14 +11,25 @@ import { getComputedSchedule } from "@/lib/scheduling/service";
 
 import { AddItemForm } from "./add-item-form";
 import { CreateScheduleButton } from "./create-schedule-button";
+import { ScheduleCalendar } from "./schedule-calendar";
+import { ScheduleListGrid } from "./schedule-list-grid";
 import { SnapshotBaselineButton } from "./snapshot-baseline-button";
 
 export const dynamic = "force-dynamic";
 
 const MS_PER_DAY = 86_400_000;
 
-export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobId]/schedule">) {
+const VIEWS = [
+  { key: "gantt", label: "Gantt" },
+  { key: "calendar", label: "Calendar" },
+  { key: "list", label: "List" },
+] as const;
+type ViewKey = (typeof VIEWS)[number]["key"];
+
+export default async function JobSchedulePage({ params, searchParams }: PageProps<"/jobs/[jobId]/schedule">) {
   const { jobId } = await params;
+  const { view: viewParam, month: monthParam } = await searchParams;
+  const view: ViewKey = VIEWS.some((v) => v.key === viewParam) ? (viewParam as ViewKey) : "gantt";
 
   let user;
   try {
@@ -74,6 +86,9 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
   const rangeStart = new Date(Math.min(...allDates.map((d) => d.getTime())));
   const rangeEnd = new Date(Math.max(...allDates.map((d) => d.getTime())));
   const totalDays = Math.max(1, Math.round((rangeEnd.getTime() - rangeStart.getTime()) / MS_PER_DAY) + 1);
+  const monthMatch = typeof monthParam === "string" ? /^(\d{4})-(\d{2})$/.exec(monthParam) : null;
+  const calendarYear = monthMatch ? Number(monthMatch[1]) : rangeStart.getUTCFullYear();
+  const calendarMonthIndex = monthMatch ? Math.min(11, Math.max(0, Number(monthMatch[2]) - 1)) : rangeStart.getUTCMonth();
   const hasBaseline = items.some((item) => item.baselineEnd !== null);
 
   return (
@@ -94,6 +109,40 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
         }
       />
 
+      <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+        {VIEWS.map((v) => (
+          <Link
+            key={v.key}
+            href={`/jobs/${job.id}/schedule?view=${v.key}`}
+            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+            style={{ borderColor: v.key === view ? "var(--bt-primary)" : "transparent", color: v.key === view ? "var(--bt-primary)" : "var(--bt-muted)" }}
+          >
+            {v.label}
+          </Link>
+        ))}
+      </nav>
+
+      {view === "list" ? (
+        <ScheduleListGrid
+          rows={items.map((item) => ({
+            id: item.id,
+            title: item.title,
+            startDate: item.startDate.toISOString(),
+            endDate: item.endDate.toISOString(),
+            durationDays: item.durationDays,
+            floatDays: item.floatDays,
+            isCriticalPath: item.isCriticalPath,
+            confirmed: item.confirmationStatus !== "UNCONFIRMED",
+          }))}
+        />
+      ) : null}
+
+      {view === "calendar" ? (
+        <ScheduleCalendar jobId={job.id} items={items} year={calendarYear} monthIndex={calendarMonthIndex} />
+      ) : null}
+
+      {view === "gantt" ? (
+        <>
       <div className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
           <div className="w-64 shrink-0 px-4 py-3">Task</div>
@@ -189,6 +238,8 @@ export default async function JobSchedulePage({ params }: PageProps<"/jobs/[jobI
           </span>
         ) : null}
       </p>
+        </>
+      ) : null}
     </div>
   );
 }
