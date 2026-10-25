@@ -5,6 +5,7 @@ import { PhotoStrip } from "@/components/files/PhotoStrip";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isAnthropicConfigured } from "@/lib/env";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { resolveFileUrlSafe } from "@/lib/files/service";
 import { formatDate } from "@/lib/format";
 
@@ -55,7 +56,7 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Daily logs — {job.name}</h1>
 
-      <DailyLogForm jobId={job.id} aiEnabled={isAnthropicConfigured()} />
+      <DailyLogForm jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />
 
       <div className="flex flex-col gap-3">
         {logs.length === 0 ? (

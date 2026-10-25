@@ -7,6 +7,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { approveChangeOrderAction, declineChangeOrderAction } from "./actions";
@@ -66,7 +67,7 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Change orders — {job.name}</h1>
 
-      {isAnthropicConfigured() ? (
+      {isAnthropicConfigured() && isJarvisUiEnabled() ? (
         <JarvisChatPanel
           context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "change_orders" }}
           storageKey={`job-change-orders:${job.id}`}

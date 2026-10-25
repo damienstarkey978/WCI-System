@@ -7,6 +7,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { listEstimateTemplates } from "@/lib/estimates/templates";
 import { formatDate, formatMoney } from "@/lib/format";
 import { listMaterialCatalogItems } from "@/lib/materials/service";
@@ -60,7 +61,7 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <h1 className="text-xl font-semibold text-[var(--bt-text)]">Estimates — {job.name}</h1>
 
-      {isAnthropicConfigured() ? (
+      {isAnthropicConfigured() && isJarvisUiEnabled() ? (
         <JarvisChatPanel
           context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "estimates" }}
           storageKey={`job-estimates:${job.id}`}

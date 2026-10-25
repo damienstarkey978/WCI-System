@@ -9,6 +9,7 @@ import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { estimateTotalCents } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
 import { ConvertToJobButton } from "../convert-form";
 import { StageSelect } from "../stage-select";
@@ -195,7 +196,7 @@ export default async function LeadDetailPage({
               </div>
             </div>
           ) : null}
-          {isAnthropicConfigured() ? (
+          {isAnthropicConfigured() && isJarvisUiEnabled() ? (
             <JarvisChatPanel
               context={{
                 page: "lead_detail",

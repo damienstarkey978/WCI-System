@@ -17,6 +17,8 @@ import {
   type JobsMenuItem,
 } from "@/lib/buildertrend-nav";
 
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
+
 import type { SidebarJob } from "./JobSidebar";
 import { CloseIcon, SparkleIcon } from "./icons";
 
@@ -177,9 +179,11 @@ export function MobileMenuDrawer({
           <Link href={REPORTS_HREF} onClick={onClose} className="block border-b px-4 py-3 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
             Reports
           </Link>
-          <Link href="/jarvis" onClick={onClose} className="flex items-center gap-2 border-b px-4 py-3 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
-            <SparkleIcon className="h-4 w-4" /> Jarvis
-          </Link>
+          {isJarvisUiEnabled() ? (
+            <Link href="/jarvis" onClick={onClose} className="flex items-center gap-2 border-b px-4 py-3 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
+              <SparkleIcon className="h-4 w-4" /> Jarvis
+            </Link>
+          ) : null}
           <FlatSection label="People" items={PEOPLE_NAV} onNavigate={onClose} />
 
           <div className="px-4 py-3">

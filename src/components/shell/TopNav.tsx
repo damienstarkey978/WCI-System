@@ -6,6 +6,8 @@ import { useState } from "react";
 
 import { UserButton } from "@clerk/nextjs";
 
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
+
 import {
   FILES_NAV,
   FINANCIAL_NAV,
@@ -365,15 +367,17 @@ export function TopNav({
       <div className="flex items-center gap-2">
         <GlobalSearch />
         <NotificationBell notifications={notifications} unreadCount={unreadCount} />
-        <Link
-          href="/jarvis"
-          className="hidden rounded p-2 transition hover:bg-white/10 sm:block"
-          style={pathname?.startsWith("/jarvis") ? { background: "var(--bt-nav-hover)" } : undefined}
-          aria-label="Jarvis"
-          title="Jarvis"
-        >
-          <SparkleIcon className="h-4.5 w-4.5" />
-        </Link>
+        {isJarvisUiEnabled() ? (
+          <Link
+            href="/jarvis"
+            className="hidden rounded p-2 transition hover:bg-white/10 sm:block"
+            style={pathname?.startsWith("/jarvis") ? { background: "var(--bt-nav-hover)" } : undefined}
+            aria-label="Jarvis"
+            title="Jarvis"
+          >
+            <SparkleIcon className="h-4.5 w-4.5" />
+          </Link>
+        ) : null}
         <PeopleDropdown pathname={pathname} />
         <button type="button" className="hidden rounded p-2 transition hover:bg-white/10 sm:block" aria-label="Help">
           <HelpIcon className="h-4.5 w-4.5" />

@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
+
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUser } from "@/lib/auth";
 import { isAnthropicConfigured } from "@/lib/env";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
 import { ChatInputForm } from "./chat-input-form";
 import { ConversationSidebar } from "./conversation-sidebar";
@@ -10,6 +13,8 @@ import { MobileConversationHistory } from "./mobile-conversation-history";
 export const dynamic = "force-dynamic";
 
 export default async function JarvisNewChatPage() {
+  if (!isJarvisUiEnabled()) redirect("/dashboard");
+
   let user;
   try {
     user = await currentAppUser();

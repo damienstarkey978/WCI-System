@@ -2,6 +2,8 @@
 
 import { useActionState, useRef, useState } from "react";
 
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
+
 import { uploadBillsAction, type UploadState } from "./upload-actions";
 
 const INITIAL: UploadState = {};
@@ -54,9 +56,11 @@ export function BillUploader({ jobId, inboxAddress }: { jobId: string; inboxAddr
           }}
         >
           <p className="text-sm font-medium text-[var(--bt-text)]">Drop bills &amp; receipts here</p>
-          <p className="mt-1 text-xs text-[var(--bt-muted)]">
-            AI reads the vendor, amount, date, and cost codes. Nothing is payable until you confirm it.
-          </p>
+          {isJarvisUiEnabled() ? (
+            <p className="mt-1 text-xs text-[var(--bt-muted)]">
+              AI reads the vendor, amount, date, and cost codes. Nothing is payable until you confirm it.
+            </p>
+          ) : null}
           <p className="mt-1 text-xs text-[var(--bt-muted)]">PNG, JPEG, GIF, WebP, or PDF · up to 20MB per batch</p>
 
           <input

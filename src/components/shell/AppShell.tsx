@@ -4,6 +4,7 @@ import { JarvisLauncher } from "@/components/jarvis/JarvisLauncher";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
 import { isAnthropicConfigured, isClerkConfigured } from "@/lib/env";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
 import { JobSidebar, type SidebarJob } from "./JobSidebar";
 import { TopNav, type BellNotification } from "./TopNav";
@@ -48,7 +49,7 @@ export async function AppShell({
         <JobSidebar jobs={jobs} activeJobId={activeJobId} />
         <main className="flex-1 overflow-y-auto bg-[var(--bt-page-bg)]">{children}</main>
       </div>
-      {isAnthropicConfigured() ? <JarvisLauncher /> : null}
+      {isAnthropicConfigured() && isJarvisUiEnabled() ? <JarvisLauncher /> : null}
     </div>
   );
 }

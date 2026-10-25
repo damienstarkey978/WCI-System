@@ -10,6 +10,7 @@ import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/she
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { isAnthropicConfigured } from "@/lib/env";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { getDailyBrief } from "@/lib/reports/daily-brief";
 import {
@@ -88,17 +89,18 @@ export default async function DashboardPage() {
   const jobsOverBudgetCount = budgetVariance.filter((row) => row.isOverBudget).length;
   const totalOutstandingCents = invoicing.reduce((sum, row) => sum + row.outstandingCents, 0);
   const lowMarginJobs = profitability.filter((row) => row.projectedMarginBasisPoints < 1000).slice(0, 5);
+  const jarvisUiEnabled = isAnthropicConfigured() && isJarvisUiEnabled();
 
   return (
     <AppShell jobs={jobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Dashboard</h1>
 
-        {isAnthropicConfigured() ? <JarvisHeroCard dailyBrief={dailyBrief} /> : null}
+        {jarvisUiEnabled ? <JarvisHeroCard dailyBrief={dailyBrief} /> : null}
 
-        {isAnthropicConfigured() ? <DashboardFunGreeting /> : null}
+        {jarvisUiEnabled ? <DashboardFunGreeting /> : null}
 
-        {isAnthropicConfigured() ? (
+        {jarvisUiEnabled ? (
           <JarvisChatPanel
             context={{ page: "dashboard" }}
             storageKey="dashboard-business-advisor"

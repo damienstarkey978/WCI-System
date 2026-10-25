@@ -1,7 +1,8 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUser } from "@/lib/auth";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { ConversationNotFoundError, getConversation } from "@/lib/jarvis/service";
 
 import { ChatInputForm } from "../chat-input-form";
@@ -12,6 +13,8 @@ import { MobileConversationHistory } from "../mobile-conversation-history";
 export const dynamic = "force-dynamic";
 
 export default async function JarvisConversationPage({ params }: PageProps<"/jarvis/[conversationId]">) {
+  if (!isJarvisUiEnabled()) redirect("/dashboard");
+
   const { conversationId } = await params;
 
   let user;
