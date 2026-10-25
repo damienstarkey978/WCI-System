@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { currentAppUserOrRedirect } from "@/lib/auth";
@@ -21,7 +23,20 @@ function ageDays(createdAt: Date): number {
  * separate pipeline column, but dropping the ability to change it would be a real
  * regression, not just a cosmetic one.
  */
-export default async function LeadsPage() {
+const STAGE_TABS = [
+  { key: "all", label: "All" },
+  { key: "NEW", label: "New" },
+  { key: "CONTACTED", label: "Contacted" },
+  { key: "QUALIFIED", label: "Qualified" },
+  { key: "PROPOSAL_SENT", label: "Proposal sent" },
+  { key: "WON", label: "Won" },
+  { key: "LOST", label: "Lost" },
+] as const;
+
+export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
+  const { stage: stageParam, q: queryParam } = await searchParams;
+  const stage = STAGE_TABS.some((t) => t.key === stageParam) ? (stageParam as (typeof STAGE_TABS)[number]["key"]) : "all";
+  const query = typeof queryParam === "string" ? queryParam.trim().toLowerCase() : "";
   let user;
   try {
     user = await currentAppUserOrRedirect();
@@ -47,8 +62,35 @@ export default async function LeadsPage() {
         </CreateModal>
       </div>
 
+      <nav className="flex flex-wrap items-end justify-between gap-3 border-b" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="flex flex-wrap gap-1">
+          {STAGE_TABS.map((t) => {
+            const count = t.key === "all" ? leads.length : leads.filter((lead) => lead.stage === t.key).length;
+            return (
+              <Link
+                key={t.key}
+                href={`/leads${t.key === "all" ? "" : `?stage=${t.key}`}${query ? `${t.key === "all" ? "?" : "&"}q=${encodeURIComponent(query)}` : ""}`}
+                className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+                style={{ borderColor: t.key === stage ? "var(--bt-primary)" : "transparent", color: t.key === stage ? "var(--bt-primary)" : "var(--bt-muted)" }}
+              >
+                {t.label} ({count})
+              </Link>
+            );
+          })}
+        </div>
+        <form action="/leads" className="flex items-center gap-2 pb-2">
+          {stage !== "all" ? <input type="hidden" name="stage" value={stage} /> : null}
+          <input name="q" defaultValue={query} placeholder="Search leads" aria-label="Search leads" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }} />
+          <button type="submit" className="rounded border px-3 py-1.5 text-sm font-medium" style={{ borderColor: "var(--bt-border)" }}>
+            Search
+          </button>
+        </form>
+      </nav>
+
       <LeadsGrid
-        rows={leads.map((lead) => ({
+        rows={leads
+          .filter((lead) => (stage === "all" || lead.stage === stage) && (!query || `${lead.title ?? ""} ${lead.name} ${lead.email ?? ""}`.toLowerCase().includes(query)))
+          .map((lead) => ({
           id: lead.id,
           title: lead.title ?? lead.name,
           converted: lead.convertedJobId !== null,
