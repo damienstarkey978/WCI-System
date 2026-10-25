@@ -55,7 +55,7 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
   );
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <PageHeader
         jobName={job.name}
         title="Daily Logs"
@@ -82,8 +82,12 @@ export default async function DailyLogsPage({ params }: PageProps<"/jobs/[jobId]
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--bt-muted)]">
                   <span className="font-medium text-[var(--bt-text)]">{formatDate(log.createdAt)}</span>
                   <div className="flex items-center gap-2">
-                    {weather ? <span>{weather}</span> : null}
-                    <span>{log.authorUser.email}</span>
+                    {weather ? (
+                      <span className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: "color-mix(in srgb, var(--bt-primary) 12%, transparent)", color: "var(--bt-primary)" }}>
+                        {weather}
+                      </span>
+                    ) : null}
+                    <span>{log.authorUser.name ?? log.authorUser.email}</span>
                   </div>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{log.note}</p>
