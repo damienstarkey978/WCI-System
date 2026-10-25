@@ -52,8 +52,14 @@ export default async function FilesPage({
   const activeCategory = typeof category === "string" && CATEGORIES.some((c) => c.value === category) ? category : "DOCUMENT";
 
   const folders = await listFolders(user.organizationId, job.id);
+  const openAttached = activeCategory === "DOCUMENT" && folderParam === "attached";
   const openFolder = activeCategory === "DOCUMENT" && typeof folderParam === "string" ? (folders.find((f) => f.id === folderParam) ?? null) : null;
-  const showFolderTable = activeCategory === "DOCUMENT" && openFolder === null;
+  const showFolderTable = activeCategory === "DOCUMENT" && openFolder === null && !openAttached;
+
+  // Buildertrend's "Attached Documents": files that belong to another record (a bill, PO,
+  // invoice, selection option or daily log) rather than sitting loose in the job's documents.
+  const attachedWhere = { OR: [{ billId: { not: null } }, { purchaseOrderId: { not: null } }, { invoiceId: { not: null } }, { selectionOptionId: { not: null } }, { dailyLogId: { not: null } }] };
+  const attachedCount = await db.file.count({ where: { jobId: job.id, deletedAt: null, category: "DOCUMENT", ...attachedWhere } });
 
   const files = await db.file.findMany({
     where: {
@@ -61,10 +67,12 @@ export default async function FilesPage({
       deletedAt: trashView ? { not: null } : null,
       ...(trashView
         ? {}
-        : openFolder
+        : openAttached
+          ? { category: "DOCUMENT" as const, ...attachedWhere }
+          : openFolder
         ? { folderId: openFolder.id }
         : activeCategory === "DOCUMENT"
-          ? { category: "DOCUMENT" as const, folderId: null }
+          ? { category: "DOCUMENT" as const, folderId: null, NOT: attachedWhere }
           : activeCategory !== "ALL"
             ? { category: activeCategory as "PHOTO" | "VIDEO" | "PRESALE_PHOTO" }
             : {}),
@@ -177,13 +185,13 @@ export default async function FilesPage({
         </div>
       ) : null}
 
-      {openFolder && !trashView ? (
+      {(openFolder || openAttached) && !trashView ? (
         <div className="flex items-center gap-2 text-sm">
           <Link href={`/jobs/${job.id}/files`} className="font-medium text-[var(--bt-primary)] hover:underline">
             Documents
           </Link>
           <span className="text-[var(--bt-muted)]">/</span>
-          <span className="font-semibold text-[var(--bt-text)]">{openFolder.name}</span>
+          <span className="font-semibold text-[var(--bt-text)]">{openAttached ? "Attached Documents" : openFolder?.name}</span>
         </div>
       ) : null}
 
@@ -201,6 +209,21 @@ export default async function FilesPage({
               </tr>
             </thead>
             <tbody>
+              {attachedCount > 0 ? (
+                <tr className="border-b" style={{ borderColor: "var(--bt-border)" }}>
+                  <td className="px-4 py-3">
+                    <Link href={`/jobs/${job.id}/files?folder=attached`} className="font-medium text-[var(--bt-primary)] hover:underline">
+                      {"📎 "}
+                      Attached Documents
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[var(--bt-muted)]">Files on bills, POs, invoices, selections and daily logs</td>
+                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3 text-right text-[var(--bt-muted)]">{attachedCount}</td>
+                  <td className="px-4 py-3" />
+                </tr>
+              ) : null}
               {folders.map((folder) => (
                 <tr key={folder.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
                   <td className="px-4 py-3">
@@ -260,7 +283,7 @@ export default async function FilesPage({
 
       {showFolderTable && !trashView && filesWithUrls.length > 0 ? <h2 className="text-sm font-semibold text-[var(--bt-text)]">Documents not in a folder</h2> : null}
 
-      {trashView ? null : filesWithUrls.length === 0 && !(showFolderTable && folders.length > 0) ? (
+      {trashView ? null : filesWithUrls.length === 0 && !(showFolderTable && (folders.length > 0 || attachedCount > 0)) ? (
         <EmptyState title="No files yet" description="Documents, photos, and videos attached to this job will appear here." />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
