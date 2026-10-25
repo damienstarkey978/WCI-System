@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { formatDate } from "@/lib/format";
 import { workedHours } from "@/lib/time-clock/hours";
 
 import { ShiftsGrid } from "./shifts-grid";
@@ -14,12 +15,13 @@ export const dynamic = "force-dynamic";
 const TABS = [
   { key: "all", label: "Shifts" },
   { key: "pending", label: "Needs approval" },
+  { key: "map", label: "Map" },
 ] as const;
 
 export default async function TimeClockPage({ params, searchParams }: PageProps<"/jobs/[jobId]/time-clock">) {
   const { jobId } = await params;
   const { tab: tabParam } = await searchParams;
-  const tab = tabParam === "pending" ? "pending" : "all";
+  const tab = tabParam === "pending" ? "pending" : tabParam === "map" ? "map" : "all";
 
   let user;
   try {
@@ -72,6 +74,66 @@ export default async function TimeClockPage({ params, searchParams }: PageProps<
         ))}
       </nav>
 
+      {tab === "map" ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-[var(--bt-muted)]">
+            Where each worker clocked in and out, from the GPS the field app sent. Each point opens in Google Maps. Shifts without GPS are listed without a location.
+          </p>
+          <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+            <table className="w-full min-w-max text-left text-sm">
+              <thead>
+                <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+                  <th className="px-4 py-3">Worker</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Clock in</th>
+                  <th className="px-4 py-3">Clock out</th>
+                  <th className="px-4 py-3">Geofence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry) => {
+                  const point = (lat: number | null, lng: number | null) =>
+                    lat !== null && lng !== null ? (
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`} target="_blank" rel="noreferrer" className="text-[var(--bt-primary)] hover:underline">
+                        {lat.toFixed(5)}, {lng.toFixed(5)}
+                      </a>
+                    ) : (
+                      <span className="text-[var(--bt-muted)]">No GPS</span>
+                    );
+                  return (
+                    <tr key={entry.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                      <td className="px-4 py-2">{entry.user.email}</td>
+                      <td className="px-4 py-2 text-[var(--bt-muted)]">{formatDate(entry.clockInAt)}</td>
+                      <td className="px-4 py-2">{point(entry.gpsInLatitude, entry.gpsInLongitude)}</td>
+                      <td className="px-4 py-2">{entry.clockOutAt ? point(entry.gpsOutLatitude, entry.gpsOutLongitude) : <span className="text-[var(--bt-muted)]">In progress</span>}</td>
+                      <td className="px-4 py-2">
+                        {entry.geofenceStatus === "OUTSIDE" ? (
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", color: "var(--bt-danger)" }}>
+                            OUTSIDE
+                          </span>
+                        ) : entry.geofenceStatus === "INSIDE" ? (
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}>
+                            INSIDE
+                          </span>
+                        ) : (
+                          <span className="text-[var(--bt-muted)]">Not checked</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {entries.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-6 text-center text-[var(--bt-muted)]">
+                      No shifts yet.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
       <ShiftsGrid
         canReview={canReview}
         rows={entries.map((entry) => ({
@@ -86,6 +148,7 @@ export default async function TimeClockPage({ params, searchParams }: PageProps<
           approvalStatus: entry.approvalStatus,
         }))}
       />
+      )}
     </div>
   );
 }
