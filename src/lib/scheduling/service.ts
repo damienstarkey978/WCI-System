@@ -99,6 +99,8 @@ export interface UpdateScheduleItemInput {
   readonly assigneeUserIds?: readonly string[];
   /** Basis points, 0 to 10000; clamped. */
   readonly percentCompleteBasisPoints?: number;
+  /** A phase on the same schedule, or null to ungroup. */
+  readonly phaseId?: string | null;
 }
 
 export async function updateScheduleItem(input: UpdateScheduleItemInput) {
@@ -119,6 +121,7 @@ export async function updateScheduleItem(input: UpdateScheduleItemInput) {
       ...(input.clientVisible !== undefined ? { clientVisible: input.clientVisible } : {}),
       ...(input.subVisible !== undefined ? { subVisible: input.subVisible } : {}),
       ...(input.assigneeUserIds !== undefined ? { assigneeUserIds: [...input.assigneeUserIds] } : {}),
+      ...(input.phaseId !== undefined ? { phaseId: await validPhaseId(existing.scheduleId, input.phaseId) } : {}),
       ...(input.percentCompleteBasisPoints !== undefined ? { percentCompleteBasisPoints: clampBasisPoints(input.percentCompleteBasisPoints) } : {}),
     },
   });
@@ -148,7 +151,8 @@ export async function getComputedSchedule(organizationId: string, scheduleId: st
   const items = schedule.items.map((item) => ({ ...item, ...computedById.get(item.id)! }));
 
   return {
-    schedule: { id: schedule.id, jobId: schedule.jobId, name: schedule.name },
+    schedule: { id: schedule.id, jobId: schedule.jobId, name: schedule.name, isOnline: schedule.isOnline, isDraft: schedule.isDraft },
+    phases: await db.schedulePhase.findMany({ where: { scheduleId: schedule.id }, orderBy: { sortOrder: "asc" } }),
     items,
     projectFinishDate: projectFinishDate(computed),
   };
@@ -192,4 +196,52 @@ export async function addNonWorkingDay(organizationId: string, isoDate: string, 
 
 export async function deleteNonWorkingDay(organizationId: string, id: string) {
   await db.nonWorkingDay.deleteMany({ where: { id, organizationId } });
+}
+
+async function validPhaseId(scheduleId: string, phaseId: string | null): Promise<string | null> {
+  if (phaseId === null) return null;
+  const phase = await db.schedulePhase.findFirst({ where: { id: phaseId, scheduleId }, select: { id: true } });
+  if (!phase) throw new SchedulePhaseNotFoundError(phaseId);
+  return phase.id;
+}
+
+export class SchedulePhaseNotFoundError extends Error {
+  constructor(phaseId: string) {
+    super(`Phase ${phaseId} not found on this schedule`);
+    this.name = "SchedulePhaseNotFoundError";
+  }
+}
+
+export class SchedulePhaseNameTakenError extends Error {
+  constructor(name: string) {
+    super(`A phase named "${name}" already exists on this schedule.`);
+    this.name = "SchedulePhaseNameTakenError";
+  }
+}
+
+export async function createSchedulePhase(organizationId: string, scheduleId: string, rawName: string) {
+  const name = rawName.replace(/\s+/g, " ").trim();
+  if (!name) throw new Error("Phase name is required.");
+
+  const schedule = await db.schedule.findFirst({ where: { id: scheduleId, organizationId }, select: { id: true } });
+  if (!schedule) throw new ScheduleNotFoundError(scheduleId);
+
+  const taken = await db.schedulePhase.findFirst({ where: { scheduleId, name: { equals: name, mode: "insensitive" } }, select: { id: true } });
+  if (taken) throw new SchedulePhaseNameTakenError(name);
+
+  const last = await db.schedulePhase.findFirst({ where: { scheduleId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+  return db.schedulePhase.create({ data: { scheduleId, name, sortOrder: (last?.sortOrder ?? -1) + 1 } });
+}
+
+/** Items in the phase are ungrouped, never deleted (ScheduleItem.phaseId is SetNull). */
+export async function deleteSchedulePhase(organizationId: string, phaseId: string) {
+  const phase = await db.schedulePhase.findFirst({ where: { id: phaseId, schedule: { organizationId } }, select: { id: true } });
+  if (!phase) throw new SchedulePhaseNotFoundError(phaseId);
+  await db.schedulePhase.delete({ where: { id: phase.id } });
+}
+
+export async function setScheduleFlags(organizationId: string, scheduleId: string, flags: { isOnline?: boolean; isDraft?: boolean }) {
+  const schedule = await db.schedule.findFirst({ where: { id: scheduleId, organizationId }, select: { id: true } });
+  if (!schedule) throw new ScheduleNotFoundError(scheduleId);
+  return db.schedule.update({ where: { id: scheduleId }, data: flags });
 }

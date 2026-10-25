@@ -7,11 +7,15 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDateUtc as formatDate } from "@/lib/format";
+import { isSchedulePublished } from "@/lib/scheduling/publish";
 import { getComputedSchedule, listNonWorkingDays } from "@/lib/scheduling/service";
 
+import { deletePhaseAction } from "./actions";
 import { AddItemForm } from "./add-item-form";
 import { CreateScheduleButton } from "./create-schedule-button";
+import { PhaseForm } from "./phase-form";
 import { ScheduleCalendar } from "./schedule-calendar";
+import { ScheduleSwitch } from "./schedule-switch";
 import { ScheduleListGrid } from "./schedule-list-grid";
 import { WorkdayExceptions } from "./workday-exceptions";
 import { SnapshotBaselineButton } from "./snapshot-baseline-button";
@@ -35,9 +39,10 @@ type ViewKey = (typeof VIEWS)[number]["key"];
 
 export default async function JobSchedulePage({ params, searchParams }: PageProps<"/jobs/[jobId]/schedule">) {
   const { jobId } = await params;
-  const { view: viewParam, month: monthParam, tab: tabParam, critical: criticalParam } = await searchParams;
+  const { view: viewParam, month: monthParam, tab: tabParam, critical: criticalParam, phases: phasesParam } = await searchParams;
   const tab: TabKey = TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : "schedule";
   const criticalOnly = criticalParam === "1";
+  const phasesOn = phasesParam === "1";
   const view: ViewKey = VIEWS.some((v) => v.key === viewParam) ? (viewParam as ViewKey) : "gantt";
 
   let user;
@@ -70,7 +75,8 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
     );
   }
 
-  const { items: allItems, projectFinishDate } = await getComputedSchedule(user.organizationId, scheduleRow.id);
+  const { items: allItems, projectFinishDate, phases, schedule: scheduleFlags } = await getComputedSchedule(user.organizationId, scheduleRow.id);
+  const published = isSchedulePublished(scheduleFlags);
   const items = criticalOnly ? allItems.filter((item) => item.isCriticalPath) : allItems;
 
   if (allItems.length === 0) {
@@ -99,6 +105,17 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
   const monthMatch = typeof monthParam === "string" ? /^(\d{4})-(\d{2})$/.exec(monthParam) : null;
   const calendarYear = monthMatch ? Number(monthMatch[1]) : rangeStart.getUTCFullYear();
   const calendarMonthIndex = monthMatch ? Math.min(11, Math.max(0, Number(monthMatch[2]) - 1)) : rangeStart.getUTCMonth();
+  type GanttRow = { type: "phase"; id: string; name: string } | { type: "item"; item: (typeof items)[number] };
+  const ganttRows: GanttRow[] = phasesOn
+    ? [
+        ...phases.flatMap((phase) => {
+          const inPhase = items.filter((item) => item.phaseId === phase.id);
+          return [{ type: "phase" as const, id: phase.id, name: phase.name }, ...inPhase.map((item) => ({ type: "item" as const, item }))];
+        }),
+        ...(items.some((item) => !item.phaseId) ? [{ type: "phase" as const, id: "none", name: "No phase" }] : []),
+        ...items.filter((item) => !item.phaseId).map((item) => ({ type: "item" as const, item })),
+      ]
+    : items.map((item) => ({ type: "item" as const, item }));
   const hasBaseline = allItems.some((item) => item.baselineEnd !== null);
 
   return (
@@ -207,7 +224,32 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
             </span>
             Critical path
           </Link>
+          <Link
+            href={`/jobs/${job.id}/schedule?view=${view}${criticalOnly ? "&critical=1" : ""}${phasesOn ? "" : "&phases=1"}`}
+            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--bt-text)]"
+            aria-pressed={phasesOn}
+          >
+            <span className="relative inline-block h-5 w-9 rounded-full" style={{ background: phasesOn ? "var(--bt-primary)" : "#d1d5db" }}>
+              <span className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all" style={{ left: phasesOn ? "18px" : "2px" }} />
+            </span>
+            Phases
+          </Link>
+          {phasesOn ? (
+            <CreateModal triggerLabel="+ Phase" title="New phase" variant="secondary">
+              <PhaseForm jobId={job.id} scheduleId={scheduleRow.id} />
+            </CreateModal>
+          ) : null}
+          <div className="ml-auto flex items-center gap-4">
+            <ScheduleSwitch jobId={job.id} scheduleId={scheduleRow.id} field="isDraft" on={scheduleFlags.isDraft} label="Draft mode" title="While on, the schedule is hidden from clients and subs." />
+            <ScheduleSwitch jobId={job.id} scheduleId={scheduleRow.id} field="isOnline" on={scheduleFlags.isOnline} label="Schedule Online" title="Share this schedule with clients and subs." />
+          </div>
         </div>
+      ) : null}
+
+      {tab === "schedule" && !published ? (
+        <p className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: "var(--bt-hazard)", color: "var(--bt-hazard)" }}>
+          {scheduleFlags.isDraft ? "Draft mode is on." : "Schedule Online is off."} Clients and subs cannot see this schedule.
+        </p>
       ) : null}
 
       {tab === "schedule" && view === "list" ? (
@@ -223,7 +265,10 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
             confirmed: item.confirmationStatus !== "UNCONFIRMED",
             jobId: job.id,
             percentComplete: item.percentCompleteBasisPoints / 100,
+            phaseId: item.phaseId,
           }))}
+          phases={phases.map((phase) => ({ id: phase.id, name: phase.name }))}
+          showPhases={phasesOn}
         />
       ) : null}
 
@@ -246,7 +291,24 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
           <div className="flex-1 px-4 py-3">Timeline</div>
         </div>
 
-        {items.map((item) => {
+        {ganttRows.map((row) => {
+          if (row.type === "phase") {
+            return (
+              <div key={`phase-${row.id}`} className="flex items-center justify-between border-b px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--bt-text)]" style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}>
+                {row.name}
+                {row.id !== "none" ? (
+                  <form action={deletePhaseAction}>
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input type="hidden" name="phaseId" value={row.id} />
+                    <button type="submit" className="text-[10px] font-medium normal-case text-[var(--bt-muted)] hover:text-red-600 hover:underline" title="Tasks in the phase are kept and ungrouped">
+                      Delete phase
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            );
+          }
+          const item = row.item;
           const offsetDays = Math.round((item.startDate.getTime() - rangeStart.getTime()) / MS_PER_DAY);
           const spanDays = Math.round((item.endDate.getTime() - item.startDate.getTime()) / MS_PER_DAY) + 1;
           const leftPct = (offsetDays / totalDays) * 100;

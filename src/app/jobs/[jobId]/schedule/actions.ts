@@ -6,6 +6,11 @@ import { requireAppUser } from "@/lib/auth";
 import {
   addNonWorkingDay,
   addScheduleItem,
+  createSchedulePhase,
+  deleteSchedulePhase,
+  SchedulePhaseNameTakenError,
+  SchedulePhaseNotFoundError,
+  setScheduleFlags,
   createSchedule,
   deleteNonWorkingDay,
   JobNotFoundError,
@@ -136,5 +141,62 @@ export async function deleteWorkdayExceptionAction(formData: FormData): Promise<
   const user = await requireAppUser();
   const jobId = String(formData.get("jobId") ?? "");
   await deleteNonWorkingDay(user.organizationId, String(formData.get("id") ?? ""));
+  revalidatePath(`/jobs/${jobId}/schedule`);
+}
+
+export async function createPhaseAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const scheduleId = String(formData.get("scheduleId") ?? "");
+
+  try {
+    await createSchedulePhase(user.organizationId, scheduleId, String(formData.get("name") ?? ""));
+  } catch (error) {
+    if (error instanceof SchedulePhaseNameTakenError || error instanceof ScheduleNotFoundError) return { error: error.message };
+    if (error instanceof Error && error.message === "Phase name is required.") return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/schedule`);
+  return { ok: true };
+}
+
+export async function deletePhaseAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  try {
+    await deleteSchedulePhase(user.organizationId, String(formData.get("phaseId") ?? ""));
+  } catch (error) {
+    if (!(error instanceof SchedulePhaseNotFoundError)) throw error;
+  }
+  revalidatePath(`/jobs/${jobId}/schedule`);
+}
+
+export async function setItemPhaseAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  try {
+    await updateScheduleItem({
+      organizationId: user.organizationId,
+      itemId: String(formData.get("itemId") ?? ""),
+      phaseId: String(formData.get("phaseId") ?? "") || null,
+    });
+  } catch (error) {
+    if (!(error instanceof SchedulePhaseNotFoundError) && !(error instanceof ScheduleItemNotFoundError)) throw error;
+  }
+  revalidatePath(`/jobs/${jobId}/schedule`);
+}
+
+export async function setScheduleFlagAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const field = String(formData.get("field") ?? "");
+  if (field !== "isOnline" && field !== "isDraft") return;
+
+  try {
+    await setScheduleFlags(user.organizationId, String(formData.get("scheduleId") ?? ""), { [field]: formData.get("value") === "true" });
+  } catch (error) {
+    if (!(error instanceof ScheduleNotFoundError)) throw error;
+  }
   revalidatePath(`/jobs/${jobId}/schedule`);
 }

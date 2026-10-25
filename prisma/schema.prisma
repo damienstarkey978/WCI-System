@@ -1704,6 +1704,25 @@ model NonWorkingDay {
   @@index([organizationId])
 }
 
+/// A named group of schedule items (Buildertrend's Phases toggle), e.g. "Framing".
+/// Items point at a phase with ScheduleItem.phaseId; deleting a phase ungroups its
+/// items, it never deletes them.
+model SchedulePhase {
+  id         String   @id @default(cuid())
+  scheduleId String
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  name      String
+  sortOrder Int    @default(0)
+
+  createdAt DateTime @default(now())
+
+  items ScheduleItem[]
+
+  @@unique([scheduleId, name])
+  @@index([scheduleId, sortOrder])
+}
+
 /// One per job in the common case, mirroring DrawSchedule's shape.
 model Schedule {
   id             String       @id @default(cuid())
@@ -1714,10 +1733,19 @@ model Schedule {
 
   name String @default("Schedule")
 
+  /// "Schedule Online": the master switch for sharing this schedule outside the office.
+  /// Off hides it from the client portal, the vendor portal and client update digests.
+  isOnline Boolean @default(true)
+  /// "Draft mode": while on, the schedule is treated as unpublished and is hidden from
+  /// the same outside surfaces, so it can be reworked without clients or subs seeing it
+  /// half done. Effective visibility is isOnline && !isDraft (src/lib/scheduling/publish.ts).
+  isDraft  Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items ScheduleItem[]
+  items  ScheduleItem[]
+  phases SchedulePhase[]
 
   @@index([jobId])
 }
@@ -1758,6 +1786,9 @@ model ScheduleItem {
 
   sortOrder Int @default(0)
 
+  phaseId String?
+  phase   SchedulePhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+
   /// Bills booked against this schedule task.
   bills Bill[]
 
@@ -1765,6 +1796,7 @@ model ScheduleItem {
   updatedAt DateTime @updatedAt
 
   @@index([scheduleId, sortOrder])
+  @@index([phaseId])
 }
 
 // ---------------------------------------------------------------------------

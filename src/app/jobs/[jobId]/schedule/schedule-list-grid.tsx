@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
 import { formatDateUtc } from "@/lib/format";
 
-import { setScheduleItemProgressAction, type ActionState } from "./actions";
+import { setItemPhaseAction, setScheduleItemProgressAction, type ActionState } from "./actions";
 
 export interface ScheduleListRow {
   readonly id: string;
@@ -18,6 +18,12 @@ export interface ScheduleListRow {
   readonly confirmed: boolean;
   readonly jobId: string;
   readonly percentComplete: number;
+  readonly phaseId: string | null;
+}
+
+export interface PhaseOption {
+  readonly id: string;
+  readonly name: string;
 }
 
 function ProgressCell({ jobId, itemId, percent }: { jobId: string; itemId: string; percent: number }) {
@@ -46,7 +52,7 @@ function ProgressCell({ jobId, itemId, percent }: { jobId: string; itemId: strin
 }
 
 /** Client half of the Schedule list view; see purchase-orders-grid.tsx for why the split exists. */
-export function ScheduleListGrid({ rows }: { rows: readonly ScheduleListRow[] }) {
+export function ScheduleListGrid({ rows, phases, showPhases }: { rows: readonly ScheduleListRow[]; phases: readonly PhaseOption[]; showPhases: boolean }) {
   const columns: DataGridColumn<ScheduleListRow>[] = [
     { key: "title", header: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title}</span> },
     { key: "start", header: "Start", sortable: true, render: (row) => formatDateUtc(new Date(row.startDate)) },
@@ -65,6 +71,31 @@ export function ScheduleListGrid({ rows }: { rows: readonly ScheduleListRow[] })
           ""
         ),
     },
+    ...(showPhases
+      ? [
+          {
+            key: "phase",
+            header: "Phase",
+            render: (row: ScheduleListRow) => (
+              <form action={setItemPhaseAction} className="flex items-center gap-1">
+                <input type="hidden" name="jobId" value={row.jobId} />
+                <input type="hidden" name="itemId" value={row.id} />
+                <select name="phaseId" defaultValue={row.phaseId ?? ""} aria-label="Phase" className="max-w-36 rounded border px-1.5 py-1 text-sm" style={{ borderColor: "var(--bt-border)" }}>
+                  <option value="">No phase</option>
+                  {phases.map((phase) => (
+                    <option key={phase.id} value={phase.id}>
+                      {phase.name}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
+                  Set
+                </button>
+              </form>
+            ),
+          },
+        ]
+      : []),
     {
       key: "progress",
       header: "% complete",

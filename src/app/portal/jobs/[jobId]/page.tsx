@@ -5,6 +5,7 @@ import { currentPortalSession } from "@/lib/client-portal/browser-session";
 import { db } from "@/lib/db";
 import { resolveFileUrlSafe } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
+import { isSchedulePublished } from "@/lib/scheduling/publish";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 import { markInvoicesViewedByClient } from "@/lib/invoicing/service";
 import { getClientBudgetView } from "@/lib/client-portal/service";
@@ -68,7 +69,7 @@ export default async function PortalJobPage({ params }: PageProps<"/portal/jobs/
   // chasing a late payment.
   if (invoices) await markInvoicesViewedByClient(invoices.map((invoice) => invoice.id));
 
-  const schedule = scheduleRow ? await getComputedSchedule(session.organizationId, scheduleRow.id) : null;
+  const schedule = scheduleRow && isSchedulePublished(scheduleRow) ? await getComputedSchedule(session.organizationId, scheduleRow.id) : null;
   const budget = access.canViewBudget ? await getClientBudgetView(session.organizationId, jobId) : null;
   // A client seeing a blank error page because one document row is broken is the
   // worst version of this failure — they have no way to know it isn't their problem.

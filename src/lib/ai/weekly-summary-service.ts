@@ -12,6 +12,7 @@
 
 import { db } from "@/lib/db";
 import { generateWeeklySummary } from "@/lib/ai/weekly-summary-assistant";
+import { isSchedulePublished } from "@/lib/scheduling/publish";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 
 export class JobNotFoundError extends Error {
@@ -39,9 +40,10 @@ async function buildClientSafeActivityText(organizationId: string, jobId: string
     select: { createdAt: true, note: true },
   });
 
-  const schedule = await db.schedule.findFirst({ where: { organizationId, jobId }, select: { id: true } });
+  const schedule = await db.schedule.findFirst({ where: { organizationId, jobId }, select: { id: true, isOnline: true, isDraft: true } });
   const scheduleLines: string[] = [];
-  if (schedule) {
+  // An offline or draft schedule is not shared with clients, so it must not leak into their digest either.
+  if (schedule && isSchedulePublished(schedule)) {
     const computed = await getComputedSchedule(organizationId, schedule.id);
     for (const item of computed.items) {
       if (!item.clientVisible) continue;

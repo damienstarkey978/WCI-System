@@ -2,6 +2,7 @@
 
 import { authenticatePortalJobRequest, portalAuthErrorResponse } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
+import { isSchedulePublished } from "@/lib/scheduling/publish";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 
 type Context = { params: Promise<{ jobId: string }> };
@@ -13,7 +14,7 @@ export async function GET(request: Request, context: Context) {
     const client = await authenticatePortalJobRequest(request, jobId, "canViewSchedule");
 
     const schedule = await db.schedule.findFirst({ where: { organizationId: client.organizationId, jobId } });
-    if (!schedule) return Response.json({ data: null });
+    if (!schedule || !isSchedulePublished(schedule)) return Response.json({ data: null });
 
     const computed = await getComputedSchedule(client.organizationId, schedule.id);
 
