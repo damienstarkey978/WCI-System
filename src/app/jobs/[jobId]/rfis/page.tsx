@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -20,8 +21,16 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   CLOSED: { bg: "#e5e7eb", text: "#374151" },
 };
 
-export default async function RfisPage({ params }: PageProps<"/jobs/[jobId]/rfis">) {
+const TABS = [
+  { key: "all", label: "All RFIs" },
+  { key: "open", label: "Open" },
+  { key: "closed", label: "Closed" },
+] as const;
+
+export default async function RfisPage({ params, searchParams }: PageProps<"/jobs/[jobId]/rfis">) {
   const { jobId } = await params;
+  const { tab: tabParam } = await searchParams;
+  const tab = TABS.some((t) => t.key === tabParam) ? (tabParam as (typeof TABS)[number]["key"]) : "all";
 
   let user;
   try {
@@ -38,7 +47,7 @@ export default async function RfisPage({ params }: PageProps<"/jobs/[jobId]/rfis
 
   const [rfis, users] = await Promise.all([
     db.rfi.findMany({
-      where: { jobId: job.id },
+      where: { jobId: job.id, ...(tab === "open" ? { status: { not: "CLOSED" as const } } : tab === "closed" ? { status: "CLOSED" as const } : {}) },
       orderBy: { createdAt: "desc" },
       include: { assigneeUser: true },
     }),
@@ -59,6 +68,19 @@ export default async function RfisPage({ params }: PageProps<"/jobs/[jobId]/rfis
         }
       />
 
+
+      <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+        {TABS.map((t) => (
+          <Link
+            key={t.key}
+            href={`/jobs/${job.id}/rfis${t.key === "all" ? "" : `?tab=${t.key}`}`}
+            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+            style={{ borderColor: t.key === tab ? "var(--bt-primary)" : "transparent", color: t.key === tab ? "var(--bt-primary)" : "var(--bt-muted)" }}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
 
       {rfis.length === 0 ? (
         <EmptyState title="No RFIs yet" description="Requests for information created for this job will appear here." />

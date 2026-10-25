@@ -33,13 +33,13 @@ export default async function ClientUpdatesPage({ params }: PageProps<"/jobs/[jo
   });
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <PageHeader jobName={job.name} title="Client Updates" action={<GenerateSummaryButton jobId={job.id} />} />
 
       {summaries.length === 0 ? (
         <EmptyState title="No client updates yet" description="Weekly AI-generated client update summaries for this job will appear here." />
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           {summaries.map((summary) => (
             <article key={summary.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
               <div className="flex items-center justify-between">
