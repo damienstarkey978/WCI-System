@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -6,6 +7,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
+import { FinancialPageHeader } from "../financial-tabs";
 import { approveCostInboxBillAction, voidCostInboxBillAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -39,9 +41,18 @@ export default async function CostInboxPage({ params }: PageProps<"/jobs/[jobId]
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Cost inbox — {job.name}</h1>
-        <p className="mt-1 text-sm text-[var(--bt-muted)]">AI-scanned receipts and bills awaiting your review before they hit the budget.</p>
+      <FinancialPageHeader jobName={job.name} title="Cost Inbox" />
+
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3 text-sm"
+        style={{ borderColor: "var(--bt-primary)", background: "color-mix(in srgb, var(--bt-primary) 8%, transparent)" }}
+      >
+        <span className="text-[var(--bt-text)]">
+          <span className="font-semibold">Cost Inbox is moving to Bills.</span> Scanned receipts and bills awaiting review are also in Bills, under In review.
+        </span>
+        <Link href={`/jobs/${job.id}/bills?status=IN_REVIEW`} className="font-semibold text-[var(--bt-primary)] hover:underline">
+          Switch to Bills
+        </Link>
       </div>
 
       {bills.length === 0 ? (
