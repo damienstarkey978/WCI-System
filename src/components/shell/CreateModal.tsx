@@ -23,6 +23,7 @@ export function CreateModal({
   children,
   open: controlledOpen,
   onOpenChange,
+  variant = "primary",
 }: {
   triggerLabel: string;
   title: string;
@@ -30,6 +31,8 @@ export function CreateModal({
   /** Pass both to control the modal from the parent (e.g. close it after a redirect). Omit for the default uncontrolled behavior. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** "secondary" is the outlined button for a page's non-primary actions (Import, Use template). */
+  variant?: "primary" | "secondary";
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
@@ -40,8 +43,12 @@ export function CreateModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
-        style={{ background: "var(--bt-primary)" }}
+        className={
+          variant === "primary"
+            ? "rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
+            : "rounded border px-3 py-2 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5"
+        }
+        style={variant === "primary" ? { background: "var(--bt-primary)" } : { borderColor: "var(--bt-border)" }}
       >
         {triggerLabel}
       </button>
