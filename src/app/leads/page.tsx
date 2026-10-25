@@ -1,23 +1,11 @@
-import Link from "next/link";
-
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate, formatMoney } from "@/lib/format";
 
 import { AddLeadOpportunityModal } from "./add-lead-opportunity-modal";
-import { StageSelect } from "./stage-select";
+import { LeadsGrid } from "./leads-grid";
 
 export const dynamic = "force-dynamic";
-
-const STAGE_STYLE: Record<string, { bg: string; text: string }> = {
-  NEW: { bg: "#e5e7eb", text: "#374151" },
-  CONTACTED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  QUALIFIED: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  PROPOSAL_SENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  WON: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  LOST: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
-};
 
 function ageDays(createdAt: Date): number {
   return Math.max(0, Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24)));
@@ -52,74 +40,21 @@ export default async function LeadsPage() {
 
       <AddLeadOpportunityModal clients={clients} />
 
-      {leads.length === 0 ? (
-        <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-          No lead opportunities yet.
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-                <th className="whitespace-nowrap px-4 py-3">Title</th>
-                <th className="whitespace-nowrap px-4 py-3">Client contact</th>
-                <th className="whitespace-nowrap px-4 py-3">Created date</th>
-                <th className="whitespace-nowrap px-4 py-3">Lead status</th>
-                <th className="whitespace-nowrap px-4 py-3 text-right">Age</th>
-                <th className="whitespace-nowrap px-4 py-3 text-right">Confidence</th>
-                <th className="whitespace-nowrap px-4 py-3 text-right">Est. revenue min</th>
-                <th className="whitespace-nowrap px-4 py-3 text-right">Est. revenue max</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => {
-                const style = STAGE_STYLE[lead.stage] ?? STAGE_STYLE.NEW;
-                return (
-                  <tr key={lead.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <Link href={`/leads/${lead.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
-                        {lead.title ?? lead.name}
-                      </Link>
-                      {lead.convertedJobId ? (
-                        <div className="text-[10px] font-semibold text-[var(--bt-status-open-text)]">Converted</div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--bt-muted)]">
-                      {lead.name}
-                      {lead.email ? <div className="text-xs">{lead.email}</div> : null}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-[var(--bt-muted)]">{formatDate(lead.createdAt)}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <StageSelect leadId={lead.id} stage={lead.stage} />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-[var(--bt-muted)]">{ageDays(lead.createdAt)} days</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-black/10">
-                          <div className="h-full rounded-full" style={{ width: `${lead.confidencePercent}%`, background: "var(--bt-primary)" }} />
-                        </div>
-                        <span className="text-[var(--bt-text)]">{lead.confidencePercent}%</span>
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-[var(--bt-text)]">
-                      {lead.estimatedRevenueMinCents !== null ? formatMoney(lead.estimatedRevenueMinCents) : "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-[var(--bt-text)]">
-                      {lead.estimatedRevenueMaxCents !== null ? formatMoney(lead.estimatedRevenueMaxCents) : "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-                        {lead.stage.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <LeadsGrid
+        rows={leads.map((lead) => ({
+          id: lead.id,
+          title: lead.title ?? lead.name,
+          converted: lead.convertedJobId !== null,
+          contactName: lead.name,
+          contactEmail: lead.email,
+          createdAt: lead.createdAt.toISOString(),
+          stage: lead.stage,
+          ageDays: ageDays(lead.createdAt),
+          confidencePercent: lead.confidencePercent,
+          revenueMinCents: lead.estimatedRevenueMinCents,
+          revenueMaxCents: lead.estimatedRevenueMaxCents,
+        }))}
+      />
     </div>
   );
 }
