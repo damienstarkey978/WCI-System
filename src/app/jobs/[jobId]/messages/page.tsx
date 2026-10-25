@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -35,7 +36,7 @@ export default async function MessagesPage({ params }: PageProps<"/jobs/[jobId]/
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Messaging — {job.name}</h1>
+      <PageHeader jobName={job.name} title="Messages" />
 
       <div className="flex flex-col rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex flex-col gap-3 p-4">

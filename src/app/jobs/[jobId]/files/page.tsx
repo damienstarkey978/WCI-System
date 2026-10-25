@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -15,10 +17,10 @@ export const dynamic = "force-dynamic";
 
 const CATEGORIES = [
   { value: "ALL", label: "All" },
-  { value: "PHOTO", label: "Photos" },
-  { value: "PRESALE_PHOTO", label: "Pre-Sale Photos" },
   { value: "DOCUMENT", label: "Documents" },
+  { value: "PHOTO", label: "Photos" },
   { value: "VIDEO", label: "Videos" },
+  { value: "PRESALE_PHOTO", label: "Pre-Sale Photos" },
 ] as const;
 
 export default async function FilesPage({
@@ -69,22 +71,31 @@ export default async function FilesPage({
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Files — {job.name}</h1>
+      <PageHeader
+        jobName={job.name}
+        title="Files"
+        action={
+          <CreateModal triggerLabel="+ Upload" title="Upload a file">
+            <UploadForm jobId={job.id} />
+          </CreateModal>
+        }
+      />
 
-      <UploadForm jobId={job.id} />
-
-      <div className="flex gap-2 border-b pb-2" style={{ borderColor: "var(--bt-border)" }}>
+      <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
         {CATEGORIES.map((cat) => (
           <Link
             key={cat.value}
             href={`/jobs/${job.id}/files${cat.value === "ALL" ? "" : `?category=${cat.value}`}`}
-            className="rounded px-3 py-1.5 text-sm font-medium"
-            style={activeCategory === cat.value ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" } : { color: "var(--bt-muted)" }}
+            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+            style={{
+              borderColor: activeCategory === cat.value ? "var(--bt-primary)" : "transparent",
+              color: activeCategory === cat.value ? "var(--bt-primary)" : "var(--bt-muted)",
+            }}
           >
             {cat.label}
           </Link>
         ))}
-      </div>
+      </nav>
 
       {filesWithUrls.length === 0 ? (
         <EmptyState title="No files yet" description="Documents, photos, and videos attached to this job will appear here." />

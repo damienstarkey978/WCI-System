@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/shell/PageHeader";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -79,7 +80,7 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Comments — {job.name}</h1>
+      <PageHeader jobName={job.name} title="Comments" />
 
       {rows.length === 0 ? (
         <EmptyState title="No comments yet" description="Internal discussion left on this job's invoices and proposals will appear here." />
