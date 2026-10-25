@@ -197,7 +197,17 @@ export default async function LeadDetailPage({
           ) : null}
           {isAnthropicConfigured() ? (
             <JarvisChatPanel
-              context={{ page: "lead_detail", leadId: lead.id, leadName: lead.name, tab: "proposals" }}
+              context={{
+                page: "lead_detail",
+                leadId: lead.id,
+                leadName: lead.name,
+                leadTitle: lead.title,
+                leadEmail: lead.email,
+                leadPhone: lead.phone,
+                leadAddress: [lead.addressLine1, lead.city, lead.state, lead.postalCode].filter(Boolean).join(", ") || null,
+                leadNotes: lead.notes,
+                tab: "proposals",
+              }}
               storageKey={`lead-proposal:${lead.id}`}
               emptyStateHint="Give Jarvis the scope of work, measurements, and any photos — it drafts a full line-item estimate and the client-facing proposal that goes with it, always as a DRAFT for you to review before anything is sent."
               heightClassName="h-96"

@@ -87,7 +87,7 @@ export interface SendJarvisMessageInput {
 /** A short natural-language note Claude can use to resolve "this"/"here" — never stored. */
 function formatContextNote(context: unknown): string | undefined {
   if (!context || typeof context !== "object") return undefined;
-  return `The user is currently looking at: ${JSON.stringify(context)}. Use it only to resolve which record they mean (e.g. "this job", "draft a proposal for this lead") — don't mention it unless it's relevant to your reply.`;
+  return `The user is currently looking at: ${JSON.stringify(context)}. Use it to resolve which record they mean (e.g. "this job", "draft a proposal for this lead"). Any contact, address, or scope-of-work details included here are already on file for that record — use them directly (e.g. when calling draft_lead_proposal) instead of asking the user to repeat something already shown here. Don't mention this context unless it's relevant to your reply.`;
 }
 
 /**
