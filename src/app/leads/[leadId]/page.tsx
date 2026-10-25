@@ -99,15 +99,11 @@ export default async function LeadDetailPage({
   );
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-xl font-semibold text-[var(--bt-text)]">{lead.title ?? lead.name}</h1>
-            <p className="text-xs text-[var(--bt-muted)]">
-              {lead.name}
-              {lead.email ? ` · ${lead.email}` : ""}
-            </p>
           </div>
           {lead.convertedJob ? (
             <Link href={`/jobs/${lead.convertedJob.id}`} className="text-sm font-medium text-[var(--bt-primary)] hover:underline">
@@ -122,6 +118,54 @@ export default async function LeadDetailPage({
         </Link>
       </div>
 
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <h2 className="text-sm font-semibold text-[var(--bt-text)]">Contact information</h2>
+        <div className="mt-3 flex items-start gap-4">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+            style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
+            aria-hidden
+          >
+            {lead.name
+              .split(/\s+/)
+              .map((part) => part[0])
+              .filter(Boolean)
+              .slice(0, 2)
+              .join("")
+              .toUpperCase()}
+          </div>
+          <div className="flex flex-col gap-0.5 text-sm text-[var(--bt-text)]">
+            <span className="font-medium">{lead.name}</span>
+            {[lead.addressLine1, lead.city, lead.state, lead.postalCode].some(Boolean) ? (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([lead.addressLine1, lead.city, lead.state, lead.postalCode].filter(Boolean).join(", "))}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[var(--bt-primary)] hover:underline"
+              >
+                {[lead.addressLine1, [lead.city, lead.state].filter(Boolean).join(", "), lead.postalCode].filter(Boolean).join(" ")}
+              </a>
+            ) : null}
+            {lead.phone ? (
+              <span>
+                <span className="text-[var(--bt-muted)]">Phone: </span>
+                <a href={`tel:${lead.phone}`} className="text-[var(--bt-primary)] hover:underline">
+                  {lead.phone}
+                </a>
+              </span>
+            ) : null}
+            {lead.email ? (
+              <span>
+                <span className="text-[var(--bt-muted)]">Primary email: </span>
+                <a href={`mailto:${lead.email}`} className="text-[var(--bt-primary)] hover:underline">
+                  {lead.email}
+                </a>
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
       <nav className="flex gap-1 overflow-x-auto border-b text-sm font-medium" style={{ borderColor: "var(--bt-border)" }}>
         {TABS.map((t) => (
           <Link
@@ -135,6 +179,7 @@ export default async function LeadDetailPage({
             }
           >
             {t.label}
+            {t.value === "activities" ? ` (${activities.length})` : t.value === "proposals" ? ` (${proposals.length})` : ""}
           </Link>
         ))}
       </nav>
