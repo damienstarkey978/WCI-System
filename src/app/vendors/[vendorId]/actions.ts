@@ -7,7 +7,7 @@ import { requireAppUser } from "@/lib/auth";
 import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
 import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
 import { syncVendorToQuickBooks } from "@/lib/quickbooks/sync/vendors";
-import { addCertification, grantVendorJobAccess, JobNotFoundError, VendorNotFoundError } from "@/lib/vendor-portal/service";
+import { addCertification, grantVendorJobAccess, JobNotFoundError, updateVendorContact, VendorNotFoundError } from "@/lib/vendor-portal/service";
 
 export interface ActionState {
   readonly error?: string;
@@ -86,5 +86,39 @@ export async function addVendorCertificationAction(_previous: ActionState, formD
   }
 
   revalidatePath(`/vendors/${vendorId}`);
+  return { ok: true };
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function updateVendorContactAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const text = (key: string) => String(formData.get(key) ?? "").trim();
+  const vendorId = text("vendorId");
+  const name = text("name");
+  const email = text("email").toLowerCase();
+
+  if (!name) return { error: "Company name is required." };
+  if (email && !EMAIL_PATTERN.test(email)) return { error: `"${email}" doesn't look like an email address.` };
+
+  try {
+    await updateVendorContact({
+      organizationId: user.organizationId,
+      vendorId,
+      name,
+      email: email || null,
+      primaryContact: text("primaryContact") || null,
+      phone: text("phone") || null,
+      cellPhone: text("cellPhone") || null,
+    });
+  } catch (error) {
+    if (error instanceof VendorNotFoundError) return { error: error.message };
+    if (error instanceof Error && /unique/i.test(error.message)) return { error: `Another vendor already uses the email "${email}".` };
+    throw error;
+  }
+
+  revalidatePath(`/vendors/${vendorId}`);
+  revalidatePath("/vendors");
   return { ok: true };
 }

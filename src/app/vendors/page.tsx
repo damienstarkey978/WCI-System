@@ -88,7 +88,10 @@ export default async function SubsVendorsPage({ searchParams }: PageProps<"/vend
   }
 
   const params = parseDirectoryParams(await searchParams, STATUSES);
-  const { totalCount, vendors } = await loadVendors(user.organizationId, params);
+  const [{ totalCount, vendors }, missingEmailCount] = await Promise.all([
+    loadVendors(user.organizationId, params),
+    db.vendor.count({ where: { organizationId: user.organizationId, email: null } }),
+  ]);
 
   const columns: readonly DirectoryColumn<VendorRow>[] = [
     {
@@ -142,6 +145,16 @@ export default async function SubsVendorsPage({ searchParams }: PageProps<"/vend
           { id: "create", label: "Sub/vendor", variant: "primary", content: <CreateVendorForm /> },
         ]}
       />
+
+      {missingEmailCount > 0 && params.status !== "no-email" ? (
+        <Link
+          href={directoryHref(BASE_PATH, params, { status: "no-email", page: 1 })}
+          className="flex w-fit items-center gap-2 rounded-md bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-200 dark:bg-amber-400/15 dark:text-amber-200"
+        >
+          {missingEmailCount} sub{missingEmailCount === 1 ? "" : "s"}/vendor{missingEmailCount === 1 ? "" : "s"} need an email to be invited to the portal
+          <span aria-hidden="true">›</span>
+        </Link>
+      ) : null}
 
       <DirectoryTable
         basePath={BASE_PATH}

@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 
 import { AddCertificationForm } from "./add-certification-form";
+import { EditVendorContactForm } from "./edit-contact-form";
 import { GrantJobAccessForm } from "./grant-job-access-form";
 import { SyncToQuickBooksButton } from "./sync-to-quickbooks-button";
 
@@ -54,6 +55,8 @@ export default async function VendorDetailPage({ params }: PageProps<"/vendors/[
           {vendor.activatedAt ? `Activated ${formatDate(vendor.activatedAt)}` : vendor.invitedAt ? `Invited ${formatDate(vendor.invitedAt)}, not yet activated` : "Not invited to the vendor portal yet"}
         </p>
       </div>
+
+      <EditVendorContactForm vendor={vendor} />
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Job access</h2>

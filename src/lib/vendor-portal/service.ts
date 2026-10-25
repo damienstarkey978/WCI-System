@@ -193,3 +193,24 @@ export async function acceptPurchaseOrder(input: AcceptPurchaseOrderInput) {
 
   return updated;
 }
+
+export interface UpdateVendorContactInput {
+  readonly organizationId: string;
+  readonly vendorId: string;
+  readonly name: string;
+  readonly email: string | null;
+  readonly primaryContact: string | null;
+  readonly phone: string | null;
+  readonly cellPhone: string | null;
+}
+
+/** Edit a vendor's company name and contact details — the way to add the email an imported sub came without. */
+export async function updateVendorContact(input: UpdateVendorContactInput) {
+  const existing = await db.vendor.findFirst({ where: { id: input.vendorId, organizationId: input.organizationId }, select: { id: true } });
+  if (!existing) throw new VendorNotFoundError(input.vendorId);
+
+  return db.vendor.update({
+    where: { id: input.vendorId },
+    data: { name: input.name, email: input.email, primaryContact: input.primaryContact, phone: input.phone, cellPhone: input.cellPhone },
+  });
+}

@@ -824,7 +824,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       "Create a new vendor/subcontractor record. This does NOT invite them to the vendor portal or notify them — it's just the record. Needed before inviting a vendor to bid or granting them job access.",
     inputSchema: z.object({
       name: z.string(),
-      email: z.string().optional().describe("Must be unique within this organization when given; omit if unknown (the vendor just can't be invited to the portal until one is added)"),
+      email: z.string().describe("Must be unique within this organization"),
       tradeType: z.string().optional().describe("e.g. Electrical, Plumbing, Framing"),
       phone: z.string().optional(),
       addressLine1: z.string().optional(),
@@ -836,7 +836,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       const vendor = await createVendor({
         organizationId: ctx.organizationId,
         name: input.name,
-        email: input.email?.trim() || null,
+        email: input.email.trim().toLowerCase(),
         tradeType: input.tradeType ?? null,
         phone: input.phone ?? null,
         addressLine1: input.addressLine1 ?? null,
@@ -844,7 +844,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         state: input.state ?? null,
         postalCode: input.postalCode ?? null,
       });
-      return `Created vendor "${vendor.name}" (${vendor.email ?? "no email"}).`;
+      return `Created vendor "${vendor.name}" (${vendor.email}).`;
     },
   });
 

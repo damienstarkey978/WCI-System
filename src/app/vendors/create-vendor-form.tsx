@@ -36,7 +36,7 @@ export function CreateVendorForm() {
         <Field label="Company name" name="name" required />
         <Field label="Trade" name="tradeType" placeholder="Electrical, Plumbing…" />
         <Field label="Primary contact" name="primaryContact" />
-        <Field label="Email (needed to invite them to the portal)" name="email" type="email" />
+        <Field label="Email" name="email" type="email" required />
         <Field label="Phone" name="phone" type="tel" />
         <Field label="Cell" name="cellPhone" type="tel" />
       </div>

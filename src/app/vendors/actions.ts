@@ -19,12 +19,13 @@ export async function createVendorAction(_previous: ActionState, formData: FormD
   const email = text("email").toLowerCase();
 
   if (!name) return { error: "Name is required." };
+  if (!email) return { error: "Email is required." };
 
   try {
     await createVendor({
       organizationId: user.organizationId,
       name,
-      email: email || null,
+      email,
       tradeType: text("tradeType") || null,
       primaryContact: text("primaryContact") || null,
       phone: text("phone") || null,
