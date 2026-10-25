@@ -18,6 +18,16 @@ export function formatMoney(cents: number): string {
   });
 }
 
+/**
+ * For date-only values stored as UTC midnight (schedule dates, workday exceptions).
+ * formatDate() uses the viewer's time zone, which shows these a day early for anyone
+ * west of UTC, and differs between the server render and the browser.
+ */
+export function formatDateUtc(date: Date | null): string {
+  if (!date) return "—";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
 export function formatDate(date: Date | null): string {
   if (!date) return "—";
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

@@ -4,9 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import { requireAppUser } from "@/lib/auth";
 import {
+  addNonWorkingDay,
   addScheduleItem,
   createSchedule,
+  deleteNonWorkingDay,
   JobNotFoundError,
+  NonWorkingDayExistsError,
   ScheduleItemNotFoundError,
   ScheduleNotFoundError,
   snapshotBaseline,
@@ -108,4 +111,30 @@ export async function setScheduleItemProgressAction(_previous: ActionState, form
 
   revalidatePath(`/jobs/${jobId}/schedule`);
   return { ok: true };
+}
+
+export async function addWorkdayExceptionAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Pick a date." };
+
+  try {
+    await addNonWorkingDay(user.organizationId, date, reason || null);
+  } catch (error) {
+    if (error instanceof NonWorkingDayExistsError) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/schedule`);
+  return { ok: true };
+}
+
+export async function deleteWorkdayExceptionAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  await deleteNonWorkingDay(user.organizationId, String(formData.get("id") ?? ""));
+  revalidatePath(`/jobs/${jobId}/schedule`);
 }

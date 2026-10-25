@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
-import { formatDate } from "@/lib/format";
+import { formatDateUtc } from "@/lib/format";
 
 import { setScheduleItemProgressAction, type ActionState } from "./actions";
 
@@ -49,8 +49,8 @@ function ProgressCell({ jobId, itemId, percent }: { jobId: string; itemId: strin
 export function ScheduleListGrid({ rows }: { rows: readonly ScheduleListRow[] }) {
   const columns: DataGridColumn<ScheduleListRow>[] = [
     { key: "title", header: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title}</span> },
-    { key: "start", header: "Start", sortable: true, render: (row) => formatDate(new Date(row.startDate)) },
-    { key: "end", header: "End", sortable: true, render: (row) => formatDate(new Date(row.endDate)) },
+    { key: "start", header: "Start", sortable: true, render: (row) => formatDateUtc(new Date(row.startDate)) },
+    { key: "end", header: "End", sortable: true, render: (row) => formatDateUtc(new Date(row.endDate)) },
     { key: "duration", header: "Duration", align: "right", render: (row) => `${row.durationDays} ${row.durationDays === 1 ? "day" : "days"}` },
     { key: "float", header: "Float", align: "right", render: (row) => `${row.floatDays} ${row.floatDays === 1 ? "day" : "days"}` },
     {

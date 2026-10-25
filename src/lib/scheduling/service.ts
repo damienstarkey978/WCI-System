@@ -169,3 +169,27 @@ export async function snapshotBaseline(organizationId: string, scheduleId: strin
 
   return getComputedSchedule(organizationId, scheduleId);
 }
+
+export class NonWorkingDayExistsError extends Error {
+  constructor(date: string) {
+    super(`${date} is already a workday exception.`);
+    this.name = "NonWorkingDayExistsError";
+  }
+}
+
+export async function listNonWorkingDays(organizationId: string) {
+  return db.nonWorkingDay.findMany({ where: { organizationId }, orderBy: { date: "asc" } });
+}
+
+/** `isoDate` is yyyy-mm-dd; stored as UTC midnight like everything the CPM engine reads. */
+export async function addNonWorkingDay(organizationId: string, isoDate: string, reason: string | null) {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid date ${isoDate}`);
+  const existing = await db.nonWorkingDay.findFirst({ where: { organizationId, date }, select: { id: true } });
+  if (existing) throw new NonWorkingDayExistsError(isoDate);
+  return db.nonWorkingDay.create({ data: { organizationId, date, reason } });
+}
+
+export async function deleteNonWorkingDay(organizationId: string, id: string) {
+  await db.nonWorkingDay.deleteMany({ where: { id, organizationId } });
+}

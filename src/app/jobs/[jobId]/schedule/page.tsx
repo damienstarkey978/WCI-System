@@ -6,13 +6,14 @@ import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate } from "@/lib/format";
-import { getComputedSchedule } from "@/lib/scheduling/service";
+import { formatDateUtc as formatDate } from "@/lib/format";
+import { getComputedSchedule, listNonWorkingDays } from "@/lib/scheduling/service";
 
 import { AddItemForm } from "./add-item-form";
 import { CreateScheduleButton } from "./create-schedule-button";
 import { ScheduleCalendar } from "./schedule-calendar";
 import { ScheduleListGrid } from "./schedule-list-grid";
+import { WorkdayExceptions } from "./workday-exceptions";
 import { SnapshotBaselineButton } from "./snapshot-baseline-button";
 
 export const dynamic = "force-dynamic";
@@ -20,15 +21,23 @@ export const dynamic = "force-dynamic";
 const MS_PER_DAY = 86_400_000;
 
 const VIEWS = [
-  { key: "gantt", label: "Gantt" },
   { key: "calendar", label: "Calendar" },
   { key: "list", label: "List" },
+  { key: "gantt", label: "Gantt" },
 ] as const;
+const TABS = [
+  { key: "schedule", label: "Schedule" },
+  { key: "baseline", label: "Baseline" },
+  { key: "exceptions", label: "Workday Exceptions" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
 type ViewKey = (typeof VIEWS)[number]["key"];
 
 export default async function JobSchedulePage({ params, searchParams }: PageProps<"/jobs/[jobId]/schedule">) {
   const { jobId } = await params;
-  const { view: viewParam, month: monthParam } = await searchParams;
+  const { view: viewParam, month: monthParam, tab: tabParam, critical: criticalParam } = await searchParams;
+  const tab: TabKey = TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : "schedule";
+  const criticalOnly = criticalParam === "1";
   const view: ViewKey = VIEWS.some((v) => v.key === viewParam) ? (viewParam as ViewKey) : "gantt";
 
   let user;
@@ -61,9 +70,10 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
     );
   }
 
-  const { items, projectFinishDate } = await getComputedSchedule(user.organizationId, scheduleRow.id);
+  const { items: allItems, projectFinishDate } = await getComputedSchedule(user.organizationId, scheduleRow.id);
+  const items = criticalOnly ? allItems.filter((item) => item.isCriticalPath) : allItems;
 
-  if (items.length === 0) {
+  if (allItems.length === 0) {
     return (
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         <PageHeader
@@ -82,14 +92,14 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
     );
   }
 
-  const allDates = items.flatMap((item) => [item.startDate, item.endDate, item.baselineStart, item.baselineEnd].filter((d): d is Date => d !== null));
+  const allDates = allItems.flatMap((item) => [item.startDate, item.endDate, item.baselineStart, item.baselineEnd].filter((d): d is Date => d !== null));
   const rangeStart = new Date(Math.min(...allDates.map((d) => d.getTime())));
   const rangeEnd = new Date(Math.max(...allDates.map((d) => d.getTime())));
   const totalDays = Math.max(1, Math.round((rangeEnd.getTime() - rangeStart.getTime()) / MS_PER_DAY) + 1);
   const monthMatch = typeof monthParam === "string" ? /^(\d{4})-(\d{2})$/.exec(monthParam) : null;
   const calendarYear = monthMatch ? Number(monthMatch[1]) : rangeStart.getUTCFullYear();
   const calendarMonthIndex = monthMatch ? Math.min(11, Math.max(0, Number(monthMatch[2]) - 1)) : rangeStart.getUTCMonth();
-  const hasBaseline = items.some((item) => item.baselineEnd !== null);
+  const hasBaseline = allItems.some((item) => item.baselineEnd !== null);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
@@ -101,28 +111,106 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
             {projectFinishDate ? (
               <span className="text-sm text-[var(--bt-muted)]">Projected finish: {formatDate(projectFinishDate)}</span>
             ) : null}
-            <SnapshotBaselineButton jobId={job.id} scheduleId={scheduleRow.id} hasBaseline={hasBaseline} />
             <CreateModal triggerLabel="New Schedule Item" title="New schedule item">
-              <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={items.map((item) => ({ id: item.id, title: item.title }))} />
+              <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={allItems.map((item) => ({ id: item.id, title: item.title }))} />
             </CreateModal>
           </div>
         }
       />
 
       <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
-        {VIEWS.map((v) => (
+        {TABS.map((t) => (
           <Link
-            key={v.key}
-            href={`/jobs/${job.id}/schedule?view=${v.key}`}
+            key={t.key}
+            href={`/jobs/${job.id}/schedule${t.key === "schedule" ? "" : `?tab=${t.key}`}`}
             className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
-            style={{ borderColor: v.key === view ? "var(--bt-primary)" : "transparent", color: v.key === view ? "var(--bt-primary)" : "var(--bt-muted)" }}
+            style={{ borderColor: t.key === tab ? "var(--bt-primary)" : "transparent", color: t.key === tab ? "var(--bt-primary)" : "var(--bt-muted)" }}
           >
-            {v.label}
+            {t.label}
           </Link>
         ))}
       </nav>
 
-      {view === "list" ? (
+      {tab === "exceptions" ? (
+        <WorkdayExceptions
+          jobId={job.id}
+          days={(await listNonWorkingDays(user.organizationId)).map((day) => ({ id: day.id, date: day.date.toISOString(), reason: day.reason }))}
+        />
+      ) : null}
+
+      {tab === "baseline" ? (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-[var(--bt-muted)]">
+              A baseline is a snapshot of today&apos;s computed dates. Later changes show here as days ahead or behind it.
+            </p>
+            <SnapshotBaselineButton jobId={job.id} scheduleId={scheduleRow.id} hasBaseline={hasBaseline} />
+          </div>
+          <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+                  <th className="px-4 py-3">Title</th>
+                  <th className="px-4 py-3">Baseline</th>
+                  <th className="px-4 py-3">Current</th>
+                  <th className="px-4 py-3 text-right">Variance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allItems.map((item) => {
+                  const variance = item.baselineEnd ? Math.round((item.endDate.getTime() - item.baselineEnd.getTime()) / MS_PER_DAY) : null;
+                  return (
+                    <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                      <td className="px-4 py-2 font-medium">{item.title}</td>
+                      <td className="px-4 py-2 text-[var(--bt-muted)]">
+                        {item.baselineStart && item.baselineEnd ? `${formatDate(item.baselineStart)} to ${formatDate(item.baselineEnd)}` : "No baseline"}
+                      </td>
+                      <td className="px-4 py-2 text-[var(--bt-muted)]">{`${formatDate(item.startDate)} to ${formatDate(item.endDate)}`}</td>
+                      <td className="px-4 py-2 text-right" style={variance !== null && variance > 0 ? { color: "var(--bt-danger)", fontWeight: 600 } : undefined}>
+                        {variance === null ? "" : `${variance > 0 ? "+" : ""}${variance}d`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "schedule" ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
+            {VIEWS.map((v) => (
+              <Link
+                key={v.key}
+                href={`/jobs/${job.id}/schedule?view=${v.key}${criticalOnly ? "&critical=1" : ""}`}
+                className="px-3 py-1.5 text-sm font-medium"
+                style={v.key === view ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" } : { color: "var(--bt-muted)" }}
+              >
+                {v.label}
+              </Link>
+            ))}
+          </div>
+          {view === "calendar" ? (
+            <Link href={`/jobs/${job.id}/schedule?view=calendar${criticalOnly ? "&critical=1" : ""}&month=${new Date().toISOString().slice(0, 7)}`} className="rounded border px-3 py-1.5 text-sm font-medium" style={{ borderColor: "var(--bt-border)" }}>
+              Today
+            </Link>
+          ) : null}
+          <Link
+            href={`/jobs/${job.id}/schedule?view=${view}${criticalOnly ? "" : "&critical=1"}`}
+            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--bt-text)]"
+            aria-pressed={criticalOnly}
+          >
+            <span className="relative inline-block h-5 w-9 rounded-full" style={{ background: criticalOnly ? "var(--bt-primary)" : "#d1d5db" }}>
+              <span className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all" style={{ left: criticalOnly ? "18px" : "2px" }} />
+            </span>
+            Critical path
+          </Link>
+        </div>
+      ) : null}
+
+      {tab === "schedule" && view === "list" ? (
         <ScheduleListGrid
           rows={items.map((item) => ({
             id: item.id,
@@ -139,11 +227,17 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
         />
       ) : null}
 
-      {view === "calendar" ? (
+      {tab === "schedule" && view === "calendar" ? (
         <ScheduleCalendar jobId={job.id} items={items} year={calendarYear} monthIndex={calendarMonthIndex} />
       ) : null}
 
-      {view === "gantt" ? (
+      {tab === "schedule" && view === "gantt" && items.length === 0 ? (
+        <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+          No critical path items.
+        </p>
+      ) : null}
+
+      {tab === "schedule" && view === "gantt" && items.length > 0 ? (
         <>
       <div className="rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
