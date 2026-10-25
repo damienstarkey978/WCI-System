@@ -15,6 +15,7 @@
 
 import { ContractType, EstimateStatus, JobStatus, ProposalStatus } from "@/generated/prisma/enums";
 import { sendEstimateToBudget } from "@/lib/budget/send-to-budget";
+import { moveLeadAttachmentsToJob } from "@/lib/crm/attachments";
 import { db } from "@/lib/db";
 import { totalDrawPercentage } from "@/lib/invoicing/calc";
 import { readTemplateDraws, readTemplateSections } from "@/lib/proposal-templates/content";
@@ -555,6 +556,7 @@ export async function acceptProposal(input: AcceptProposalInput) {
       await tx.proposal.update({ where: { id: proposal.id }, data: { jobId: job.id } });
       await tx.estimate.update({ where: { id: selectedOption.estimateId }, data: { jobId: job.id } });
       await tx.lead.update({ where: { id: lead.id }, data: { convertedJobId: job.id } });
+      await moveLeadAttachmentsToJob(tx, proposal.organizationId, lead.id, job.id);
       await tx.clientJobAccess.upsert({
         where: { clientId_jobId: { clientId: proposal.clientId, jobId: job.id } },
         create: {

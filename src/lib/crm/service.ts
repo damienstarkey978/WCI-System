@@ -10,6 +10,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { JobStatus, ProposalStatus, type LeadActivityType, type LeadStage } from "@/generated/prisma/enums";
 import type { CreateJobInput } from "@/lib/api-schemas";
+import { moveLeadAttachmentsToJob } from "@/lib/crm/attachments";
 import { db } from "@/lib/db";
 import { emitEvent } from "@/lib/webhooks";
 
@@ -188,6 +189,8 @@ export async function convertLeadToJob(
       where: { id: lead.id },
       data: { convertedJobId: job.id },
     });
+
+    await moveLeadAttachmentsToJob(tx, organizationId, lead.id, job.id);
 
     return { job, lead: updatedLead };
   });

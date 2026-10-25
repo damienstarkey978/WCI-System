@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { currentAppUser } from "@/lib/auth";
+import { listLeadAttachments } from "@/lib/crm/attachments";
 import { db } from "@/lib/db";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -15,8 +16,9 @@ import { ConvertToJobButton } from "../convert-form";
 import { StageSelect } from "../stage-select";
 import { CreateLeadProposalForm } from "./create-lead-proposal-form";
 import { LeadActivityForm } from "./lead-activity-form";
+import { LeadAttachmentsUpload } from "./lead-attachments-upload";
 import { LeadDetailsForm } from "./lead-details-form";
-import { declineProposalAction, sendProposalAction } from "./actions";
+import { declineProposalAction, deleteLeadAttachmentAction, sendProposalAction } from "./actions";
 import { ToggleActivityButton } from "./toggle-activity-button";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +84,8 @@ export default async function LeadDetailPage({
       select: { id: true, code: true, name: true },
     }),
   ]);
+
+  const attachments = await listLeadAttachments(user.organizationId, lead.id);
 
   const preSalePhotoFiles = lead.convertedJob
     ? await db.file.findMany({
@@ -443,6 +447,49 @@ export default async function LeadDetailPage({
           />
         </div>
       )}
+
+      {tab !== "activities" && tab !== "proposals" ? (
+        <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+          <h2 className="text-sm font-semibold text-[var(--bt-text)]">Attachments{attachments.length > 0 ? ` (${attachments.length})` : ""}</h2>
+          <div className="mt-3">
+            <LeadAttachmentsUpload leadId={lead.id} />
+          </div>
+          {attachments.length === 0 ? (
+            <p className="mt-3 text-sm text-[var(--bt-muted)]">No attachments yet. They move into the job&apos;s Files when this lead becomes a job.</p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="flex flex-col overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
+                  {attachment.url ? (
+                    <a href={attachment.url} target="_blank" rel="noreferrer" className="block h-24 bg-[var(--bt-page-bg)]">
+                      {attachment.isImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching
+                        <img src={attachment.url} alt={attachment.fileName} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-3xl text-[var(--bt-muted)]">📄</div>
+                      )}
+                    </a>
+                  ) : (
+                    <div className="flex h-24 items-center justify-center text-xs text-[var(--bt-muted)]">File unavailable</div>
+                  )}
+                  <div className="flex items-center justify-between gap-1 p-2">
+                    <span className="truncate text-xs text-[var(--bt-text)]" title={attachment.fileName}>
+                      {attachment.fileName}
+                    </span>
+                    <form action={deleteLeadAttachmentAction}>
+                      <input type="hidden" name="leadId" value={lead.id} />
+                      <input type="hidden" name="attachmentId" value={attachment.id} />
+                      <button type="submit" className="text-[10px] font-semibold text-red-600 hover:underline">
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

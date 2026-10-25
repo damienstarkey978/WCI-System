@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 
 import { LeadActivityType, RateMode } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
+import { deleteLeadAttachment, LeadAttachmentLeadNotFoundError, uploadLeadAttachment } from "@/lib/crm/attachments";
 import { createLeadActivity, LeadNotFoundError, setLeadActivityCompleted } from "@/lib/crm/service";
+import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
 import { LeadMissingContactError, createLeadProposal } from "@/lib/crm/lead-proposal";
 import { parsePercentToBasisPoints } from "@/lib/money";
@@ -125,5 +127,39 @@ export async function declineProposalAction(formData: FormData): Promise<void> {
     throw error;
   }
 
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function uploadLeadAttachmentsAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const leadId = String(formData.get("leadId") ?? "");
+
+  const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  if (files.length === 0) return { error: "Choose at least one file." };
+
+  try {
+    for (const file of files) {
+      await uploadLeadAttachment({
+        organizationId: user.organizationId,
+        leadId,
+        uploadedByUserId: user.id,
+        fileName: file.name,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        mimeType: file.type || null,
+      });
+    }
+  } catch (error) {
+    if (error instanceof StorageNotConfiguredError || error instanceof LeadAttachmentLeadNotFoundError) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true };
+}
+
+export async function deleteLeadAttachmentAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const leadId = String(formData.get("leadId") ?? "");
+  await deleteLeadAttachment(user.organizationId, String(formData.get("attachmentId") ?? ""));
   revalidatePath(`/leads/${leadId}`);
 }

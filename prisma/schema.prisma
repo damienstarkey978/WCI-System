@@ -128,6 +128,7 @@ model Organization {
   bidPackages             BidPackage[]
   leads                   Lead[]
   leadActivities          LeadActivity[]
+  leadAttachments         LeadAttachment[]
   proposals               Proposal[]
   specifications          Specification[]
   submittals              Submittal[]
@@ -186,6 +187,7 @@ model User {
   notifications             Notification[]
   assignedLeads             Lead[]
   leadActivities            LeadActivity[]
+  uploadedLeadAttachments   LeadAttachment[]
   jarvisConversations       JarvisConversation[]
   proposalDraftJobs         ProposalDraftJob[]
   oauthAuthorizationCodes   OAuthAuthorizationCode[]
@@ -2712,6 +2714,7 @@ model Lead {
   proposals         Proposal[]
   estimates         Estimate[]
   activities        LeadActivity[]
+  attachments       LeadAttachment[]
   proposalDraftJobs ProposalDraftJob[]
 
   @@index([organizationId, stage])
@@ -2935,6 +2938,31 @@ model ProposalSectionBullet {
   sortOrder Int    @default(0)
 
   @@index([sectionId, sortOrder])
+}
+
+/// A file attached to a Lead before any Job exists (Buildertrend's lead Attachments).
+/// File.jobId is required, so pre-job files live here; when the lead converts to a Job
+/// they are MOVED into the job's Files (src/lib/crm/attachments.ts), keeping the same
+/// storage object, and these rows are removed so nothing points at a file twice.
+model LeadAttachment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadId         String
+  lead           Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  fileName  String
+  /// Storage path in the private job-files bucket (same convention as File.url).
+  url       String
+  mimeType  String?
+  sizeBytes Int?
+
+  uploadedByUserId String
+  uploadedByUser   User   @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
 }
 
 enum MaterialVendor {
