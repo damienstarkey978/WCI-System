@@ -82,6 +82,8 @@ export default async function CompanySettingsPage() {
         <CompanyInfoForm info={organization} />
         <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>
           <SettingsLink href="/jobs" label="Jobs →" />
+          <span className="mx-2 text-[var(--bt-muted)]">|</span>
+          <SettingsLink href="/job-groups" label="Job groups →" />
         </div>
       </div>
 
@@ -93,6 +95,7 @@ export default async function CompanySettingsPage() {
         <SettingsGroup title="Sales">
           <SettingsLink href="/leads" label="Sales" />
           <SettingsLink href="/leads" label="Lead Generation" />
+          <SettingsLink href="/leads/proposal-templates" label="Proposal templates" />
         </SettingsGroup>
 
         <SettingsGroup title="Files">
@@ -118,6 +121,7 @@ export default async function CompanySettingsPage() {
           <SettingsLink href="/admin/cost-codes" label="Cost codes" />
           <SettingsLink href="/materials" label="Catalog" />
           <SettingsLink href="/settings/quickbooks" label="QuickBooks" />
+          <SettingsLink href="/admin/inbound-email" label="Inbound email (receipts)" />
           <ComingSoon label="Bids" />
           <ComingSoon label="Estimates" />
           <ComingSoon label="Bills / POs / Budget" />
