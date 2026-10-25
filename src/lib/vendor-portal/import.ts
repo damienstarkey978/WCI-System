@@ -31,8 +31,14 @@ export interface VendorImportRow {
   readonly divisions: readonly string[];
   readonly primaryContact: string | null;
   readonly email: string | null;
+  /** Further addresses from a cell that listed several ("a@x.com;b@x.com"). Only the first is stored; these are reported so someone can decide. */
+  readonly extraEmails: readonly string[];
   readonly phone: string | null;
   readonly cellPhone: string | null;
+  readonly addressLine1: string | null;
+  readonly city: string | null;
+  readonly state: string | null;
+  readonly postalCode: string | null;
 }
 
 export interface VendorImportSummary {
@@ -45,7 +51,9 @@ export interface VendorImportSummary {
   /** Extra rows for a company already seen earlier in the same file. */
   readonly duplicateRowsMerged: number;
   /** Emails left off because another vendor already has them (they're unique per organization). */
-  readonly emailsSkipped: readonly string[];
+  readonly emailsSkipped: readonly { company: string; email: string }[];
+  /** Companies whose email cell listed more than one address; the first was used. */
+  readonly extraEmails: readonly { company: string; emails: readonly string[] }[];
 }
 
 /** "  PRIME  Wiring LLC " and "prime wiring llc" are the same company. */
@@ -73,13 +81,35 @@ export function parseDivisions(cell: string | undefined): string[] {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Buildertrend lets a contact have several emails and exports them joined with ";" (sometimes with a stray leading one). */
+export function parseEmails(cell: string | undefined): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const part of (cell ?? "").split(/[;,\s]+/)) {
+    const email = part.trim().toLowerCase();
+    if (!EMAIL_PATTERN.test(email) || seen.has(email)) continue;
+    seen.add(email);
+    result.push(email);
+  }
+  return result;
+}
+
+/** "Fl", "fl" and "FL" are all Florida. Anything that isn't a two-letter code is left as typed (just uppercased). */
+export function normalizeState(value: string | null): string | null {
+  return value === null ? null : value.toUpperCase();
+}
+
 const HEADER_ALIASES = {
   name: ["company", "company name", "name", "display name"],
   divisions: ["division", "divisions", "sub/vendor divisions", "trade"],
   primaryContact: ["primary contact", "contact", "contact name"],
-  email: ["email", "e-mail", "primary email", "email address"],
+  email: ["email", "e-mail", "primary email", "email address", "emails"],
   phone: ["phone", "primary phone", "office phone", "phone number"],
   cellPhone: ["cell", "cell phone", "mobile", "mobile phone"],
+  addressLine1: ["street address", "address", "address line 1", "street"],
+  city: ["city"],
+  state: ["state"],
+  postalCode: ["zip code", "zip", "postal code", "zipcode"],
 } as const;
 
 export function parseVendorSheet(csvText: string): VendorImportRow[] {
@@ -99,21 +129,31 @@ export function parseVendorSheet(csvText: string): VendorImportRow[] {
     email: column("email"),
     phone: column("phone"),
     cellPhone: column("cellPhone"),
+    addressLine1: column("addressLine1"),
+    city: column("city"),
+    state: column("state"),
+    postalCode: column("postalCode"),
   };
+  const cell = (cells: string[], key: keyof typeof index): string | null => (index[key] === -1 ? null : clean(cells[index[key]]));
 
   const rows: VendorImportRow[] = [];
   for (const cells of table.slice(headerIndex + 1)) {
     const name = clean(cells[index.name]);
     if (!name) continue;
 
-    const emailRaw = index.email === -1 ? null : clean(cells[index.email])?.toLowerCase() ?? null;
+    const emails = index.email === -1 ? [] : parseEmails(cells[index.email]);
     rows.push({
       name,
       divisions: index.divisions === -1 ? [] : parseDivisions(cells[index.divisions]),
-      primaryContact: index.primaryContact === -1 ? null : clean(cells[index.primaryContact]),
-      email: emailRaw && EMAIL_PATTERN.test(emailRaw) ? emailRaw : null,
-      phone: index.phone === -1 ? null : clean(cells[index.phone]),
-      cellPhone: index.cellPhone === -1 ? null : clean(cells[index.cellPhone]),
+      primaryContact: cell(cells, "primaryContact"),
+      email: emails[0] ?? null,
+      extraEmails: emails.slice(1),
+      phone: cell(cells, "phone"),
+      cellPhone: cell(cells, "cellPhone"),
+      addressLine1: cell(cells, "addressLine1"),
+      city: cell(cells, "city"),
+      state: normalizeState(cell(cells, "state")),
+      postalCode: cell(cells, "postalCode"),
     });
   }
 
@@ -139,8 +179,13 @@ function mergeDuplicateRows(rows: readonly VendorImportRow[]): { merged: VendorI
       divisions: existing.divisions.length > 0 ? existing.divisions : row.divisions,
       primaryContact: existing.primaryContact ?? row.primaryContact,
       email: existing.email ?? row.email,
+      extraEmails: existing.extraEmails.length > 0 ? existing.extraEmails : row.extraEmails,
       phone: existing.phone ?? row.phone,
       cellPhone: existing.cellPhone ?? row.cellPhone,
+      addressLine1: existing.addressLine1 ?? row.addressLine1,
+      city: existing.city ?? row.city,
+      state: existing.state ?? row.state,
+      postalCode: existing.postalCode ?? row.postalCode,
     });
   }
 
@@ -152,7 +197,7 @@ export async function importVendors(organizationId: string, incoming: readonly V
 
   const existingVendors = await db.vendor.findMany({
     where: { organizationId },
-    select: { id: true, name: true, email: true, phone: true, cellPhone: true, primaryContact: true, divisions: true },
+    select: { id: true, name: true, email: true, phone: true, cellPhone: true, primaryContact: true, divisions: true, addressLine1: true, city: true, state: true, postalCode: true },
   });
   const existingByName = new Map(existingVendors.map((vendor) => [normalizeVendorName(vendor.name), vendor]));
   const takenEmails = new Set(existingVendors.flatMap((vendor) => (vendor.email ? [vendor.email.toLowerCase()] : [])));
@@ -165,15 +210,20 @@ export async function importVendors(organizationId: string, incoming: readonly V
     cellPhone: string | null;
     primaryContact: string | null;
     divisions: string[];
+    addressLine1: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
   }[] = [];
   const updates: ReturnType<typeof db.vendor.update>[] = [];
-  const emailsSkipped: string[] = [];
+  const emailsSkipped: { company: string; email: string }[] = [];
+  const extraEmails: { company: string; emails: readonly string[] }[] = [];
   let unchanged = 0;
 
-  const claimEmail = (email: string | null): string | null => {
+  const claimEmail = (company: string, email: string | null): string | null => {
     if (!email) return null;
     if (takenEmails.has(email)) {
-      emailsSkipped.push(email);
+      emailsSkipped.push({ company, email });
       return null;
     }
     takenEmails.add(email);
@@ -182,29 +232,38 @@ export async function importVendors(organizationId: string, incoming: readonly V
 
   for (const row of merged) {
     const existing = existingByName.get(normalizeVendorName(row.name));
+    if (row.extraEmails.length > 0) extraEmails.push({ company: row.name, emails: row.extraEmails });
 
     if (!existing) {
       creates.push({
         organizationId,
         name: row.name,
-        email: claimEmail(row.email),
+        email: claimEmail(row.name, row.email),
         phone: row.phone,
         cellPhone: row.cellPhone,
         primaryContact: row.primaryContact,
         divisions: [...row.divisions],
+        addressLine1: row.addressLine1,
+        city: row.city,
+        state: row.state,
+        postalCode: row.postalCode,
       });
       continue;
     }
 
     const data: Record<string, unknown> = {};
     if (!existing.email && row.email) {
-      const email = claimEmail(row.email);
+      const email = claimEmail(row.name, row.email);
       if (email) data.email = email;
     }
     if (!existing.phone && row.phone) data.phone = row.phone;
     if (!existing.cellPhone && row.cellPhone) data.cellPhone = row.cellPhone;
     if (!existing.primaryContact && row.primaryContact) data.primaryContact = row.primaryContact;
     if (existing.divisions.length === 0 && row.divisions.length > 0) data.divisions = [...row.divisions];
+    if (!existing.addressLine1 && row.addressLine1) data.addressLine1 = row.addressLine1;
+    if (!existing.city && row.city) data.city = row.city;
+    if (!existing.state && row.state) data.state = row.state;
+    if (!existing.postalCode && row.postalCode) data.postalCode = row.postalCode;
 
     if (Object.keys(data).length === 0) {
       unchanged += 1;
@@ -222,5 +281,6 @@ export async function importVendors(organizationId: string, incoming: readonly V
     unchanged,
     duplicateRowsMerged: duplicates,
     emailsSkipped,
+    extraEmails,
   };
 }

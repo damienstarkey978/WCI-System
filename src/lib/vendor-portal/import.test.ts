@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { InvalidVendorSheetError, normalizeVendorName, parseDivisions, parseVendorSheet } from "@/lib/vendor-portal/import";
+import { InvalidVendorSheetError, normalizeState, normalizeVendorName, parseDivisions, parseEmails, parseVendorSheet } from "@/lib/vendor-portal/import";
 
 // Shaped like Buildertrend's real "SubsReport" export: a title row, a blank row, then the
 // header — and divisions packed into one cell separated by ", \n".
@@ -46,12 +46,38 @@ describe("parseVendorSheet", () => {
     expect(rows.map((row) => row.email)).toEqual(["sales@acme.com", null, null]);
   });
 
+  it("reads address columns and normalizes the state", () => {
+    const [row] = parseVendorSheet("Company,Street address,City,State,Zip code\nAcme,1729 Rivergate trail,Jacksonville,fl,32223");
+
+    expect(row).toMatchObject({ addressLine1: "1729 Rivergate trail", city: "Jacksonville", state: "FL", postalCode: "32223" });
+  });
+
+  it("uses the first email when a cell lists several, and keeps the rest for review", () => {
+    const rows = parseVendorSheet("Company,Email\nSwanson,glenjr@swansonfire.com;glen@swansonfire.com\nStray,;ken@pump.com\nSame,a@x.com;A@X.com");
+
+    expect(rows[0]).toMatchObject({ email: "glenjr@swansonfire.com", extraEmails: ["glen@swansonfire.com"] });
+    expect(rows[1]).toMatchObject({ email: "ken@pump.com", extraEmails: [] });
+    expect(rows[2]).toMatchObject({ email: "a@x.com", extraEmails: [] });
+  });
+
   it("rejects a file with no Company column", () => {
     expect(() => parseVendorSheet("Foo,Bar\n1,2")).toThrow(InvalidVendorSheetError);
   });
 
   it("rejects a header with no vendors under it", () => {
     expect(() => parseVendorSheet("Company,Phone\n")).toThrow(InvalidVendorSheetError);
+  });
+});
+
+describe("parseEmails / normalizeState", () => {
+  it("splits on semicolons, commas and spaces, dropping junk and duplicates", () => {
+    expect(parseEmails(" ;A@x.com, b@y.org ;not-an-email;a@X.com")).toEqual(["a@x.com", "b@y.org"]);
+    expect(parseEmails("")).toEqual([]);
+  });
+
+  it("uppercases states and leaves null alone", () => {
+    expect(normalizeState("Fl")).toBe("FL");
+    expect(normalizeState(null)).toBeNull();
   });
 });
 

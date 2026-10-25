@@ -15,7 +15,7 @@ export function ImportVendorsForm() {
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">Import subs/vendors from CSV</h2>
       <p className="mt-1 max-w-3xl text-xs text-[var(--bt-muted)]">
         Upload Buildertrend&apos;s Subs report saved as CSV (or any CSV with a <code className="font-mono">Company</code> column, and optionally{" "}
-        <code className="font-mono">Division, Primary contact, Email, Phone, Cell</code>). Safe to re-run: companies already here are matched by name and only
+        <code className="font-mono">Division, Primary contact, Email, Phone, Cell, Street address, City, State, Zip code</code>). Safe to re-run: companies already here are matched by name and only
         have their blank fields filled in — nothing you&apos;ve entered is overwritten. Buildertrend&apos;s own Activation column is ignored, since it describes
         their Buildertrend login, not this system&apos;s.
       </p>
@@ -38,8 +38,35 @@ export function ImportVendorsForm() {
           <p className="mt-1 text-xs text-[var(--bt-muted)]">
             {summary.rowsRead} rows read
             {summary.duplicateRowsMerged > 0 ? ` · ${summary.duplicateRowsMerged} duplicate row${summary.duplicateRowsMerged === 1 ? "" : "s"} for the same company merged` : ""}
-            {summary.emailsSkipped.length > 0 ? ` · ${summary.emailsSkipped.length} email${summary.emailsSkipped.length === 1 ? "" : "s"} skipped because another vendor already has it (${summary.emailsSkipped.join(", ")})` : ""}
           </p>
+          {summary.emailsSkipped.length > 0 ? (
+            <details className="mt-2 text-xs">
+              <summary className="cursor-pointer font-medium text-amber-700 dark:text-amber-400">
+                {summary.emailsSkipped.length} email{summary.emailsSkipped.length === 1 ? "" : "s"} not added — another vendor already has that address
+              </summary>
+              <ul className="mt-1 list-disc pl-5 text-[var(--bt-muted)]">
+                {summary.emailsSkipped.map((item) => (
+                  <li key={`${item.company}-${item.email}`}>
+                    {item.company}: {item.email}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          {summary.extraEmails.length > 0 ? (
+            <details className="mt-2 text-xs">
+              <summary className="cursor-pointer font-medium text-amber-700 dark:text-amber-400">
+                {summary.extraEmails.length} {summary.extraEmails.length === 1 ? "company lists" : "companies list"} more than one email — only the first was saved
+              </summary>
+              <ul className="mt-1 list-disc pl-5 text-[var(--bt-muted)]">
+                {summary.extraEmails.map((item) => (
+                  <li key={item.company}>
+                    {item.company}: also {item.emails.join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </div>
       ) : null}
     </form>
