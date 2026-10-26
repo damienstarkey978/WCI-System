@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
+import { PencilIcon } from "@/components/shell/icons";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { PO_STATUS_STYLE, WORK_STATUS_STYLE } from "./status-styles";
@@ -10,6 +11,7 @@ import { PO_STATUS_STYLE, WORK_STATUS_STYLE } from "./status-styles";
 export interface PurchaseOrderRow {
   readonly id: string;
   readonly jobId: string;
+  readonly jobName: string;
   readonly poNumber: string;
   readonly poSuffix: string | null;
   readonly title: string | null;
@@ -20,6 +22,9 @@ export interface PurchaseOrderRow {
   readonly totalCents: number;
 }
 
+/** Buildertrend's Purchase Orders Standard View: Job, PO #, Title (+ edit action). */
+const DEFAULT_HIDDEN = ["vendorName", "status", "workStatus", "createdAt", "totalCents"] as const;
+
 /**
  * The client half of the Purchase Orders page — DataGrid's column `render`
  * callbacks are plain functions, which can't cross the server/client
@@ -28,6 +33,13 @@ export interface PurchaseOrderRow {
  */
 export function PurchaseOrdersGrid({ rows }: { rows: readonly PurchaseOrderRow[] }) {
   const columns: DataGridColumn<PurchaseOrderRow>[] = [
+    {
+      key: "job",
+      header: "Job",
+      sortable: true,
+      sortValue: (row) => row.jobName,
+      render: (row) => <span className="text-[var(--bt-muted)]">{row.jobName}</span>,
+    },
     {
       key: "poNumber",
       header: "PO #",
@@ -39,7 +51,16 @@ export function PurchaseOrdersGrid({ rows }: { rows: readonly PurchaseOrderRow[]
         </Link>
       ),
     },
-    { key: "title", header: "Title", render: (row) => row.title ?? "—" },
+    {
+      key: "title",
+      header: "Title",
+      sortable: true,
+      render: (row) => (
+        <Link href={`/jobs/${row.jobId}/purchase-orders/${row.id}`} className="hover:underline" style={{ color: "var(--bt-primary)" }}>
+          {row.title ?? "—"}
+        </Link>
+      ),
+    },
     { key: "vendorName", header: "Performed by", sortable: true, render: (row) => row.vendorName },
     {
       key: "status",
@@ -76,5 +97,25 @@ export function PurchaseOrdersGrid({ rows }: { rows: readonly PurchaseOrderRow[]
     },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="purchase-orders" selectable showTotals emptyMessage="No purchase orders yet." />;
+  return (
+    <DataGrid
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      viewKey="purchase-orders"
+      defaultHiddenKeys={DEFAULT_HIDDEN}
+      selectable
+      showTotals
+      rowActions={(row) => (
+        <Link
+          href={`/jobs/${row.jobId}/purchase-orders/${row.id}`}
+          aria-label={`Edit purchase order ${row.poNumber}`}
+          className="inline-flex rounded p-1 text-[var(--bt-muted)] hover:bg-black/5 hover:text-[var(--bt-primary)]"
+        >
+          <PencilIcon className="h-4 w-4" />
+        </Link>
+      )}
+      emptyMessage="No purchase orders yet."
+    />
+  );
 }

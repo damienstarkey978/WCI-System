@@ -95,37 +95,49 @@ function totalsCell(totals: FunnelTotals, columnId: BudgetColumnId): GridCell {
 }
 
 /**
- * The four numbers a PM checks before anything else: what the job sells for, what it
- * is now projected to cost, and the profit and margin that fall out of the two. They
- * are always shown, whatever column view is selected, because a view that hides the
- * price column shouldn't also hide whether the job is making money.
+ * Buildertrend's budget header equation: Revised price − Projected cost =
+ * Projected profit, with margin called out beside it. Always shown, whatever
+ * column view is selected.
  */
 function SummaryStrip({ totals }: { totals: FunnelTotals }) {
   const losing = totals.projectedProfitCents < 0;
-  const tiles = [
-    { label: "Revised price", value: formatMoney(totals.revisedClientPriceCents) },
-    { label: "Projected cost", value: formatMoney(totals.projectedCostCents) },
-    { label: "Projected profit", value: formatMoney(totals.projectedProfitCents), danger: losing },
-    { label: "Margin", value: formatPercent(totals.projectedMarginBasisPoints), danger: losing },
-  ];
-
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {tiles.map((tile) => (
-        <div
-          key={tile.label}
-          className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3"
-          style={{ borderColor: "var(--bt-border)" }}
-        >
-          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{tile.label}</div>
-          <div
-            className="mt-1 text-xl font-semibold"
-            style={{ color: tile.danger ? "var(--bt-danger)" : "var(--bt-text)" }}
-          >
-            {tile.value}
-          </div>
+    <div
+      className="flex flex-wrap items-center gap-4 rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3 sm:gap-6"
+      style={{ borderColor: "var(--bt-border)" }}
+    >
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Total revised price</div>
+        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.revisedClientPriceCents)}</div>
+      </div>
+      <div className="hidden h-10 w-px bg-[var(--bt-border)] sm:block" />
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Revised price</div>
+        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.revisedClientPriceCents)}</div>
+      </div>
+      <span className="text-lg text-[var(--bt-muted)]">−</span>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Projected cost</div>
+        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.projectedCostCents)}</div>
+      </div>
+      <span className="text-lg text-[var(--bt-muted)]">=</span>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Projected profit</div>
+        <div className="mt-1 text-lg font-semibold" style={{ color: losing ? "var(--bt-danger)" : "var(--bt-text)" }}>
+          {formatMoney(totals.projectedProfitCents)}
         </div>
-      ))}
+      </div>
+      <span
+        className="rounded-full px-2.5 py-1 text-xs font-semibold"
+        style={{
+          background: losing
+            ? "color-mix(in srgb, var(--bt-danger) 14%, transparent)"
+            : "color-mix(in srgb, var(--bt-primary) 14%, transparent)",
+          color: losing ? "var(--bt-danger)" : "var(--bt-primary)",
+        }}
+      >
+        {formatPercent(totals.projectedMarginBasisPoints)} profit margin
+      </span>
     </div>
   );
 }
@@ -204,11 +216,34 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
 
       <SummaryStrip totals={view.funnel.totals} />
 
-      <BudgetViewSelect
-        jobId={jobId}
-        views={BUDGET_VIEWS.map((v) => ({ key: v.key, label: v.label }))}
-        selectedKey={selectedBudgetView.key}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+          {[
+            { key: "standard", label: "Cost categories" },
+            { key: "job-costing", label: "Job costing" },
+          ].map((tab) => {
+            const isActive = selectedBudgetView.key === tab.key;
+            return (
+              <a
+                key={tab.key}
+                href={`/jobs/${jobId}/budget?view=${tab.key}`}
+                className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+                style={{
+                  borderColor: isActive ? "var(--bt-primary)" : "transparent",
+                  color: isActive ? "var(--bt-primary)" : "var(--bt-muted)",
+                }}
+              >
+                {tab.label}
+              </a>
+            );
+          })}
+        </nav>
+        <BudgetViewSelect
+          jobId={jobId}
+          views={BUDGET_VIEWS.map((v) => ({ key: v.key, label: v.label }))}
+          selectedKey={selectedBudgetView.key}
+        />
+      </div>
 
       <BudgetGrid
         columnLabels={columns.map((columnId) => BUDGET_COLUMN_LABELS[columnId])}

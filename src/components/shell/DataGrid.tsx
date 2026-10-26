@@ -48,6 +48,7 @@ export function DataGrid<T>({
   emptyMessage = "No results.",
   pageSize: initialPageSize = 50,
   viewKey,
+  defaultHiddenKeys = [],
 }: {
   columns: readonly DataGridColumn<T>[];
   rows: readonly T[];
@@ -63,6 +64,11 @@ export function DataGrid<T>({
   pageSize?: number;
   /** Enables the Standard View column chooser, remembered per browser under this key. */
   viewKey?: string;
+  /**
+   * Columns hidden in Standard View until the user opts them back on. Used when the
+   * Buildertrend default is a short column set but WCI still keeps the extras available.
+   */
+  defaultHiddenKeys?: readonly string[];
 }) {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<number>(initialPageSize);
@@ -71,29 +77,61 @@ export function DataGrid<T>({
   // so a grid that just says `selectable` still has working checkboxes and sortable headers.
   const [ownSelected, setOwnSelected] = useState<ReadonlySet<string>>(new Set());
   const [ownSort, setOwnSort] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
-  const [hiddenKeys, setHiddenKeys] = useState<readonly string[]>([]);
+  const [hiddenKeys, setHiddenKeys] = useState<readonly string[]>(() => [...defaultHiddenKeys]);
   const [chooserOpen, setChooserOpen] = useState(false);
+  const [hasSavedView, setHasSavedView] = useState(false);
 
   const storageKey = viewKey ? `wci.grid.${viewKey}` : null;
+  // Join so an inline defaultHiddenKeys={[...]} from the caller does not re-fire the effect every render.
+  const defaultHiddenKey = defaultHiddenKeys.join("\0");
   useEffect(() => {
-    if (!storageKey) return;
+    // Reading localStorage (and applying Standard View defaults) can only happen after mount.
+    const defaults = defaultHiddenKey.length > 0 ? defaultHiddenKey.split("\0") : [];
+    /* eslint-disable react-hooks/set-state-in-effect -- hydrate column visibility from localStorage after mount */
+    if (!storageKey) {
+      setHiddenKeys(defaults);
+      setHasSavedView(false);
+      return;
+    }
     try {
       const raw = window.localStorage.getItem(storageKey);
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reading the saved view needs the browser, so it can only happen after mount
-      if (Array.isArray(parsed)) setHiddenKeys(parsed.filter((value): value is string => typeof value === "string"));
+      if (raw === null) {
+        setHiddenKeys(defaults);
+        setHasSavedView(false);
+        return;
+      }
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setHiddenKeys(parsed.filter((value): value is string => typeof value === "string"));
+        setHasSavedView(true);
+      }
     } catch {
-      // Storage can be blocked or hold junk; the grid just shows every column.
+      // Storage can be blocked or hold junk; fall back to the Buildertrend default.
+      setHiddenKeys(defaults);
+      setHasSavedView(false);
     }
-  }, [storageKey]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [storageKey, defaultHiddenKey]);
 
   function saveHidden(next: readonly string[]) {
     setHiddenKeys(next);
+    setHasSavedView(true);
     if (!storageKey) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(next));
     } catch {
       // Not remembered this time; the choice still applies for this visit.
+    }
+  }
+
+  function resetToStandardView() {
+    setHiddenKeys([...defaultHiddenKeys]);
+    setHasSavedView(false);
+    if (!storageKey) return;
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      // Still resets for this visit.
     }
   }
 
@@ -165,7 +203,7 @@ export function DataGrid<T>({
             className="rounded border px-3 py-1 text-xs font-medium text-[var(--bt-text)]"
             style={{ borderColor: "var(--bt-border)" }}
           >
-            {hiddenKeys.length > 0 ? "Custom view" : "Standard view"}
+            {hasSavedView ? "Custom view" : "Standard view"}
           </button>
           {chooserOpen ? (
             <div className="absolute right-3 top-full z-20 mt-1 w-56 rounded-lg border bg-[var(--bt-panel-bg)] p-2 shadow-lg" style={{ borderColor: "var(--bt-border)" }}>
@@ -187,8 +225,8 @@ export function DataGrid<T>({
                   </label>
                 );
               })}
-              {hiddenKeys.length > 0 ? (
-                <button type="button" onClick={() => saveHidden([])} className="mt-1 w-full rounded px-2 py-1 text-left text-xs font-medium text-[var(--bt-primary)] hover:bg-black/5">
+              {hasSavedView ? (
+                <button type="button" onClick={resetToStandardView} className="mt-1 w-full rounded px-2 py-1 text-left text-xs font-medium text-[var(--bt-primary)] hover:bg-black/5">
                   Back to Standard view
                 </button>
               ) : null}

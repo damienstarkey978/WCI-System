@@ -19,8 +19,8 @@ export const dynamic = "force-dynamic";
 /** The pipeline, in the order the office works it. ALL is unfiltered. */
 const TABS = [
   { key: "INBOX", label: "Inbox" },
-  { key: "IN_REVIEW", label: "In review" },
-  { key: "READY_FOR_PAYMENT", label: "Ready for payment" },
+  { key: "IN_REVIEW", label: "In Review" },
+  { key: "READY_FOR_PAYMENT", label: "Ready for Payment" },
   { key: "PAID", label: "Paid" },
   { key: "ALL", label: "All bills" },
 ] as const;
@@ -48,9 +48,10 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
+  // Buildertrend opens on Inbox; staff switch to Paid / Ready for Payment from there.
   const activeTab: TabKey = isTabKey(typeof status === "string" ? status : undefined)
     ? (status as TabKey)
-    : "ALL";
+    : "INBOX";
 
   // ALL deliberately hides voided bills: a voided bill isn't something the office
   // still has to act on, and including it would make the total row disagree with
@@ -84,6 +85,7 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
   const rows = bills.map((bill) => ({
     id: bill.id,
     jobId: job.id,
+    jobName: job.name,
     title: bill.title,
     billNumber: bill.billNumber,
     vendorName: bill.vendorName,
@@ -98,20 +100,18 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
     qboBillId: bill.qboBillId,
   }));
 
+  const createAction = (
+    <div className="flex items-center gap-2">
+      <EmailToInboxButton inboxAddress={inboxAddress} />
+      <CreateModal triggerLabel="+ Bill" title="New bill">
+        <CreateBillForm jobId={job.id} costCodes={costCodes} purchaseOrders={purchaseOrders} />
+      </CreateModal>
+    </div>
+  );
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <FinancialPageHeader
-        jobName={job.name}
-        title="Bills"
-        action={
-          <div className="flex items-center gap-2">
-            <EmailToInboxButton inboxAddress={inboxAddress} />
-            <CreateModal triggerLabel="+ Bill" title="New bill">
-              <CreateBillForm jobId={job.id} costCodes={costCodes} purchaseOrders={purchaseOrders} />
-            </CreateModal>
-          </div>
-        }
-      />
+      <FinancialPageHeader jobName={job.name} title="Bills" action={createAction} />
 
       <PurchaseOrdersBillsTabs jobId={job.id} active="bills" />
 
@@ -140,8 +140,19 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
 
       {rows.length === 0 ? (
         <EmptyState
-          title={activeTab === "ALL" ? "No bills yet" : `Nothing in ${TABS.find((t) => t.key === activeTab)?.label}`}
+          title={
+            activeTab === "INBOX"
+              ? "You're all caught up"
+              : activeTab === "ALL"
+                ? "No bills yet"
+                : `Nothing in ${TABS.find((t) => t.key === activeTab)?.label}`
+          }
           description="Drop a receipt above, forward one to the inbox address, or add a bill by hand."
+          action={
+            <CreateModal triggerLabel="+ Bill" title="New bill">
+              <CreateBillForm jobId={job.id} costCodes={costCodes} purchaseOrders={purchaseOrders} />
+            </CreateModal>
+          }
         />
       ) : (
         <BillsGrid rows={rows} isQboConnected={isQboConnected} />

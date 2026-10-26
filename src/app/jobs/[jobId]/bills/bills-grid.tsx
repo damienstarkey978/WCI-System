@@ -19,6 +19,7 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
 export interface BillRow {
   readonly id: string;
   readonly jobId: string;
+  readonly jobName: string;
   readonly title: string | null;
   readonly billNumber: string | null;
   readonly vendorName: string;
@@ -33,23 +34,43 @@ export interface BillRow {
   readonly qboBillId: string | null;
 }
 
+/** Buildertrend's Bills Standard View: Job, Created by, Bill #, Bill title. */
+const DEFAULT_HIDDEN = ["vendorName", "po", "status", "date", "totalCents", "qbo"] as const;
+
 /** The client half of the Bills page — see purchase-orders-grid.tsx's doc comment for why this split exists. */
 export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; isQboConnected: boolean }) {
   const columns: DataGridColumn<BillRow>[] = [
     {
+      key: "job",
+      header: "Job",
+      sortable: true,
+      sortValue: (row) => row.jobName,
+      render: (row) => <span className="text-[var(--bt-muted)]">{row.jobName}</span>,
+    },
+    { key: "createdBy", header: "Created by", render: (row) => row.createdByName ?? "—" },
+    {
+      key: "billNumber",
+      header: "Bill #",
+      sortable: true,
+      render: (row) => (
+        <Link href={`/jobs/${row.jobId}/bills/${row.id}`} className="font-medium hover:underline" style={{ color: "var(--bt-primary)" }}>
+          {row.billNumber ?? "—"}
+        </Link>
+      ),
+    },
+    {
       key: "title",
-      header: "Title",
+      header: "Bill title",
       render: (row) => (
         <>
           <Link href={`/jobs/${row.jobId}/bills/${row.id}`} className="hover:underline" style={{ color: "var(--bt-primary)" }}>
-            {row.title ?? row.billNumber ?? row.vendorName}
+            {row.title ?? row.vendorName}
           </Link>
           {row.fromOcr ? <span className="ml-1.5 rounded bg-black/5 px-1 py-0.5 text-[10px] text-[var(--bt-muted)]">AI</span> : null}
         </>
       ),
     },
     { key: "vendorName", header: "Pay to", sortable: true, render: (row) => <span className="font-medium text-[var(--bt-text)]">{row.vendorName}</span> },
-    { key: "billNumber", header: "Bill #", render: (row) => row.billNumber ?? "—" },
     {
       key: "po",
       header: "PO",
@@ -63,7 +84,6 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
           <span className="text-[var(--bt-muted)]">—</span>
         ),
     },
-    { key: "createdBy", header: "Created by", render: (row) => row.createdByName ?? "—" },
     {
       key: "status",
       header: "Status",
@@ -98,5 +118,16 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
       : []),
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="bills" selectable showTotals emptyMessage="No bills yet." />;
+  return (
+    <DataGrid
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      viewKey="bills"
+      defaultHiddenKeys={isQboConnected ? DEFAULT_HIDDEN : DEFAULT_HIDDEN.filter((key) => key !== "qbo")}
+      selectable
+      showTotals
+      emptyMessage="No bills yet."
+    />
+  );
 }

@@ -91,10 +91,9 @@ function Head({ columns }: { columns: readonly string[] }) {
 }
 
 /**
- * The Buildertrend-style equation at the top of a job's Invoices screen: the
- * contract's Original price minus Payments received equals the Remaining balance —
- * a different number from the "Outstanding" tile below, which is only what has
- * actually been invoiced so far and may be less than the full contract.
+ * Buildertrend's equation at the top of Invoices: Total revised price minus
+ * Payments equals Remaining balance. Distinct from the Outstanding tile below,
+ * which is only what has been invoiced so far.
  */
 function ContractEquation({ contractPriceCents, paidCents }: { contractPriceCents: number; paidCents: number }) {
   const remainingCents = contractPriceCents - paidCents;
@@ -104,7 +103,7 @@ function ContractEquation({ contractPriceCents, paidCents }: { contractPriceCent
       style={{ borderColor: "var(--bt-border)" }}
     >
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Original price</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Total revised price</div>
         <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(contractPriceCents)}</div>
       </div>
       <span className="text-lg text-[var(--bt-muted)]">−</span>
@@ -299,7 +298,15 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
       {activeTab === "invoices" ? (
         <>
           {invoices.length === 0 ? (
-            <EmptyState title="No invoices yet" description="Invoices created for this job will appear here." />
+            <EmptyState
+              title="No invoices yet"
+              description="Create an invoice or draw for this job's client."
+              action={
+                <CreateModal triggerLabel="+ Invoice" title="New invoice">
+                  <CreateInvoiceForm jobId={job.id} />
+                </CreateModal>
+              }
+            />
           ) : (
             <Panel>
               <Head columns={["Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Due", "Actions"]} />
@@ -322,7 +329,11 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                           <span>{invoice.clientLastViewedAt ? `Viewed ${formatDate(invoice.clientLastViewedAt)}` : "Not viewed yet"}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-[var(--bt-text)]">{invoice.title ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
+                          {invoice.title ?? "—"}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3">
                         <Badge status={invoice.status} />
                       </td>

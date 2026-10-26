@@ -74,7 +74,7 @@ export function BudgetGrid({
               className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
               style={{ borderColor: "var(--bt-border)" }}
             >
-              <th className="sticky left-0 bg-[var(--bt-panel-bg)] px-4 py-3 text-left">Cost code</th>
+              <th className="sticky left-0 bg-[var(--bt-panel-bg)] px-4 py-3 text-left">Cost categories</th>
               {columnLabels.map((label) => (
                 <th key={label} className="whitespace-nowrap px-4 py-3 text-right">
                   {label}

@@ -22,6 +22,7 @@ export function CreatePoForm({ jobId, costCodes }: { jobId: string; costCodes: r
           <input
             name="poNumber"
             required
+            placeholder="0001"
             className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
             style={{ borderColor: "var(--bt-border)" }}
           />
@@ -31,6 +32,15 @@ export function CreatePoForm({ jobId, costCodes }: { jobId: string; costCodes: r
           <input
             name="vendorName"
             required
+            className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
+        <label className="grid gap-1 text-sm sm:col-span-2">
+          <span className="text-xs font-medium text-[var(--bt-muted)]">Title</span>
+          <input
+            name="title"
+            placeholder="Framing, Roofing, Doors & Windows…"
             className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
             style={{ borderColor: "var(--bt-border)" }}
           />

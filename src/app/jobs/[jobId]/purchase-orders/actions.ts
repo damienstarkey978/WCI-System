@@ -33,6 +33,7 @@ export async function createPurchaseOrderAction(_previous: ActionState, formData
   const jobId = String(formData.get("jobId") ?? "");
   const poNumber = String(formData.get("poNumber") ?? "").trim();
   const vendorName = String(formData.get("vendorName") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
 
   if (!poNumber) return { error: "PO number is required." };
   if (!vendorName) return { error: "Vendor name is required." };
@@ -46,6 +47,7 @@ export async function createPurchaseOrderAction(_previous: ActionState, formData
       jobId,
       poNumber,
       vendorName,
+      title: title || null,
       lineItems,
     });
   } catch (error) {
