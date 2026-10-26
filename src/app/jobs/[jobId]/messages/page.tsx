@@ -1,19 +1,23 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
+import { GENERAL_THREAD_ID, listThreadMessages, listThreadSummaries, MessageThreadNotFoundError } from "@/lib/messages/threads";
 
-import { JOB_MESSAGE_FEATURE_TYPE } from "./constants";
 import { MessageForm } from "./message-form";
+import { NewThreadForm } from "./new-thread-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function MessagesPage({ params }: PageProps<"/jobs/[jobId]/messages">) {
+export default async function MessagesPage({ params, searchParams }: PageProps<"/jobs/[jobId]/messages">) {
   const { jobId } = await params;
+  const { thread: threadParam } = await searchParams;
 
   let user;
   try {
@@ -28,34 +32,76 @@ export default async function MessagesPage({ params }: PageProps<"/jobs/[jobId]/
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const messages = await db.comment.findMany({
-    where: { organizationId: user.organizationId, featureType: JOB_MESSAGE_FEATURE_TYPE, featureId: job.id },
-    orderBy: { createdAt: "asc" },
-    include: { authorUser: true },
-  });
+  const threads = await listThreadSummaries(user.organizationId, job.id);
+  const requested = typeof threadParam === "string" ? threadParam : null;
+  const selected = threads.find((t) => t.id === requested) ?? threads[0] ?? null;
+
+  let messages: Awaited<ReturnType<typeof listThreadMessages>> = [];
+  if (selected) {
+    try {
+      messages = await listThreadMessages(user.organizationId, job.id, selected.id);
+    } catch (error) {
+      if (!(error instanceof MessageThreadNotFoundError)) throw error;
+    }
+  }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-      <PageHeader jobName={job.name} title="Messages" />
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+      <PageHeader
+        jobName={job.name}
+        title="Messages"
+        action={
+          <CreateModal triggerLabel="+ Message" title="New message">
+            <NewThreadForm jobId={job.id} />
+          </CreateModal>
+        }
+      />
 
-      <div className="flex flex-col rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="flex flex-col gap-3 p-4">
-          {messages.length === 0 ? (
-            <EmptyState title="No messages yet" description="Messages posted about this job will appear here." />
-          ) : (
-            messages.map((message) => (
-              <div key={message.id} className="rounded border px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
-                <div className="flex items-center justify-between text-xs text-[var(--bt-muted)]">
-                  <span className="font-medium text-[var(--bt-text)]">{message.authorUser?.email ?? "Unknown"}</span>
-                  <span>{formatDate(message.createdAt)}</span>
+      {threads.length === 0 ? (
+        <EmptyState title="No messages yet" description="Start a conversation about this job with + Message." />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-[18rem_minmax(0,1fr)]">
+          <nav className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+            {threads.map((thread) => {
+              const active = thread.id === selected?.id;
+              return (
+                <Link
+                  key={thread.id}
+                  href={`/jobs/${job.id}/messages?thread=${thread.id}`}
+                  className="block border-b px-4 py-3 last:border-0"
+                  style={{ borderColor: "var(--bt-border)", background: active ? "var(--bt-panel-bg-muted)" : undefined }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-semibold text-[var(--bt-text)]">{thread.subject}</span>
+                    <span className="shrink-0 text-xs text-[var(--bt-muted)]">{thread.messageCount}</span>
+                  </div>
+                  <div className="truncate text-xs text-[var(--bt-muted)]">{thread.preview}</div>
+                  <div className="mt-0.5 text-[10px] text-[var(--bt-muted)]">{formatDate(thread.lastMessageAt)}</div>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <section className="flex flex-col rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+            <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
+              <h2 className="text-sm font-semibold text-[var(--bt-text)]">{selected?.subject ?? "Conversation"}</h2>
+            </header>
+            <div className="flex flex-col gap-3 p-4">
+              {messages.length === 0 ? <p className="text-sm text-[var(--bt-muted)]">No messages in this conversation.</p> : null}
+              {messages.map((message) => (
+                <div key={message.id} className="rounded border px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
+                  <div className="flex items-center justify-between text-xs text-[var(--bt-muted)]">
+                    <span className="font-medium text-[var(--bt-text)]">{message.authorUser?.name ?? message.authorUser?.email ?? "Unknown"}</span>
+                    <span>{formatDate(message.createdAt)}</span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{message.body}</p>
                 </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{message.body}</p>
-              </div>
-            ))
-          )}
+              ))}
+            </div>
+            {selected ? <MessageForm jobId={job.id} threadId={selected.id ?? GENERAL_THREAD_ID} /> : null}
+          </section>
         </div>
-        <MessageForm jobId={job.id} />
-      </div>
+      )}
     </div>
   );
 }

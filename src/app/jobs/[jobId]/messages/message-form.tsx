@@ -6,7 +6,7 @@ import { postJobMessageAction, type ActionState } from "./actions";
 
 const INITIAL: ActionState = {};
 
-export function MessageForm({ jobId }: { jobId: string }) {
+export function MessageForm({ jobId, threadId }: { jobId: string; threadId: string }) {
   const [state, formAction, pending] = useActionState(postJobMessageAction, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -21,20 +21,16 @@ export function MessageForm({ jobId }: { jobId: string }) {
       style={{ borderColor: "var(--bt-border)" }}
     >
       <input type="hidden" name="jobId" value={jobId} />
+      <input type="hidden" name="threadId" value={threadId} />
       <textarea
         name="body"
         required
         rows={2}
-        placeholder="Write a message…"
+        placeholder="Write a reply…"
         className="flex-1 rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
         style={{ borderColor: "var(--bt-border)" }}
       />
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
-        style={{ background: "var(--bt-primary)" }}
-      >
+      <button type="submit" disabled={pending} className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50" style={{ background: "var(--bt-primary)" }}>
         {pending ? "Sending…" : "Send"}
       </button>
       {state.error ? <p className="text-xs text-red-600">{state.error}</p> : null}
