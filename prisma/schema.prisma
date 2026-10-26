@@ -2279,6 +2279,7 @@ model Client {
   actionTokens   ClientActionToken[]
   proposals      Proposal[]
   warrantyClaims WarrantyClaim[]
+  surveys        Survey[]
   /// Leads whose contact was linked to this Client via "Choose from existing
   /// contacts" in the Add Lead Opportunity modal.
   leadsAsContact Lead[]
@@ -3350,12 +3351,19 @@ model Survey {
 
   title      String
   touchpoint SurveyTouchpoint
+  /// Optional invitation copy shown when issuing a response link (not emailed yet).
+  invitationBody String?
+  releaseAt      DateTime?
+  clientId       String?
+  client         Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   questions     SurveyQuestion[]
   responseLinks SurveyResponseLink[]
+
+  @@index([jobId])
 }
 
 model SurveyQuestion {

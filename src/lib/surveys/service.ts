@@ -39,11 +39,22 @@ export interface CreateSurveyInput {
   readonly title: string;
   readonly touchpoint: "PRE_PROJECT" | "MID_PROJECT" | "POST_COMPLETION";
   readonly questions: readonly CreateSurveyQuestionInput[];
+  readonly invitationBody?: string | null;
+  readonly releaseAt?: Date | null;
+  readonly clientId?: string | null;
 }
 
 export async function createSurvey(input: CreateSurveyInput) {
   const job = await db.job.findFirst({ where: { id: input.jobId, organizationId: input.organizationId }, select: { id: true } });
   if (!job) throw new JobNotFoundError(input.jobId);
+
+  if (input.clientId) {
+    const client = await db.client.findFirst({
+      where: { id: input.clientId, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    if (!client) throw new Error(`Client ${input.clientId} not found`);
+  }
 
   return db.survey.create({
     data: {
@@ -51,6 +62,9 @@ export async function createSurvey(input: CreateSurveyInput) {
       jobId: input.jobId,
       title: input.title,
       touchpoint: input.touchpoint,
+      invitationBody: input.invitationBody?.trim() || null,
+      releaseAt: input.releaseAt ?? null,
+      clientId: input.clientId ?? null,
       questions: { create: input.questions.map((q, index) => ({ prompt: q.prompt, sortOrder: index })) },
     },
     include: { questions: { orderBy: { sortOrder: "asc" } } },
