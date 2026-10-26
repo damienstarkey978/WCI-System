@@ -1,11 +1,16 @@
 "use client";
 
+import Link from "next/link";
+
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDateUtc, formatMoney } from "@/lib/format";
 
 export interface SelectionRow {
   readonly id: string;
+  readonly jobId: string;
   readonly title: string;
+  readonly category: string | null;
+  readonly location: string | null;
   readonly allowanceTitle: string | null;
   readonly dueDate: string | null;
   readonly status: "Pending" | "Approved" | "Declined";
@@ -31,10 +36,21 @@ const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
 /** Client halves of the Selections list/allowances views; see purchase-orders-grid.tsx for why the split exists. */
 export function SelectionsListGrid({ rows }: { rows: readonly SelectionRow[] }) {
   const columns: DataGridColumn<SelectionRow>[] = [
-    { key: "title", header: "Title", sortable: true, render: (row) => <span className="font-medium">{row.title}</span> },
+    {
+      key: "title",
+      header: "Title",
+      sortable: true,
+      render: (row) => (
+        <Link href={`/jobs/${row.jobId}/selections/${row.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
+          {row.title}
+        </Link>
+      ),
+    },
+    { key: "category", header: "Category", render: (row) => row.category || "Unassigned" },
+    { key: "location", header: "Location", render: (row) => row.location || "Unassigned" },
     { key: "allowance", header: "Allowance", render: (row) => row.allowanceTitle ?? "" },
-    { key: "dueDate", header: "Due", sortable: true, render: (row) => (row.dueDate ? formatDate(new Date(row.dueDate)) : "") },
-    { key: "options", header: "Options", align: "right", render: (row) => row.optionCount },
+    { key: "dueDate", header: "Deadline", sortable: true, render: (row) => (row.dueDate ? formatDateUtc(new Date(row.dueDate)) : "") },
+    { key: "options", header: "Choices", align: "right", render: (row) => row.optionCount },
     {
       key: "status",
       header: "Status",

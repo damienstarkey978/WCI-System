@@ -2397,6 +2397,11 @@ model Allowance {
   @@index([jobId])
 }
 
+enum SelectionType {
+  SINGLE
+  SHARED
+}
+
 model Selection {
   id             String       @id @default(cuid())
   organizationId String
@@ -2411,12 +2416,20 @@ model Selection {
   description String?
   dueDate     DateTime?
 
+  /// Buildertrend category / location labels used by Hierarchy view (freeform for v1).
+  category String?
+  location String?
+  /// When true, client portal treats this selection as required before closing.
+  requireClientSelection Boolean @default(false)
+  selectionType          SelectionType @default(SINGLE)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   options SelectionOption[]
 
   @@index([jobId])
+  @@index([jobId, category])
 }
 
 enum SelectionOptionStatus {

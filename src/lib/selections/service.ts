@@ -9,7 +9,7 @@
  * Budget until approval, exactly like Change Orders (src/lib/change-orders).
  */
 
-import { SelectionOptionStatus } from "@/generated/prisma/enums";
+import { SelectionOptionStatus, SelectionType } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { acceptsNewCommitments } from "@/lib/job-status";
 import type { Cents } from "@/lib/money";
@@ -107,7 +107,12 @@ export interface CreateSelectionInput {
   readonly title: string;
   readonly description?: string | null;
   readonly dueDate?: Date | null;
-  readonly options: readonly CreateSelectionOptionInput[];
+  readonly category?: string | null;
+  readonly location?: string | null;
+  readonly requireClientSelection?: boolean;
+  readonly selectionType?: SelectionType;
+  /** Empty allowed — BT saves the shell first, then adds choices. */
+  readonly options?: readonly CreateSelectionOptionInput[];
 }
 
 export async function createSelection(input: CreateSelectionInput) {
@@ -122,6 +127,8 @@ export async function createSelection(input: CreateSelectionInput) {
     if (!allowance) throw new AllowanceNotFoundError(input.allowanceId);
   }
 
+  const options = input.options ?? [];
+
   return db.selection.create({
     data: {
       organizationId: input.organizationId,
@@ -130,17 +137,107 @@ export async function createSelection(input: CreateSelectionInput) {
       title: input.title,
       description: input.description ?? null,
       dueDate: input.dueDate ?? null,
-      options: {
-        create: input.options.map((option, index) => ({
-          title: option.title,
-          description: option.description ?? null,
-          priceCents: option.priceCents,
-          clientPriceCents: option.clientPriceCents,
-          sortOrder: index,
-        })),
-      },
+      category: input.category?.trim() || null,
+      location: input.location?.trim() || null,
+      requireClientSelection: input.requireClientSelection ?? false,
+      selectionType: input.selectionType ?? SelectionType.SINGLE,
+      ...(options.length > 0
+        ? {
+            options: {
+              create: options.map((option, index) => ({
+                title: option.title,
+                description: option.description ?? null,
+                priceCents: option.priceCents,
+                clientPriceCents: option.clientPriceCents,
+                sortOrder: index,
+              })),
+            },
+          }
+        : {}),
     },
     include: { options: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+export interface UpdateSelectionInput {
+  readonly organizationId: string;
+  readonly selectionId: string;
+  readonly title?: string;
+  readonly description?: string | null;
+  readonly dueDate?: Date | null;
+  readonly category?: string | null;
+  readonly location?: string | null;
+  readonly requireClientSelection?: boolean;
+  readonly selectionType?: SelectionType;
+  readonly allowanceId?: string | null;
+}
+
+export async function updateSelection(input: UpdateSelectionInput) {
+  const existing = await db.selection.findFirst({
+    where: { id: input.selectionId, organizationId: input.organizationId },
+    include: { options: true },
+  });
+  if (!existing) throw new SelectionNotFoundError(input.selectionId);
+  if (existing.options.some((option) => option.status === SelectionOptionStatus.APPROVED)) {
+    throw new SelectionAlreadyDecidedError(existing.id);
+  }
+
+  if (input.allowanceId) {
+    const allowance = await db.allowance.findFirst({
+      where: { id: input.allowanceId, organizationId: input.organizationId, jobId: existing.jobId },
+      select: { id: true },
+    });
+    if (!allowance) throw new AllowanceNotFoundError(input.allowanceId);
+  }
+
+  return db.selection.update({
+    where: { id: existing.id },
+    data: {
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+      ...(input.category !== undefined ? { category: input.category?.trim() || null } : {}),
+      ...(input.location !== undefined ? { location: input.location?.trim() || null } : {}),
+      ...(input.requireClientSelection !== undefined ? { requireClientSelection: input.requireClientSelection } : {}),
+      ...(input.selectionType !== undefined ? { selectionType: input.selectionType } : {}),
+      ...(input.allowanceId !== undefined ? { allowanceId: input.allowanceId } : {}),
+    },
+    include: { options: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+export async function addSelectionOption(
+  organizationId: string,
+  selectionId: string,
+  option: CreateSelectionOptionInput,
+) {
+  const selection = await db.selection.findFirst({
+    where: { id: selectionId, organizationId },
+    include: {
+      options: {
+        orderBy: { sortOrder: "desc" },
+        take: 1,
+      },
+    },
+  });
+  if (!selection) throw new SelectionNotFoundError(selectionId);
+
+  const decided = await db.selectionOption.findFirst({
+    where: { selectionId, status: SelectionOptionStatus.APPROVED },
+    select: { id: true },
+  });
+  if (decided) throw new SelectionAlreadyDecidedError(selectionId);
+
+  const nextSort = (selection.options[0]?.sortOrder ?? -1) + 1;
+  return db.selectionOption.create({
+    data: {
+      selectionId,
+      title: option.title,
+      description: option.description ?? null,
+      priceCents: option.priceCents,
+      clientPriceCents: option.clientPriceCents,
+      sortOrder: nextSort,
+    },
   });
 }
 

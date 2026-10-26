@@ -547,7 +547,12 @@ export const createSelectionSchema = z.object({
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().max(5_000).nullish(),
   dueDate: z.coerce.date().nullish(),
-  options: z.array(createSelectionOptionInputSchema).min(1).max(50),
+  category: z.string().trim().max(255).nullish(),
+  location: z.string().trim().max(255).nullish(),
+  requireClientSelection: z.boolean().optional(),
+  selectionType: z.enum(["SINGLE", "SHARED"]).optional(),
+  /// Empty allowed: Buildertrend saves the selection first, then adds choices.
+  options: z.array(createSelectionOptionInputSchema).max(50).default([]),
 });
 
 export const requestApprovalLinkSchema = z.object({
