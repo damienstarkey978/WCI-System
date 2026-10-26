@@ -184,6 +184,7 @@ model User {
   authoredDailyLogs         DailyLog[]
   assignedTodos             Todo[]
   assignedRfis              Rfi[]
+  managedSubmittals         Submittal[] @relation("SubmittalManager")
   uploadedFiles             File[]
   authoredComments          Comment[]
   notifications             Notification[]
@@ -2523,6 +2524,7 @@ model Vendor {
   bills          Bill[]
   bidSubmissions BidSubmission[]
   warrantyClaims WarrantyClaim[]
+  submittals     Submittal[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -3179,13 +3181,22 @@ model SpecificationSection {
 enum SubmittalType {
   MATERIAL_SPEC
   SHOP_DRAWING
+  PRODUCT_DATA
+  SAMPLE
+  OTHER
 }
 
 enum SubmittalStatus {
+  DRAFT
+  /// Displayed as "Needs review" (Buildertrend wording).
   PENDING
+  IN_APPROVAL
   APPROVED
-  REJECTED
+  APPROVED_AS_NOTED
   REVISE_AND_RESUBMIT
+  REJECTED
+  VOIDED
+  AWAITING_DOCUMENTS
 }
 
 model Submittal {
@@ -3195,9 +3206,25 @@ model Submittal {
   jobId          String
   job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
+  /// Per-job sequential number, like RFI/CO.
+  number Int
   title  String
   type   SubmittalType
+  /// App create path sets DRAFT; DB default stays PENDING for additive safety with enum expands.
   status SubmittalStatus @default(PENDING)
+
+  description String?
+  /// Freeform package label for v1 (full SubmittalPackage model later).
+  packageName String?
+  /// CSI MasterFormat division label, freeform for v1.
+  division    String?
+  specSection String?
+  finalDueDate DateTime?
+
+  managerUserId String?
+  managerUser   User?   @relation("SubmittalManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  vendorId      String?
+  vendor        Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3205,6 +3232,7 @@ model Submittal {
   revisions   SubmittalRevision[]
   reviewLinks SubmittalReviewLink[]
 
+  @@unique([jobId, number])
   @@index([jobId, status])
 }
 

@@ -726,9 +726,16 @@ export const generateSpecificationFromEstimateSchema = z.object({
 export const createSubmittalSchema = z.object({
   jobId: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(255),
-  type: z.enum(["MATERIAL_SPEC", "SHOP_DRAWING"]),
-  documentUrl: z.string().url().max(2_000),
+  type: z.enum(["MATERIAL_SPEC", "SHOP_DRAWING", "PRODUCT_DATA", "SAMPLE", "OTHER"]),
+  documentUrl: z.string().url().max(2_000).nullish(),
   notes: z.string().trim().max(5_000).nullish(),
+  description: z.string().trim().max(10_000).nullish(),
+  packageName: z.string().trim().max(255).nullish(),
+  division: z.string().trim().max(255).nullish(),
+  specSection: z.string().trim().max(255).nullish(),
+  finalDueDate: z.string().datetime().nullish(),
+  managerUserId: z.string().min(1).max(64).nullish(),
+  vendorId: z.string().min(1).max(64).nullish(),
 });
 
 export const addSubmittalRevisionSchema = z.object({

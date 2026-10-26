@@ -38,7 +38,12 @@ export const POST = withApiAuth(["submittals:write"], async (request, auth) => {
   }
 
   try {
-    const submittal = await createSubmittal({ organizationId: auth.organizationId, ...parsed.data });
+    const { finalDueDate, ...rest } = parsed.data;
+    const submittal = await createSubmittal({
+      organizationId: auth.organizationId,
+      ...rest,
+      finalDueDate: finalDueDate ? new Date(finalDueDate) : null,
+    });
     return Response.json({ data: submittal }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) return apiError(422, "unknown_job", error.message);
