@@ -9,6 +9,7 @@ import { draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/e
 import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
 import { listEnabledAiPreferenceInstructions } from "@/lib/ai/preference-instructions";
 import { createChangeOrder, JobNotFoundError as ChangeOrderJobNotFoundError, JobNotOpenError } from "@/lib/change-orders/service";
+import { ClientNotFoundError, createProposal } from "@/lib/proposals/service";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -24,11 +25,24 @@ export class NoCostCodesError extends Error {
   }
 }
 
+export { ClientNotFoundError };
+
 export interface CreateAiEstimateDraftInput {
   readonly organizationId: string;
   readonly jobId: string;
   readonly notes: string;
   readonly images?: readonly DraftEstimateImageInput[];
+  /**
+   * Handy-style notes → estimate lines → proposal: when true, also persist the
+   * AI's client-facing narrative (projectDescription + proposalSections) as a
+   * DRAFT Proposal linked to this job. Requires a client on the job (or an
+   * explicit clientId). Admin/API callers leave this false so they only get the
+   * Estimate worksheet.
+   */
+  readonly createProposal?: boolean;
+  /** Prefer this client when createProposal is true; otherwise the first client
+   *  with job access is used. */
+  readonly clientId?: string;
 }
 
 export interface CreateAiEstimateDraftResult {
@@ -36,6 +50,9 @@ export interface CreateAiEstimateDraftResult {
   readonly title: string;
   readonly assumptions: readonly string[];
   readonly lineItemCount: number;
+  readonly proposalId?: string;
+  /** Set when createProposal was requested but no client could be resolved. */
+  readonly proposalSkippedReason?: string;
 }
 
 async function loadDraftingCatalogs(
@@ -73,6 +90,11 @@ async function loadDraftingCatalogs(
  * The created estimate is always DRAFT, never locked and never sent to the budget —
  * a human reviews and edits it like any hand-entered estimate before "Send to Job
  * Budget" touches real numbers.
+ *
+ * When `createProposal` is true (Jarvis Handy path), also creates a DRAFT Proposal
+ * with the AI's client-facing narrative — same estimate/proposal split as
+ * draftLeadProposalFromNotes (src/lib/crm/lead-proposal.ts), but anchored to an
+ * existing Job. Admin/API callers omit that flag and only get the Estimate.
  */
 export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): Promise<CreateAiEstimateDraftResult> {
   const job = await db.job.findFirst({
@@ -95,11 +117,6 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
     preferenceInstructions,
   });
 
-  // This admin-only tool has no client/lead context to attach a Proposal to, so
-  // draft.projectDescription and draft.proposalSections (the client-facing side of
-  // the split) are intentionally discarded here — only the Estimate is persisted.
-  // The AI-drafted proposal narrative is wired up separately in the Lead Proposal
-  // flow (src/lib/crm/lead-proposal.ts), where a real Proposal row can be created.
   const estimate = await db.estimate.create({
     data: {
       organizationId: input.organizationId,
@@ -127,12 +144,52 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
 
-  return {
+  const base: CreateAiEstimateDraftResult = {
     estimateId: estimate.id,
     title: estimate.title,
     assumptions: draft.assumptions,
     lineItemCount: estimate.lineItems.length,
   };
+
+  if (!input.createProposal) {
+    return base;
+  }
+
+  let clientId = input.clientId ?? null;
+  if (clientId) {
+    const client = await db.client.findFirst({
+      where: { id: clientId, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    if (!client) throw new ClientNotFoundError(clientId);
+  } else {
+    const access = await db.clientJobAccess.findFirst({
+      where: { jobId: job.id, client: { organizationId: input.organizationId } },
+      orderBy: { createdAt: "asc" },
+      select: { clientId: true },
+    });
+    clientId = access?.clientId ?? null;
+  }
+
+  if (!clientId) {
+    return {
+      ...base,
+      proposalSkippedReason:
+        "No client is linked to this job yet — the estimate was saved as DRAFT. Link a client (or pass clientId) and ask Jarvis to draft again, or attach this estimate to a proposal with add_proposal_option.",
+    };
+  }
+
+  const proposal = await createProposal({
+    organizationId: input.organizationId,
+    jobId: job.id,
+    clientId,
+    title: draft.title,
+    coverMessage: draft.projectDescription,
+    options: [{ estimateId: estimate.id, label: "Option 1" }],
+    sections: draft.proposalSections,
+  });
+
+  return { ...base, proposalId: proposal.id };
 }
 
 export interface CreateAiChangeOrderDraftInput {

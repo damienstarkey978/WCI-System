@@ -9,12 +9,23 @@
  * single-shot form: type a message, Jarvis replies with real text (and, when it
  * calls a tool like draft_lead_proposal, a plain-language confirmation + link —
  * never a silent redirect).
+ *
+ * Confirm/Decline for pending actions and polling for async draft_lead_proposal
+ * worker replies also live here so the Handy-style notes → estimate → proposal
+ * flow can finish without forcing a trip to the full /jarvis page.
  */
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 
-import { sendJarvisLauncherMessageAction, type LauncherActionState } from "@/app/jarvis/actions";
+import {
+  confirmPendingActionLauncherAction,
+  declinePendingActionLauncherAction,
+  refreshJarvisLauncherConversationAction,
+  sendJarvisLauncherMessageAction,
+  type LauncherActionState,
+  type LauncherPendingActionData,
+} from "@/app/jarvis/actions";
 import { prepareJarvisAttachments } from "@/lib/client/prepare-jarvis-attachments";
 import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
 import { JarvisVoiceButton } from "@/components/jarvis/JarvisVoiceButton";
@@ -22,6 +33,7 @@ import { useFunUi } from "@/components/jarvis/useFunUi";
 import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 const STORAGE_KEY_PREFIX = "jarvis-chat-conversation-id";
+const DRAFT_POLL_MS = 4_000;
 
 interface JarvisChatPanelProps {
   readonly context: Record<string, unknown> | null;
@@ -37,6 +49,91 @@ interface JarvisChatPanelProps {
    *  flight — e.g. swap the mascot's face to "thinking" — without lifting the whole
    *  useActionState up. */
   readonly onPendingChange?: (pending: boolean) => void;
+}
+
+function isWaitingOnAsyncDraft(messages: readonly { role: string; content: string }[]): boolean {
+  const lastAssistant = [...messages].reverse().find((message) => message.role === "ASSISTANT");
+  if (!lastAssistant) return false;
+  return (
+    lastAssistant.content.includes("Queued that up") ||
+    lastAssistant.content.includes("I'll post the result right here")
+  );
+}
+
+function EmbeddedPendingActionCard({
+  conversationId,
+  action,
+  onResolved,
+}: {
+  conversationId: string;
+  action: LauncherPendingActionData;
+  onResolved: (state: LauncherActionState) => void;
+}) {
+  const [confirmPending, startConfirm] = useTransition();
+  const [declinePending, startDecline] = useTransition();
+
+  if (action.status === "PENDING") {
+    return (
+      <div className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-950">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Waiting on your confirmation</div>
+        <p className="mt-1 text-sm">{action.summary}</p>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            disabled={confirmPending || declinePending}
+            onClick={() => {
+              const formData = new FormData();
+              formData.set("conversationId", conversationId);
+              formData.set("actionId", action.id);
+              startConfirm(async () => {
+                const next = await confirmPendingActionLauncherAction({}, formData);
+                onResolved(next);
+              });
+            }}
+            className="rounded bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {confirmPending ? "…" : "Confirm"}
+          </button>
+          <button
+            type="button"
+            disabled={confirmPending || declinePending}
+            onClick={() => {
+              const formData = new FormData();
+              formData.set("conversationId", conversationId);
+              formData.set("actionId", action.id);
+              startDecline(async () => {
+                const next = await declinePendingActionLauncherAction({}, formData);
+                onResolved(next);
+              });
+            }}
+            className="rounded border border-amber-400 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {declinePending ? "…" : "Decline"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-lg border px-2.5 py-2 text-xs"
+      style={
+        action.status === "CONFIRMED"
+          ? {
+              borderColor: "color-mix(in srgb, var(--bt-success) 35%, transparent)",
+              background: "color-mix(in srgb, var(--bt-success) 14%, transparent)",
+              color: "var(--bt-success)",
+            }
+          : { borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)", color: "var(--bt-muted)" }
+      }
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-wide">
+        {action.status === "CONFIRMED" ? "Confirmed" : "Declined"}
+      </div>
+      <p className="mt-1 text-sm">{action.resultSummary ?? action.summary}</p>
+    </div>
+  );
 }
 
 function JarvisChatBody({
@@ -65,29 +162,56 @@ function JarvisChatBody({
   const [state, formAction, pending] = useActionState<LauncherActionState, FormData>(sendJarvisLauncherMessageAction, {
     conversationId: initialConversationId,
   });
+  // Confirm/Decline/poll refresh land here; cleared when the user sends a new message
+  // so useActionState's reply wins without an effect that resets on every send.
+  const [overlayState, setOverlayState] = useState<LauncherActionState | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Bumped on each send so an in-flight draft poll can't overwrite the new reply.
+  const sendEpochRef = useRef(0);
   // Covers compressing photos in the browser, which happens before formAction (and
   // therefore useActionState's own `pending`) ever starts — see chat-input-form.tsx's
   // identical note.
   const [preparing, setPreparing] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [, startRefresh] = useTransition();
+
+  // After a send, `state` is authoritative (overlay was cleared in the form submit).
+  // After Confirm/Decline/async-draft poll, overlay holds the fresher snapshot.
+  const viewState =
+    overlayState && (!state.conversationId || overlayState.conversationId === state.conversationId)
+      ? { ...state, ...overlayState }
+      : state;
 
   useEffect(() => {
-    if (state.conversationId) sessionStorage.setItem(storageKeyFull, state.conversationId);
-  }, [state.conversationId, storageKeyFull]);
+    if (viewState.conversationId) sessionStorage.setItem(storageKeyFull, viewState.conversationId);
+  }, [viewState.conversationId, storageKeyFull]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [state.messages]);
+  }, [viewState.messages, viewState.pendingActions]);
 
   useEffect(() => {
     onPendingChange?.(pending);
   }, [pending, onPendingChange]);
 
-  const messages = state.messages ?? [];
-  const pendingCount = state.pendingCount ?? 0;
-  const conversationId = state.conversationId;
+  const messages = viewState.messages ?? [];
+  const pendingActions = viewState.pendingActions ?? [];
+  const pendingCount = viewState.pendingCount ?? pendingActions.filter((action) => action.status === "PENDING").length;
+  const conversationId = viewState.conversationId;
+  const waitingOnDraft = isWaitingOnAsyncDraft(messages);
+
+  useEffect(() => {
+    if (!conversationId || !waitingOnDraft || pending) return;
+    const epochAtStart = sendEpochRef.current;
+    const timer = window.setInterval(() => {
+      startRefresh(async () => {
+        const next = await refreshJarvisLauncherConversationAction(conversationId);
+        if (sendEpochRef.current === epochAtStart) setOverlayState(next);
+      });
+    }, DRAFT_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [conversationId, waitingOnDraft, pending]);
 
   function fillSuggestion(suggestion: string) {
     const textarea = formRef.current?.elements.namedItem("text");
@@ -157,7 +281,7 @@ function JarvisChatBody({
       </div>
 
       <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
-        {messages.length === 0 ? (
+        {messages.length === 0 && pendingActions.length === 0 ? (
           <div className="flex flex-1 flex-col justify-center gap-2">
             <p className="text-center text-sm text-[var(--bt-muted)]">{emptyStateHint}</p>
             {suggestions.length > 0 ? (
@@ -177,20 +301,35 @@ function JarvisChatBody({
             ) : null}
           </div>
         ) : (
-          messages.map((message) => (
-            <div key={message.id} className={`flex ${message.role === "USER" ? "justify-end" : "justify-start"}`}>
-              <div
-                className="max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm"
-                style={
-                  message.role === "USER"
-                    ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" }
-                    : { background: "var(--bt-panel-bg-muted)", color: "var(--bt-text)" }
-                }
-              >
-                {message.content}
+          <>
+            {messages.map((message) => (
+              <div key={message.id} className={`flex ${message.role === "USER" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className="max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm"
+                  style={
+                    message.role === "USER"
+                      ? { background: "var(--bt-primary)", color: "var(--bt-on-primary)" }
+                      : { background: "var(--bt-panel-bg-muted)", color: "var(--bt-text)" }
+                  }
+                >
+                  {message.content}
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+            {conversationId
+              ? pendingActions.map((action) => (
+                  <div key={action.id} className="flex justify-start">
+                    <div className="max-w-[85%]">
+                      <EmbeddedPendingActionCard
+                        conversationId={conversationId}
+                        action={action}
+                        onResolved={setOverlayState}
+                      />
+                    </div>
+                  </div>
+                ))
+              : null}
+          </>
         )}
         {pending ? (
           <div className="flex items-center gap-2 justify-start">
@@ -200,7 +339,10 @@ function JarvisChatBody({
             </div>
           </div>
         ) : null}
-        {pendingCount > 0 && conversationId ? (
+        {waitingOnDraft && !pending ? (
+          <p className="text-center text-xs text-[var(--bt-muted)]">Still drafting — this chat will update when it finishes…</p>
+        ) : null}
+        {pendingCount > 0 && conversationId && pendingActions.length === 0 ? (
           <div className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
             {pendingCount} action{pendingCount === 1 ? "" : "s"} waiting on your confirmation —{" "}
             <Link href={`/jarvis/${conversationId}`} className="font-semibold hover:underline">
@@ -215,6 +357,8 @@ function JarvisChatBody({
         ref={formRef}
         action={async (formData) => {
           setAttachmentError(null);
+          sendEpochRef.current += 1;
+          setOverlayState(null);
           setPreparing(true);
           const prepared = await prepareJarvisAttachments(formData).finally(() => setPreparing(false));
           if (prepared.error) {
@@ -257,8 +401,8 @@ function JarvisChatBody({
         </label>
       </form>
       {preparing ? <p className="px-2.5 pb-2 text-xs text-[var(--bt-muted)]">Preparing photos…</p> : null}
-      {attachmentError ?? state.error ? (
-        <p className="px-2.5 pb-2 text-xs text-red-600">{attachmentError ?? state.error}</p>
+      {attachmentError ?? viewState.error ? (
+        <p className="px-2.5 pb-2 text-xs text-red-600">{attachmentError ?? viewState.error}</p>
       ) : null}
     </div>
   );

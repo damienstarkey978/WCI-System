@@ -29,7 +29,7 @@ export function CreateLeadProposalForm({
       <input type="hidden" name="leadId" value={leadId} />
       <h2 className="text-sm font-semibold text-[var(--bt-text)]">New proposal</h2>
       <p className="mt-1 text-xs text-[var(--bt-muted)]">
-        Creating a proposal converts this lead to a job (if it hasn&apos;t been already) and prices it off a new estimate.
+        Builds a DRAFT estimate and client-facing proposal off this lead. Accepting the proposal later is what creates the Job — nothing is sent or converted until you say so.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">

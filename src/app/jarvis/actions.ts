@@ -12,7 +12,7 @@ import {
   confirmPendingAction,
   declinePendingAction,
 } from "@/lib/jarvis/pending-actions";
-import { ConversationNotFoundError, sendJarvisMessage } from "@/lib/jarvis/service";
+import { ConversationNotFoundError, getConversation, sendJarvisMessage } from "@/lib/jarvis/service";
 
 export interface ActionState {
   readonly error?: string;
@@ -78,20 +78,60 @@ export interface LauncherMessageData {
   readonly createdAt: string;
 }
 
+export interface LauncherPendingActionData {
+  readonly id: string;
+  readonly summary: string;
+  readonly status: "PENDING" | "CONFIRMED" | "DECLINED";
+  readonly resultSummary: string | null;
+  readonly createdAt: string;
+}
+
 export interface LauncherActionState {
   readonly error?: string;
   readonly conversationId?: string;
   readonly messages?: readonly LauncherMessageData[];
+  readonly pendingActions?: readonly LauncherPendingActionData[];
   readonly pendingCount?: number;
+}
+
+function toLauncherState(conversation: {
+  readonly id: string;
+  readonly messages: readonly { id: string; role: "USER" | "ASSISTANT"; content: string; createdAt: Date }[];
+  readonly pendingActions: readonly {
+    id: string;
+    summary: string;
+    status: "PENDING" | "CONFIRMED" | "DECLINED";
+    resultSummary: string | null;
+    createdAt: Date;
+  }[];
+}): LauncherActionState {
+  const pendingActions = conversation.pendingActions.map((action) => ({
+    id: action.id,
+    summary: action.summary,
+    status: action.status,
+    resultSummary: action.resultSummary,
+    createdAt: action.createdAt.toISOString(),
+  }));
+  return {
+    conversationId: conversation.id,
+    messages: conversation.messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt.toISOString(),
+    })),
+    pendingActions,
+    pendingCount: pendingActions.filter((action) => action.status === "PENDING").length,
+  };
 }
 
 /**
  * The docked-launcher counterpart to sendJarvisMessageAction (src/components/jarvis/
  * JarvisLauncher.tsx) — same underlying sendJarvisMessage call, but returns the
  * conversation as data instead of redirecting, since the launcher is a panel over
- * whatever page the user was already on, not a destination. Confirming/declining a
- * queued action still only happens on the full /jarvis/[conversationId] page — this
- * only reports how many are waiting.
+ * whatever page the user was already on, not a destination. Pending confirm cards
+ * are returned here too so the embedded panel can Confirm/Decline without forcing
+ * a trip to the full /jarvis page (Handy-style stay-on-page flow).
  */
 export async function sendJarvisLauncherMessageAction(_previous: LauncherActionState, formData: FormData): Promise<LauncherActionState> {
   const user = await requireAppUser();
@@ -123,19 +163,25 @@ export async function sendJarvisLauncherMessageAction(_previous: LauncherActionS
     const conversation = await sendJarvisMessage({ organizationId: user.organizationId, userId: user.id, conversationId, text, context, images });
     revalidatePath("/jarvis");
     revalidatePath(`/jarvis/${conversation.id}`);
-    return {
-      conversationId: conversation.id,
-      messages: conversation.messages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        createdAt: message.createdAt.toISOString(),
-      })),
-      pendingCount: conversation.pendingActions.filter((action) => action.status === "PENDING").length,
-    };
+    return toLauncherState(conversation);
   } catch (error) {
     if (error instanceof AiNotConfiguredError) return { error: "Jarvis isn't configured yet — set ANTHROPIC_API_KEY in .env.", conversationId };
     if (error instanceof ConversationNotFoundError || error instanceof JarvisReplyError) return { error: error.message, conversationId };
+    throw error;
+  }
+}
+
+/**
+ * Re-read an embedded conversation (messages + pending actions) without sending —
+ * used to pick up async draft_lead_proposal worker replies and after Confirm/Decline.
+ */
+export async function refreshJarvisLauncherConversationAction(conversationId: string): Promise<LauncherActionState> {
+  const user = await requireAppUser();
+  try {
+    const conversation = await getConversation(user.organizationId, user.id, conversationId);
+    return toLauncherState(conversation);
+  } catch (error) {
+    if (error instanceof ConversationNotFoundError) return { error: error.message, conversationId };
     throw error;
   }
 }
@@ -168,4 +214,44 @@ export async function declinePendingActionAction(formData: FormData): Promise<vo
   }
 
   revalidatePath(`/jarvis/${conversationId}`);
+}
+
+/** Embedded-panel Confirm — returns refreshed launcher state instead of relying on a full-page revalidate. */
+export async function confirmPendingActionLauncherAction(
+  previous: LauncherActionState,
+  formData: FormData,
+): Promise<LauncherActionState> {
+  const user = await requireAppUser();
+  const conversationId = String(formData.get("conversationId") ?? "") || previous.conversationId;
+  const actionId = String(formData.get("actionId") ?? "");
+  if (!conversationId || !actionId) return { ...previous, error: "Missing confirmation details." };
+
+  try {
+    await confirmPendingAction(user.organizationId, actionId, user.role);
+  } catch (error) {
+    if (!(error instanceof PendingActionNotFoundError) && !(error instanceof PendingActionNotPendingError)) throw error;
+  }
+
+  revalidatePath(`/jarvis/${conversationId}`);
+  return refreshJarvisLauncherConversationAction(conversationId);
+}
+
+/** Embedded-panel Decline — same shape as confirmPendingActionLauncherAction. */
+export async function declinePendingActionLauncherAction(
+  previous: LauncherActionState,
+  formData: FormData,
+): Promise<LauncherActionState> {
+  const user = await requireAppUser();
+  const conversationId = String(formData.get("conversationId") ?? "") || previous.conversationId;
+  const actionId = String(formData.get("actionId") ?? "");
+  if (!conversationId || !actionId) return { ...previous, error: "Missing decline details." };
+
+  try {
+    await declinePendingAction(user.organizationId, actionId);
+  } catch (error) {
+    if (!(error instanceof PendingActionNotFoundError) && !(error instanceof PendingActionNotPendingError)) throw error;
+  }
+
+  revalidatePath(`/jarvis/${conversationId}`);
+  return refreshJarvisLauncherConversationAction(conversationId);
 }

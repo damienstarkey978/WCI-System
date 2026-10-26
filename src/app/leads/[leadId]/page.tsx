@@ -11,6 +11,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { estimateTotalCents } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
+import { JARVIS_LEAD_PROPOSAL_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 import { ConvertToJobButton } from "../convert-form";
 import { StageSelect } from "../stage-select";
@@ -259,7 +260,8 @@ export default async function LeadDetailPage({
                 tab: "proposals",
               }}
               storageKey={`lead-proposal:${lead.id}`}
-              emptyStateHint="Give Jarvis the scope of work, measurements, and any photos — it drafts a full line-item estimate and the client-facing proposal that goes with it, always as a DRAFT for you to review before anything is sent."
+              suggestions={[...JARVIS_LEAD_PROPOSAL_SUGGESTIONS]}
+              emptyStateHint="Give Jarvis the scope of work, measurements, and any photos — it drafts a full line-item estimate and the client-facing proposal that goes with it (Handy-style), always as a DRAFT for you to review before anything is sent."
               heightClassName="h-96"
             />
           ) : null}

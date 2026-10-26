@@ -31,6 +31,7 @@ import { ChangeOrderMode, ChangeOrderStatus, ContractType, InvoiceStatus, JobSta
 import { AiNotConfiguredError, DraftGenerationError } from "@/lib/ai/estimate-assistant";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
 import {
+  ClientNotFoundError as AiDraftClientNotFoundError,
   createAiChangeOrderDraft,
   createAiEstimateDraft,
   JobNotFoundError as AiDraftJobNotFoundError,
@@ -45,8 +46,14 @@ import { createChangeOrder } from "@/lib/change-orders/service";
 import { createClient, grantJobAccess } from "@/lib/client-portal/service";
 import { vendorTradeLabel } from "@/lib/vendor-portal/labels";
 import { createVendor } from "@/lib/vendor-portal/service";
+import {
+  draftLeadProposalFromNotes,
+  LeadMissingContactError,
+  LeadNotFoundError as LeadProposalLeadNotFoundError,
+  NoCostCodesError as LeadProposalNoCostCodesError,
+} from "@/lib/crm/lead-proposal";
 import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/service";
-import { queueProposalDraftJob } from "@/lib/jarvis/proposal-draft-jobs";
+import { ProposalDraftWorkerNotConfiguredError, queueProposalDraftJob } from "@/lib/jarvis/proposal-draft-jobs";
 import { db } from "@/lib/db";
 import { ProposalTemplateNotFoundError } from "@/lib/proposal-templates/service";
 import { readTemplateDraws, readTemplateSections } from "@/lib/proposal-templates/content";
@@ -341,10 +348,11 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const draftEstimateWithAiTool = betaZodTool({
     name: "draft_estimate_with_ai",
     description:
-      "Give Jarvis the scope of work, measurements, and notes for a job, and it drafts a full cost-coded estimate against the job's real cost code and materials catalog — created as DRAFT, never locked and never sent to Budget. Reuses the same estimate-drafting pipeline as the Estimates page and the Lead Proposal flow. Pass the job's id from list_jobs.",
+      "Give Jarvis the scope of work, measurements, and notes for a job, and it drafts a full cost-coded estimate AND the matching client-facing proposal narrative (Handy-style notes → line items → proposal) against the job's real cost code and materials catalog — both created as DRAFT, never locked, never sent to Budget, never sent to the client. Needs a client linked to the job (or pass clientId); without one the estimate still saves and you'll get a note to link a client. Pass the job's id from list_jobs.",
     inputSchema: z.object({
       jobId: z.string().describe("The job's id, from list_jobs"),
       notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),
+      clientId: z.string().optional().describe("Optional client id from list_clients — preferred when the job has more than one client"),
     }),
     run: async (input) => {
       try {
@@ -353,11 +361,24 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
           jobId: input.jobId,
           notes: input.notes,
           images: ctx.images,
+          createProposal: true,
+          clientId: input.clientId,
         });
-        return `Drafted estimate "${result.title}" (id: ${result.estimateId}) with ${result.lineItemCount} line item${result.lineItemCount === 1 ? "" : "s"} — status DRAFT, view it in the job's Estimates tab. A human needs to review it before it's sent to Budget. Pass this id to add_proposal_option to offer it as a priced option on a job-based proposal.`;
+        ctx.sideEffects.push(
+          `Drafted estimate ${result.estimateId}${result.proposalId ? ` and proposal ${result.proposalId}` : ""} for job ${input.jobId}`,
+        );
+        if (result.proposalId) {
+          return `Drafted estimate "${result.title}" (id: ${result.estimateId}) with ${result.lineItemCount} line item${
+            result.lineItemCount === 1 ? "" : "s"
+          } and a matching DRAFT proposal (id: ${result.proposalId}) — view the proposal at /leads/proposals/${result.proposalId}. A human needs to review both before send_proposal or Send to Budget.`;
+        }
+        return `Drafted estimate "${result.title}" (id: ${result.estimateId}) with ${result.lineItemCount} line item${
+          result.lineItemCount === 1 ? "" : "s"
+        } — status DRAFT, view it in the job's Estimates tab. ${result.proposalSkippedReason ?? ""} Pass this id to add_proposal_option once a proposal exists.`;
       } catch (error) {
         if (error instanceof AiNotConfiguredError) return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
         if (error instanceof AiDraftJobNotFoundError) return `No job found with id ${input.jobId} in this organization.`;
+        if (error instanceof AiDraftClientNotFoundError) return error.message;
         if (error instanceof AiDraftNoCostCodesError || error instanceof DraftGenerationError) return error.message;
         throw error;
       }
@@ -1005,7 +1026,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const draftLeadProposalTool = betaZodTool({
     name: "draft_lead_proposal",
     description:
-      "Give Jarvis the scope of work, measurements, and notes for a lead, and it queues a full estimate + client-facing proposal narrative to be drafted — created as DRAFT, never sent. This does not run inline: drafting against the full cost code catalog can take longer than one chat turn allows, so it's queued and the result is posted back into this same conversation once it's ready (usually within a couple minutes) — converting the lead to a job if not already converted, and creating/linking a Client record with portal permissions provisioned (the client still can't log in until someone separately sends them a portal invite — this does not do that). Pass the lead's id from list_leads.",
+      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a full estimate + client-facing proposal narrative (Handy-style notes → line items → proposal) — created as DRAFT, never sent, and never converted to a Job (Job creation happens only when a human/client accepts the proposal later). Upserts a Client from the lead contact so the proposal has someone to address; portal login still needs a separate invite. Prefer this on a lead's Proposals tab. Drafting against the full catalog is usually queued and posted back into this conversation when ready; if the async worker isn't configured it runs inline instead. Pass the lead's id from list_leads.",
     inputSchema: z.object({
       leadId: z.string().describe("The lead's id, from list_leads"),
       notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),
@@ -1013,18 +1034,51 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       clientPhone: z.string().optional(),
     }),
     run: async (input) => {
-      const job = await queueProposalDraftJob({
-        organizationId: ctx.organizationId,
-        leadId: input.leadId,
-        userId: ctx.userId,
-        conversationId: ctx.conversationId,
-        notes: input.notes,
-        images: ctx.images,
-        clientEmail: input.clientEmail ?? null,
-        clientPhone: input.clientPhone ?? null,
-      });
-      ctx.sideEffects.push(`Queued a proposal draft (job ${job.id}) for lead ${input.leadId} — not drafted yet`);
-      return "Queued that up — drafting the estimate and proposal now against the full cost code catalog, which takes longer than I can wait on in one reply. I'll post the result right here once it's done, usually within a couple minutes.";
+      try {
+        const job = await queueProposalDraftJob({
+          organizationId: ctx.organizationId,
+          leadId: input.leadId,
+          userId: ctx.userId,
+          conversationId: ctx.conversationId,
+          notes: input.notes,
+          images: ctx.images,
+          clientEmail: input.clientEmail ?? null,
+          clientPhone: input.clientPhone ?? null,
+        });
+        ctx.sideEffects.push(`Queued a proposal draft (job ${job.id}) for lead ${input.leadId} — not drafted yet`);
+        return "Queued that up — drafting the estimate and proposal now against the full cost code catalog, which takes longer than I can wait on in one reply. I'll post the result right here once it's done, usually within a couple minutes.";
+      } catch (error) {
+        // Dev / missing CRON_SECRET: run the same draft inline so notes → proposal
+        // still works instead of failing hard with a worker-config error.
+        if (!(error instanceof ProposalDraftWorkerNotConfiguredError)) {
+          if (error instanceof LeadProposalLeadNotFoundError) return `No lead found with id ${input.leadId} in this organization.`;
+          throw error;
+        }
+        try {
+          const proposal = await draftLeadProposalFromNotes({
+            organizationId: ctx.organizationId,
+            leadId: input.leadId,
+            userId: ctx.userId,
+            notes: input.notes,
+            images: ctx.images,
+            clientEmail: input.clientEmail ?? null,
+            clientPhone: input.clientPhone ?? null,
+          });
+          ctx.sideEffects.push(`Drafted proposal ${proposal.id} for lead ${input.leadId}`);
+          return `Drafted proposal "${proposal.title}" (id: ${proposal.id}) — status DRAFT, view it at /leads/proposals/${proposal.id}. A human needs to review and send it; accepting later is what creates the Job.`;
+        } catch (draftError) {
+          if (draftError instanceof AiNotConfiguredError) return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
+          if (draftError instanceof LeadProposalLeadNotFoundError) return `No lead found with id ${input.leadId} in this organization.`;
+          if (
+            draftError instanceof LeadMissingContactError ||
+            draftError instanceof LeadProposalNoCostCodesError ||
+            draftError instanceof DraftGenerationError
+          ) {
+            return draftError.message;
+          }
+          throw draftError;
+        }
+      }
     },
   });
 
@@ -1908,26 +1962,52 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const sendProposalTool = betaZodTool({
     name: "send_proposal",
     description:
-      "Queue the most recent draft proposal for a job to be sent to the client. This does NOT actually send anything — it only queues the action for the user's explicit confirmation, since sending a proposal is client-facing.",
-    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+      "Queue a DRAFT proposal to be sent to the client. Prefer proposalId (from draft_lead_proposal, draft_estimate_with_ai, list_proposals, or get_proposal) — that works for lead-only drafts that have no Job yet. Optionally pass jobId instead to queue the most recent DRAFT for that job. This does NOT actually send anything — it only queues the action for the user's explicit confirmation.",
+    inputSchema: z.object({
+      proposalId: z.string().optional().describe("The proposal's id — preferred, especially for lead-only drafts"),
+      jobId: z.string().optional().describe("The job's id from list_jobs — used when proposalId is omitted to pick the latest DRAFT for that job"),
+    }),
     run: async (input) => {
-      const job = await requireJob(ctx.organizationId, input.jobId);
-      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+      if (!input.proposalId && !input.jobId) {
+        return "Pass proposalId (preferred) or jobId so I know which draft proposal to queue.";
+      }
 
-      const draft = await db.proposal.findFirst({
-        where: { jobId: job.id, status: ProposalStatus.DRAFT },
-        orderBy: { createdAt: "desc" },
-        select: { id: true, title: true },
-      });
-      if (!draft) return `${job.name} has no draft proposals waiting to be sent.`;
+      let draft: { id: string; title: string; jobName: string | null } | null = null;
 
+      if (input.proposalId) {
+        const proposal = await db.proposal.findFirst({
+          where: { id: input.proposalId, organizationId: ctx.organizationId, status: ProposalStatus.DRAFT },
+          select: { id: true, title: true, job: { select: { name: true } }, lead: { select: { name: true } } },
+        });
+        if (!proposal) return `No DRAFT proposal found with id ${input.proposalId} in this organization.`;
+        draft = {
+          id: proposal.id,
+          title: proposal.title,
+          jobName: proposal.job?.name ?? proposal.lead?.name ?? null,
+        };
+      } else if (input.jobId) {
+        const job = await requireJob(ctx.organizationId, input.jobId);
+        if (!job) return `No job found with id ${input.jobId} in this organization.`;
+
+        const proposal = await db.proposal.findFirst({
+          where: { jobId: job.id, status: ProposalStatus.DRAFT },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, title: true },
+        });
+        if (!proposal) return `${job.name} has no draft proposals waiting to be sent.`;
+        draft = { id: proposal.id, title: proposal.title, jobName: job.name };
+      }
+
+      if (!draft) return "Couldn't find a draft proposal to queue.";
+
+      const forWhom = draft.jobName ? ` for ${draft.jobName}` : "";
       await createPendingAction({
         conversationId: ctx.conversationId,
         toolName: "send_proposal",
         input: { proposalId: draft.id },
-        summary: `Send proposal "${draft.title}" for ${job.name} to the client`,
+        summary: `Send proposal "${draft.title}"${forWhom} to the client`,
       });
-      return `Queued proposal "${draft.title}" for ${job.name} for the user's confirmation. It has NOT been sent — tell the user to confirm it in the chat.`;
+      return `Queued proposal "${draft.title}"${forWhom} for the user's confirmation. It has NOT been sent — tell the user to confirm it in the chat.`;
     },
   });
 

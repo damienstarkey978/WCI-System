@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
+import { JARVIS_JOB_ESTIMATE_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 import { listEstimateTemplates } from "@/lib/estimates/templates";
 import { listMaterialCatalogItems } from "@/lib/materials/service";
 
@@ -87,7 +88,8 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
         <JarvisChatPanel
           context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "estimates" }}
           storageKey={`job-estimates:${job.id}`}
-          emptyStateHint="Describe the scope of work — measurements, materials, anything relevant — and Jarvis drafts a full cost-coded estimate against this job's catalog. Attach photos and it'll factor those in too."
+          suggestions={[...JARVIS_JOB_ESTIMATE_SUGGESTIONS]}
+          emptyStateHint="Describe the scope of work — measurements, materials, anything relevant — and Jarvis drafts a full cost-coded estimate plus the matching client-facing proposal (Handy-style), when a client is linked to this job. Attach photos and it'll factor those in too."
           heightClassName="h-96"
         />
       ) : null}
