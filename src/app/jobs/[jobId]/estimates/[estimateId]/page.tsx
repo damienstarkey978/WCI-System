@@ -102,18 +102,32 @@ export default async function EstimateWorksheetPage({ params }: PageProps<"/jobs
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        {[
-          { label: "Builder cost", value: formatMoney(totalCost) },
-          { label: "Client price", value: formatMoney(totalPrice) },
-          { label: "Profit", value: formatMoney(profit) },
-          { label: "Margin", value: formatPercent(marginBasisPoints) },
-        ].map((card) => (
-          <div key={card.label} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-            <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{card.label}</div>
-            <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{card.value}</div>
-          </div>
-        ))}
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3 text-sm"
+        style={{ borderColor: "var(--bt-border)" }}
+      >
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[var(--bt-muted)]">
+          <span>
+            Original <strong className="text-[var(--bt-text)]">{formatMoney(totalPrice)}</strong>
+          </span>
+          <span>+</span>
+          <span>
+            Approved COs <strong className="text-[var(--bt-text)]">{formatMoney(0)}</strong>
+          </span>
+          <span>+</span>
+          <span>
+            New <strong className="text-[var(--bt-text)]">{formatMoney(0)}</strong>
+          </span>
+          <span>=</span>
+          <span>
+            Total <strong className="text-[var(--bt-text)]">{formatMoney(totalPrice)}</strong>
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-4 text-xs text-[var(--bt-muted)]">
+          <span>Builder cost {formatMoney(totalCost)}</span>
+          <span>Profit {formatMoney(profit)}</span>
+          <span>Margin {formatPercent(marginBasisPoints)}</span>
+        </div>
       </div>
 
       <LineItemsGrid jobId={job.id} estimateId={estimate.id} rows={rows} editable={!locked} />

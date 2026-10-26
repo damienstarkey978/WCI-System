@@ -93,7 +93,15 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
       ) : null}
 
       {rows.length === 0 ? (
-        <EmptyState title="No estimates yet" description="Estimates created for this job will appear here." />
+        <EmptyState
+          title="Build your estimate"
+          description="Create an estimate worksheet with cost codes, markup, and client pricing. Import CSV or start from a template."
+          action={
+            <CreateModal triggerLabel="+ Estimate" title="New estimate">
+              <CreateEstimateForm jobId={job.id} costCodes={costCodes} materials={materials} />
+            </CreateModal>
+          }
+        />
       ) : (
         <EstimatesGrid rows={rows} />
       )}
