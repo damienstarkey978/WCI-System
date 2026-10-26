@@ -117,6 +117,7 @@ model Organization {
   rfis                    Rfi[]
   files                   File[]
   fileFolders             FileFolder[]
+  jobCustomFieldDefs      JobCustomFieldDef[]
   messageThreads          MessageThread[]
   comments                Comment[]
   notifications           Notification[]
@@ -248,6 +249,12 @@ model Job {
   sqft         Int?
   permitNumber String?
   lotInfo      String?
+
+  /// Job Info > Notes (Buildertrend). Plain text, 2500 characters max (enforced in updateJobDetails).
+  notesInternal String?
+  notesSubs     String?
+  /// "Funded by construction loan". Null until someone answers it.
+  fundedByLoan  Boolean?
 
   projectedStart DateTime?
   projectedEnd   DateTime?
@@ -2066,6 +2073,28 @@ model File {
   @@index([billId])
   @@index([purchaseOrderId])
   @@index([invoiceId])
+}
+
+enum JobCustomFieldType {
+  TEXT
+  CHECKBOX
+}
+
+/// An org-wide custom field shown on every job's Job Info page (Buildertrend's Custom
+/// fields). Values live per job in Job.customFields under the key "cf_<definition id>",
+/// so renaming a field never orphans its values.
+model JobCustomFieldDef {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name      String
+  type      JobCustomFieldType @default(TEXT)
+  sortOrder Int                @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, name])
 }
 
 /// A job's Documents folder (Buildertrend's Files > Documents). One level only: BT's

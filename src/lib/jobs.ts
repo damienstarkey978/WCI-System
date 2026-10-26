@@ -97,6 +97,8 @@ export async function transitionJobStatus(input: TransitionJobStatusInput): Prom
   return updated;
 }
 
+export const MAX_NOTES_LENGTH = 2500;
+
 export interface UpdateJobDetailsInput {
   readonly name?: string;
   readonly prefix?: string | null;
@@ -119,6 +121,11 @@ export interface UpdateJobDetailsInput {
   readonly projectionReference?: ProjectionReference;
   readonly accountingBasis?: AccountingBasis;
   readonly isTemplate?: boolean;
+  readonly notesInternal?: string | null;
+  readonly notesSubs?: string | null;
+  readonly fundedByLoan?: boolean | null;
+  /** Values for org custom fields (JobCustomFieldDef), keyed by definition id. */
+  readonly customFieldValues?: Readonly<Record<string, string | boolean>>;
   /**
    * Buildertrend's free-text job category ("Addition", "Remodel", ...). There's no
    * dedicated column for it — Job.customFields already exists precisely for
@@ -142,14 +149,20 @@ export function getJobType(job: Pick<JobModel, "customFields">): string | null {
  * which is the only supported way to change `status` itself.
  */
 export async function updateJobDetails(organizationId: string, jobId: string, input: UpdateJobDetailsInput): Promise<JobModel> {
-  const { jobType, ...rest } = input;
+  const { jobType, customFieldValues, ...rest } = input;
+  if ((rest.notesInternal?.length ?? 0) > MAX_NOTES_LENGTH || (rest.notesSubs?.length ?? 0) > MAX_NOTES_LENGTH) {
+    throw new Error(`Notes can be at most ${MAX_NOTES_LENGTH} characters.`);
+  }
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { customFields: true } });
   if (!job) throw new JobNotFoundError(jobId);
 
   const data: Prisma.JobUpdateInput = { ...rest };
-  if (jobType !== undefined) {
+  if (jobType !== undefined || customFieldValues !== undefined) {
     const existing = typeof job.customFields === "object" && job.customFields !== null && !Array.isArray(job.customFields) ? job.customFields : {};
-    data.customFields = { ...existing, jobType } as Prisma.InputJsonValue;
+    const next: Record<string, unknown> = { ...existing };
+    if (jobType !== undefined) next.jobType = jobType;
+    for (const [definitionId, value] of Object.entries(customFieldValues ?? {})) next[`cf_${definitionId}`] = value;
+    data.customFields = next as Prisma.InputJsonValue;
   }
 
   return db.job.update({ where: { id: jobId }, data });

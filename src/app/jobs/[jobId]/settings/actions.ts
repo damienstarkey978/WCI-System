@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { revokeJobAccess as revokeClientJobAccessService, grantJobAccess } from "@/lib/client-portal/service";
 import { AccountingBasis, ContractType, ProjectionReference, ScheduleScope, UserRole } from "@/generated/prisma/enums";
 import { requireRole } from "@/lib/auth";
+import { CustomFieldNameTakenError, createJobCustomField, listJobCustomFields, parseCustomFieldValues } from "@/lib/job-custom-fields";
 import { JobNotFoundError, updateJobDetails } from "@/lib/jobs";
 import { grantStaffJobAccess, revokeStaffJobAccess } from "@/lib/staff/service";
 import { grantVendorJobAccess, revokeVendorJobAccess } from "@/lib/vendor-portal/service";
@@ -48,10 +49,17 @@ export async function updateJobDetailsAction(jobId: string, _previous: ActionSta
     return { error: "Choose a contract type." };
   }
 
+  const customFieldDefs = await listJobCustomFields(admin.organizationId);
+  const fundedRaw = String(formData.get("fundedByLoan") ?? "");
+
   try {
     await updateJobDetails(admin.organizationId, jobId, {
       name,
       contractType,
+      notesInternal: optionalString(formData, "notesInternal"),
+      notesSubs: optionalString(formData, "notesSubs"),
+      fundedByLoan: fundedRaw === "yes" ? true : fundedRaw === "no" ? false : null,
+      customFieldValues: parseCustomFieldValues(customFieldDefs, (key) => formData.get(key)),
       prefix: optionalString(formData, "prefix"),
       jobType: optionalString(formData, "jobType"),
       jobGroupId: optionalString(formData, "jobGroupId"),
@@ -71,6 +79,23 @@ export async function updateJobDetailsAction(jobId: string, _previous: ActionSta
     });
   } catch (error) {
     if (error instanceof JobNotFoundError) return { error: error.message };
+    if (error instanceof Error && error.message.startsWith("Notes can be at most")) return { error: error.message };
+    throw error;
+  }
+
+  revalidateSettings(jobId);
+  return { ok: true };
+}
+
+export async function createCustomFieldAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const admin = await requireRole(UserRole.ADMIN, UserRole.PM);
+  const jobId = String(formData.get("jobId") ?? "");
+  const type = String(formData.get("type") ?? "TEXT") === "CHECKBOX" ? "CHECKBOX" : "TEXT";
+
+  try {
+    await createJobCustomField(admin.organizationId, String(formData.get("name") ?? ""), type);
+  } catch (error) {
+    if (error instanceof CustomFieldNameTakenError || (error instanceof Error && error.message === "Field name is required.")) return { error: error.message };
     throw error;
   }
 

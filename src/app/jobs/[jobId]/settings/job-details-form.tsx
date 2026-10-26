@@ -54,6 +54,9 @@ export interface JobDetailsExtras {
   readonly relatedLead: { id: string; title: string; stageLabel: string } | null;
   readonly jobTypeSuggestions: readonly string[];
   readonly projectManagers: readonly { id: string; name: string }[];
+  readonly customFields: readonly { id: string; name: string; type: "TEXT" | "CHECKBOX"; value: string | boolean | null }[];
+  readonly addCustomFieldControl: ReactNode;
+  readonly quickbooks: { linked: boolean; clientName: string | null };
 }
 
 export const JOB_DETAILS_FORM_ID = "job-details-form";
@@ -63,6 +66,7 @@ export function JobDetailsForm({ job, jobGroups, extras }: { job: JobModel; jobG
   const [state, formAction] = useActionState(action, INITIAL);
 
   return (
+    <>
     <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       {/* The title input and the Save button live in the page header and join this form by id. */}
       <form id={JOB_DETAILS_FORM_ID} action={formAction} className="contents">
@@ -103,7 +107,7 @@ export function JobDetailsForm({ job, jobGroups, extras }: { job: JobModel; jobG
               <Field label="Contract price">
                 <div className="rounded border px-3 py-2 text-sm text-[var(--bt-text)]" style={{ ...inputStyle, background: "var(--bt-panel-bg-muted)" }}>
                   {extras.contractPriceLabel}
-                  <span className="ml-2 text-xs text-[var(--bt-muted)]">from the job budget</span>
+                  <span className="ml-2 text-xs text-[var(--bt-muted)]">from the approved proposal</span>
                 </div>
               </Field>
 
@@ -158,22 +162,70 @@ export function JobDetailsForm({ job, jobGroups, extras }: { job: JobModel; jobG
               </Field>
             </div>
 
-            <h3 className="mb-3 mt-6 text-base font-semibold text-[var(--bt-text)]">Property details</h3>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Square footage">
+          </Card>
+
+          <Card title="Notes">
+            <div className="grid gap-4">
+              <Field label="Notes for internal users">
+                <textarea name="notesInternal" rows={3} maxLength={2500} defaultValue={job.notesInternal ?? ""} className={inputClass} style={inputStyle} />
+                <span className="text-xs text-[var(--bt-muted)]">Maximum 2500 characters</span>
+              </Field>
+              <Field label="Notes for subs/vendors">
+                <textarea name="notesSubs" rows={3} maxLength={2500} defaultValue={job.notesSubs ?? ""} className={inputClass} style={inputStyle} />
+                <span className="text-xs text-[var(--bt-muted)]">Maximum 2500 characters</span>
+              </Field>
+            </div>
+          </Card>
+
+          <Card title={`Custom fields (${extras.customFields.length})`}>
+            {extras.customFields.length === 0 ? (
+              <p className="text-sm text-[var(--bt-muted)]">No custom fields yet. Add one to track something specific to your jobs.</p>
+            ) : (
+              <div className="grid gap-4">
+                {extras.customFields.map((field) =>
+                  field.type === "CHECKBOX" ? (
+                    <label key={field.id} className="flex items-center gap-2 text-sm text-[var(--bt-text)]">
+                      <input type="checkbox" name={`cf_${field.id}`} defaultChecked={field.value === true} />
+                      {field.name}
+                    </label>
+                  ) : (
+                    <Field key={field.id} label={field.name}>
+                      <input name={`cf_${field.id}`} defaultValue={typeof field.value === "string" ? field.value : ""} className={inputClass} style={inputStyle} />
+                    </Field>
+                  ),
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <Card title="Property">
+            <div className="grid gap-4">
+              <fieldset className="grid gap-1.5 text-sm">
+                <legend className="mb-1 text-xs font-medium text-[var(--bt-muted)]">Funded by construction loan</legend>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="fundedByLoan" value="yes" defaultChecked={job.fundedByLoan === true} />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="fundedByLoan" value="no" defaultChecked={job.fundedByLoan === false} />
+                  No
+                </label>
+              </fieldset>
+              <Field label="Square feet">
                 <input name="sqft" type="number" min={0} defaultValue={job.sqft ?? ""} className={inputClass} style={inputStyle} />
               </Field>
               <Field label="Permit number">
                 <input name="permitNumber" defaultValue={job.permitNumber ?? ""} className={inputClass} style={inputStyle} />
               </Field>
               <Field label="Lot info">
-                <input name="lotInfo" defaultValue={job.lotInfo ?? ""} className={inputClass} style={inputStyle} />
+                <input name="lotInfo" maxLength={35} defaultValue={job.lotInfo ?? ""} className={inputClass} style={inputStyle} />
+                <span className="text-xs text-[var(--bt-muted)]">Maximum 35 characters</span>
               </Field>
             </div>
           </Card>
-        </div>
 
-        <div className="flex flex-col gap-4">
           <Card title="Schedule">
             <div className="grid grid-cols-2 gap-4">
               <Field label="Projected start">
@@ -231,6 +283,36 @@ export function JobDetailsForm({ job, jobGroups, extras }: { job: JobModel; jobG
             </div>
           </Card>
 
+          <Card
+            title="QuickBooks"
+            action={
+              <span
+                className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                style={extras.quickbooks.linked ? { background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" } : { background: "var(--bt-panel-bg-muted)", color: "var(--bt-muted)" }}
+              >
+                {extras.quickbooks.linked ? "Linked" : "Not linked"}
+              </span>
+            }
+          >
+            <dl className="grid gap-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-[var(--bt-muted)]">Job</dt>
+                <dd className="text-right font-medium text-[var(--bt-text)]">{job.name}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[var(--bt-muted)]">QuickBooks sub customer</dt>
+                <dd className="text-right font-medium text-[var(--bt-text)]">{extras.quickbooks.linked ? `Id ${job.qboCustomerId}` : "Created when the job syncs"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[var(--bt-muted)]">Client</dt>
+                <dd className="text-right font-medium text-[var(--bt-text)]">{extras.quickbooks.clientName ?? "No client yet"}</dd>
+              </div>
+            </dl>
+            <Link href="/settings/quickbooks" className="mt-3 inline-block text-xs font-medium text-[var(--bt-primary)] hover:underline">
+              QuickBooks settings
+            </Link>
+          </Card>
+
           {state.error ? (
             <p role="alert" className="text-sm text-red-600">
               {state.error}
@@ -240,5 +322,8 @@ export function JobDetailsForm({ job, jobGroups, extras }: { job: JobModel; jobG
         </div>
       </form>
     </div>
+    {/* Outside the details form on purpose: forms cannot nest. */}
+    {extras.addCustomFieldControl}
+    </>
   );
 }

@@ -6,6 +6,8 @@ import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser, requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { allowedNextStatusesForRole } from "@/lib/job-status";
+import { customFieldValueOf, listJobCustomFields } from "@/lib/job-custom-fields";
+import { estimateTotalCents } from "@/lib/budget/funnel";
 import { formatMoney } from "@/lib/format";
 import { vendorTradeLabel } from "@/lib/vendor-portal/labels";
 
@@ -13,6 +15,7 @@ import { AdvancedSettingsForm } from "./advanced-settings-form";
 import { ClientsTab } from "./clients-tab";
 import { InternalUsersTab } from "./internal-users-tab";
 import { JOB_DETAILS_FORM_ID, JobDetailsForm } from "./job-details-form";
+import { CustomFieldForm } from "./custom-field-form";
 import { JobStatusControl } from "./job-status-control";
 import { SubsVendorsTab } from "./subs-vendors-tab";
 
@@ -55,7 +58,7 @@ export default async function JobSettingsPage({ params, searchParams }: PageProp
 
   const activeTab: TabKey = TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : "details";
 
-  const [jobGroups, clientAccess, allClients, userAccess, allStaff, vendorAccess, allVendors, relatedLead, budgetLines, jobTypeRows] = await Promise.all([
+  const [jobGroups, clientAccess, allClients, userAccess, allStaff, vendorAccess, allVendors, relatedLead, approvedProposal, jobTypeRows, customFieldDefs] = await Promise.all([
     db.jobGroup.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" } }),
     db.clientJobAccess.findMany({ where: { jobId: job.id }, include: { client: true }, orderBy: { client: { name: "asc" } } }),
     db.client.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
@@ -68,8 +71,14 @@ export default async function JobSettingsPage({ params, searchParams }: PageProp
     db.vendorJobAccess.findMany({ where: { jobId: job.id }, include: { vendor: true }, orderBy: { vendor: { name: "asc" } } }),
     db.vendor.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true, tradeType: true, divisions: true } }),
     db.lead.findFirst({ where: { convertedJobId: job.id, organizationId: user.organizationId }, select: { id: true, title: true, name: true, stage: true } }),
-    db.budgetLine.findMany({ where: { jobId: job.id }, select: { revisedClientPriceCents: true } }),
+    // Contract price is what the client approved: the selected option of the accepted proposal.
+    db.proposal.findFirst({
+      where: { jobId: job.id, organizationId: user.organizationId, status: "ACCEPTED" },
+      orderBy: { clientSignedAt: "desc" },
+      include: { options: { include: { estimate: { include: { lineItems: true } } } } },
+    }),
     db.job.findMany({ where: { organizationId: user.organizationId }, select: { customFields: true }, take: 500 }),
+    listJobCustomFields(user.organizationId),
   ]);
 
   const STAGE_LABEL: Record<string, string> = { NEW: "New", CONTACTED: "Contacted", QUALIFIED: "Qualified", PROPOSAL_SENT: "Proposal sent", WON: "Sold", LOST: "Lost" };
@@ -80,7 +89,9 @@ export default async function JobSettingsPage({ params, searchParams }: PageProp
         .filter((value): value is string => typeof value === "string" && value.trim() !== ""),
     ),
   ].sort((a, b) => a.localeCompare(b));
-  const contractPriceCents = budgetLines.reduce((total, line) => total + line.revisedClientPriceCents, 0);
+  const approvedOption = approvedProposal ? (approvedProposal.options.find((option) => option.id === approvedProposal.selectedOptionId) ?? (approvedProposal.options.length === 1 ? approvedProposal.options[0] : null)) : null;
+  const contractPriceCents = approvedOption ? estimateTotalCents(approvedOption.estimate.lineItems) : null;
+  const primaryClient = clientAccess[0]?.client.name ?? null;
   const projectManagers = userAccess.filter((a) => a.user.role === UserRole.PM).map((a) => ({ id: a.userId, name: a.user.name ?? a.user.email }));
 
   return (
@@ -142,10 +153,18 @@ export default async function JobSettingsPage({ params, searchParams }: PageProp
           jobGroups={jobGroups}
           extras={{
             statusControl: <JobStatusControl jobId={job.id} current={job.status} next={allowedNextStatusesForRole(job.status, user.role)} />,
-            contractPriceLabel: contractPriceCents > 0 ? formatMoney(contractPriceCents) : "Not set yet",
+            contractPriceLabel: contractPriceCents !== null ? formatMoney(contractPriceCents) : "No approved proposal yet",
             relatedLead: relatedLead ? { id: relatedLead.id, title: relatedLead.title ?? relatedLead.name, stageLabel: STAGE_LABEL[relatedLead.stage] ?? relatedLead.stage } : null,
             jobTypeSuggestions,
             projectManagers,
+            customFields: customFieldDefs.map((def) => ({ id: def.id, name: def.name, type: def.type, value: customFieldValueOf(job.customFields, def.id) })),
+            addCustomFieldControl: (
+              <section className="max-w-md rounded-lg border bg-[var(--bt-panel-bg)] p-5" style={{ borderColor: "var(--bt-border)" }}>
+                <h2 className="mb-3 text-base font-semibold text-[var(--bt-text)]">Add a custom field</h2>
+                <CustomFieldForm jobId={job.id} />
+              </section>
+            ),
+            quickbooks: { linked: job.qboCustomerId !== null, clientName: primaryClient },
           }}
         />
       ) : null}
