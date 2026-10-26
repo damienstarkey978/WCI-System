@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
 import { formatDate } from "@/lib/format";
 
@@ -20,6 +22,8 @@ export interface ClaimRow {
   readonly title: string;
   readonly description: string;
   readonly status: string;
+  readonly priority: string | null;
+  readonly category: string | null;
   readonly createdAt: string;
   readonly assignedVendor: string | null;
   readonly appointmentAt: string | null;
@@ -28,17 +32,30 @@ export interface ClaimRow {
 /** Client half of the Warranties page; see purchase-orders-grid.tsx for why the split exists. */
 export function ClaimsGrid({ rows, vendors }: { rows: readonly ClaimRow[]; vendors: readonly VendorOption[] }) {
   const columns: DataGridColumn<ClaimRow>[] = [
-    { key: "claimNumber", header: "Claim", sortable: true, render: (row) => <span className="font-medium">{row.claimNumber}</span> },
+    {
+      key: "claimNumber",
+      header: "Claim #",
+      sortable: true,
+      render: (row) => (
+        <Link href={`/jobs/${row.jobId}/warranties/${row.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
+          {row.claimNumber}
+        </Link>
+      ),
+    },
     {
       key: "title",
       header: "Title",
       render: (row) => (
         <div>
-          <div>{row.title}</div>
+          <Link href={`/jobs/${row.jobId}/warranties/${row.id}`} className="font-medium hover:underline">
+            {row.title}
+          </Link>
           <div className="max-w-md truncate text-xs text-[var(--bt-muted)]">{row.description}</div>
         </div>
       ),
     },
+    { key: "category", header: "Category", render: (row) => row.category || "Unassigned" },
+    { key: "priority", header: "Priority", render: (row) => row.priority || "Low" },
     { key: "createdAt", header: "Submitted", sortable: true, render: (row) => formatDate(new Date(row.createdAt)) },
     { key: "assigned", header: "Assigned to", render: (row) => row.assignedVendor ?? "" },
     { key: "appointment", header: "Appointment", render: (row) => (row.appointmentAt ? formatDate(new Date(row.appointmentAt)) : "") },

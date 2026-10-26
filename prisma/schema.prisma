@@ -3273,6 +3273,16 @@ model WarrantyClaim {
   title       String
   description String
 
+  /// Buildertrend category / priority / classification (freeform for v1).
+  category       String?
+  priority       String? @default("Low")
+  classification String?
+  internalNotes  String?
+  /// Extra cost booked for the claim, integer cents.
+  addedCostCents Int @default(0)
+  showClient     Boolean @default(true)
+  followUpDate   DateTime?
+
   /// Freeform — not every warranty claim comes from a portal Client.
   submittedByName  String?
   submittedByEmail String?

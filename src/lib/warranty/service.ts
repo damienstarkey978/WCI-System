@@ -58,12 +58,20 @@ export class ClientMismatchError extends Error {
 export interface CreateWarrantyClaimInput {
   readonly organizationId: string;
   readonly jobId: string;
-  readonly claimNumber: string;
+  /** When omitted, auto-assigns the next per-org claim number. */
+  readonly claimNumber?: string | null;
   readonly title: string;
   readonly description: string;
   readonly submittedByName?: string | null;
   readonly submittedByEmail?: string | null;
   readonly clientId?: string | null;
+  readonly category?: string | null;
+  readonly priority?: string | null;
+  readonly classification?: string | null;
+  readonly internalNotes?: string | null;
+  readonly addedCostCents?: number;
+  readonly showClient?: boolean;
+  readonly followUpDate?: Date | null;
 }
 
 export async function createWarrantyClaim(input: CreateWarrantyClaimInput) {
@@ -75,16 +83,75 @@ export async function createWarrantyClaim(input: CreateWarrantyClaimInput) {
     if (!client) throw new ClientNotFoundError(input.clientId);
   }
 
+  let claimNumber = input.claimNumber?.trim() || "";
+  if (!claimNumber) {
+    const count = await db.warrantyClaim.count({ where: { organizationId: input.organizationId } });
+    claimNumber = String(count + 1).padStart(4, "0");
+  }
+
   return db.warrantyClaim.create({
     data: {
       organizationId: input.organizationId,
       jobId: input.jobId,
-      claimNumber: input.claimNumber,
+      claimNumber,
       title: input.title,
       description: input.description,
       submittedByName: input.submittedByName ?? null,
       submittedByEmail: input.submittedByEmail ?? null,
       clientId: input.clientId ?? null,
+      category: input.category?.trim() || null,
+      priority: input.priority?.trim() || "Low",
+      classification: input.classification?.trim() || null,
+      internalNotes: input.internalNotes?.trim() || null,
+      addedCostCents: input.addedCostCents ?? 0,
+      showClient: input.showClient ?? true,
+      followUpDate: input.followUpDate ?? null,
+    },
+  });
+}
+
+export interface UpdateWarrantyClaimInput {
+  readonly organizationId: string;
+  readonly claimId: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly category?: string | null;
+  readonly priority?: string | null;
+  readonly classification?: string | null;
+  readonly internalNotes?: string | null;
+  readonly addedCostCents?: number;
+  readonly showClient?: boolean;
+  readonly followUpDate?: Date | null;
+  readonly clientId?: string | null;
+}
+
+export async function updateWarrantyClaim(input: UpdateWarrantyClaimInput) {
+  const existing = await db.warrantyClaim.findFirst({
+    where: { id: input.claimId, organizationId: input.organizationId },
+  });
+  if (!existing) throw new WarrantyClaimNotFoundError(input.claimId);
+
+  if (input.clientId) {
+    const client = await db.client.findFirst({
+      where: { id: input.clientId, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    if (!client) throw new ClientNotFoundError(input.clientId);
+  }
+
+  return db.warrantyClaim.update({
+    where: { id: existing.id },
+    data: {
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.category !== undefined ? { category: input.category?.trim() || null } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority?.trim() || "Low" } : {}),
+      ...(input.classification !== undefined ? { classification: input.classification?.trim() || null } : {}),
+      ...(input.internalNotes !== undefined ? { internalNotes: input.internalNotes?.trim() || null } : {}),
+      ...(input.addedCostCents !== undefined ? { addedCostCents: input.addedCostCents } : {}),
+      ...(input.showClient !== undefined ? { showClient: input.showClient } : {}),
+      ...(input.followUpDate !== undefined ? { followUpDate: input.followUpDate } : {}),
+      ...(input.clientId !== undefined ? { clientId: input.clientId } : {}),
     },
   });
 }
