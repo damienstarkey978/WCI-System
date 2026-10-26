@@ -3462,6 +3462,13 @@ model ClientUpdateSummary {
   body       String
   highlights String[]
 
+  /// Set when staff approve the (possibly edited) draft. Approve-and-Email sets
+  /// this in the same step as the send.
+  approvedAt DateTime?
+  /// Set when the approved update was emailed to the job's primary Client.
+  emailedAt  DateTime?
+  emailedTo  String?
+
   createdAt DateTime @default(now())
 
   @@index([jobId, periodEnd])

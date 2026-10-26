@@ -12,6 +12,8 @@
 
 import { db } from "@/lib/db";
 import { generateWeeklySummary } from "@/lib/ai/weekly-summary-assistant";
+import { EmailNotConfiguredError, sendEmail } from "@/lib/email/send";
+import { isTransactionalEmailConfigured } from "@/lib/env";
 import { isSchedulePublished } from "@/lib/scheduling/publish";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 
@@ -19,6 +21,20 @@ export class JobNotFoundError extends Error {
   constructor(jobId: string) {
     super(`Job ${jobId} not found`);
     this.name = "JobNotFoundError";
+  }
+}
+
+export class SummaryNotFoundError extends Error {
+  constructor(summaryId: string) {
+    super(`Client update ${summaryId} not found`);
+    this.name = "SummaryNotFoundError";
+  }
+}
+
+export class NoPrimaryClientEmailError extends Error {
+  constructor(jobId: string) {
+    super(`Job ${jobId} has no primary client email to send this update to.`);
+    this.name = "NoPrimaryClientEmailError";
   }
 }
 
@@ -37,7 +53,7 @@ async function buildClientSafeActivityText(organizationId: string, jobId: string
   const dailyLogs = await db.dailyLog.findMany({
     where: { organizationId, jobId, clientVisible: true, createdAt: { gte: periodStart, lte: periodEnd } },
     orderBy: { createdAt: "asc" },
-    select: { createdAt: true, note: true },
+    select: { createdAt: true, title: true, note: true },
   });
 
   const schedule = await db.schedule.findFirst({ where: { organizationId, jobId }, select: { id: true, isOnline: true, isDraft: true } });
@@ -55,9 +71,165 @@ async function buildClientSafeActivityText(organizationId: string, jobId: string
     }
   }
 
-  const dailyLogLines = dailyLogs.map((log) => `- Site log ${log.createdAt.toISOString().slice(0, 10)}: ${log.note}`);
+  const dailyLogLines = dailyLogs.map((log) => {
+    const title = log.title?.trim();
+    const prefix = title ? `${title}: ` : "";
+    return `- Site log ${log.createdAt.toISOString().slice(0, 10)}: ${prefix}${log.note}`;
+  });
 
   return [...dailyLogLines, ...scheduleLines].join("\n");
+}
+
+/** Earliest ClientJobAccess grant on the job is the primary client (same rule as job settings). */
+export async function resolvePrimaryClientEmail(organizationId: string, jobId: string): Promise<{ clientId: string; name: string; email: string } | null> {
+  const access = await db.clientJobAccess.findFirst({
+    where: { jobId, client: { organizationId } },
+    orderBy: { createdAt: "asc" },
+    include: { client: { select: { id: true, name: true, email: true } } },
+  });
+  if (!access?.client.email?.trim()) return null;
+  return { clientId: access.client.id, name: access.client.name, email: access.client.email.trim() };
+}
+
+export interface UpdateWeeklySummaryInput {
+  readonly organizationId: string;
+  readonly summaryId: string;
+  readonly headline: string;
+  readonly body: string;
+  readonly highlights: readonly string[];
+}
+
+export async function updateWeeklySummary(input: UpdateWeeklySummaryInput) {
+  const existing = await db.clientUpdateSummary.findFirst({
+    where: { id: input.summaryId, organizationId: input.organizationId },
+  });
+  if (!existing) throw new SummaryNotFoundError(input.summaryId);
+  if (existing.emailedAt) {
+    throw new Error("This update was already emailed. Generate a new one to send another.");
+  }
+
+  const headline = input.headline.trim();
+  const body = input.body.trim();
+  if (!headline) throw new Error("Headline is required.");
+  if (!body) throw new Error("Body is required.");
+
+  return db.clientUpdateSummary.update({
+    where: { id: existing.id },
+    data: {
+      headline,
+      body,
+      highlights: input.highlights.map((h) => h.trim()).filter(Boolean),
+    },
+  });
+}
+
+export function buildClientUpdateEmail(input: {
+  clientName: string;
+  jobName: string;
+  companyName: string;
+  headline: string;
+  body: string;
+  highlights: readonly string[];
+  periodStart: Date;
+  periodEnd: Date;
+}) {
+  const firstName = input.clientName.trim().split(/\s+/)[0] || "there";
+  const period = `${input.periodStart.toISOString().slice(0, 10)} to ${input.periodEnd.toISOString().slice(0, 10)}`;
+  const highlightBlock = input.highlights.length
+    ? ["", "Highlights:", ...input.highlights.map((h) => `• ${h}`)].join("\n")
+    : "";
+  const text = [
+    `Hi ${firstName},`,
+    "",
+    `Here is your progress update for ${input.jobName} (${period}).`,
+    "",
+    input.headline,
+    "",
+    input.body,
+    highlightBlock,
+    "",
+    `- ${input.companyName}`,
+  ]
+    .filter((line, index, arr) => !(line === "" && arr[index - 1] === ""))
+    .join("\n");
+
+  const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const highlightsHtml = input.highlights.length
+    ? `<ul>${input.highlights.map((h) => `<li>${escape(h)}</li>`).join("")}</ul>`
+    : "";
+  const html =
+    `<p>Hi ${escape(firstName)},</p>` +
+    `<p>Here is your progress update for <strong>${escape(input.jobName)}</strong> (${escape(period)}).</p>` +
+    `<p><strong>${escape(input.headline)}</strong></p>` +
+    `<p>${escape(input.body).replace(/\n/g, "<br/>")}</p>` +
+    highlightsHtml +
+    `<p>- ${escape(input.companyName)}</p>`;
+
+  return {
+    subject: `${input.companyName}: ${input.jobName} progress update`,
+    text,
+    html,
+  };
+}
+
+export interface ApproveAndEmailWeeklySummaryInput {
+  readonly organizationId: string;
+  readonly summaryId: string;
+  /** Optional final edits applied in the same step as approve+email. */
+  readonly headline?: string;
+  readonly body?: string;
+  readonly highlights?: readonly string[];
+}
+
+export async function approveAndEmailWeeklySummary(input: ApproveAndEmailWeeklySummaryInput) {
+  if (!isTransactionalEmailConfigured()) throw new EmailNotConfiguredError();
+
+  const summary = await db.clientUpdateSummary.findFirst({
+    where: { id: input.summaryId, organizationId: input.organizationId },
+    include: { job: { select: { id: true, name: true } }, organization: { select: { name: true, contactEmail: true } } },
+  });
+  if (!summary) throw new SummaryNotFoundError(input.summaryId);
+  if (summary.emailedAt) {
+    throw new Error("This update was already emailed. Generate a new one to send another.");
+  }
+
+  const headline = (input.headline ?? summary.headline).trim();
+  const body = (input.body ?? summary.body).trim();
+  const highlights = (input.highlights ?? summary.highlights).map((h) => h.trim()).filter(Boolean);
+  if (!headline || !body) throw new Error("Headline and body are required before emailing.");
+
+  const primary = await resolvePrimaryClientEmail(input.organizationId, summary.jobId);
+  if (!primary) throw new NoPrimaryClientEmailError(summary.jobId);
+
+  const message = buildClientUpdateEmail({
+    clientName: primary.name,
+    jobName: summary.job.name,
+    companyName: summary.organization.name,
+    headline,
+    body,
+    highlights,
+    periodStart: summary.periodStart,
+    periodEnd: summary.periodEnd,
+  });
+
+  await sendEmail({
+    to: primary.email,
+    ...message,
+    replyTo: summary.organization.contactEmail ?? undefined,
+  });
+
+  const now = new Date();
+  return db.clientUpdateSummary.update({
+    where: { id: summary.id },
+    data: {
+      headline,
+      body,
+      highlights,
+      approvedAt: now,
+      emailedAt: now,
+      emailedTo: primary.email,
+    },
+  });
 }
 
 export interface CreateWeeklySummaryResult {
