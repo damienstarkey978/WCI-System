@@ -191,6 +191,7 @@ model User {
   leadActivities            LeadActivity[]
   uploadedLeadAttachments   LeadAttachment[]
   startedMessageThreads     MessageThread[]
+  dailyLogLikes             DailyLogLike[]
   jarvisConversations       JarvisConversation[]
   proposalDraftJobs         ProposalDraftJob[]
   oauthAuthorizationCodes   OAuthAuthorizationCode[]
@@ -1889,7 +1890,9 @@ model DailyLog {
   authorUserId   String
   authorUser     User         @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
 
-  note String
+  /// Buildertrend's log title ("Prime walk thru"). Null on logs from before titles existed.
+  title String?
+  note  String
 
   /// Populated only when a weather provider is configured — see
   /// src/lib/daily-logs/weather.ts. Null otherwise, never a fabricated value.
@@ -1902,8 +1905,21 @@ model DailyLog {
   updatedAt DateTime @updatedAt
 
   files File[]
+  likes DailyLogLike[]
 
   @@index([jobId, createdAt])
+}
+
+/// A heart on a daily log; one per user per log.
+model DailyLogLike {
+  dailyLogId String
+  dailyLog   DailyLog @relation(fields: [dailyLogId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([dailyLogId, userId])
 }
 
 enum TodoStatus {

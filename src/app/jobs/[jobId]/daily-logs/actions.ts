@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 
 import { AiNotConfiguredError, DailyLogDraftError, draftDailyLogNote, type DailyLogImageInput } from "@/lib/ai/daily-log-assistant";
 import { requireAppUser } from "@/lib/auth";
-import { createDailyLog, JobNotFoundError } from "@/lib/daily-logs/service";
+import { createComment } from "@/lib/comments/service";
+import { createDailyLog, JobNotFoundError, toggleDailyLogLike } from "@/lib/daily-logs/service";
+import { uploadAndRegisterFile } from "@/lib/files/service";
+import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
 
 export interface ActionState {
   readonly error?: string;
@@ -54,6 +57,7 @@ export async function createDailyLogAction(_previous: ActionState, formData: For
 
   const jobId = String(formData.get("jobId") ?? "");
   const note = String(formData.get("note") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
   const clientVisible = formData.get("clientVisible") === "on";
   const subVisible = formData.get("subVisible") === "on";
 
@@ -61,17 +65,38 @@ export async function createDailyLogAction(_previous: ActionState, formData: For
     return { error: "Note is required." };
   }
 
+  const attachments = formData.getAll("attachments").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+
   try {
-    await createDailyLog({
+    const log = await createDailyLog({
       organizationId: user.organizationId,
       jobId,
       authorUserId: user.id,
+      title,
       note,
       clientVisible,
       subVisible,
     });
+
+    // Photos and videos ride with the log and share its visibility; anything else is a document.
+    for (const file of attachments) {
+      const category = file.type.startsWith("image/") ? "PHOTO" : file.type.startsWith("video/") ? "VIDEO" : "DOCUMENT";
+      await uploadAndRegisterFile({
+        organizationId: user.organizationId,
+        jobId,
+        uploadedByUserId: user.id,
+        fileName: file.name,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        mimeType: file.type || null,
+        sizeBytes: file.size,
+        category,
+        clientVisible,
+        subVisible,
+        dailyLogId: log.id,
+      });
+    }
   } catch (error) {
-    if (error instanceof JobNotFoundError) {
+    if (error instanceof JobNotFoundError || error instanceof StorageNotConfiguredError) {
       return { error: error.message };
     }
     throw error;
@@ -79,5 +104,29 @@ export async function createDailyLogAction(_previous: ActionState, formData: For
 
   revalidatePath(`/jobs/${jobId}/daily-logs`);
   revalidatePath(`/jobs/${jobId}`);
+  return { ok: true };
+}
+
+export async function toggleDailyLogLikeAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  try {
+    await toggleDailyLogLike(user.organizationId, String(formData.get("logId") ?? ""), user.id);
+  } catch {
+    // A log deleted underneath the click just refreshes the page.
+  }
+  revalidatePath(`/jobs/${jobId}/daily-logs`);
+}
+
+export async function addDailyLogCommentAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const logId = String(formData.get("logId") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  if (!body) return { error: "Write a comment first." };
+
+  await createComment({ organizationId: user.organizationId, featureType: "DailyLog", featureId: logId, authorUserId: user.id, body });
+  revalidatePath(`/jobs/${jobId}/daily-logs`);
+  revalidatePath(`/jobs/${jobId}/daily-logs/${logId}`);
   return { ok: true };
 }

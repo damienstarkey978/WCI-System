@@ -77,8 +77,19 @@ export function DailyLogForm({ jobId, aiEnabled }: { jobId: string; aiEnabled?: 
 
       {aiEnabled ? <DraftWithAi noteRef={noteRef} /> : null}
 
+      <label className="mb-3 grid gap-1 text-sm">
+        <span className="text-xs font-medium text-[var(--bt-muted)]">Title</span>
+        <input
+          name="title"
+          maxLength={200}
+          placeholder="Prime walk thru"
+          className="w-full rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+          style={{ borderColor: "var(--bt-border)" }}
+        />
+      </label>
+
       <label className="grid gap-1 text-sm">
-        <span className="text-xs font-medium text-[var(--bt-muted)]">New daily log</span>
+        <span className="text-xs font-medium text-[var(--bt-muted)]">Notes</span>
         <textarea
           ref={noteRef}
           name="note"
@@ -88,6 +99,11 @@ export function DailyLogForm({ jobId, aiEnabled }: { jobId: string; aiEnabled?: 
           className="w-full rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
           style={{ borderColor: "var(--bt-border)" }}
         />
+      </label>
+
+      <label className="mt-3 grid gap-1 text-sm">
+        <span className="text-xs font-medium text-[var(--bt-muted)]">Photos and files</span>
+        <input type="file" name="attachments" multiple className="text-sm" />
       </label>
 
       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-[var(--bt-muted)]">
