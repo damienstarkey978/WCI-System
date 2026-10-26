@@ -7,23 +7,16 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate } from "@/lib/format";
 
-import { AnswerRfiForm } from "./answer-rfi-form";
-import { closeRfiAction } from "./actions";
 import { CreateRfiForm } from "./create-rfi-form";
+import { RfisGrid } from "./rfis-grid";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  OPEN: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  ANSWERED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  CLOSED: { bg: "#e5e7eb", text: "#374151" },
-};
 
 const TABS = [
   { key: "all", label: "All RFIs" },
   { key: "open", label: "Open" },
+  { key: "answered", label: "Answered" },
   { key: "closed", label: "Closed" },
 ] as const;
 
@@ -45,29 +38,39 @@ export default async function RfisPage({ params, searchParams }: PageProps<"/job
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
+  const statusWhere =
+    tab === "open"
+      ? ({ status: "OPEN" as const })
+      : tab === "answered"
+        ? ({ status: "ANSWERED" as const })
+        : tab === "closed"
+          ? ({ status: "CLOSED" as const })
+          : {};
+
   const [rfis, users] = await Promise.all([
     db.rfi.findMany({
-      where: { jobId: job.id, ...(tab === "open" ? { status: { not: "CLOSED" as const } } : tab === "closed" ? { status: "CLOSED" as const } : {}) },
-      orderBy: { createdAt: "desc" },
-      include: { assigneeUser: true },
+      where: { jobId: job.id, ...statusWhere },
+      orderBy: { number: "desc" },
+      include: { assigneeUser: { select: { email: true, name: true } } },
     }),
-    db.user.findMany({ where: { organizationId: user.organizationId, isActive: true }, orderBy: { email: "asc" }, select: { id: true, email: true } }),
+    db.user.findMany({
+      where: { organizationId: user.organizationId, isActive: true },
+      orderBy: { email: "asc" },
+      select: { id: true, email: true, name: true },
+    }),
   ]);
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <PageHeader
         jobName={job.name}
         title="RFIs"
         action={
-          <div className="flex items-center gap-2">
-            <CreateModal triggerLabel="+ RFI" title="New RFI">
-              <CreateRfiForm jobId={job.id} users={users} />
-            </CreateModal>
-          </div>
+          <CreateModal triggerLabel="+ RFI" title="New RFI" size="lg">
+            <CreateRfiForm jobId={job.id} users={users} />
+          </CreateModal>
         }
       />
-
 
       <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
         {TABS.map((t) => (
@@ -75,7 +78,10 @@ export default async function RfisPage({ params, searchParams }: PageProps<"/job
             key={t.key}
             href={`/jobs/${job.id}/rfis${t.key === "all" ? "" : `?tab=${t.key}`}`}
             className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
-            style={{ borderColor: t.key === tab ? "var(--bt-primary)" : "transparent", color: t.key === tab ? "var(--bt-primary)" : "var(--bt-muted)" }}
+            style={{
+              borderColor: t.key === tab ? "var(--bt-primary)" : "transparent",
+              color: t.key === tab ? "var(--bt-primary)" : "var(--bt-muted)",
+            }}
           >
             {t.label}
           </Link>
@@ -83,47 +89,23 @@ export default async function RfisPage({ params, searchParams }: PageProps<"/job
       </nav>
 
       {rfis.length === 0 ? (
-        <EmptyState title="No RFIs yet" description="Requests for information created for this job will appear here." />
+        <EmptyState
+          title="Clarify the unknown with RFIs"
+          description="Streamline formal requests for information with Subs/Vendors to keep the project moving."
+        />
       ) : (
-        <div className="flex flex-col gap-3">
-          {rfis.map((rfi) => {
-            const style = STATUS_STYLE[rfi.status] ?? STATUS_STYLE.OPEN;
-            return (
-              <article key={rfi.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold text-[var(--bt-text)]">{rfi.title}</h2>
-                  <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-                    {rfi.status}
-                  </span>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{rfi.question}</p>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--bt-muted)]">
-                  <span>Asked {formatDate(rfi.createdAt)}</span>
-                  {rfi.dueDate ? <span>Due {formatDate(rfi.dueDate)}</span> : null}
-                  {rfi.assigneeUser ? <span>Assigned to {rfi.assigneeUser.email}</span> : null}
-                </div>
-                {rfi.answer ? (
-                  <div className="mt-2 rounded bg-[var(--bt-page-bg)] p-2 text-sm text-[var(--bt-text)]">
-                    <span className="text-xs font-semibold text-[var(--bt-muted)]">Answer: </span>
-                    {rfi.answer}
-                  </div>
-                ) : null}
-                {rfi.status !== "CLOSED" ? (
-                  <div className="mt-2 flex items-center gap-3">
-                    {rfi.status === "OPEN" ? <AnswerRfiForm jobId={job.id} rfiId={rfi.id} /> : null}
-                    <form action={closeRfiAction}>
-                      <input type="hidden" name="jobId" value={job.id} />
-                      <input type="hidden" name="rfiId" value={rfi.id} />
-                      <button type="submit" className="text-xs text-[var(--bt-muted)] hover:text-red-600 hover:underline">
-                        Close
-                      </button>
-                    </form>
-                  </div>
-                ) : null}
-              </article>
-            );
-          })}
-        </div>
+        <RfisGrid
+          rows={rfis.map((rfi) => ({
+            id: rfi.id,
+            jobId: job.id,
+            number: rfi.number,
+            title: rfi.title,
+            status: rfi.status,
+            dueDate: rfi.dueDate ? rfi.dueDate.toISOString() : null,
+            createdAt: rfi.createdAt.toISOString(),
+            assignee: rfi.assigneeUser ? rfi.assigneeUser.name || rfi.assigneeUser.email : null,
+          }))}
+        />
       )}
     </div>
   );

@@ -2017,6 +2017,8 @@ model Rfi {
   jobId          String
   job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
+  /// Per-job display number (0001, 0002, …). Assigned on create.
+  number   Int
   title    String
   question String
   status   RfiStatus @default(OPEN)
@@ -2024,6 +2026,9 @@ model Rfi {
 
   assigneeUserId String?
   assigneeUser   User?   @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
+
+  /// Reminder label matching Buildertrend (None, 1 Day Before, …). Display only for now.
+  reminder String?
 
   answer     String?
   answeredAt DateTime?
@@ -2035,6 +2040,7 @@ model Rfi {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([jobId, number])
   @@index([jobId, status])
 }
 
