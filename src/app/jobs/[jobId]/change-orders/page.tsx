@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -16,6 +17,16 @@ import { CreateChangeOrderForm } from "./create-change-order-form";
 
 export const dynamic = "force-dynamic";
 
+const STATUS_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "not_sent", label: "Not sent" },
+  { key: "sent", label: "Sent / Pending" },
+  { key: "past_due", label: "Past due" },
+  { key: "approved", label: "Approved" },
+  { key: "declined", label: "Declined" },
+] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number]["key"];
+
 function clientPriceCents(changeOrder: {
   mode: string;
   flatClientPriceCents: number | null;
@@ -28,8 +39,19 @@ function clientPriceCents(changeOrder: {
   }, 0);
 }
 
-export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[jobId]/change-orders">) {
+function builderCostCents(changeOrder: {
+  mode: string;
+  flatCostCents: number | null;
+  lineItems: readonly { quantityMilli: number; unitCostCents: number }[];
+}): number {
+  if (changeOrder.mode === "FLAT") return changeOrder.flatCostCents ?? 0;
+  return changeOrder.lineItems.reduce((total, item) => total + extendedCostCents(item.quantityMilli, item.unitCostCents), 0);
+}
+
+export default async function ChangeOrdersPage({ params, searchParams }: PageProps<"/jobs/[jobId]/change-orders">) {
   const { jobId } = await params;
+  const { status: statusParam } = await searchParams;
+  const statusFilter: StatusFilter = STATUS_FILTERS.some((f) => f.key === statusParam) ? (statusParam as StatusFilter) : "all";
 
   let user;
   try {
@@ -47,7 +69,7 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
   const [changeOrders, costCodes] = await Promise.all([
     db.changeOrder.findMany({
       where: { jobId: job.id },
-      orderBy: { createdAt: "desc" },
+      orderBy: { number: "desc" },
       include: { lineItems: true },
     }),
     db.costCode.findMany({
@@ -57,6 +79,43 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
     }),
   ]);
 
+  const now = new Date();
+  const rows = changeOrders.map((co) => {
+    const pastDue =
+      co.status === "PENDING_APPROVAL" && co.deadline !== null && co.deadline.getTime() < now.getTime();
+    return {
+      id: co.id,
+      jobId: job.id,
+      number: co.number,
+      title: co.title,
+      mode: co.mode,
+      status: co.status,
+      createdAt: co.createdAt.toISOString(),
+      statusChangedAt: co.statusChangedAt.toISOString(),
+      deadline: co.deadline ? co.deadline.toISOString() : null,
+      builderCostCents: builderCostCents(co),
+      clientPriceCents: clientPriceCents(co),
+      pastDue,
+    };
+  });
+
+  const filtered = rows.filter((row) => {
+    switch (statusFilter) {
+      case "not_sent":
+        return row.status === "DRAFT";
+      case "sent":
+        return row.status === "PENDING_APPROVAL" && !row.pastDue;
+      case "past_due":
+        return row.pastDue;
+      case "approved":
+        return row.status === "APPROVED";
+      case "declined":
+        return row.status === "DECLINED";
+      default:
+        return true;
+    }
+  });
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
       <PageHeader
@@ -64,7 +123,7 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
         title="Change Orders"
         action={
           <div className="flex items-center gap-2">
-            <CreateModal triggerLabel="+ Change Order" title="New change order">
+            <CreateModal triggerLabel="+ Change Order" title="New change order" size="lg">
               <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
             </CreateModal>
           </div>
@@ -80,21 +139,26 @@ export default async function ChangeOrdersPage({ params }: PageProps<"/jobs/[job
         />
       ) : null}
 
+      <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+        {STATUS_FILTERS.map((filter) => (
+          <Link
+            key={filter.key}
+            href={filter.key === "all" ? `/jobs/${job.id}/change-orders` : `/jobs/${job.id}/change-orders?status=${filter.key}`}
+            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium"
+            style={{
+              borderColor: statusFilter === filter.key ? "var(--bt-primary)" : "transparent",
+              color: statusFilter === filter.key ? "var(--bt-primary)" : "var(--bt-muted)",
+            }}
+          >
+            {filter.label}
+          </Link>
+        ))}
+      </nav>
 
-      {changeOrders.length === 0 ? (
+      {filtered.length === 0 ? (
         <EmptyState title="No change orders yet" description="Change orders created for this job will appear here." />
       ) : (
-        <ChangeOrdersGrid
-          rows={changeOrders.map((co) => ({
-            id: co.id,
-            jobId: job.id,
-            title: co.title,
-            mode: co.mode,
-            status: co.status,
-            createdAt: co.createdAt.toISOString(),
-            clientPriceCents: clientPriceCents(co),
-          }))}
-        />
+        <ChangeOrdersGrid rows={filtered} />
       )}
     </div>
   );

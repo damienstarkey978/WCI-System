@@ -79,6 +79,10 @@ export interface CreateChangeOrderInput {
   readonly flatCostCents?: Cents;
   readonly flatClientPriceCents?: Cents;
   readonly lineItems?: readonly CreateChangeOrderLineItemInput[];
+  readonly deadline?: Date | null;
+  readonly notesBuilder?: string | null;
+  readonly notesClient?: string | null;
+  readonly invoiceOnApproval?: boolean;
 }
 
 export async function createChangeOrder(input: CreateChangeOrderInput) {
@@ -90,13 +94,25 @@ export async function createChangeOrder(input: CreateChangeOrderInput) {
   if (!acceptsNewCommitments(job.status)) throw new JobNotOpenError(input.jobId, job.status);
 
   const isFlat = input.mode === ChangeOrderMode.FLAT;
+  const last = await db.changeOrder.findFirst({
+    where: { jobId: input.jobId },
+    orderBy: { number: "desc" },
+    select: { number: true },
+  });
+  const number = (last?.number ?? 0) + 1;
 
   return db.changeOrder.create({
     data: {
       organizationId: input.organizationId,
       jobId: input.jobId,
+      number,
       title: input.title,
       mode: input.mode,
+      deadline: input.deadline ?? null,
+      notesBuilder: input.notesBuilder ?? null,
+      notesClient: input.notesClient ?? null,
+      invoiceOnApproval: input.invoiceOnApproval ?? false,
+      statusChangedAt: new Date(),
       ...(isFlat
         ? {
             flatCostCodeId: input.flatCostCodeId,
@@ -119,6 +135,51 @@ export async function createChangeOrder(input: CreateChangeOrderInput) {
           }),
     },
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+export interface UpdateChangeOrderInput {
+  readonly organizationId: string;
+  readonly changeOrderId: string;
+  readonly title?: string;
+  readonly deadline?: Date | null;
+  readonly notesBuilder?: string | null;
+  readonly notesClient?: string | null;
+  readonly invoiceOnApproval?: boolean;
+}
+
+export async function updateChangeOrder(input: UpdateChangeOrderInput) {
+  const existing = await db.changeOrder.findFirst({
+    where: { id: input.changeOrderId, organizationId: input.organizationId },
+  });
+  if (!existing) throw new ChangeOrderNotFoundError(input.changeOrderId);
+  if (existing.status === ChangeOrderStatus.APPROVED || existing.status === ChangeOrderStatus.DECLINED) {
+    throw new ChangeOrderNotPendingError(input.changeOrderId, existing.status);
+  }
+
+  return db.changeOrder.update({
+    where: { id: existing.id },
+    data: {
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.deadline !== undefined ? { deadline: input.deadline } : {}),
+      ...(input.notesBuilder !== undefined ? { notesBuilder: input.notesBuilder } : {}),
+      ...(input.notesClient !== undefined ? { notesClient: input.notesClient } : {}),
+      ...(input.invoiceOnApproval !== undefined ? { invoiceOnApproval: input.invoiceOnApproval } : {}),
+    },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+/** Mark a draft as sent/pending without emailing (no provider yet). */
+export async function markChangeOrderSent(organizationId: string, changeOrderId: string) {
+  const changeOrder = await db.changeOrder.findFirst({ where: { id: changeOrderId, organizationId } });
+  if (!changeOrder) throw new ChangeOrderNotFoundError(changeOrderId);
+  if (changeOrder.status !== ChangeOrderStatus.DRAFT) {
+    throw new ChangeOrderNotPendingError(changeOrderId, changeOrder.status);
+  }
+  return db.changeOrder.update({
+    where: { id: changeOrder.id },
+    data: { status: ChangeOrderStatus.PENDING_APPROVAL, statusChangedAt: new Date() },
   });
 }
 
@@ -216,6 +277,7 @@ export async function approveChangeOrder(input: ApproveChangeOrderInput) {
       data: {
         status: ChangeOrderStatus.APPROVED,
         approvedAt: new Date(),
+        statusChangedAt: new Date(),
         clientSignatureName: input.clientSignatureName ?? changeOrder.clientSignatureName,
         clientSignedAt: input.clientSignatureName ? new Date() : changeOrder.clientSignedAt,
         clientSignatureIp: input.clientSignatureIp ?? changeOrder.clientSignatureIp,
@@ -241,7 +303,10 @@ export async function declineChangeOrder(organizationId: string, changeOrderId: 
     throw new ChangeOrderNotPendingError(changeOrderId, changeOrder.status);
   }
 
-  return db.changeOrder.update({ where: { id: changeOrder.id }, data: { status: ChangeOrderStatus.DECLINED } });
+  return db.changeOrder.update({
+    where: { id: changeOrder.id },
+    data: { status: ChangeOrderStatus.DECLINED, statusChangedAt: new Date() },
+  });
 }
 
 export class ChangeOrderNotApprovedError extends Error {

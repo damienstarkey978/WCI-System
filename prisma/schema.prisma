@@ -1850,6 +1850,8 @@ model ChangeOrder {
   jobId          String
   job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
+  /// Per-job display number (0001, 0002, …). Assigned on create.
+  number Int
   title  String
   mode   ChangeOrderMode
   status ChangeOrderStatus @default(DRAFT)
@@ -1860,16 +1862,26 @@ model ChangeOrder {
   flatCostCents        Int?
   flatClientPriceCents Int?
 
+  /// Approval deadline (Buildertrend). Past-due filter uses this when still pending.
+  deadline      DateTime?
+  notesBuilder  String?
+  notesClient   String?
+  /// When true, staff intend to invoice the client after approval (display/flag only for now).
+  invoiceOnApproval Boolean @default(false)
+
   clientSignatureName String?
   clientSignedAt      DateTime?
   clientSignatureIp   String?
   approvedAt          DateTime?
+  /// Updated whenever status changes (for the list "Status changed" column).
+  statusChangedAt     DateTime @default(now())
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   lineItems ChangeOrderLineItem[]
 
+  @@unique([jobId, number])
   @@index([jobId, status])
 }
 
