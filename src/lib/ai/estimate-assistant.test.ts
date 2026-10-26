@@ -78,6 +78,35 @@ describe("draftEstimateFromNotes", () => {
     expect(call.model).toBe("claude-opus-5");
   });
 
+  it("includes company AI preference instructions in the user prompt when provided", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const client = fakeClient({ parsed_output: VALID_PARSED_OUTPUT, stop_reason: "end_turn" });
+
+    await draftEstimateFromNotes(
+      {
+        jobName: "Test job",
+        notes: "notes",
+        costCodes: CODES,
+        preferenceInstructions: [
+          {
+            id: "pref1",
+            label: "Separate Interior Painting Section",
+            instruction: "Always separate Interior Painting into its own section.",
+            forType: "ESTIMATE",
+            enabled: true,
+            appliesToChangeOrder: false,
+          },
+        ],
+      },
+      client,
+    );
+
+    const call = client.stream.mock.calls[0][0];
+    expect(call.messages[0].content).toContain("Company AI preference instructions");
+    expect(call.messages[0].content).toContain("Separate Interior Painting Section");
+    expect(call.messages[0].content).toContain("Always separate Interior Painting into its own section.");
+  });
+
   it("throws when the model refuses", async () => {
     process.env.ANTHROPIC_API_KEY = "test-key";
     const client = fakeClient({ parsed_output: null, stop_reason: "refusal" });

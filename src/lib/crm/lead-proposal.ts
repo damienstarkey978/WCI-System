@@ -11,6 +11,7 @@
 
 import { AiNotConfiguredError, DraftGenerationError, draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
 import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
+import { listEnabledAiPreferenceInstructions } from "@/lib/ai/preference-instructions";
 import { LeadNotFoundError } from "@/lib/crm/service";
 import { createEstimate, type CreateEstimateLineItemInput } from "@/lib/estimates/service";
 import { db } from "@/lib/db";
@@ -190,7 +191,7 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
   const lead = await db.lead.findFirst({ where: { id: input.leadId, organizationId: input.organizationId } });
   if (!lead) throw new LeadNotFoundError(input.leadId);
 
-  const [costCodeRows, materialRows] = await Promise.all([
+  const [costCodeRows, materialRows, preferenceInstructions] = await Promise.all([
     db.costCode.findMany({
       where: { organizationId: input.organizationId, isActive: true },
       select: { id: true, code: true, name: true, defaultCostType: true },
@@ -198,6 +199,9 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     db.materialCatalogItem.findMany({
       where: { organizationId: input.organizationId },
       select: { vendor: true, description: true, unit: true, unitCostCents: true },
+    }),
+    listEnabledAiPreferenceInstructions(input.organizationId, {
+      forTypes: ["ESTIMATE", "PROPOSAL"],
     }),
   ]);
   if (costCodeRows.length === 0) throw new NoCostCodesError();
@@ -211,6 +215,7 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     costCodes,
     materialCatalog,
     images: input.images,
+    preferenceInstructions,
   });
 
   const lineItems: readonly CreateEstimateLineItemInput[] = draft.lineItems.map((line) => ({

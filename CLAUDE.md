@@ -655,3 +655,15 @@ Record every architectural decision that departs from the above, with the reason
   templates` UI, `/api/v1/proposal-templates` plus `/proposals/{id}/apply-
   template` (reusing the `proposals:read`/`proposals:write` scopes), and the
   Jarvis tools `list_proposal_templates` / `apply_proposal_template`.
+
+- **Handoff cost instructions are org AI preference instructions, not per-CostCode
+  rows (Handoff import):** Damien asked to pull Handoff cost instructions for every
+  cost code into WCI OS proposals. Live Handoff (World Construction Inc) stores those
+  as Settings → Presets written rules (`AiPreferenceInstruction`), not as fields on
+  the Cost codes library — and Cost codes itself returned UNAUTHORIZED on the current
+  Handoff plan. Imported the real Presets GraphQL export into
+  `AiPreferenceInstruction` (seeded from `prisma/data/handoff-ai-preference-
+  instructions.json`) and inject enabled ESTIMATE/PROPOSAL rules into
+  `draftEstimateFromNotes` / lead-proposal drafting. Disabled Handoff instructions
+  are stored with `enabled: false` and are not injected. No instruction text was
+  invented.

@@ -1,0 +1,180 @@
+{
+  "source": "Handoff World Construction Inc Settings > Presets (live GraphQL intercept 2026-10-26)",
+  "sourceUrl": "https://app.handoff.ai/settings/presets",
+  "handoffOrganizationId": "3b1eaacc-cd87-4732-b6bc-a0a0e509c4cf",
+  "note": "Handoff Cost codes library is not available on the current Handoff plan (API UNAUTHORIZED). These AI preference instructions are the company cost/estimating/proposal rules Handy applies across the catalog.",
+  "estimateDefaultValues": {
+    "id": "d0d871e5-685e-4b07-9d68-b4fb52941b6e",
+    "createdAt": "2026-02-09T15:11:01.646Z",
+    "updatedAt": "2026-06-25T15:39:05.790Z",
+    "markupDefaultValuesFrom": "LAST_USED",
+    "markups": {
+      "material": {
+        "pct": 40,
+        "__typename": "EstimateDefaultMarkup"
+      },
+      "labor": {
+        "pct": 40,
+        "__typename": "EstimateDefaultMarkup"
+      },
+      "other": {
+        "pct": 40,
+        "__typename": "EstimateDefaultMarkup"
+      },
+      "__typename": "EstimateDefaultMarkups"
+    },
+    "belowTheLineMarkupDefaultValuesFrom": "LAST_USED",
+    "belowTheLineMarkups": [],
+    "taxDefaultValuesFrom": "STORED_VALUES",
+    "tax": {
+      "title": "Tax",
+      "pct": 0,
+      "appliesTo": "MATERIAL",
+      "__typename": "EstimateDefaultTax"
+    },
+    "__typename": "EstimateDefaultValues"
+  },
+  "proposalDefaultValues": {
+    "id": "3a16b4de-afa4-4cad-a6fa-57d125676c90",
+    "createdAt": "2026-02-09T15:11:01.678Z",
+    "updatedAt": "2026-06-02T13:09:33.001Z",
+    "proposalDefaultValuesFrom": "STORED_VALUES",
+    "lumpSum": true,
+    "displayType": "SUMMARY",
+    "signatureRequired": false,
+    "hideTaxOnProposal": false,
+    "paymentScheduleEnabled": false,
+    "paymentSchedule": [],
+    "__typename": "ProposalDefaultValues"
+  },
+  "instructions": [
+    {
+      "externalId": "96e9dbdb-3016-4666-8f83-28ef935c2a59",
+      "label": "Group Soffit with Siding (Vinyl) & Fascia with Roofing",
+      "instruction": "Always include line items and pricing for fascia whenever adding a roof on a new construction project or an addition. Always group soffit and siding together in the same section/group (e.g., 'Siding & Soffit'), never with roofing. Always specify vinyl soffit unless specified otherwise.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "8b15f346-0e41-485a-aad8-a5411fb3bd61",
+      "label": "Separate Interior Painting Section",
+      "instruction": "Always separate Interior Painting into its own distinct, dedicated section on all estimates. Never combine interior painting with carpentry, framing, drywall, or general finishes.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "cce83063-ea92-418f-91b6-7f6e64995945",
+      "label": null,
+      "instruction": "When an item or material is purchased directly by the client/homeowner, always label and refer to it as 'Owner Purchased' (or 'Owner-Purchased'). Never label or call items purchased directly by the client an 'Owner Allowance' or 'Allowance', as allowances represent company-purchased items with a set budget amount.",
+      "forType": "ESTIMATE",
+      "enabled": false,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "9ff217a0-8c95-463e-8b85-c73667cfedb9",
+      "label": "Proposal Allowances vs Owner-Supplied Items",
+      "instruction": "When generating a proposal:\n1. Clearly distinguish between 'Allowances' and 'Owner-Supplied Items'.\n2. If there are NO owner-supplied items (i.e. contractor purchases materials under an allowance budget), do NOT state that items are owner-supplied. Label the section 'Material Allowances' and state that allowance amounts represent the budget included in the contract for customer selections.\n3. Only include language regarding 'Owner-Supplied Items' if there are actual items specifically designated as purchased directly by the owner.\n4. Ensure all allowance rates are accurately formatted (e.g., Tile and LVP flooring allowance must always be written as $4.00 per square foot, never $400/SF).",
+      "forType": "ESTIMATE",
+      "enabled": false,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "3a0f674c-b19d-4f57-948f-688ea438b4ad",
+      "label": "Site prep items in Demolition section",
+      "instruction": "Always place dumpsters, roll-off waste containers, debris haul-off, floor protection, dust containment/plastic barriers, and all site preparation line items in the 'Demolition & Site Prep' (or 'Site Preparation & Demolition') section. Never place dumpsters, floor protection, or site prep items under 'Plans, Permitting & Engineering'.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "2e1d48f6-987b-496b-b603-f941987e07a0",
+      "label": "Separate Framing and Drywall Sections",
+      "instruction": "Always separate Framing and Drywall into two distinct, dedicated sections on estimates: one standalone section for Framing and one standalone section for Drywall.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "f48dfb93-62ae-47f9-b674-709f81f4b976",
+      "label": "Default Insulation R-Values",
+      "instruction": "Always specify and estimate R-13 batt insulation for walls and R-30 batt insulation for ceilings by default on all projects and additions.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "9ca3564e-a59f-4737-9baa-1d7b4db99dc7",
+      "label": "Demolition Section for Enclosures",
+      "instruction": "For lanai and patio enclosures, always dedicate a specific section solely to Demolition (e.g., removing existing tile, columns, framing).",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "e0350b47-cdcb-48ac-bb64-feb01e0857db",
+      "label": "Owner Allowances under Key Takeoffs in Client Message",
+      "instruction": "For all proposals: Always keep Lump Sum ENABLED to hide individual line item prices. However, you MUST list all Owner Allowances and their exact dollar amounts (e.g., flooring per SF, specific fixture budgets) as a bulleted list directly in the Client Message under a 'Key Takeoffs' heading so the client clearly sees their shopping allotments. Also, set the display type to DETAIL.",
+      "forType": "ESTIMATE",
+      "enabled": false,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "87f94772-61fe-4ad6-981c-3971cc4813fc",
+      "label": "Owner-supplied material allowances",
+      "instruction": "Always include owner-supplied material allowances as line items on every estimate. Use the following allowance amounts:\n- Quartz or granite kitchen countertops: $75/SF allowance\n- Shower valve / trim kit: $150 each\n- Sink faucets: $100 each\n- Toilet: $150 each\n- Single vanity with sink top: $500 each\n- Double vanity with sink top: $1,000 each\n- Kitchen cabinet handles: $150 allowance\n- Tile and LVP flooring: $4.00/SF\n- Carpet: $3.00/SF\n- Carpet pad: $1.00/SF\n- Cabinets (White Shaker): $200/LF\n- Interior doors: $150 each\n- Exterior doors: $450 each\n- Windows: $350 each\n\nThese are owner-supplied items \u2014 label them clearly as \"Owner Allowance\" line items so the client knows the budgeted amount for materials they are purchasing.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "6a43044b-1be8-40dd-898e-1b9958a45ccb",
+      "label": "List Allowance Dollar Amounts in Proposal Message",
+      "instruction": "When generating proposals, ALWAYS write out the specific Customer Allotments/Owner Allowances as a bulleted list inside the proposal's Client Message/Introduction text. You MUST include the exact dollar amount they are allowed to spend per item, per LF, or per SF (e.g. 'Toilets: $150 each', 'Flooring: $4.00/SF'). Do not just say they have an allowance; explicitly list the dollar budgets so the customer sees exactly what they can spend before signing.",
+      "forType": "ESTIMATE",
+      "enabled": false,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "8f39acfe-0b17-4215-975d-5c0da56923f2",
+      "label": "Premium Materials & Conditional Siding",
+      "instruction": "Always use high quality finishes for projects. Specify 'high quality paint' for all painting items (do NOT mention Sherwin Williams or specific brands). Use quartz counters and LVP flooring. For siding: Use Hardie board ONLY for new construction or additions. For renovations or repairs, ALWAYS ask the user what the existing siding material is so it can be matched.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "13f78073-573f-475b-9944-060a57607794",
+      "label": null,
+      "instruction": "When creating estimates, always base the scope, materials, and quantities strictly on what the architectural plans or drawings specify. The plans will always override any other standard presets or preferences if there is a conflict.",
+      "forType": "ESTIMATE",
+      "enabled": false,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "3170eeb8-988e-4348-962e-92791184d5d6",
+      "label": "Set $100/hr labor rate",
+      "instruction": "Always use a labor rate of $100 per hour for all labor line items and calculations.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": true
+    },
+    {
+      "externalId": "79e912a9-60a5-4aef-a242-6918cff53ef3",
+      "label": "Preserve titles, no auto-proposals",
+      "instruction": "Never create, auto-generate, or modify the estimate or project title. Whatever the user puts in as the title must be used exactly as given. If the user does not provide a title, ask them for one\u2014do not invent or guess one from file names or context. The title must match exactly as given because it is synced with BuilderTrend and the owner uses it to locate the correct project by title. \n\nAdditionally, never create a proposal when adding a client to an estimate. Only create the estimate and stop there. The estimate will be reviewed by the owner before any proposal is created.\n\nBill's workflow is always the same:\n1. Bill gathers scope (PDFs, photos, plans, measurements, etc.)\n2. Bill creates the estimate with AI assistance\n3. Bill assigns it to the company owner for review via a separate software\n4. The owner reviews, makes changes, creates the proposal, and releases it to the client\n\nNever suggest creating a proposal, sending a proposal, or any next steps beyond completing the estimate. Once the estimate is done, the job is done. Do not prompt or nudge Bill toward proposals, invoices, or client-facing deliverables.",
+      "forType": "ESTIMATE",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    },
+    {
+      "externalId": "8f7b017f-49d5-455e-b2e4-5f94753eb9f6",
+      "label": "Include takeoff details in proposals",
+      "instruction": "When generating proposals from estimates, always include detailed takeoff information, measurements, and quantities in the proposal text or scope of work. Specifically, pull over and display the following quantities if they apply to the job: Flooring SF (LVP, tile, carpet), Wall paint SF, Ceiling paint SF, Baseboard LF, Crown molding LF, Kitchen/Vanity cabinet LF, Countertop SF, Drywall SF, Roofing SF/squares, Siding SF, Fence LF, Concrete SF, Doors and windows (quantities and sizes), and Demolition quantities.",
+      "forType": "PROPOSAL",
+      "enabled": true,
+      "appliesToChangeOrder": false
+    }
+  ]
+}

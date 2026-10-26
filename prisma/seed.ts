@@ -22,10 +22,13 @@
 // Next.js loads .env automatically; a standalone tsx script does not.
 import "dotenv/config";
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../src/generated/prisma/client";
-import { CostType } from "../src/generated/prisma/enums";
+import { AiPreferenceForType, CostType } from "../src/generated/prisma/enums";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -205,6 +208,55 @@ async function main(): Promise<void> {
   }
   if (deleted > 0) console.log(`✓ ${deleted} stale cost code(s) deleted`);
   if (deactivated > 0) console.log(`✓ ${deactivated} stale cost code(s) deactivated (still referenced elsewhere)`);
+
+  // Handoff Presets → AiPreferenceInstruction (real export; never invent text).
+  const handoffPath = join(process.cwd(), "prisma/data/handoff-ai-preference-instructions.json");
+  const handoffExport = JSON.parse(readFileSync(handoffPath, "utf8")) as {
+    instructions: readonly {
+      externalId: string;
+      label: string | null;
+      instruction: string;
+      forType: keyof typeof AiPreferenceForType;
+      enabled: boolean;
+      appliesToChangeOrder: boolean;
+    }[];
+  };
+
+  let instructionCount = 0;
+  for (const [index, entry] of handoffExport.instructions.entries()) {
+    const forType = AiPreferenceForType[entry.forType];
+    if (!forType) {
+      throw new Error(`Unknown AiPreferenceForType in Handoff export: ${entry.forType}`);
+    }
+    await prisma.aiPreferenceInstruction.upsert({
+      where: {
+        organizationId_externalId: {
+          organizationId: organization.id,
+          externalId: entry.externalId,
+        },
+      },
+      update: {
+        label: entry.label,
+        instruction: entry.instruction,
+        forType,
+        enabled: entry.enabled,
+        appliesToChangeOrder: entry.appliesToChangeOrder,
+        sortOrder: index,
+      },
+      create: {
+        organizationId: organization.id,
+        externalId: entry.externalId,
+        label: entry.label,
+        instruction: entry.instruction,
+        forType,
+        enabled: entry.enabled,
+        appliesToChangeOrder: entry.appliesToChangeOrder,
+        sortOrder: index,
+      },
+    });
+    instructionCount++;
+  }
+  console.log(`✓ ${instructionCount} Handoff AI preference instruction(s) seeded`);
 }
 
 main()

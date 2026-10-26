@@ -7,6 +7,7 @@ import { ChangeOrderMode } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
 import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
+import { listEnabledAiPreferenceInstructions } from "@/lib/ai/preference-instructions";
 import { createChangeOrder, JobNotFoundError as ChangeOrderJobNotFoundError, JobNotOpenError } from "@/lib/change-orders/service";
 
 export class JobNotFoundError extends Error {
@@ -37,7 +38,10 @@ export interface CreateAiEstimateDraftResult {
   readonly lineItemCount: number;
 }
 
-async function loadDraftingCatalogs(organizationId: string) {
+async function loadDraftingCatalogs(
+  organizationId: string,
+  options?: { readonly forChangeOrder?: boolean },
+) {
   const costCodeRows = await db.costCode.findMany({
     where: { organizationId, isActive: true },
     select: { id: true, code: true, name: true, defaultCostType: true },
@@ -48,13 +52,19 @@ async function loadDraftingCatalogs(organizationId: string) {
   const costCodes: readonly CostCodeOption[] = costCodeRows;
   const defaultCostTypeById = new Map(costCodeRows.map((row) => [row.id, row.defaultCostType]));
 
-  const materialRows = await db.materialCatalogItem.findMany({
-    where: { organizationId },
-    select: { vendor: true, description: true, unit: true, unitCostCents: true },
-  });
+  const [materialRows, preferenceInstructions] = await Promise.all([
+    db.materialCatalogItem.findMany({
+      where: { organizationId },
+      select: { vendor: true, description: true, unit: true, unitCostCents: true },
+    }),
+    listEnabledAiPreferenceInstructions(organizationId, {
+      forTypes: options?.forChangeOrder ? ["ESTIMATE", "CHANGE_ORDER"] : ["ESTIMATE", "PROPOSAL"],
+      forChangeOrder: options?.forChangeOrder === true,
+    }),
+  ]);
   const materialCatalog: readonly MaterialCatalogOption[] = materialRows;
 
-  return { costCodes, defaultCostTypeById, materialCatalog };
+  return { costCodes, defaultCostTypeById, materialCatalog, preferenceInstructions };
 }
 
 /**
@@ -73,7 +83,8 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
     throw new JobNotFoundError(input.jobId);
   }
 
-  const { costCodes, defaultCostTypeById, materialCatalog } = await loadDraftingCatalogs(input.organizationId);
+  const { costCodes, defaultCostTypeById, materialCatalog, preferenceInstructions } =
+    await loadDraftingCatalogs(input.organizationId);
 
   const draft = await draftEstimateFromNotes({
     jobName: job.name,
@@ -81,6 +92,7 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
     costCodes,
     materialCatalog,
     images: input.images,
+    preferenceInstructions,
   });
 
   // This admin-only tool has no client/lead context to attach a Proposal to, so
@@ -156,7 +168,8 @@ export async function createAiChangeOrderDraft(input: CreateAiChangeOrderDraftIn
     throw new JobNotFoundError(input.jobId);
   }
 
-  const { costCodes, defaultCostTypeById, materialCatalog } = await loadDraftingCatalogs(input.organizationId);
+  const { costCodes, defaultCostTypeById, materialCatalog, preferenceInstructions } =
+    await loadDraftingCatalogs(input.organizationId, { forChangeOrder: true });
 
   const draft = await draftEstimateFromNotes({
     jobName: job.name,
@@ -164,6 +177,7 @@ export async function createAiChangeOrderDraft(input: CreateAiChangeOrderDraftIn
     costCodes,
     materialCatalog,
     images: input.images,
+    preferenceInstructions,
   });
 
   let changeOrder;

@@ -59,6 +59,18 @@ enum CostType {
   NONE
 }
 
+/// Handoff-style AI preference instruction tab (Settings → Presets). Company-wide
+/// written rules Handy/Jarvis apply when drafting estimates and proposals — not a
+/// per-CostCode field (Handoff's Cost codes library was unavailable on WCI's plan;
+/// these instructions ARE the "cost instructions" imported from Handoff).
+enum AiPreferenceForType {
+  ESTIMATE
+  PROPOSAL
+  DOCUMENT
+  CHANGE_ORDER
+  SCHEDULE
+}
+
 /// Permission Wizard equivalent: how much of a job's schedule a user may see.
 enum ScheduleScope {
   ASSIGNED_ONLY
@@ -93,9 +105,10 @@ model Organization {
   users        User[]
   jobs         Job[]
   jobGroups    JobGroup[]
-  costCodes    CostCode[]
-  apiKeys      ApiKey[]
-  oauthClients OAuthClient[]
+  costCodes                 CostCode[]
+  aiPreferenceInstructions  AiPreferenceInstruction[]
+  apiKeys                   ApiKey[]
+  oauthClients              OAuthClient[]
 
   estimates               Estimate[]
   estimateTemplates       EstimateTemplate[]
@@ -419,6 +432,31 @@ model CostCode {
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
   @@index([parentId])
+}
+
+/// Company AI preference instructions imported from Handoff Presets (and editable
+/// later). Injected into estimate/proposal AI drafting prompts so Jarvis follows
+/// WCI's real rules — never invented placeholders.
+model AiPreferenceInstruction {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Handoff AiPreferenceInstruction id when imported; null for hand-entered rows.
+  externalId String?
+
+  label                  String?
+  instruction            String
+  forType                AiPreferenceForType
+  enabled                Boolean             @default(true)
+  appliesToChangeOrder   Boolean             @default(false)
+  sortOrder              Int                 @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, forType, enabled])
 }
 
 // ---------------------------------------------------------------------------

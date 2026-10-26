@@ -27,6 +27,10 @@ import {
   type MaterialCatalogOption,
   type NormalizedEstimateDraft,
 } from "@/lib/ai/estimate-draft";
+import {
+  formatAiPreferenceInstructions,
+  type AiPreferenceInstructionRow,
+} from "@/lib/ai/preference-instructions";
 import { isAnthropicConfigured } from "@/lib/env";
 
 export class AiNotConfiguredError extends Error {
@@ -79,6 +83,10 @@ Rules:
 - projectDescription is the short paragraph a proposal opens with — summarize the
   scope the way you'd describe it to the client in the first breath, one or two
   sentences, plus the key scope numbers (square footage, etc.) if known.
+- When "Company AI preference instructions" are provided in the user message, follow
+  every enabled rule there for grouping, materials, allowances, takeoff detail, and
+  proposal narrative. Those rules are the company's real Handoff Presets — do not
+  invent conflicting company standards.
 - This produces a DRAFT for a human estimator to review, edit, and price-check before
   anything is sent to a client. Do not hedge in the output itself — produce your best
   concrete numbers, and put caveats in "assumptions" instead.`;
@@ -103,6 +111,8 @@ export interface DraftEstimateInput {
   readonly costCodes: readonly CostCodeOption[];
   readonly materialCatalog?: readonly MaterialCatalogOption[];
   readonly images?: readonly DraftEstimateImageInput[];
+  /** Org AI preference instructions (Handoff Presets). Optional for backward-compatible callers/tests. */
+  readonly preferenceInstructions?: readonly AiPreferenceInstructionRow[];
 }
 
 /**
@@ -131,6 +141,7 @@ export async function draftEstimateFromNotes(
   const schema = buildEstimateDraftSchema(input.costCodes.map((code) => code.id));
   const catalog = formatCostCodeCatalog(input.costCodes);
   const materials = formatMaterialCatalog(input.materialCatalog ?? []);
+  const preferences = formatAiPreferenceInstructions(input.preferenceInstructions ?? []);
 
   const promptText = [
     `Job: ${input.jobName}`,
@@ -140,6 +151,9 @@ export async function draftEstimateFromNotes(
     "",
     "Materials catalog (vendor | description | unit | unit price):",
     materials,
+    "",
+    "Company AI preference instructions (from Handoff Presets — follow these):",
+    preferences,
     "",
     "Field notes:",
     input.notes,
