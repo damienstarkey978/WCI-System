@@ -10,12 +10,9 @@ import { CloseIcon } from "./icons";
  * `children` is whatever create-form component the page already has — this is
  * purely a trigger + overlay, it has no opinion on what's inside.
  *
- * Does not auto-close on a successful submit yet — the existing create-form
- * components don't call back out when they're done (they're plain Server Action
- * forms with their own useActionState). A page that wants auto-close passes its
- * own `open`/`onOpenChange` instead of relying on the uncontrolled default, once
- * that form is updated to report success. Until then, closing is just the X
- * button, the backdrop, or the after-submit state showing success inline.
+ * Auto-close is opt-in: pass controlled `open`/`onOpenChange` and have the child
+ * form call `onOpenChange(false)` (or a success callback) when the Server Action
+ * returns ok. Uncontrolled modals still close via the X button or backdrop.
  */
 export function CreateModal({
   triggerLabel,
@@ -60,10 +57,10 @@ export function CreateModal({
         {triggerLabel}
       </button>
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <div
-            className={`relative flex max-h-[90vh] w-full ${maxWidth} flex-col overflow-hidden rounded-lg bg-[var(--bt-panel-bg)] shadow-xl`}
+            className={`relative flex max-h-[92vh] w-full ${maxWidth} flex-col overflow-hidden rounded-t-lg bg-[var(--bt-panel-bg)] shadow-xl sm:max-h-[90vh] sm:rounded-lg`}
             role="dialog"
             aria-modal="true"
             aria-label={title}
@@ -76,7 +73,7 @@ export function CreateModal({
                 </button>
               </div>
             )}
-            <div className={hideHeader ? "overflow-y-auto" : "overflow-y-auto p-4"}>{children}</div>
+            <div className={hideHeader ? "overflow-y-auto" : "overflow-y-auto p-3 sm:p-4"}>{children}</div>
           </div>
         </div>
       ) : null}

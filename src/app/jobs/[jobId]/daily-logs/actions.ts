@@ -99,7 +99,9 @@ export async function createDailyLogAction(_previous: ActionState, formData: For
     if (error instanceof JobNotFoundError || error instanceof StorageNotConfiguredError) {
       return { error: error.message };
     }
-    throw error;
+    // Surface unexpected failures so the client pending state always clears
+    // instead of leaving "Saving…" stuck with no message.
+    return { error: error instanceof Error ? error.message : "Could not save the daily log." };
   }
 
   revalidatePath(`/jobs/${jobId}/daily-logs`);

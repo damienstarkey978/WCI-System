@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { createDailyLogAction, draftDailyLogNoteAction, type ActionState, type DraftDailyLogActionState } from "./actions";
@@ -8,22 +9,18 @@ const INITIAL: ActionState = {};
 const DRAFT_INITIAL: DraftDailyLogActionState = {};
 
 /**
- * "Draft with AI" (handoff-ai-analysis-and-jarvis-deep-integration-spec.md Part
- * 3.3a) — snap a photo, jot a quick note, and Jarvis writes the log entry for
- * review before it's saved. Deliberately its own small form nested inside the real
- * one: drafting never submits a DailyLog, only fills the note textarea below.
+ * "Draft with AI" — own form, never nested inside the create form (invalid HTML
+ * nesting was breaking submit / leaving Saving stuck once Jarvis UI was on).
  */
 function DraftWithAi({ noteRef }: { noteRef: React.RefObject<HTMLTextAreaElement | null> }) {
   const [draftState, draftAction, draftPending] = useActionState(draftDailyLogNoteAction, DRAFT_INITIAL);
   const [rough, setRough] = useState("");
-  const photosRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (draftState.draft && noteRef.current) {
       noteRef.current.value = draftState.draft;
     }
-    // Only re-sync the (uncontrolled) note textarea when a *new* draft comes back —
-    // not on every render, so it doesn't stomp on further hand-edits.
+    // Only re-sync the (uncontrolled) note textarea when a *new* draft comes back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftState.draft]);
 
@@ -40,12 +37,12 @@ function DraftWithAi({ noteRef }: { noteRef: React.RefObject<HTMLTextAreaElement
           className="w-full rounded border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--bt-primary)]"
           style={{ borderColor: "var(--bt-border)" }}
         />
-        <div className="flex items-center gap-2">
-          <input ref={photosRef} type="file" name="photos" multiple accept="image/jpeg,image/png,image/webp,image/gif" className="flex-1 text-xs" />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input type="file" name="photos" multiple accept="image/jpeg,image/png,image/webp,image/gif" className="min-w-0 flex-1 text-xs" />
           <button
             type="submit"
             disabled={draftPending || rough.trim().length < 5}
-            className="rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-text)] disabled:opacity-50"
+            className="rounded border px-3 py-2 text-xs font-semibold text-[var(--bt-text)] disabled:opacity-50 sm:py-1.5"
             style={{ borderColor: "var(--bt-border)" }}
           >
             {draftPending ? "Drafting…" : "Draft entry"}
@@ -58,81 +55,96 @@ function DraftWithAi({ noteRef }: { noteRef: React.RefObject<HTMLTextAreaElement
   );
 }
 
-export function DailyLogForm({ jobId, aiEnabled }: { jobId: string; aiEnabled?: boolean }) {
+export function DailyLogForm({
+  jobId,
+  aiEnabled,
+  onSuccess,
+}: {
+  jobId: string;
+  aiEnabled?: boolean;
+  /** Called after a successful create so the parent can close the modal. */
+  onSuccess?: () => void;
+}) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(createDailyLogAction, INITIAL);
-  const formRef = useRef<HTMLFormElement>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
+  const handledOk = useRef(false);
+
+  useEffect(() => {
+    if (!state.ok || handledOk.current) return;
+    handledOk.current = true;
+    onSuccess?.();
+    router.refresh();
+  }, [state.ok, onSuccess, router]);
+
+  useEffect(() => {
+    if (!state.ok) handledOk.current = false;
+  }, [state.ok]);
 
   return (
-    <form
-      ref={formRef}
-      action={async (formData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
-      className="rounded-lg border bg-[var(--bt-panel-bg)] p-4"
-      style={{ borderColor: "var(--bt-border)" }}
-    >
-      <input type="hidden" name="jobId" value={jobId} />
-
+    <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4" style={{ borderColor: "var(--bt-border)" }}>
       {aiEnabled ? <DraftWithAi noteRef={noteRef} /> : null}
 
-      <label className="mb-3 grid gap-1 text-sm">
-        <span className="text-xs font-medium text-[var(--bt-muted)]">Title</span>
-        <input
-          name="title"
-          maxLength={200}
-          placeholder="Prime walk thru"
-          className="w-full rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
-          style={{ borderColor: "var(--bt-border)" }}
-        />
-      </label>
+      <form action={formAction} className="flex flex-col gap-3">
+        <input type="hidden" name="jobId" value={jobId} />
 
-      <label className="grid gap-1 text-sm">
-        <span className="text-xs font-medium text-[var(--bt-muted)]">Notes</span>
-        <textarea
-          ref={noteRef}
-          name="note"
-          required
-          rows={3}
-          placeholder="What happened on site today?"
-          className="w-full rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
-          style={{ borderColor: "var(--bt-border)" }}
-        />
-      </label>
-
-      <label className="mt-3 grid gap-1 text-sm">
-        <span className="text-xs font-medium text-[var(--bt-muted)]">Photos and files</span>
-        <input type="file" name="attachments" multiple className="text-sm" />
-      </label>
-
-      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-[var(--bt-muted)]">
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" name="clientVisible" defaultChecked />
-          Visible to client
+        <label className="grid gap-1 text-sm">
+          <span className="text-xs font-medium text-[var(--bt-muted)]">Title</span>
+          <input
+            name="title"
+            maxLength={200}
+            placeholder="Prime walk thru"
+            className="w-full rounded border px-3 py-2.5 text-base outline-none focus:border-[var(--bt-primary)] sm:py-2 sm:text-sm"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
         </label>
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" name="subVisible" defaultChecked />
-          Visible to subs
+
+        <label className="grid gap-1 text-sm">
+          <span className="text-xs font-medium text-[var(--bt-muted)]">Notes</span>
+          <textarea
+            ref={noteRef}
+            name="note"
+            required
+            rows={4}
+            placeholder="What happened on site today?"
+            className="w-full rounded border px-3 py-2.5 text-base outline-none focus:border-[var(--bt-primary)] sm:py-2 sm:text-sm"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
         </label>
-      </div>
 
-      {state.error ? (
-        <p role="alert" className="mt-2 text-xs text-red-600">
-          {state.error}
-        </p>
-      ) : null}
+        <label className="grid gap-1 text-sm">
+          <span className="text-xs font-medium text-[var(--bt-muted)]">Photos and files</span>
+          <input type="file" name="attachments" multiple className="text-sm" />
+        </label>
 
-      <div className="mt-3">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
-          style={{ background: "var(--bt-primary)" }}
-        >
-          {pending ? "Saving…" : "Add log"}
-        </button>
-      </div>
-    </form>
+        <div className="flex flex-col gap-2 text-xs text-[var(--bt-muted)] sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" name="clientVisible" defaultChecked />
+            Visible to client
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" name="subVisible" defaultChecked />
+            Visible to subs
+          </label>
+        </div>
+
+        {state.error ? (
+          <p role="alert" className="text-xs text-red-600">
+            {state.error}
+          </p>
+        ) : null}
+
+        <div>
+          <button
+            type="submit"
+            disabled={pending}
+            className="w-full rounded px-4 py-2.5 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 sm:w-auto sm:py-2"
+            style={{ background: "var(--bt-primary)" }}
+          >
+            {pending ? "Saving…" : "Add log"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

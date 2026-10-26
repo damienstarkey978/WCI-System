@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -11,7 +10,7 @@ import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { resolveFileUrlSafe } from "@/lib/files/service";
 
 import { toggleDailyLogLikeAction } from "./actions";
-import { DailyLogForm } from "./daily-log-form";
+import { DailyLogCreateModal } from "./daily-log-create-modal";
 import { logHeading, weatherSummary } from "@/lib/daily-logs/display";
 
 import { LogGallery } from "./log-gallery";
@@ -126,9 +125,7 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
                 </div>
               </form>
             </details>
-            <CreateModal triggerLabel="+ Daily Log" title="New daily log">
-              <DailyLogForm jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />
-            </CreateModal>
+            <DailyLogCreateModal jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />
           </div>
         }
       />
