@@ -2209,7 +2209,8 @@ model FileFolder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files File[]
+  files        File[]
+  inspections  JobPermitInspection[]
 
   @@unique([jobId, name])
   @@index([organizationId])
@@ -3531,6 +3532,10 @@ model JobPermitInspection {
   name        String
   completedAt DateTime?
   sortOrder   Int       @default(0)
+
+  /// Files > Inspection Pictures folder for this inspection (created on demand).
+  folderId String?     @unique
+  folder   FileFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

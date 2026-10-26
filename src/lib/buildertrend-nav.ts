@@ -95,6 +95,7 @@ export const FILES_NAV: readonly JobNavLink[] = [
   { label: "Documents", path: "/files?category=DOCUMENT" },
   { label: "Photos", path: "/files?category=PHOTO" },
   { label: "Videos", path: "/files?category=VIDEO" },
+  { label: "Inspection Pictures", path: "/files/inspection-pictures", isNew: true },
 ];
 
 /**

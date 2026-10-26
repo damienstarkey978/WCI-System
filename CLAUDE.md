@@ -674,3 +674,8 @@ Record every architectural decision that departs from the above, with the reason
   names from the Permit Rockstar guide catalog (no pools). Production inspection names
   are expected to come from city permitting software later. Send Permit Reminder uses
   the existing Resend `sendEmail` path (same EMAIL_* env as client progress reports).
+- **Inspection Pictures under Files (next scope):** each `JobPermitInspection` links
+  to a `FileFolder` (`Inspection: {name}`). Files > Inspection Pictures lists those
+  folders, shows Permit Rockstar guide links + universal photo tips, and supports
+  camera/library capture with client-side compress + parallel upload. Termite cert
+  on Slab is a disabled checkbox stub only; receive/upload/notify Garry waits on Damien.
