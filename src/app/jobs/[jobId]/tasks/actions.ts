@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import type { TodoStatus } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
-import { createTodo, JobNotFoundError, TodoNotFoundError, updateTodoStatus } from "@/lib/todos/service";
+import {
+  createTodo,
+  JobNotFoundError,
+  TodoNotFoundError,
+  updateTodo,
+  updateTodoStatus,
+} from "@/lib/todos/service";
 
 export interface ActionState {
   readonly error?: string;
@@ -13,20 +19,27 @@ export interface ActionState {
 
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 
+function parsePriority(raw: string): (typeof PRIORITIES)[number] {
+  return (PRIORITIES as readonly string[]).includes(raw) ? (raw as (typeof PRIORITIES)[number]) : "MEDIUM";
+}
+
 export async function createTodoAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();
 
   const jobId = String(formData.get("jobId") ?? "");
   const title = String(formData.get("title") ?? "").trim();
-  const priorityRaw = String(formData.get("priority") ?? "MEDIUM");
+  const priority = parsePriority(String(formData.get("priority") ?? "MEDIUM"));
   const dueDateRaw = String(formData.get("dueDate") ?? "");
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const category = String(formData.get("category") ?? "").trim() || null;
+  const assigneeUserId = String(formData.get("assigneeUserId") ?? "") || null;
+  const checklistItems = formData
+    .getAll("checklistItems")
+    .map(String)
+    .map((item) => item.trim())
+    .filter(Boolean);
 
-  if (!title) {
-    return { error: "Title is required." };
-  }
-  const priority = (PRIORITIES as readonly string[]).includes(priorityRaw)
-    ? (priorityRaw as (typeof PRIORITIES)[number])
-    : "MEDIUM";
+  if (!title) return { error: "Title is required." };
 
   try {
     await createTodo({
@@ -34,12 +47,51 @@ export async function createTodoAction(_previous: ActionState, formData: FormDat
       jobId,
       title,
       priority,
-      dueDate: dueDateRaw ? new Date(dueDateRaw) : null,
+      description,
+      category,
+      assigneeUserId,
+      dueDate: dueDateRaw ? new Date(`${dueDateRaw}T00:00:00Z`) : null,
+      checklistItems,
     });
   } catch (error) {
-    if (error instanceof JobNotFoundError) {
-      return { error: error.message };
-    }
+    if (error instanceof JobNotFoundError) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/tasks`);
+  revalidatePath(`/jobs/${jobId}`);
+  return { ok: true };
+}
+
+export async function saveTodoAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const todoId = String(formData.get("todoId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return { error: "Title is required." };
+
+  const dueDateRaw = String(formData.get("dueDate") ?? "");
+  const checklistItems = formData
+    .getAll("checklistItems")
+    .map(String)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  try {
+    await updateTodo({
+      organizationId: user.organizationId,
+      todoId,
+      title,
+      description: String(formData.get("description") ?? "").trim() || null,
+      priority: parsePriority(String(formData.get("priority") ?? "MEDIUM")),
+      category: String(formData.get("category") ?? "").trim() || null,
+      assigneeUserId: String(formData.get("assigneeUserId") ?? "") || null,
+      dueDate: dueDateRaw ? new Date(`${dueDateRaw}T00:00:00Z`) : null,
+      checklistItems,
+    });
+  } catch (error) {
+    if (error instanceof TodoNotFoundError) return { error: error.message };
     throw error;
   }
 

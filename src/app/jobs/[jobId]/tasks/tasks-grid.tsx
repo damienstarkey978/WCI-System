@@ -4,12 +4,7 @@ import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
 import { formatDate } from "@/lib/format";
 
 import { setTodoStatusAction } from "./actions";
-
-const PRIORITY_STYLE: Record<string, { bg: string; text: string }> = {
-  HIGH: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
-  MEDIUM: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  LOW: { bg: "#e5e7eb", text: "#374151" },
-};
+import { TaskDetailDrawer, type StaffOption, type TaskDetailValues } from "./task-detail-drawer";
 
 export interface TaskRow {
   readonly id: string;
@@ -20,14 +15,27 @@ export interface TaskRow {
   readonly status: string;
   readonly assignee: string | null;
   readonly dueDate: string | null;
+  readonly detail: TaskDetailValues;
 }
 
 /** Client half of the Tasks page; see purchase-orders-grid.tsx for why the split exists. */
-export function TasksGrid({ rows, emptyMessage }: { rows: readonly TaskRow[]; emptyMessage: string }) {
+export function TasksGrid({
+  rows,
+  emptyMessage,
+  jobId,
+  jobName,
+  staff,
+}: {
+  rows: readonly TaskRow[];
+  emptyMessage: string;
+  jobId: string;
+  jobName: string;
+  staff: readonly StaffOption[];
+}) {
   const columns: DataGridColumn<TaskRow>[] = [
     {
       key: "done",
-      header: "Done",
+      header: "",
       render: (row) => {
         const done = row.status === "DONE";
         return (
@@ -49,25 +57,24 @@ export function TasksGrid({ rows, emptyMessage }: { rows: readonly TaskRow[]; em
     },
     {
       key: "title",
-      header: "Title",
+      header: "Task",
       sortable: true,
-      render: (row) => <span className={row.status === "DONE" ? "text-[var(--bt-muted)] line-through" : "font-medium"}>{row.title}</span>,
+      render: (row) => (
+        <TaskDetailDrawer jobId={jobId} jobName={jobName} staff={staff} initial={row.detail}>
+          <span className={row.status === "DONE" ? "text-[var(--bt-muted)] line-through" : "font-medium text-[var(--bt-primary)]"}>
+            {row.title}
+          </span>
+        </TaskDetailDrawer>
+      ),
     },
-    { key: "category", header: "Tag", render: (row) => row.category ?? "" },
+    { key: "dueDate", header: "Due date", sortable: true, render: (row) => (row.dueDate ? formatDate(new Date(row.dueDate)) : "") },
+    { key: "assignee", header: "Assign", render: (row) => row.assignee ?? "No assignee" },
+    { key: "category", header: "Type", render: (row) => row.category ?? "" },
     {
       key: "priority",
       header: "Priority",
-      render: (row) => {
-        const style = PRIORITY_STYLE[row.priority] ?? PRIORITY_STYLE.MEDIUM;
-        return (
-          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-            {row.priority}
-          </span>
-        );
-      },
+      render: (row) => row.priority,
     },
-    { key: "assignee", header: "Assigned to", render: (row) => row.assignee ?? "Unassigned" },
-    { key: "dueDate", header: "Due", sortable: true, render: (row) => (row.dueDate ? formatDate(new Date(row.dueDate)) : "") },
   ];
 
   return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="tasks" selectable emptyMessage={emptyMessage} />;
