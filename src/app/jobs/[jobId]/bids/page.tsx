@@ -65,24 +65,26 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
     0,
   );
 
+  const createAction = (
+    <CreateModal triggerLabel="+ Bid Package" title="New bid package" size="lg">
+      <CreateBidPackageForm jobId={job.id} />
+    </CreateModal>
+  );
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-      <FinancialPageHeader
-        jobName={job.name}
-        title="Bid Packages"
-        action={
-          <CreateModal triggerLabel="+ Bid Package" title="New bid package">
-            <CreateBidPackageForm jobId={job.id} />
-          </CreateModal>
-        }
-      />
+      <FinancialPageHeader jobName={job.name} title="Bids" action={createAction} />
 
       <div className="text-sm text-[var(--bt-muted)]">
         Total approved Bid Packages amount: <span className="font-semibold text-[var(--bt-text)]">{formatMoney(totalApprovedCents)}</span>
       </div>
 
       {bidPackages.length === 0 ? (
-        <EmptyState title="No bid packages yet" description="Bid packages sent out for this job will appear here." />
+        <EmptyState
+          title="Manage your Bids in one place"
+          description="Send bids, track responses, and compare bid amounts."
+          action={createAction}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {bidPackages.map((pkg) => {

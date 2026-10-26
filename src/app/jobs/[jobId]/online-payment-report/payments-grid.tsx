@@ -15,13 +15,18 @@ export interface OnlinePaymentRow {
 /** Client half of the Online Payment Report; see purchase-orders-grid.tsx for why the split exists. */
 export function OnlinePaymentsGrid({ rows }: { rows: readonly OnlinePaymentRow[] }) {
   const columns: DataGridColumn<OnlinePaymentRow>[] = [
-    { key: "receivedAt", header: "Payment date", sortable: true, render: (row) => formatDate(new Date(row.receivedAt)) },
-    { key: "invoiceNumber", header: "Invoice #", sortable: true, render: (row) => <span className="font-medium">{row.invoiceNumber}</span> },
-    { key: "method", header: "Payment method", render: (row) => row.method },
+    {
+      key: "invoiceNumber",
+      header: "Invoice",
+      sortable: true,
+      render: (row) => <span className="font-medium text-[var(--bt-primary)]">{row.invoiceNumber}</span>,
+    },
+    { key: "receivedAt", header: "Date paid", sortable: true, render: (row) => formatDate(new Date(row.receivedAt)) },
+    { key: "method", header: "Recorded by", render: () => "Client portal" },
     { key: "reference", header: "Reference", render: (row) => row.reference ?? "—" },
     {
       key: "amountCents",
-      header: "Amount",
+      header: "Payment amount",
       align: "right",
       sortable: true,
       render: (row) => formatMoney(row.amountCents),
@@ -29,5 +34,16 @@ export function OnlinePaymentsGrid({ rows }: { rows: readonly OnlinePaymentRow[]
     },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="payments" selectable showTotals emptyMessage="No online payments yet." />;
+  return (
+    <DataGrid
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      viewKey="payments"
+      defaultHiddenKeys={["reference"]}
+      selectable
+      showTotals
+      emptyMessage="No online payments yet."
+    />
+  );
 }

@@ -438,22 +438,39 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
           <EmptyState title="No payments yet" description="Payments recorded against this job's invoices show up here." />
         ) : (
           <Panel>
-            <Head columns={["Received", "Invoice", "Method", "Reference", "~Amount"]} />
+            <Head columns={["Invoice", "Date paid", "Recorded by", "~Payment amount"]} />
             <tbody>
-              {allPayments.map(({ payment, invoice }) => (
-                <tr key={payment.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                  <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(payment.receivedAt)}</td>
-                  <td className="px-4 py-3">
-                    <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
-                      {invoice.invoiceNumber}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--bt-muted)]">{payment.method.replace(/_/g, " ")}</td>
-                  <td className="px-4 py-3 text-[var(--bt-muted)]">{payment.reference ?? "—"}</td>
-                  <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(payment.amountCents)}</td>
-                </tr>
-              ))}
+              {allPayments.map(({ payment, invoice }) => {
+                const recordedBy =
+                  payment.method === "QBO_SYNC"
+                    ? "QuickBooks"
+                    : payment.method === "STRIPE_CARD" || payment.method === "STRIPE_ACH"
+                      ? "Client portal"
+                      : "Staff";
+                return (
+                  <tr key={payment.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                    <td className="px-4 py-3">
+                      <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
+                        {invoice.invoiceNumber}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(payment.receivedAt)}</td>
+                    <td className="px-4 py-3 text-[var(--bt-muted)]">{recordedBy}</td>
+                    <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(payment.amountCents)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
+            <tfoot>
+              <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)" }}>
+                <td className="px-4 py-3" colSpan={3}>
+                  Totals
+                </td>
+                <td className="px-4 py-3 text-right text-[var(--bt-text)]">
+                  {formatMoney(allPayments.reduce((sum, row) => sum + row.payment.amountCents, 0))}
+                </td>
+              </tr>
+            </tfoot>
           </Panel>
         )
       ) : null}
