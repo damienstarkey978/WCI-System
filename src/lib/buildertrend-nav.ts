@@ -135,6 +135,7 @@ export const REPORTS_HREF = "/reports";
  */
 export const QUICK_ADD_NAV: readonly JobsMenuItem[] = [
   { label: "Bid Package", kind: "job", jobPath: "/bids" },
+  { label: "Bill", kind: "job", jobPath: "/bills" },
   { label: "Change Order", kind: "job", jobPath: "/change-orders" },
   { label: "Client Contact", kind: "global", href: "/clients" },
   { label: "Daily Log", kind: "job", jobPath: "/daily-logs" },
@@ -166,7 +167,7 @@ export const HELP_MENU_ITEMS: readonly string[] = [
   "Contact us",
   "Support Chat",
   "Community",
-  "Learning Academy",
+  "Buildertrend Learning Academy",
   "Help Center",
   "Product Feedback",
   "Legal",

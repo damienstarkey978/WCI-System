@@ -38,8 +38,15 @@ type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
   ALL: "All",
-  PRE_SALE: "Pre-sale",
-  OPEN: "Open",
+  PRE_SALE: "Pre-Construction",
+  OPEN: "In Progress",
+  WARRANTY: "Warranty",
+  CLOSED: "Closed",
+};
+
+const JOB_STATUS_LABEL: Record<string, string> = {
+  PRE_SALE: "Pre-Construction",
+  OPEN: "In Progress",
   WARRANTY: "Warranty",
   CLOSED: "Closed",
 };
@@ -172,7 +179,7 @@ export function JobSidebar({
               className="w-fit rounded px-1.5 py-0.5 text-[10px] font-semibold"
               style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
             >
-              {activeJob.status.replace(/_/g, " ")}
+              {JOB_STATUS_LABEL[activeJob.status] ?? activeJob.status.replace(/_/g, " ")}
             </span>
           </Link>
         ) : (

@@ -130,6 +130,12 @@ export default async function CompanySettingsPage() {
           <ComingSoon label="Taxes" />
         </SettingsGroup>
 
+        <SettingsGroup title="Integrations">
+          <SettingsLink href="/settings/quickbooks" label="QuickBooks" />
+          <SettingsLink href="/settings/connections" label="Connected applications" />
+          <ComingSoon label="Gusto" />
+        </SettingsGroup>
+
         <SettingsGroup title="Directory">
           <SettingsLink href="/settings/roles" label="Role management" />
           <SettingsLink href="/staff" label="Internal users" />
@@ -138,7 +144,6 @@ export default async function CompanySettingsPage() {
         </SettingsGroup>
 
         <SettingsGroup title="Developer">
-          <SettingsLink href="/settings/connections" label="Connected applications" />
           <SettingsLink href="/settings/api-keys" label="API keys" />
         </SettingsGroup>
       </div>

@@ -13,9 +13,9 @@ import { JobsGrid } from "./jobs-grid";
 export const dynamic = "force-dynamic";
 
 const STATUS_TABS = [
-  { key: "all", label: "All" },
-  { key: "OPEN", label: "Open" },
-  { key: "PRE_SALE", label: "Pre-sale" },
+  { key: "all", label: "All Jobs" },
+  { key: "OPEN", label: "In Progress" },
+  { key: "PRE_SALE", label: "Pre-Construction" },
   { key: "WARRANTY", label: "Warranty" },
   { key: "CLOSED", label: "Closed" },
 ] as const;
@@ -43,7 +43,7 @@ export default async function JobsIndexPage({ searchParams }: PageProps<"/jobs">
         ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
       },
       orderBy: { createdAt: "desc" },
-      include: { jobGroup: true },
+      include: { jobGroup: true, clientAccess: { take: 1, include: { client: { select: { name: true } } } } },
     }),
     sidebarJobsForOrg(user.organizationId, user),
     notificationBellDataForUser(user.organizationId, user.id),
@@ -77,10 +77,12 @@ export default async function JobsIndexPage({ searchParams }: PageProps<"/jobs">
     prefix: job.prefix,
     status: job.status,
     groupName: job.jobGroup?.name ?? "General",
+    customerName: job.clientAccess[0]?.client.name ?? null,
     address: [job.addressLine1, job.city, job.state].filter(Boolean).join(", ") || null,
     contractType: job.contractType,
     projectedStart: job.projectedStart ? job.projectedStart.toISOString() : null,
     projectedEnd: job.projectedEnd ? job.projectedEnd.toISOString() : null,
+    qboLinked: job.qboCustomerId !== null,
   }));
 
   return (
@@ -93,7 +95,7 @@ export default async function JobsIndexPage({ searchParams }: PageProps<"/jobs">
             className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
             style={{ background: "var(--bt-primary)" }}
           >
-            + New job
+            + Job
           </Link>
         </div>
 

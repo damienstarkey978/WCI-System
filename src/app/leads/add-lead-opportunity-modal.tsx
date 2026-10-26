@@ -56,7 +56,7 @@ export function AddLeadOpportunityModal({ clients }: { clients: readonly Existin
         className="self-start rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
         style={{ background: "var(--bt-primary)" }}
       >
-        + Lead Opportunity
+        + Lead
       </button>
     );
   }

@@ -12,7 +12,9 @@ export interface LeadRow {
   readonly title: string;
   readonly converted: boolean;
   readonly contactName: string;
+  readonly contactPhone: string | null;
   readonly contactEmail: string | null;
+  readonly source: string | null;
   readonly createdAt: string;
   readonly stage: string;
   readonly ageDays: number;
@@ -21,12 +23,15 @@ export interface LeadRow {
   readonly revenueMaxCents: number | null;
 }
 
+/** Buildertrend Lead Opportunities Standard View: Lead Name, Stage, Contact, Phone, Email, … */
+const DEFAULT_HIDDEN = ["age", "confidence", "revenueMin", "revenueMax"] as const;
+
 /** Client half of the Lead Opportunities list; see purchase-orders-grid.tsx for why the split exists. */
 export function LeadsGrid({ rows }: { rows: readonly LeadRow[] }) {
   const columns: DataGridColumn<LeadRow>[] = [
     {
       key: "title",
-      header: "Title",
+      header: "Lead Name",
       sortable: true,
       render: (row) => (
         <div className="whitespace-nowrap">
@@ -37,18 +42,12 @@ export function LeadsGrid({ rows }: { rows: readonly LeadRow[] }) {
         </div>
       ),
     },
-    {
-      key: "contact",
-      header: "Client contact",
-      render: (row) => (
-        <div className="text-[var(--bt-muted)]">
-          {row.contactName}
-          {row.contactEmail ? <div className="text-xs">{row.contactEmail}</div> : null}
-        </div>
-      ),
-    },
-    { key: "createdAt", header: "Created date", sortable: true, render: (row) => formatDate(new Date(row.createdAt)) },
-    { key: "stage", header: "Lead status", render: (row) => <StageSelect leadId={row.id} stage={row.stage} /> },
+    { key: "stage", header: "Stage", render: (row) => <StageSelect leadId={row.id} stage={row.stage} /> },
+    { key: "contact", header: "Contact", render: (row) => row.contactName },
+    { key: "phone", header: "Phone", render: (row) => row.contactPhone ?? "" },
+    { key: "email", header: "Email", render: (row) => row.contactEmail ?? "" },
+    { key: "source", header: "Lead Source", render: (row) => row.source ?? "" },
+    { key: "createdAt", header: "Created Date", sortable: true, render: (row) => formatDate(new Date(row.createdAt)) },
     { key: "age", header: "Age", align: "right", sortable: true, sortValue: (row) => row.ageDays, render: (row) => `${row.ageDays} days` },
     {
       key: "confidence",
@@ -69,5 +68,15 @@ export function LeadsGrid({ rows }: { rows: readonly LeadRow[] }) {
     { key: "revenueMax", header: "Est. revenue max", align: "right", render: (row) => (row.revenueMaxCents !== null ? formatMoney(row.revenueMaxCents) : "") },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} selectable viewKey="lead-opportunities" emptyMessage="No lead opportunities yet." />;
+  return (
+    <DataGrid
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      selectable
+      viewKey="lead-opportunities"
+      defaultHiddenKeys={DEFAULT_HIDDEN}
+      emptyMessage="No lead opportunities yet."
+    />
+  );
 }

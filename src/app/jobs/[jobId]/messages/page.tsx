@@ -45,23 +45,35 @@ export default async function MessagesPage({ params, searchParams }: PageProps<"
     }
   }
 
+  const createAction = (
+    <CreateModal triggerLabel="+ New Message" title="New message">
+      <NewThreadForm jobId={job.id} />
+    </CreateModal>
+  );
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <PageHeader
-        jobName={job.name}
-        title="Messages"
-        action={
-          <CreateModal triggerLabel="+ Message" title="New message">
-            <NewThreadForm jobId={job.id} />
-          </CreateModal>
-        }
-      />
+      <PageHeader jobName={job.name} title="Messages" action={createAction} />
 
       {threads.length === 0 ? (
-        <EmptyState title="No messages yet" description="Start a conversation about this job with + Message." />
+        <EmptyState title="No messages yet" description="Start a conversation about this job with + New Message." action={createAction} />
       ) : (
-        <div className="grid gap-4 md:grid-cols-[18rem_minmax(0,1fr)]">
+        <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)_14rem]">
           <nav className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+            <div className="flex gap-1 border-b px-2 pt-2" style={{ borderColor: "var(--bt-border)" }}>
+              {["All", "Unread", "Archived"].map((tab, index) => (
+                <span
+                  key={tab}
+                  className="-mb-px border-b-2 px-2 py-1.5 text-xs font-medium"
+                  style={{
+                    borderColor: index === 0 ? "var(--bt-primary)" : "transparent",
+                    color: index === 0 ? "var(--bt-primary)" : "var(--bt-muted)",
+                  }}
+                >
+                  {tab}
+                </span>
+              ))}
+            </div>
             {threads.map((thread) => {
               const active = thread.id === selected?.id;
               return (
@@ -82,11 +94,11 @@ export default async function MessagesPage({ params, searchParams }: PageProps<"
             })}
           </nav>
 
-          <section className="flex flex-col rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+          <section className="flex min-h-[24rem] flex-col rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
             <header className="border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
               <h2 className="text-sm font-semibold text-[var(--bt-text)]">{selected?.subject ?? "Conversation"}</h2>
             </header>
-            <div className="flex flex-col gap-3 p-4">
+            <div className="flex flex-1 flex-col gap-3 p-4">
               {messages.length === 0 ? <p className="text-sm text-[var(--bt-muted)]">No messages in this conversation.</p> : null}
               {messages.map((message) => (
                 <div key={message.id} className="rounded border px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
@@ -100,6 +112,24 @@ export default async function MessagesPage({ params, searchParams }: PageProps<"
             </div>
             {selected ? <MessageForm jobId={job.id} threadId={selected.id ?? GENERAL_THREAD_ID} /> : null}
           </section>
+
+          <aside className="rounded-lg border bg-[var(--bt-panel-bg)] p-4 text-sm" style={{ borderColor: "var(--bt-border)" }}>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Details</h3>
+            <dl className="mt-3 flex flex-col gap-2 text-sm">
+              <div>
+                <dt className="text-[var(--bt-muted)]">Job</dt>
+                <dd className="font-medium text-[var(--bt-text)]">{job.name}</dd>
+              </div>
+              <div>
+                <dt className="text-[var(--bt-muted)]">Thread</dt>
+                <dd className="font-medium text-[var(--bt-text)]">{selected?.subject ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-[var(--bt-muted)]">Messages</dt>
+                <dd className="font-medium text-[var(--bt-text)]">{selected?.messageCount ?? 0}</dd>
+              </div>
+            </dl>
+          </aside>
         </div>
       )}
     </div>

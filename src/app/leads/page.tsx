@@ -24,13 +24,13 @@ function ageDays(createdAt: Date): number {
  * regression, not just a cosmetic one.
  */
 const STAGE_TABS = [
-  { key: "all", label: "All" },
   { key: "NEW", label: "New" },
   { key: "CONTACTED", label: "Contacted" },
   { key: "QUALIFIED", label: "Qualified" },
-  { key: "PROPOSAL_SENT", label: "Proposal sent" },
+  { key: "PROPOSAL_SENT", label: "Quote Sent" },
   { key: "WON", label: "Won" },
   { key: "LOST", label: "Lost" },
+  { key: "all", label: "All Leads" },
 ] as const;
 
 export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
@@ -51,15 +51,14 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead opportunities</h1>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <AddLeadOpportunityModal clients={clients} />
-        <CreateModal triggerLabel="Import Leads" title="Import leads from CSV" variant="secondary">
-          <ImportLeadsForm />
-        </CreateModal>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead Opportunities</h1>
+        <div className="flex items-center gap-2">
+          <CreateModal triggerLabel="Import Leads" title="Import leads from CSV" variant="secondary">
+            <ImportLeadsForm />
+          </CreateModal>
+          <AddLeadOpportunityModal clients={clients} />
+        </div>
       </div>
 
       <nav className="flex flex-wrap items-end justify-between gap-3 border-b" style={{ borderColor: "var(--bt-border)" }}>
@@ -89,20 +88,22 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
 
       <LeadsGrid
         rows={leads
-          .filter((lead) => (stage === "all" || lead.stage === stage) && (!query || `${lead.title ?? ""} ${lead.name} ${lead.email ?? ""}`.toLowerCase().includes(query)))
+          .filter((lead) => (stage === "all" || lead.stage === stage) && (!query || `${lead.title ?? ""} ${lead.name} ${lead.email ?? ""} ${lead.phone ?? ""}`.toLowerCase().includes(query)))
           .map((lead) => ({
-          id: lead.id,
-          title: lead.title ?? lead.name,
-          converted: lead.convertedJobId !== null,
-          contactName: lead.name,
-          contactEmail: lead.email,
-          createdAt: lead.createdAt.toISOString(),
-          stage: lead.stage,
-          ageDays: ageDays(lead.createdAt),
-          confidencePercent: lead.confidencePercent,
-          revenueMinCents: lead.estimatedRevenueMinCents,
-          revenueMaxCents: lead.estimatedRevenueMaxCents,
-        }))}
+            id: lead.id,
+            title: lead.title ?? lead.name,
+            converted: lead.convertedJobId !== null,
+            contactName: lead.name,
+            contactPhone: lead.phone,
+            contactEmail: lead.email,
+            source: lead.source,
+            createdAt: lead.createdAt.toISOString(),
+            stage: lead.stage,
+            ageDays: ageDays(lead.createdAt),
+            confidencePercent: lead.confidencePercent,
+            revenueMinCents: lead.estimatedRevenueMinCents,
+            revenueMaxCents: lead.estimatedRevenueMaxCents,
+          }))}
       />
     </div>
   );
