@@ -35,7 +35,7 @@ export interface JobsMenuItem {
  */
 export const JOBS_NAV: readonly JobsMenuItem[] = [
   { label: "Summary", kind: "global", href: "/dashboard" },
-  { label: "Job Info", kind: "job", jobPath: "" },
+  { label: "Job Info", kind: "job", jobPath: "/settings" },
   { label: "Job Price Summary", kind: "job", jobPath: "/budget" },
   { label: "Jobs List", kind: "global", href: "/jobs" },
   { label: "Job Groups", kind: "global", href: "/job-groups" },

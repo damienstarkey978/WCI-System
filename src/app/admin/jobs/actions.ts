@@ -92,5 +92,6 @@ export async function transitionJobStatusAction(
   }
 
   revalidatePath("/admin/jobs");
+  revalidatePath(`/jobs/${jobId}/settings`);
   return { ok: true };
 }

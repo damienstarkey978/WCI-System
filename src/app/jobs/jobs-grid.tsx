@@ -32,7 +32,7 @@ export function JobsGrid({ rows }: { rows: readonly JobRow[] }) {
       header: "Job",
       sortable: true,
       render: (row) => (
-        <Link href={`/jobs/${row.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
+        <Link href={`/jobs/${row.id}/settings`} className="font-medium text-[var(--bt-primary)] hover:underline">
           {row.prefix ? <span className="mr-1.5 font-mono text-xs text-[var(--bt-muted)]">{row.prefix}</span> : null}
           {row.name}
         </Link>
