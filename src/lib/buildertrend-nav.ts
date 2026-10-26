@@ -82,6 +82,7 @@ export const PROJECT_MANAGEMENT_NAV: readonly JobNavLink[] = [
   { label: "Time Clock", path: "/time-clock" },
   { label: "Plans and Specs", path: "/plans-and-specs", isNew: true },
   { label: "Client Updates", path: "/client-updates" },
+  { label: "Permitting", path: "/permitting", isNew: true },
   { label: "Submittals", path: "/submittals", isNew: true },
 ];
 

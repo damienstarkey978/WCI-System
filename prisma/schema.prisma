@@ -161,6 +161,7 @@ model Organization {
   oauthAuthorizationCodes OAuthAuthorizationCode[]
   oauthAccessTokens       OAuthAccessToken[]
   oauthRefreshTokens      OAuthRefreshToken[]
+  jobPermits              JobPermit[]
 }
 
 model User {
@@ -264,6 +265,10 @@ model Job {
   sqft         Int?
   permitNumber String?
   lotInfo      String?
+  /// Notice of Commencement on file (permitting checklist).
+  nocOnFile    Boolean @default(false)
+  /// Notice to Building Official filed (permitting checklist).
+  ntboFiled    Boolean @default(false)
 
   /// Job Info > Notes (Buildertrend). Plain text, 2500 characters max (enforced in updateJobDetails).
   notesInternal String?
@@ -334,6 +339,7 @@ model Job {
   creditMemos           CreditMemo[]
   deposits              Deposit[]
   inboundEmails         InboundEmail[]
+  permits               JobPermit[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -2564,6 +2570,7 @@ model Vendor {
   bidSubmissions BidSubmission[]
   warrantyClaims WarrantyClaim[]
   submittals     Submittal[]
+  jobPermits     JobPermit[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -3473,6 +3480,62 @@ model ClientUpdateSummary {
 
   @@index([jobId, periodEnd])
   @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Permitting — job checklist for building + MEP permits, inspections, NOC/NTBO.
+// City permitting software is the source of inspection names in production;
+// demo/placeholder names may come from the Permit Rockstar guide catalog.
+// ---------------------------------------------------------------------------
+
+enum PermitTrade {
+  BUILDING
+  ELECTRICAL
+  PLUMBING
+  MECHANICAL
+  OTHER
+}
+
+model JobPermit {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  trade        PermitTrade
+  permitNumber String?
+  /// False until the permit has been pulled for this trade.
+  pulled       Boolean     @default(false)
+  pulledAt     DateTime?
+
+  /// Sub/vendor responsible for this trade (target of Send Permit Reminder).
+  vendorId String?
+  vendor   Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  inspections JobPermitInspection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobId, trade])
+  @@index([organizationId])
+  @@index([jobId])
+}
+
+model JobPermitInspection {
+  id       String    @id @default(cuid())
+  permitId String
+  permit   JobPermit @relation(fields: [permitId], references: [id], onDelete: Cascade)
+
+  name        String
+  completedAt DateTime?
+  sortOrder   Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([permitId])
 }
 
 // ---------------------------------------------------------------------------

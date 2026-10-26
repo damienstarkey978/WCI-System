@@ -667,3 +667,10 @@ Record every architectural decision that departs from the above, with the reason
   `draftEstimateFromNotes` / lead-proposal drafting. Disabled Handoff instructions
   are stored with `enabled: false` and are not injected. No instruction text was
   invented.
+- **Permitting is a first-class module with JobPermit / JobPermitInspection (next
+  scope):** job settings already had `Job.permitNumber`; the Permitting page under
+  Project Management adds `Job.nocOnFile` / `Job.ntboFiled`, per-trade `JobPermit`
+  rows (Building + MEP), and named inspections. Demo jobs seed placeholder inspection
+  names from the Permit Rockstar guide catalog (no pools). Production inspection names
+  are expected to come from city permitting software later. Send Permit Reminder uses
+  the existing Resend `sendEmail` path (same EMAIL_* env as client progress reports).
