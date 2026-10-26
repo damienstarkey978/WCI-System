@@ -59,44 +59,114 @@ export async function snapshotBaselineAction(_previous: ActionState, formData: F
   return { ok: true };
 }
 
-export async function addScheduleItemAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireAppUser();
-
-  const jobId = String(formData.get("jobId") ?? "");
-  const scheduleId = String(formData.get("scheduleId") ?? "");
+function parseScheduleItemFields(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const durationRaw = String(formData.get("durationDays") ?? "1");
   const lagRaw = String(formData.get("lagDays") ?? "0");
   const manualStartDateRaw = String(formData.get("manualStartDate") ?? "");
-  const predecessorIds = formData.getAll("predecessorIds").map(String).filter(Boolean);
-
-  if (!title) return { error: "Title is required." };
+  const predecessorIds = formData
+    .getAll("predecessorIds")
+    .map(String)
+    .filter(Boolean);
+  const assigneeUserIds = formData.getAll("assigneeUserIds").map(String).filter(Boolean);
+  const reminderRaw = String(formData.get("reminderDays") ?? "");
+  const percentRaw = String(formData.get("percent") ?? "0");
+  const tags = String(formData.get("tags") ?? "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  const phaseIdRaw = String(formData.get("phaseId") ?? "");
+  const complete = formData.get("complete") === "on";
 
   const durationDays = Math.round(Number(durationRaw));
-  if (!Number.isFinite(durationDays) || durationDays <= 0) return { error: "Duration must be a positive number of days." };
-
   const lagDays = Math.round(Number(lagRaw || "0"));
-  if (!Number.isFinite(lagDays)) return { error: "Lag must be a number of days." };
+  const percent = complete ? 100 : Number(percentRaw);
+  const reminderDays = reminderRaw === "" ? null : Math.round(Number(reminderRaw));
+
+  return {
+    title,
+    durationDays,
+    lagDays,
+    percent,
+    reminderDays,
+    predecessorIds,
+    assigneeUserIds,
+    tags,
+    phaseId: phaseIdRaw || null,
+    manualStartDate: manualStartDateRaw ? new Date(`${manualStartDateRaw}T00:00:00Z`) : null,
+    displayColor: String(formData.get("displayColor") ?? "").trim() || null,
+    isHourly: formData.get("isHourly") === "on",
+    clientVisible: formData.get("clientVisible") === "on",
+    subVisible: formData.get("subVisible") === "on",
+    showOnGantt: formData.get("showOnGantt") === "on",
+    notesInternal: String(formData.get("notesInternal") ?? "").trim() || null,
+    notesSubs: String(formData.get("notesSubs") ?? "").trim() || null,
+    notesClient: String(formData.get("notesClient") ?? "").trim() || null,
+  };
+}
+
+/** Create or update a schedule item from the Buildertrend-style Schedule Item modal. */
+export async function saveScheduleItemAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const scheduleId = String(formData.get("scheduleId") ?? "");
+  const itemId = String(formData.get("itemId") ?? "");
+  const fields = parseScheduleItemFields(formData);
+
+  if (!fields.title) return { error: "Title is required." };
+  if (!Number.isFinite(fields.durationDays) || fields.durationDays <= 0) return { error: "Work days must be a positive number." };
+  if (!Number.isFinite(fields.lagDays)) return { error: "Lag must be a number of days." };
+  if (!Number.isFinite(fields.percent) || fields.percent < 0 || fields.percent > 100) return { error: "Progress must be 0 to 100." };
+  if (fields.reminderDays !== null && (!Number.isFinite(fields.reminderDays) || fields.reminderDays < 0)) {
+    return { error: "Reminder must be a number of days." };
+  }
+  if (!fields.manualStartDate || Number.isNaN(fields.manualStartDate.getTime())) return { error: "Start date is required." };
+
+  const payload = {
+    title: fields.title,
+    durationDays: fields.durationDays,
+    predecessorIds: fields.predecessorIds,
+    lagDays: fields.lagDays,
+    manualStartDate: fields.manualStartDate,
+    clientVisible: fields.clientVisible,
+    subVisible: fields.subVisible,
+    showOnGantt: fields.showOnGantt,
+    assigneeUserIds: fields.assigneeUserIds,
+    displayColor: fields.displayColor,
+    isHourly: fields.isHourly,
+    reminderDays: fields.reminderDays,
+    tags: fields.tags,
+    notesInternal: fields.notesInternal,
+    notesSubs: fields.notesSubs,
+    notesClient: fields.notesClient,
+    percentCompleteBasisPoints: Math.round(fields.percent * 100),
+    phaseId: fields.phaseId,
+  };
 
   try {
-    await addScheduleItem({
-      organizationId: user.organizationId,
-      scheduleId,
-      title,
-      durationDays,
-      predecessorIds,
-      lagDays,
-      manualStartDate: manualStartDateRaw ? new Date(manualStartDateRaw) : null,
-      clientVisible: formData.get("clientVisible") === "on",
-      subVisible: formData.get("subVisible") === "on",
-    });
+    if (itemId) {
+      await updateScheduleItem({ organizationId: user.organizationId, itemId, ...payload });
+    } else {
+      await addScheduleItem({ organizationId: user.organizationId, scheduleId, ...payload });
+    }
   } catch (error) {
-    if (error instanceof ScheduleNotFoundError) return { error: error.message };
+    if (
+      error instanceof ScheduleNotFoundError ||
+      error instanceof ScheduleItemNotFoundError ||
+      error instanceof SchedulePhaseNotFoundError
+    ) {
+      return { error: error.message };
+    }
     throw error;
   }
 
   revalidatePath(`/jobs/${jobId}/schedule`);
   return { ok: true };
+}
+
+export async function addScheduleItemAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  return saveScheduleItemAction(_previous, formData);
 }
 
 export async function setScheduleItemProgressAction(_previous: ActionState, formData: FormData): Promise<ActionState> {

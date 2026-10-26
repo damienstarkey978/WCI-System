@@ -1795,7 +1795,22 @@ model ScheduleItem {
   confirmationStatus ScheduleItemConfirmationStatus @default(UNCONFIRMED)
   clientVisible      Boolean                        @default(true)
   subVisible         Boolean                        @default(true)
+  /// Buildertrend "Show on Gantt" viewing flag.
+  showOnGantt        Boolean                        @default(true)
   assigneeUserIds    String[]
+
+  /// Named color for calendar/Gantt bars (e.g. "Olive"). Null uses the default theme color.
+  displayColor String?
+  /// Buildertrend "Hourly" toggle — marks the item as hourly rather than day-based.
+  isHourly     Boolean @default(false)
+  /// Days before start to remind assignees. Null means no reminder. 1 = "1 Day Before".
+  reminderDays Int?
+  /// Free-form tags (Buildertrend Phases & Tags).
+  tags         String[] @default([])
+
+  notesInternal String?
+  notesSubs     String?
+  notesClient   String?
 
   sortOrder Int @default(0)
 

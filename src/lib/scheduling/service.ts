@@ -58,7 +58,17 @@ export interface CreateScheduleItemInput {
   readonly manualStartDate?: Date | null;
   readonly clientVisible?: boolean;
   readonly subVisible?: boolean;
+  readonly showOnGantt?: boolean;
   readonly assigneeUserIds?: readonly string[];
+  readonly displayColor?: string | null;
+  readonly isHourly?: boolean;
+  readonly reminderDays?: number | null;
+  readonly tags?: readonly string[];
+  readonly notesInternal?: string | null;
+  readonly notesSubs?: string | null;
+  readonly notesClient?: string | null;
+  readonly percentCompleteBasisPoints?: number;
+  readonly phaseId?: string | null;
 }
 
 export async function addScheduleItem(input: CreateScheduleItemInput) {
@@ -79,7 +89,17 @@ export async function addScheduleItem(input: CreateScheduleItemInput) {
       manualStartDate: input.manualStartDate ?? null,
       clientVisible: input.clientVisible ?? true,
       subVisible: input.subVisible ?? true,
+      showOnGantt: input.showOnGantt ?? true,
       assigneeUserIds: [...(input.assigneeUserIds ?? [])],
+      displayColor: input.displayColor ?? null,
+      isHourly: input.isHourly ?? false,
+      reminderDays: input.reminderDays ?? null,
+      tags: [...(input.tags ?? [])],
+      notesInternal: input.notesInternal ?? null,
+      notesSubs: input.notesSubs ?? null,
+      notesClient: input.notesClient ?? null,
+      percentCompleteBasisPoints: input.percentCompleteBasisPoints !== undefined ? clampBasisPoints(input.percentCompleteBasisPoints) : 0,
+      phaseId: input.phaseId !== undefined ? await validPhaseId(input.scheduleId, input.phaseId) : null,
       sortOrder: count,
     },
   });
@@ -96,11 +116,19 @@ export interface UpdateScheduleItemInput {
   readonly confirmationStatus?: "UNCONFIRMED" | "CONFIRMED";
   readonly clientVisible?: boolean;
   readonly subVisible?: boolean;
+  readonly showOnGantt?: boolean;
   readonly assigneeUserIds?: readonly string[];
   /** Basis points, 0 to 10000; clamped. */
   readonly percentCompleteBasisPoints?: number;
   /** A phase on the same schedule, or null to ungroup. */
   readonly phaseId?: string | null;
+  readonly displayColor?: string | null;
+  readonly isHourly?: boolean;
+  readonly reminderDays?: number | null;
+  readonly tags?: readonly string[];
+  readonly notesInternal?: string | null;
+  readonly notesSubs?: string | null;
+  readonly notesClient?: string | null;
 }
 
 export async function updateScheduleItem(input: UpdateScheduleItemInput) {
@@ -120,9 +148,17 @@ export async function updateScheduleItem(input: UpdateScheduleItemInput) {
       ...(input.confirmationStatus !== undefined ? { confirmationStatus: input.confirmationStatus } : {}),
       ...(input.clientVisible !== undefined ? { clientVisible: input.clientVisible } : {}),
       ...(input.subVisible !== undefined ? { subVisible: input.subVisible } : {}),
+      ...(input.showOnGantt !== undefined ? { showOnGantt: input.showOnGantt } : {}),
       ...(input.assigneeUserIds !== undefined ? { assigneeUserIds: [...input.assigneeUserIds] } : {}),
       ...(input.phaseId !== undefined ? { phaseId: await validPhaseId(existing.scheduleId, input.phaseId) } : {}),
       ...(input.percentCompleteBasisPoints !== undefined ? { percentCompleteBasisPoints: clampBasisPoints(input.percentCompleteBasisPoints) } : {}),
+      ...(input.displayColor !== undefined ? { displayColor: input.displayColor } : {}),
+      ...(input.isHourly !== undefined ? { isHourly: input.isHourly } : {}),
+      ...(input.reminderDays !== undefined ? { reminderDays: input.reminderDays } : {}),
+      ...(input.tags !== undefined ? { tags: [...input.tags] } : {}),
+      ...(input.notesInternal !== undefined ? { notesInternal: input.notesInternal } : {}),
+      ...(input.notesSubs !== undefined ? { notesSubs: input.notesSubs } : {}),
+      ...(input.notesClient !== undefined ? { notesClient: input.notesClient } : {}),
     },
   });
 }

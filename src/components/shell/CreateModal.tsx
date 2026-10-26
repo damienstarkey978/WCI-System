@@ -24,6 +24,8 @@ export function CreateModal({
   open: controlledOpen,
   onOpenChange,
   variant = "primary",
+  size = "md",
+  hideHeader = false,
 }: {
   triggerLabel: string;
   title: string;
@@ -33,10 +35,15 @@ export function CreateModal({
   onOpenChange?: (open: boolean) => void;
   /** "secondary" is the outlined button for a page's non-primary actions (Import, Use template). */
   variant?: "primary" | "secondary";
+  /** "lg" matches Buildertrend's Schedule Item / similar wide forms. */
+  size?: "md" | "lg";
+  /** When the child form renders its own title bar (e.g. Schedule Item). */
+  hideHeader?: boolean;
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;
+  const maxWidth = size === "lg" ? "max-w-3xl" : "max-w-lg";
 
   return (
     <>
@@ -56,18 +63,20 @@ export function CreateModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <div
-            className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg bg-[var(--bt-panel-bg)] shadow-xl"
+            className={`relative flex max-h-[90vh] w-full ${maxWidth} flex-col overflow-hidden rounded-lg bg-[var(--bt-panel-bg)] shadow-xl`}
             role="dialog"
             aria-modal="true"
             aria-label={title}
           >
-            <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
-              <h2 className="text-sm font-semibold text-[var(--bt-text)]">{title}</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded p-1 text-[var(--bt-muted)] hover:bg-black/5">
-                <CloseIcon className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="overflow-y-auto p-4">{children}</div>
+            {hideHeader ? null : (
+              <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
+                <h2 className="text-sm font-semibold text-[var(--bt-text)]">{title}</h2>
+                <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded p-1 text-[var(--bt-muted)] hover:bg-black/5">
+                  <CloseIcon className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            <div className={hideHeader ? "overflow-y-auto" : "overflow-y-auto p-4"}>{children}</div>
           </div>
         </div>
       ) : null}

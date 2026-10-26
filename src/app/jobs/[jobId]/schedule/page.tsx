@@ -11,12 +11,12 @@ import { isSchedulePublished } from "@/lib/scheduling/publish";
 import { getComputedSchedule, listNonWorkingDays } from "@/lib/scheduling/service";
 
 import { deletePhaseAction } from "./actions";
-import { AddItemForm } from "./add-item-form";
 import { CreateScheduleButton } from "./create-schedule-button";
 import { PhaseForm } from "./phase-form";
 import { ScheduleCalendar } from "./schedule-calendar";
 import { ScheduleSwitch } from "./schedule-switch";
 import { ScheduleListGrid } from "./schedule-list-grid";
+import { NewScheduleItemButton, EditScheduleItemButton } from "./schedule-item-modals";
 import { WorkdayExceptions } from "./workday-exceptions";
 import { SnapshotBaselineButton } from "./snapshot-baseline-button";
 
@@ -79,6 +79,42 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
   const published = isSchedulePublished(scheduleFlags);
   const items = criticalOnly ? allItems.filter((item) => item.isCriticalPath) : allItems;
 
+  const staff = await db.user.findMany({
+    where: { organizationId: user.organizationId, isActive: true, role: { not: "AGENT" } },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+  });
+  const staffOptions = staff.map((person) => ({ id: person.id, name: person.name?.trim() || person.email }));
+  const itemOptions = allItems.map((item) => ({ id: item.id, title: item.title }));
+  const phaseOptions = phases.map((phase) => ({ id: phase.id, name: phase.name }));
+  const hasBaselineFlag = allItems.some((item) => item.baselineEnd !== null);
+
+  function itemFormValues(item: (typeof allItems)[number]) {
+    return {
+      id: item.id,
+      title: item.title,
+      displayColor: item.displayColor ?? "Olive",
+      assigneeUserIds: item.assigneeUserIds ?? [],
+      startDate: item.startDate.toISOString().slice(0, 10),
+      durationDays: item.durationDays,
+      endDate: item.endDate.toISOString().slice(0, 10),
+      isHourly: item.isHourly ?? false,
+      percentComplete: item.percentCompleteBasisPoints / 100,
+      reminderDays: item.reminderDays ?? 1,
+      predecessorIds: item.predecessorIds ?? [],
+      lagDays: item.lagDays,
+      phaseId: item.phaseId,
+      tags: item.tags ?? [],
+      showOnGantt: item.showOnGantt ?? true,
+      clientVisible: item.clientVisible,
+      subVisible: item.subVisible,
+      notesInternal: item.notesInternal ?? "",
+      notesSubs: item.notesSubs ?? "",
+      notesClient: item.notesClient ?? "",
+      hasBaseline: hasBaselineFlag,
+    };
+  }
+
   if (allItems.length === 0) {
     return (
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
@@ -86,9 +122,14 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
           jobName={job.name}
           title="Schedule"
           action={
-            <CreateModal triggerLabel="New Schedule Item" title="New schedule item">
-              <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={[]} />
-            </CreateModal>
+            <NewScheduleItemButton
+              jobId={job.id}
+              scheduleId={scheduleRow.id}
+              jobName={job.name}
+              existingItems={[]}
+              phases={phaseOptions}
+              staff={staffOptions}
+            />
           }
         />
         <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
@@ -128,9 +169,14 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
             {projectFinishDate ? (
               <span className="text-sm text-[var(--bt-muted)]">Projected finish: {formatDate(projectFinishDate)}</span>
             ) : null}
-            <CreateModal triggerLabel="New Schedule Item" title="New schedule item">
-              <AddItemForm jobId={job.id} scheduleId={scheduleRow.id} existingItems={allItems.map((item) => ({ id: item.id, title: item.title }))} />
-            </CreateModal>
+            <NewScheduleItemButton
+              jobId={job.id}
+              scheduleId={scheduleRow.id}
+              jobName={job.name}
+              existingItems={itemOptions}
+              phases={phaseOptions}
+              staff={staffOptions}
+            />
           </div>
         }
       />
@@ -266,9 +312,15 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
             jobId: job.id,
             percentComplete: item.percentCompleteBasisPoints / 100,
             phaseId: item.phaseId,
+            formValues: itemFormValues(item),
           }))}
-          phases={phases.map((phase) => ({ id: phase.id, name: phase.name }))}
+          phases={phaseOptions}
           showPhases={phasesOn}
+          jobId={job.id}
+          scheduleId={scheduleRow.id}
+          jobName={job.name}
+          existingItems={itemOptions}
+          staff={staffOptions}
         />
       ) : null}
 
@@ -330,7 +382,17 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
           return (
             <div key={item.id} className="flex items-center border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
               <div className="w-64 shrink-0 truncate px-4 py-3 text-sm text-[var(--bt-text)]">
-                {item.title}
+                <EditScheduleItemButton
+                  jobId={job.id}
+                  scheduleId={scheduleRow.id}
+                  jobName={job.name}
+                  existingItems={itemOptions}
+                  phases={phaseOptions}
+                  staff={staffOptions}
+                  initial={itemFormValues(item)}
+                >
+                  {item.title}
+                </EditScheduleItemButton>
                 {item.confirmationStatus === "UNCONFIRMED" ? (
                   <span
                     className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold"
