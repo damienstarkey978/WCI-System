@@ -364,7 +364,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const draftEstimateWithAiTool = betaZodTool({
     name: "draft_estimate_with_ai",
     description:
-      "Give Jarvis the scope of work, measurements, and notes for a job, and it drafts a full cost-coded estimate AND the matching client-facing proposal narrative (Handy-style notes → line items → proposal) against the job's real cost code and materials catalog — both created as DRAFT, never locked, never sent to Budget, never sent to the client. Needs a client linked to the job (or pass clientId); without one the estimate still saves and you'll get a note to link a client. Pass the job's id from list_jobs.",
+      "Give Jarvis the scope of work, measurements, and notes for a job, and it drafts a full cost-coded estimate AND the matching client-facing proposal narrative (notes → line items → proposal) against the job's real cost code and materials catalog — both created as DRAFT, never locked, never sent to Budget, never sent to the client. Needs a client linked to the job (or pass clientId); without one the estimate still saves and you'll get a note to link a client. Pass the job's id from list_jobs.",
     inputSchema: z.object({
       jobId: z.string().describe("The job's id, from list_jobs"),
       notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),
@@ -1147,7 +1147,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const draftLeadProposalTool = betaZodTool({
     name: "draft_lead_proposal",
     description:
-      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a DRAFT estimate first (line items + cost codes, Handy/Handoff-style). Client narrative is held on the estimate until a human explicitly converts it to a Proposal. Never sent, never auto-converted to a Job. Prefer this on a lead's Proposals tab. Drafting against the full catalog is usually queued and posted back into this conversation when ready; if the async worker isn't configured it runs inline instead. Pass the lead's id from list_leads.",
+      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a DRAFT estimate first (line items + cost codes, Handoff-style). Client narrative is held on the estimate until a human explicitly converts it to a Proposal. Never sent, never auto-converted to a Job. Prefer this on a lead's Proposals tab. Drafting against the full catalog is usually queued and posted back into this conversation when ready; if the async worker isn't configured it runs inline instead. Pass the lead's id from list_leads.",
     inputSchema: z.object({
       leadId: z.string().describe("The lead's id, from list_leads"),
       notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),

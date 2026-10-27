@@ -101,7 +101,7 @@ export default function HandoffParityFixturePage() {
         {(
           [
             ["estimate", "Estimate desktop"],
-            ["handy", "Handy dock"],
+            ["handy", "Jarvis dock"],
             ["proposal", "Client proposal"],
             ["mobile", "Estimate mobile"],
           ] as const
