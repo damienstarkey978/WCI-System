@@ -13,7 +13,7 @@ const COST_TYPES = [
   { value: "OTHER", label: "Other" },
 ] as const;
 
-interface DraftLine {
+export interface DraftCostLine {
   readonly key: number;
   title: string;
   costCodeId: string;
@@ -21,6 +21,17 @@ interface DraftLine {
   unitCost: string;
   quantity: string;
   unit: string;
+}
+
+/** A catalog row the "Add From" menu can pull into the cost table. */
+export interface AddFromSource {
+  readonly id: string;
+  readonly groupLabel: string;
+  readonly title: string;
+  readonly costCodeId: string;
+  readonly costType: string;
+  readonly unitCostCents: number;
+  readonly quantityMilli: number;
 }
 
 function moneyCents(unitCost: string, quantity: string): number {
@@ -36,15 +47,24 @@ function formatDollars(cents: number): string {
   return (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
+function emptyLine(key: number): DraftCostLine {
+  return { key, title: "", costCodeId: "", costType: "NONE", unitCost: "", quantity: "1", unit: "" };
+}
+
 /**
- * Buildertrend-style Cost table for Purchase Order create/edit: Title, Cost type,
- * Unit cost, Qty, Unit, Builder Cost, required Cost code. Submits the same parallel
- * arrays as CostCodeLineItems plus lineCostType[] for the PO create action.
+ * Buildertrend-style Cost table for Purchase Order / Bill create: Title, Cost type,
+ * Unit cost, Qty, Unit, Builder Cost, required Cost code, + Item, optional Add From.
  */
-export function PoCostLineItems({ costCodes }: { costCodes: readonly CostCodeOption[] }) {
-  const [lines, setLines] = useState<DraftLine[]>([
-    { key: 0, title: "", costCodeId: "", costType: "NONE", unitCost: "", quantity: "1", unit: "" },
-  ]);
+export function PoCostLineItems({
+  costCodes,
+  addFromSources = [],
+  heading = "Cost",
+}: {
+  costCodes: readonly CostCodeOption[];
+  addFromSources?: readonly AddFromSource[];
+  heading?: string;
+}) {
+  const [lines, setLines] = useState<DraftCostLine[]>([emptyLine(0)]);
   const [nextKey, setNextKey] = useState(1);
 
   const totalCents = useMemo(
@@ -52,14 +72,70 @@ export function PoCostLineItems({ costCodes }: { costCodes: readonly CostCodeOpt
     [lines],
   );
 
-  function update(key: number, patch: Partial<DraftLine>) {
+  const groups = useMemo(() => {
+    const map = new Map<string, AddFromSource[]>();
+    for (const source of addFromSources) {
+      const list = map.get(source.groupLabel) ?? [];
+      list.push(source);
+      map.set(source.groupLabel, list);
+    }
+    return [...map.entries()];
+  }, [addFromSources]);
+
+  function update(key: number, patch: Partial<DraftCostLine>) {
     setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+  }
+
+  function addFrom(sourceId: string) {
+    const source = addFromSources.find((row) => row.id === sourceId);
+    if (!source) return;
+    setLines((current) => {
+      const blankOnly =
+        current.length === 1 && !current[0]?.title && !current[0]?.costCodeId && !current[0]?.unitCost;
+      const next = emptyLine(nextKey);
+      next.title = source.title;
+      next.costCodeId = source.costCodeId;
+      next.costType = source.costType || "NONE";
+      next.unitCost = (source.unitCostCents / 100).toFixed(2);
+      next.quantity = (source.quantityMilli / 1000).toString();
+      return blankOnly ? [next] : [...current, next];
+    });
+    setNextKey((key) => key + 1);
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[var(--bt-text)]">Cost</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-[var(--bt-text)]">{heading}</h3>
+        {groups.length > 0 ? (
+          <label className="flex items-center gap-1.5 text-xs">
+            <span className="font-medium text-[var(--bt-muted)]">Add From</span>
+            <select
+              defaultValue=""
+              onChange={(event) => {
+                if (event.target.value) {
+                  addFrom(event.target.value);
+                  event.target.value = "";
+                }
+              }}
+              className="rounded border px-2 py-1.5 text-xs outline-none focus:border-[var(--bt-primary)]"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
+              <option value="" disabled>
+                Choose…
+              </option>
+              {groups.map(([group, rows]) => (
+                <optgroup key={group} label={group}>
+                  {rows.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.title}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       <div className="overflow-x-auto rounded border" style={{ borderColor: "var(--bt-border)" }}>
@@ -210,10 +286,7 @@ export function PoCostLineItems({ costCodes }: { costCodes: readonly CostCodeOpt
       <button
         type="button"
         onClick={() => {
-          setLines((current) => [
-            ...current,
-            { key: nextKey, title: "", costCodeId: "", costType: "NONE", unitCost: "", quantity: "1", unit: "" },
-          ]);
+          setLines((current) => [...current, emptyLine(nextKey)]);
           setNextKey((key) => key + 1);
         }}
         className="self-start rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5"

@@ -62,10 +62,14 @@ export interface RegisterFileInput {
   readonly subVisible?: boolean;
   readonly dailyLogId?: string | null;
   readonly folderId?: string | null;
+  readonly purchaseOrderId?: string | null;
+  readonly billId?: string | null;
 }
 
 export async function registerFile(input: RegisterFileInput) {
   await assertJobAndDailyLog(input.organizationId, input.jobId, input.dailyLogId);
+  await assertPurchaseOrder(input.organizationId, input.jobId, input.purchaseOrderId);
+  await assertBill(input.organizationId, input.jobId, input.billId);
 
   return db.file.create({
     data: {
@@ -81,6 +85,8 @@ export async function registerFile(input: RegisterFileInput) {
       subVisible: input.subVisible ?? true,
       dailyLogId: input.dailyLogId ?? null,
       folderId: await validFolderId(input.organizationId, input.jobId, input.folderId),
+      purchaseOrderId: input.purchaseOrderId ?? null,
+      billId: input.billId ?? null,
     },
   });
 }
@@ -99,11 +105,15 @@ export interface UploadAndRegisterFileInput {
   readonly dailyLogId?: string | null;
   /** Must be a folder on the same job; ignored (unfiled) if it is not. */
   readonly folderId?: string | null;
+  readonly purchaseOrderId?: string | null;
+  readonly billId?: string | null;
 }
 
 /** Uploads the bytes to the job-files bucket, then registers the resulting File row. */
 export async function uploadAndRegisterFile(input: UploadAndRegisterFileInput) {
   await assertJobAndDailyLog(input.organizationId, input.jobId, input.dailyLogId);
+  await assertPurchaseOrder(input.organizationId, input.jobId, input.purchaseOrderId);
+  await assertBill(input.organizationId, input.jobId, input.billId);
 
   const category = input.category ?? "DOCUMENT";
   const id = crypto.randomUUID();
@@ -132,8 +142,46 @@ export async function uploadAndRegisterFile(input: UploadAndRegisterFileInput) {
       subVisible: input.subVisible ?? true,
       dailyLogId: input.dailyLogId ?? null,
       folderId: await validFolderId(input.organizationId, input.jobId, input.folderId),
+      purchaseOrderId: input.purchaseOrderId ?? null,
+      billId: input.billId ?? null,
     },
   });
+}
+
+export class PurchaseOrderNotFoundForFileError extends Error {
+  constructor(purchaseOrderId: string) {
+    super(`No purchase order ${purchaseOrderId} on this job.`);
+    this.name = "PurchaseOrderNotFoundForFileError";
+  }
+}
+
+export class BillNotFoundForFileError extends Error {
+  constructor(billId: string) {
+    super(`No bill ${billId} on this job.`);
+    this.name = "BillNotFoundForFileError";
+  }
+}
+
+async function assertPurchaseOrder(
+  organizationId: string,
+  jobId: string,
+  purchaseOrderId: string | null | undefined,
+) {
+  if (!purchaseOrderId) return;
+  const po = await db.purchaseOrder.findFirst({
+    where: { id: purchaseOrderId, organizationId, jobId },
+    select: { id: true },
+  });
+  if (!po) throw new PurchaseOrderNotFoundForFileError(purchaseOrderId);
+}
+
+async function assertBill(organizationId: string, jobId: string, billId: string | null | undefined) {
+  if (!billId) return;
+  const bill = await db.bill.findFirst({
+    where: { id: billId, organizationId, jobId },
+    select: { id: true },
+  });
+  if (!bill) throw new BillNotFoundForFileError(billId);
 }
 
 async function validFolderId(organizationId: string, jobId: string, folderId: string | null | undefined): Promise<string | null> {

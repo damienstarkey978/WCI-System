@@ -53,6 +53,13 @@ export class UnknownVendorError extends Error {
   }
 }
 
+export class UnknownScheduleItemError extends Error {
+  constructor(scheduleItemId: string) {
+    super(`No schedule item ${scheduleItemId} on this job.`);
+    this.name = "UnknownScheduleItemError";
+  }
+}
+
 export interface CreateBillLineItemInput {
   readonly costCodeId: string;
   readonly costType?: CostType;
@@ -67,9 +74,13 @@ export interface CreateBillInput {
   readonly vendorName: string;
   readonly vendorId?: string | null;
   readonly billNumber?: string | null;
+  readonly title?: string | null;
+  readonly description?: string | null;
   readonly issuedOn?: Date | null;
   readonly dueOn?: Date | null;
+  readonly linkedScheduleItemId?: string | null;
   readonly fromOcr?: boolean;
+  readonly createdByUserId?: string | null;
   readonly lineItems: readonly CreateBillLineItemInput[];
 }
 
@@ -107,6 +118,17 @@ export async function createBill(input: CreateBillInput) {
     if (!vendor) throw new UnknownVendorError(input.vendorId);
   }
 
+  if (input.linkedScheduleItemId) {
+    const item = await db.scheduleItem.findFirst({
+      where: {
+        id: input.linkedScheduleItemId,
+        schedule: { jobId: input.jobId, organizationId: input.organizationId },
+      },
+      select: { id: true },
+    });
+    if (!item) throw new UnknownScheduleItemError(input.linkedScheduleItemId);
+  }
+
   const bill = await db.bill.create({
     data: {
       organizationId: input.organizationId,
@@ -115,9 +137,13 @@ export async function createBill(input: CreateBillInput) {
       vendorName: input.vendorName,
       vendorId: input.vendorId ?? null,
       billNumber: input.billNumber ?? null,
+      title: input.title ?? null,
+      description: input.description ?? null,
       issuedOn: input.issuedOn ?? null,
       dueOn: input.dueOn ?? null,
+      linkedScheduleItemId: input.linkedScheduleItemId ?? null,
       fromOcr: input.fromOcr ?? false,
+      createdByUserId: input.createdByUserId ?? null,
       lineItems: {
         create: input.lineItems.map((item, index) => ({
           costCodeId: item.costCodeId,

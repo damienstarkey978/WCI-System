@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAppUser } from "@/lib/auth";
+import {
+  JobNotFoundError as FileJobNotFoundError,
+  PurchaseOrderNotFoundForFileError,
+  uploadAndRegisterFile,
+} from "@/lib/files/service";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
 import {
   PurchaseOrderVendorMissingError,
@@ -15,8 +20,11 @@ import {
   JobNotFoundError,
   JobNotOpenError,
   UnknownCostCodeError,
+  UnknownScheduleItemError,
   UnknownVendorError,
 } from "@/lib/purchase-orders/service";
+import { looksLikeHtml, sanitizeRichTextHtml } from "@/lib/rich-text";
+import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
 import {
   amendPurchaseOrder,
   approvePurchaseOrder,
@@ -53,10 +61,21 @@ export async function createPurchaseOrderAction(_previous: ActionState, formData
   const vendorName = String(formData.get("vendorName") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
   const materialsOnly = String(formData.get("materialsOnly") ?? "") === "true";
-  const scopeOfWork = String(formData.get("scopeOfWork") ?? "").trim() || null;
+  const isVariance = String(formData.get("isVariance") ?? "") === "true";
+  const completionMode = String(formData.get("completionMode") ?? "date") === "schedule" ? "schedule" : "date";
+  const rawScope = String(formData.get("scopeOfWork") ?? "").trim();
+  const scopeOfWork = rawScope
+    ? looksLikeHtml(rawScope)
+      ? sanitizeRichTextHtml(rawScope)
+      : rawScope
+    : null;
   const internalNotes = String(formData.get("internalNotes") ?? "").trim() || null;
-  const scheduledCompletionOn = parseOptionalDate(String(formData.get("scheduledCompletionOn") ?? ""));
-  const completedOn = parseOptionalDate(String(formData.get("completedOn") ?? ""));
+  const scheduledCompletionOn =
+    completionMode === "date" ? parseOptionalDate(String(formData.get("scheduledCompletionOn") ?? "")) : null;
+  const completedOn =
+    completionMode === "date" ? parseOptionalDate(String(formData.get("completedOn") ?? "")) : null;
+  const linkedScheduleItemId =
+    completionMode === "schedule" ? String(formData.get("linkedScheduleItemId") ?? "").trim() || null : null;
 
   if (!poNumber) {
     poNumber = await nextAutoPoNumber(user.organizationId);
@@ -79,8 +98,10 @@ export async function createPurchaseOrderAction(_previous: ActionState, formData
       vendorId,
       title: title || null,
       materialsOnly,
+      isVariance,
       scheduledCompletionOn,
       completedOn,
+      linkedScheduleItemId,
       scopeOfWork,
       internalNotes,
       lineItems,
@@ -91,7 +112,8 @@ export async function createPurchaseOrderAction(_previous: ActionState, formData
       error instanceof JobNotFoundError ||
       error instanceof JobNotOpenError ||
       error instanceof DuplicatePoNumberError ||
-      error instanceof UnknownVendorError
+      error instanceof UnknownVendorError ||
+      error instanceof UnknownScheduleItemError
     ) {
       return { error: error.message };
     }
@@ -248,4 +270,47 @@ export async function setWorkStatusAction(_previous: ActionState, formData: Form
   return runWorkflowAction(jobId, purchaseOrderId, (organizationId, actorUserId) =>
     setWorkStatus({ organizationId, purchaseOrderId, workComplete, actor: { actorUserId } }),
   );
+}
+
+/** Attach files to a saved PO (create modal is save-first for attachments). */
+export async function attachPurchaseOrderFilesAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const purchaseOrderId = String(formData.get("purchaseOrderId") ?? "");
+  const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  if (files.length === 0) return { error: "Choose at least one file." };
+
+  try {
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await uploadAndRegisterFile({
+        organizationId: user.organizationId,
+        jobId,
+        uploadedByUserId: user.id,
+        fileName: file.name,
+        bytes,
+        mimeType: file.type || null,
+        sizeBytes: file.size,
+        category: "DOCUMENT",
+        clientVisible: false,
+        subVisible: true,
+        purchaseOrderId,
+      });
+    }
+  } catch (error) {
+    if (
+      error instanceof StorageNotConfiguredError ||
+      error instanceof FileJobNotFoundError ||
+      error instanceof PurchaseOrderNotFoundForFileError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/purchase-orders/${purchaseOrderId}`);
+  return { ok: true };
 }

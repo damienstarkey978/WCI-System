@@ -3,8 +3,9 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { PoCostLineItems } from "@/components/financial/PoCostLineItems";
+import { PoCostLineItems, type AddFromSource } from "@/components/financial/PoCostLineItems";
 import type { CostCodeOption } from "@/components/financial/CostCodeLineItems";
+import { ScopeRichText } from "@/components/financial/ScopeRichText";
 import { CloseIcon } from "@/components/shell/icons";
 
 import { createPurchaseOrderAction, type ActionState } from "./actions";
@@ -17,15 +18,22 @@ export interface VendorOption {
   readonly email: string | null;
 }
 
+export interface ScheduleOption {
+  readonly id: string;
+  readonly title: string;
+}
+
 /**
- * Buildertrend Purchase Order create modal — General Information, Scope of Work,
- * Cost table, Internal Only sidebar, sticky Save + Send footer. WCI colors.
+ * Buildertrend Purchase Order create modal — General Information, Scope toolbar,
+ * Variance, Attachments seam, Cost + Add From, Internal Only, Save + Send.
  */
 export function CreatePoForm({
   jobId,
   jobName,
   costCodes,
   vendors,
+  scheduleItems,
+  addFromSources,
   suggestedPoNumber,
   defaultScopeOfWork,
   onClose,
@@ -34,6 +42,8 @@ export function CreatePoForm({
   jobName: string;
   costCodes: readonly CostCodeOption[];
   vendors: readonly VendorOption[];
+  scheduleItems: readonly ScheduleOption[];
+  addFromSources: readonly AddFromSource[];
   suggestedPoNumber: string;
   defaultScopeOfWork: string;
   onClose?: () => void;
@@ -42,14 +52,14 @@ export function CreatePoForm({
   const [state, formAction, pending] = useActionState(createPurchaseOrderAction, INITIAL);
   const [intent, setIntent] = useState<"save" | "send">("save");
   const [materialsOnly, setMaterialsOnly] = useState(false);
+  const [isVariance, setIsVariance] = useState(false);
   const [vendorId, setVendorId] = useState("");
+  const [completionMode, setCompletionMode] = useState<"date" | "schedule">("date");
+  const [linkedScheduleItemId, setLinkedScheduleItemId] = useState("");
 
   useEffect(() => {
     if (!state.ok || !state.purchaseOrderId) return;
     onClose?.();
-    // revalidatePath remounts this page and would wipe an in-modal accept link —
-    // always land on the detail view, carrying the link in the query when staff
-    // must share it by hand (email not configured / vendor has no email).
     const params = new URLSearchParams();
     if (state.acceptUrl && state.needsManualDelivery) {
       params.set("acceptUrl", state.acceptUrl);
@@ -67,6 +77,7 @@ export function CreatePoForm({
       <input type="hidden" name="jobId" value={jobId} />
       <input type="hidden" name="intent" value={intent} />
       <input type="hidden" name="vendorName" value={selectedVendor?.name ?? ""} />
+      <input type="hidden" name="completionMode" value={completionMode} />
 
       <header
         className="flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3 sm:px-5"
@@ -149,40 +160,128 @@ export function CreatePoForm({
               </label>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">
+            <div className="grid gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-medium text-[var(--bt-muted)]">Scheduled Completion</span>
-                <input
-                  type="date"
-                  name="scheduledCompletionOn"
-                  className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
-                  style={{ borderColor: "var(--bt-border)" }}
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="text-xs font-medium text-[var(--bt-muted)]">Completion Date</span>
-                <input
-                  type="date"
-                  name="completedOn"
-                  className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
-                  style={{ borderColor: "var(--bt-border)" }}
-                />
-              </label>
+                <div className="inline-flex rounded border p-0.5" style={{ borderColor: "var(--bt-border)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setCompletionMode("date")}
+                    className="rounded px-2.5 py-1 text-xs font-semibold"
+                    style={{
+                      background: completionMode === "date" ? "var(--bt-primary)" : "transparent",
+                      color: completionMode === "date" ? "var(--bt-on-primary)" : "var(--bt-text)",
+                    }}
+                  >
+                    Choose date
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCompletionMode("schedule")}
+                    className="rounded px-2.5 py-1 text-xs font-semibold"
+                    style={{
+                      background: completionMode === "schedule" ? "var(--bt-primary)" : "transparent",
+                      color: completionMode === "schedule" ? "var(--bt-on-primary)" : "var(--bt-text)",
+                    }}
+                  >
+                    Link to Schedule
+                  </button>
+                </div>
+              </div>
+
+              {completionMode === "date" ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-xs font-medium text-[var(--bt-muted)]">Completion Date</span>
+                    <input
+                      type="date"
+                      name="scheduledCompletionOn"
+                      className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+                      style={{ borderColor: "var(--bt-border)" }}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-xs font-medium text-[var(--bt-muted)]">Completed</span>
+                    <input
+                      type="date"
+                      name="completedOn"
+                      className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+                      style={{ borderColor: "var(--bt-border)" }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className="grid gap-1 text-sm sm:max-w-md">
+                  <span className="text-xs font-medium text-[var(--bt-muted)]">Schedule item</span>
+                  <select
+                    name="linkedScheduleItemId"
+                    value={linkedScheduleItemId}
+                    onChange={(event) => setLinkedScheduleItemId(event.target.value)}
+                    className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)]"
+                    style={{ borderColor: "var(--bt-border)" }}
+                  >
+                    <option value="">Choose schedule item…</option>
+                    {scheduleItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title}
+                      </option>
+                    ))}
+                  </select>
+                  {scheduleItems.length === 0 ? (
+                    <span className="text-[10px] text-[var(--bt-muted)]">No schedule items on this job yet.</span>
+                  ) : null}
+                </label>
+              )}
             </div>
           </section>
 
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold text-[var(--bt-text)]">Scope of Work</h3>
-            <textarea
-              name="scopeOfWork"
-              rows={10}
-              defaultValue={defaultScopeOfWork}
-              className="w-full rounded border px-3 py-2 font-mono text-xs leading-relaxed outline-none focus:border-[var(--bt-primary)] sm:text-sm"
-              style={{ borderColor: "var(--bt-border)" }}
-            />
+          <ScopeRichText defaultValue={defaultScopeOfWork} />
+
+          <section className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--bt-text)]">Plans and Specs</h3>
+              <p className="mt-1 text-xs text-[var(--bt-muted)]">Save to add plans and specs.</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--bt-text)]">Attachments</h3>
+              <div className="mt-1 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled
+                  title="Save the purchase order first, then attach files on the detail page."
+                  className="rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)] opacity-60"
+                  style={{ borderColor: "var(--bt-border)" }}
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  title="Save the purchase order first."
+                  className="rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)] opacity-60"
+                  style={{ borderColor: "var(--bt-border)" }}
+                >
+                  Create new doc
+                </button>
+              </div>
+              <p className="mt-1 text-[10px] text-[var(--bt-muted)]">Save to attach files — they open on the PO detail page.</p>
+            </div>
           </section>
 
-          <PoCostLineItems costCodes={costCodes} />
+          <label className="flex items-center gap-2 text-sm text-[var(--bt-text)]">
+            <input
+              type="checkbox"
+              name="isVariance"
+              value="true"
+              checked={isVariance}
+              onChange={(event) => setIsVariance(event.target.checked)}
+              className="rounded border"
+              style={{ borderColor: "var(--bt-border)" }}
+            />
+            Mark as a Variance PO
+          </label>
+
+          <PoCostLineItems costCodes={costCodes} addFromSources={addFromSources} />
         </div>
 
         <aside

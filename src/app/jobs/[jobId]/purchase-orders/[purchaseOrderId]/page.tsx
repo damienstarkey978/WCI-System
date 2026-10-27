@@ -2,13 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { RichTextDisplay } from "@/components/financial/RichTextDisplay";
 import { currentAppUser } from "@/lib/auth";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { db } from "@/lib/db";
+import { resolveFileUrlSafe } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { purchaseOrderProgress } from "@/lib/purchase-orders/workflow";
 
 import { PO_STATUS_STYLE, WORK_STATUS_STYLE } from "../status-styles";
+import { AttachPurchaseOrderFiles } from "./attach-files";
 import { WorkflowButtons } from "./workflow-buttons";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +67,13 @@ export default async function PurchaseOrderDetailPage({
     include: {
       job: { select: { name: true } },
       vendor: { select: { id: true, name: true, email: true } },
+      linkedScheduleItem: { select: { id: true, title: true } },
       lineItems: { orderBy: { sortOrder: "asc" }, include: { costCode: { select: { code: true, name: true } } } },
+      files: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, fileName: true, url: true },
+      },
       bills: {
         orderBy: { createdAt: "desc" },
         select: { id: true, billNumber: true, approvalStatus: true, lineItems: { select: { amountCents: true } } },
@@ -80,6 +89,12 @@ export default async function PurchaseOrderDetailPage({
   const progress = await purchaseOrderProgress(user.organizationId, purchaseOrder.id);
   const statusStyle = PO_STATUS_STYLE[purchaseOrder.status] ?? PO_STATUS_STYLE.DRAFT;
   const workStyle = WORK_STATUS_STYLE[purchaseOrder.workStatus];
+  const attachedFiles = await Promise.all(
+    purchaseOrder.files.map(async (file) => ({
+      ...file,
+      href: await resolveFileUrlSafe(file.url),
+    })),
+  );
 
   // What the vendor actually agreed to, when they've agreed to something: the frozen
   // snapshot rather than the live (possibly since-edited) scope of work.
@@ -162,9 +177,16 @@ export default async function PurchaseOrderDetailPage({
                 }
               />
               <Field label="Materials only" value={purchaseOrder.materialsOnly ? "Yes" : "No"} />
+              <Field label="Variance PO" value={purchaseOrder.isVariance ? "Yes" : "No"} />
               <Field
                 label="Scheduled completion"
-                value={purchaseOrder.scheduledCompletionOn ? formatDate(purchaseOrder.scheduledCompletionOn) : "—"}
+                value={
+                  purchaseOrder.linkedScheduleItem
+                    ? purchaseOrder.linkedScheduleItem.title
+                    : purchaseOrder.scheduledCompletionOn
+                      ? formatDate(purchaseOrder.scheduledCompletionOn)
+                      : "—"
+                }
               />
               <Field
                 label="Completed"
@@ -224,9 +246,30 @@ export default async function PurchaseOrderDetailPage({
                   scope of work now requires an amend, which re-opens approval.
                 </p>
               ) : null}
-              <div className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--bt-text)]">{agreementText}</div>
+              <RichTextDisplay value={agreementText} className="text-sm leading-relaxed text-[var(--bt-text)]" />
             </Panel>
           ) : null}
+
+          <Panel title="Attachments">
+            {attachedFiles.length > 0 ? (
+              <ul className="mb-3 flex flex-col gap-1.5">
+                {attachedFiles.map((file) => (
+                  <li key={file.id} className="text-sm">
+                    {file.href ? (
+                      <a href={file.href} className="hover:underline" style={{ color: "var(--bt-primary)" }} target="_blank" rel="noreferrer">
+                        {file.fileName}
+                      </a>
+                    ) : (
+                      <span className="text-[var(--bt-muted)]">{file.fileName}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mb-3 text-sm text-[var(--bt-muted)]">No attachments yet.</p>
+            )}
+            <AttachPurchaseOrderFiles jobId={jobId} purchaseOrderId={purchaseOrder.id} />
+          </Panel>
 
           {purchaseOrder.bills.length > 0 ? (
             <Panel title="Bills against this PO">

@@ -55,6 +55,13 @@ export class UnknownAgreementTemplateError extends Error {
   }
 }
 
+export class UnknownScheduleItemError extends Error {
+  constructor(scheduleItemId: string) {
+    super(`No schedule item ${scheduleItemId} on this job.`);
+    this.name = "UnknownScheduleItemError";
+  }
+}
+
 export interface CreatePurchaseOrderLineItemInput {
   readonly costCodeId: string;
   readonly costType?: CostType;
@@ -77,8 +84,12 @@ export interface CreatePurchaseOrderInput {
   /** Short label for the PO — "Install Shower Pan" rather than just "0036". */
   readonly title?: string | null;
   readonly materialsOnly?: boolean;
+  /** Buildertrend "Mark as a Variance PO" — display/filter only. */
+  readonly isVariance?: boolean;
   readonly scheduledCompletionOn?: Date | null;
   readonly completedOn?: Date | null;
+  /** Optional schedule task this PO's work is tied to (BT "Link to Schedule"). */
+  readonly linkedScheduleItemId?: string | null;
   /**
    * The subcontractor agreement text. When agreementTemplateId is given and this is
    * not, the template's body is copied in — copied, not referenced, so editing the
@@ -114,6 +125,17 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
     if (!vendor) throw new UnknownVendorError(input.vendorId);
   }
 
+  if (input.linkedScheduleItemId) {
+    const item = await db.scheduleItem.findFirst({
+      where: {
+        id: input.linkedScheduleItemId,
+        schedule: { jobId: input.jobId, organizationId: input.organizationId },
+      },
+      select: { id: true },
+    });
+    if (!item) throw new UnknownScheduleItemError(input.linkedScheduleItemId);
+  }
+
   // An explicit scopeOfWork always wins; a template only fills the gap when none was
   // typed. The body is copied here rather than read through the relation at display
   // time, so later edits to the template can't rewrite an agreement in flight.
@@ -140,8 +162,10 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
         sourceId: input.sourceId ?? null,
         title: input.title ?? null,
         materialsOnly: input.materialsOnly ?? false,
+        isVariance: input.isVariance ?? false,
         scheduledCompletionOn: input.scheduledCompletionOn ?? null,
         completedOn: input.completedOn ?? null,
+        linkedScheduleItemId: input.linkedScheduleItemId ?? null,
         scopeOfWork,
         agreementTemplateId: input.agreementTemplateId ?? null,
         internalNotes: input.internalNotes ?? null,
