@@ -77,6 +77,9 @@ export const SCOPES = [
   // Phase 8 — AI layer
   "weekly-summaries:read",
   "weekly-summaries:write",
+  // AI takeoffs → Duke purchasing queue
+  "takeoffs:read",
+  "takeoffs:write",
   // Historical data migration (Buildertrend cutover) — bypasses live workflow state
   // machines to backfill already-settled records; see src/lib/migration/service.ts.
   "migration:write",
@@ -130,6 +133,8 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "bills:read",
     "bills:write",
     "budgets:read",
+    "takeoffs:read",
+    "takeoffs:write",
     "webhooks:read",
     "events:write",
     "vendors:read",
@@ -227,7 +232,17 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "surveys:write",
     "weekly-summaries:read",
     "weekly-summaries:write",
+    "takeoffs:read",
+    "takeoffs:write",
   ],
   vince: ["jobs:read", "jobs:write", "leads:read", "leads:write", "proposals:read", "proposals:write"],
-  neil: ["jobs:read", "cost-codes:read", "estimates:read", "estimates:write", "budgets:read"],
+  neil: [
+    "jobs:read",
+    "cost-codes:read",
+    "estimates:read",
+    "estimates:write",
+    "budgets:read",
+    "takeoffs:read",
+    "takeoffs:write",
+  ],
 };

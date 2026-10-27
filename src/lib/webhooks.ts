@@ -27,6 +27,10 @@ export const WEBHOOK_EVENT_TYPES = [
   "po.sent_for_approval",
   "po.approved",
   "po.declined",
+  /// Takeoff line(s) explicitly queued for Duke (never emitted by AI draft alone).
+  "purchasing_intent.queued",
+  /// Purchasing intent converted to a PurchaseOrder (sourceType=TAKEOFF).
+  "purchasing_intent.converted",
   /// Raised when an approved PO is revised, which re-opens vendor acceptance.
   "po.amended",
   /// Raised when a PO is voided — subscribers should stop treating it as committed.

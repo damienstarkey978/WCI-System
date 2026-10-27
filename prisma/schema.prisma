@@ -160,6 +160,8 @@ model Organization {
   surveys                 Survey[]
   clientUpdateSummaries   ClientUpdateSummary[]
   materialCatalogItems    MaterialCatalogItem[]
+  takeoffs                Takeoff[]
+  purchasingIntents       PurchasingIntent[]
   jarvisConversations     JarvisConversation[]
   proposalDraftJobs       ProposalDraftJob[]
   quickBooksConnection    QuickBooksConnection?
@@ -350,6 +352,8 @@ model Job {
   deposits              Deposit[]
   inboundEmails         InboundEmail[]
   permits               JobPermit[]
+  takeoffs              Takeoff[]
+  purchasingIntents     PurchasingIntent[]
 
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
@@ -444,6 +448,7 @@ model CostCode {
   bidPackageLineItems       BidPackageLineItem[]
   estimateTemplateLineItems EstimateTemplateLineItem[]
   invoiceLineItems          InvoiceLineItem[]
+  takeoffLineItems          TakeoffLine[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -508,6 +513,7 @@ model ApiKey {
 
   jobStatusEvents     JobStatusEvent[]
   purchaseOrderEvents PurchaseOrderEvent[]
+  claimedPurchasingIntents PurchasingIntent[]
 
   @@index([organizationId])
 }
@@ -790,6 +796,35 @@ enum FinancialSourceType {
   CHANGE_ORDER
   BID
   SELECTION
+  /// AI or hand takeoff → explicit "queue for purchasing" / "push to PO".
+  TAKEOFF
+}
+
+/// Job-level quantity takeoff (plans/measurements → structured lines). Always
+/// reviewed before any purchasing intent or PO is created — never silent.
+enum TakeoffStatus {
+  DRAFT
+  READY
+  ARCHIVED
+}
+
+enum TakeoffLineStatus {
+  DRAFT
+  READY
+  /// Explicitly queued for Duke / purchasing agent (PurchasingIntent exists).
+  QUEUED
+  /// Converted to a PurchaseOrder (sourceType=TAKEOFF).
+  ORDERED
+  CANCELLED
+}
+
+/// Duke's purchasing queue item — one per takeoff line after an explicit
+/// "Send to Purchasing" action. Claim → convert-to-PO is also explicit.
+enum PurchasingIntentStatus {
+  QUEUED
+  CLAIMED
+  CONVERTED
+  CANCELLED
 }
 
 model Estimate {
@@ -1039,16 +1074,124 @@ model PurchaseOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lineItems PurchaseOrderLineItem[]
-  bills     Bill[]
-  files     File[]
-  events    PurchaseOrderEvent[]
+  lineItems         PurchaseOrderLineItem[]
+  bills             Bill[]
+  files             File[]
+  events            PurchaseOrderEvent[]
+  takeoffLines      TakeoffLine[]
+  purchasingIntents PurchasingIntent[]
 
   @@unique([organizationId, poNumber])
   @@index([jobId, status])
   @@index([jobId, workStatus])
   @@index([vendorId])
   @@index([linkedScheduleItemId])
+}
+
+/// Quantity takeoff for a job — plans/measurement notes → structured lines that
+/// can be explicitly queued for Duke or pushed to a Purchase Order.
+model Takeoff {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title  String
+  status TakeoffStatus @default(DRAFT)
+
+  /// Plans / measurement notes the takeoff was drafted from (kept for audit).
+  notes String?
+
+  /// True when drafted by the AI assistant. Always DRAFT for human review —
+  /// never queues purchasing or creates a PO automatically.
+  aiGenerated   Boolean  @default(false)
+  aiPromptNotes String?
+  /// Assumptions / gaps the model flagged for the PM to confirm.
+  assumptions   String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines   TakeoffLine[]
+  intents PurchasingIntent[]
+
+  @@index([organizationId])
+  @@index([jobId, status])
+}
+
+model TakeoffLine {
+  id        String  @id @default(cuid())
+  takeoffId String
+  takeoff   Takeoff @relation(fields: [takeoffId], references: [id], onDelete: Cascade)
+
+  costCodeId String
+  costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
+  costType   CostType @default(NONE)
+
+  title         String
+  description   String?
+  /// Quantity × 1000. 2.5 units is stored as 2500.
+  quantityMilli Int     @default(1000)
+  unit          String?
+  /// Optional estimated unit cost (cents) for purchasing guidance — not a commitment.
+  unitCostCents Int     @default(0)
+  groupLabel    String?
+  sortOrder     Int     @default(0)
+
+  status     TakeoffLineStatus   @default(DRAFT)
+  confidence LineItemConfidence?
+
+  /// Set when this line was converted into a PO (direct push or via intent).
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  purchasingIntent PurchasingIntent?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([takeoffId, sortOrder])
+  @@index([costCodeId])
+  @@index([purchaseOrderId])
+  @@index([status])
+}
+
+/// Explicit purchasing queue for Duke. Created only by "Send to Purchasing" —
+/// never implied by drafting a takeoff.
+model PurchasingIntent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  takeoffId String
+  takeoff   Takeoff @relation(fields: [takeoffId], references: [id], onDelete: Cascade)
+
+  /// One intent per takeoff line.
+  takeoffLineId String      @unique
+  takeoffLine   TakeoffLine @relation(fields: [takeoffLineId], references: [id], onDelete: Cascade)
+
+  status PurchasingIntentStatus @default(QUEUED)
+
+  vendorHint String?
+  notes      String?
+
+  claimedByApiKeyId String?
+  claimedByApiKey   ApiKey?   @relation(fields: [claimedByApiKeyId], references: [id], onDelete: SetNull)
+  claimedAt         DateTime?
+
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([jobId, status])
+  @@index([takeoffId])
+  @@index([purchaseOrderId])
 }
 
 /// Reusable subcontractor-agreement boilerplate. WCI pastes the same

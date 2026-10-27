@@ -691,3 +691,11 @@ Record every architectural decision that departs from the above, with the reason
   the routes use — no parallel authorization or write path. Agent kinds `ATLAS` and
   `ROY` join the enum; Heather's default scopes expand to office-manager breadth.
   Decision brief: project store `docs/agent-access-atlas-roy-heather.md`.
+- **AI takeoffs + job Purchasing page (purchasing handoff):** `Takeoff` /
+  `TakeoffLine` / `PurchasingIntent` models plus `FinancialSourceType.TAKEOFF`.
+  AI drafts from plan/measurement notes are always DRAFT (`aiGenerated: true`) —
+  never silent-queue Duke or create a PO. Explicit actions only: queue-purchasing
+  (emits `purchasing_intent.queued`) or push-to-PO / convert-intent-to-PO
+  (`sourceType=TAKEOFF`). Job PM nav adds Takeoffs + Purchasing; Purchasing rolls
+  up takeoff lines + existing PO statuses (purchased vs not-yet) rather than a
+  parallel AP module. Duke scopes include `takeoffs:read`/`takeoffs:write`.
