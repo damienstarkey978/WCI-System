@@ -85,6 +85,9 @@ export async function POST(request: Request): Promise<Response> {
   const auth = await authenticate(request);
   if (!auth) return unauthorizedWithDiscovery(request);
 
+  const bearerToken = extractToken(request);
+  if (!bearerToken) return unauthorizedWithDiscovery(request);
+
   let server: McpServer | undefined;
   // enableJsonResponse: every tool here resolves in one shot with no server-initiated
   // notifications, so a plain JSON response is sufficient — and it lets this handler
@@ -93,7 +96,9 @@ export async function POST(request: Request): Promise<Response> {
   // server + transport is built per request, so there is nothing to keep alive between calls).
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   try {
-    server = buildMcpServer(auth);
+    // Forward the same bearer to /api/v1 via api_v1_request — one auth model, no
+    // parallel write path (see docs/agent-access-atlas-roy-heather.md).
+    server = buildMcpServer(auth, { origin: originOf(request), bearerToken });
     await server.connect(transport);
     const response = await transport.handleRequest(request);
     // The transport builds its own response, so the cross-origin headers have to be

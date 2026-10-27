@@ -396,11 +396,17 @@ build Phase 4 on an unvalidated Phase 1.
 | Key name | Agent | Scope |
 |---|---|---|
 | jarvis | Orchestrator | Read-heavy, cross-module, all webhook subscriptions |
-| heather | Office manager | Daily Logs, Files, custom permit-milestone events (Phase 2) |
+| heather | Office manager | Daily logs, files, permits, schedule/todos, notifications, clients/subs, events (broad ops) |
+| atlas | Marks (progress/accountability) | All reads + targeted writes (schedule, todos, comments, notifications, daily logs, permits, events) |
+| roy | Garry (financials) | Budgets/reports read, POs/bills/invoices R/W, vendors, files, events |
 | duke | Purchasing | Purchase Orders, Bills, unmatched-transaction webhook (Phase 1) |
-| hank | PM | Project management module (Phase 2 onward); Specifications/Submittals/Warranty/Surveys (Phase 6) |
+| hank | PM | Project management module (Phase 2 onward); Specifications/Submittals/Warranty/Surveys (Phase 6); permits |
 | vince | Sales | Leads/Opportunities/Proposals (Phase 5) |
 | neil | Estimator | Estimates (Phase 5, though Estimate itself ships in Phase 1) |
+
+Default scopes live in `src/lib/api-scopes.ts` (`AGENT_DEFAULT_SCOPES`). Issue with
+`npm run issue-api-key -- --name <agent>`. MCP (`/api/mcp`) uses the same keys and
+forwards to `/api/v1` via `api_v1_request` — see the agent-access decision brief.
 
 **Migration source:** Airtable "WCI Job Tracker" — 28 fields, 5 views (Active Jobs,
 Awaiting Action, Money, Health Check, Grid). Export before Phase 6.
@@ -679,3 +685,9 @@ Record every architectural decision that departs from the above, with the reason
   folders, shows Permit Rockstar guide links + universal photo tips, and supports
   camera/library capture with client-side compress + parallel upload. Termite cert
   on Slab is a disabled checkbox stub only; receive/upload/notify Garry waits on Damien.
+- **Grokbot agents use API + MCP, not MCP-only (Atlas/Roy/Heather):** `/api/v1` remains
+  the source of truth with scoped `ApiKey`s; `/api/mcp` authenticates with the same
+  keys and exposes `api_v1_request` plus convenience tools that call the same services
+  the routes use — no parallel authorization or write path. Agent kinds `ATLAS` and
+  `ROY` join the enum; Heather's default scopes expand to office-manager breadth.
+  Decision brief: project store `docs/agent-access-atlas-roy-heather.md`.

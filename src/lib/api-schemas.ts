@@ -925,3 +925,31 @@ export const importInvoiceSchema = z.object({
 export const importInvoicesSchema = z.object({
   invoices: z.array(importInvoiceSchema).min(1).max(100),
 });
+
+// ---------------------------------------------------------------------------
+// Permitting (Heather / Atlas / field ops)
+// ---------------------------------------------------------------------------
+
+export const updatePermitSchema = z
+  .object({
+    pulled: z.boolean().optional(),
+    vendorId: z.string().min(1).max(64).nullish(),
+    permitNumber: z.string().trim().max(64).nullish(),
+  })
+  .refine((value) => value.pulled !== undefined || value.vendorId !== undefined || value.permitNumber !== undefined, {
+    message: "Provide at least one of pulled, vendorId, or permitNumber.",
+  });
+
+export const updatePermitInspectionSchema = z.object({
+  completed: z.boolean(),
+});
+
+export const updateJobPermittingFlagsSchema = z
+  .object({
+    nocOnFile: z.boolean().optional(),
+    ntboFiled: z.boolean().optional(),
+  })
+  .refine((value) => value.nocOnFile !== undefined || value.ntboFiled !== undefined, {
+    message: "Provide nocOnFile and/or ntboFiled.",
+  });
+

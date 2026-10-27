@@ -2,6 +2,9 @@
  * Issue an API key for an agent or integration.
  *
  *   npm run issue-api-key -- --name duke
+ *   npm run issue-api-key -- --name atlas
+ *   npm run issue-api-key -- --name roy
+ *   npm run issue-api-key -- --name heather
  *   npm run issue-api-key -- --name jarvis --org world-construction
  *   npm run issue-api-key -- --name reporting-bot --scopes jobs:read,budgets:read
  *

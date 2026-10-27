@@ -151,7 +151,7 @@ describe("scopes", () => {
 describe("agent default scopes", () => {
   it("defines a key for every agent in the roster", () => {
     expect(Object.keys(AGENT_DEFAULT_SCOPES).sort()).toEqual(
-      ["duke", "hank", "heather", "jarvis", "neil", "vince"].sort(),
+      ["atlas", "duke", "hank", "heather", "jarvis", "neil", "roy", "vince"].sort(),
     );
   });
 
@@ -179,10 +179,36 @@ describe("agent default scopes", () => {
     expect(grantsScope(jarvis, "purchase-orders:write")).toBe(false);
   });
 
-  it("scopes Heather to daily logs and files", () => {
+  it("scopes Heather as office manager — ops, permits, clients/subs, not AP writes", () => {
     const heather = AGENT_DEFAULT_SCOPES.heather;
     expect(grantsScope(heather, "daily-logs:write")).toBe(true);
     expect(grantsScope(heather, "files:write")).toBe(true);
+    expect(grantsScope(heather, "permits:write")).toBe(true);
+    expect(grantsScope(heather, "clients:write")).toBe(true);
+    expect(grantsScope(heather, "vendors:write")).toBe(true);
+    expect(grantsScope(heather, "notifications:write")).toBe(true);
     expect(grantsScope(heather, "bills:write")).toBe(false);
+  });
+
+  it("gives Atlas cross-module read plus targeted accountability writes", () => {
+    const atlas = AGENT_DEFAULT_SCOPES.atlas;
+    expect(grantsScope(atlas, "jobs:read")).toBe(true);
+    expect(grantsScope(atlas, "budgets:read")).toBe(true);
+    expect(grantsScope(atlas, "schedule:write")).toBe(true);
+    expect(grantsScope(atlas, "todos:write")).toBe(true);
+    expect(grantsScope(atlas, "permits:write")).toBe(true);
+    expect(grantsScope(atlas, "purchase-orders:write")).toBe(false);
+    expect(grantsScope(atlas, "bills:write")).toBe(false);
+  });
+
+  it("scopes Roy to financials-heavy ops without jobs:write", () => {
+    const roy = AGENT_DEFAULT_SCOPES.roy;
+    expect(grantsScope(roy, "purchase-orders:write")).toBe(true);
+    expect(grantsScope(roy, "bills:write")).toBe(true);
+    expect(grantsScope(roy, "invoices:write")).toBe(true);
+    expect(grantsScope(roy, "budgets:read")).toBe(true);
+    expect(grantsScope(roy, "files:write")).toBe(true);
+    expect(grantsScope(roy, "jobs:write")).toBe(false);
+    expect(grantsScope(roy, "daily-logs:write")).toBe(false);
   });
 });
