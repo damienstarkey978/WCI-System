@@ -1,21 +1,17 @@
 "use client";
 
 /**
- * "Let's get to work" — a mic button on every Jarvis composer (the docked launcher
- * panel, the dashboard's inline business-advisor chat, /jarvis and /jarvis/[id], and
- * any other inline embedding, since they all render through JarvisChatPanel.tsx)
- * that talks straight to Jarvis via the browser's built-in speech recognition:
- * dictate, and the moment you stop (tap again, or just go quiet), it sends — no
- * separate "now press Send" step, since the whole point is a hands-free way to
- * communicate with Jarvis instead of typing.
+ * Compact mic control for every Jarvis Ask composer (docked launcher, Lead
+ * Proposals entry, estimate Handy rail, /jarvis). Matches Handoff Ask Handy's
+ * icon mic — speech fills the textarea; the user taps Send (no giant CTA).
  *
- * Chrome, Edge, and Safari (desktop and mobile) all ship `webkitSpeechRecognition`;
- * Firefox doesn't implement the Web Speech API at all, so this renders nothing there
- * rather than a button that errors on click — same progressive-enhancement approach
- * as the geolocation check in field/time-clock/time-clock-client.tsx.
+ * Chrome/Edge/Safari ship `webkitSpeechRecognition`. Firefox has no Web Speech
+ * API — we still render a disabled mic with a title so the toolbar layout
+ * stays consistent instead of vanishing (same progressive-enhancement idea as
+ * field geolocation).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 interface SpeechRecognitionResultLike {
   readonly isFinal: boolean;
@@ -49,36 +45,57 @@ function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | undef
   return globalWithSpeech.SpeechRecognition ?? globalWithSpeech.webkitSpeechRecognition;
 }
 
+function MicIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 3.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7.5 11.5a4.5 4.5 0 0 0 9 0M12 16v3.5M9.5 19.5h5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function JarvisVoiceButton({
   onTranscript,
   onFinish,
-  funUi,
+  disabled = false,
 }: {
-  /** Called with each finalized chunk of speech — the caller decides how to fold it
-   *  into the composer (JarvisChatPanel.tsx appends it to whatever's already typed,
-   *  so starting to dictate never clobbers a draft). */
+  /** Called with each finalized chunk of speech — the caller appends into the composer. */
   onTranscript: (text: string) => void;
-  /** Called once, after listening stops, if at least one word was actually
-   *  recognized — JarvisChatPanel.tsx uses this to submit the message
-   *  automatically, so talking to Jarvis is a single hands-free action rather
-   *  than dictate-then-remember-to-tap-Send. Not called on a stop with nothing
-   *  captured (mic tapped and immediately tapped off, permission denied, etc.),
-   *  so it never sends an empty message. */
-  onFinish: () => void;
-  funUi: boolean;
+  /**
+   * Optional. When set, called once listening stops if any speech was captured.
+   * Handoff-style composers leave this unset so dictation only fills the input
+   * and Send submits. Pass it only for a deliberate auto-send flow.
+   */
+  onFinish?: () => void;
+  disabled?: boolean;
 }) {
-  const [supported, setSupported] = useState(false);
+  const supported = useSyncExternalStore(
+    () => () => {},
+    () => getSpeechRecognitionConstructor() !== undefined,
+    () => false,
+  );
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const capturedAnythingRef = useRef(false);
 
   useEffect(() => {
-    const detectSupport = () => setSupported(getSpeechRecognitionConstructor() !== undefined);
-    detectSupport();
     return () => recognitionRef.current?.stop();
   }, []);
 
   function toggleListening() {
+    if (!supported || disabled) return;
+
     if (listening) {
       recognitionRef.current?.stop();
       setListening(false);
@@ -107,28 +124,40 @@ export function JarvisVoiceButton({
     recognition.onerror = () => setListening(false);
     recognition.onend = () => {
       setListening(false);
-      if (capturedAnythingRef.current) onFinish();
+      if (capturedAnythingRef.current) onFinish?.();
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
-    setListening(true);
+    try {
+      recognition.start();
+      setListening(true);
+    } catch {
+      setListening(false);
+    }
   }
 
-  if (!supported) return null;
+  const title = !supported
+    ? "Voice input isn’t supported in this browser"
+    : listening
+      ? "Stop listening"
+      : "Speak to Jarvis";
 
   return (
     <button
       type="button"
       onClick={toggleListening}
+      disabled={disabled || !supported}
       aria-pressed={listening}
-      className={`flex w-full items-center justify-center gap-2 rounded-full py-2 text-sm font-semibold transition ${
-        funUi ? "wci-fun-chunky-btn wci-fun-heading text-white" : "text-[var(--bt-on-primary)]"
-      } ${listening ? "animate-pulse" : ""}`}
-      style={{ background: funUi ? "linear-gradient(135deg, var(--bt-primary), var(--bt-nav))" : "var(--bt-primary)" }}
+      aria-label={title}
+      title={title}
+      className={`inline-flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full transition sm:h-9 sm:w-9 ${
+        listening
+          ? "animate-pulse text-[var(--bt-on-primary)]"
+          : "text-[var(--bt-muted)] hover:bg-black/5 hover:text-[var(--bt-text)] disabled:cursor-not-allowed disabled:opacity-40"
+      }`}
+      style={listening ? { background: "var(--bt-primary)" } : undefined}
     >
-      <span aria-hidden="true">🎤</span>
-      {listening ? "Listening…" : "Let's get to work"}
+      <MicIcon />
     </button>
   );
 }
