@@ -1,7 +1,11 @@
 /**
- * Handoff-style estimate spreadsheet: grouped rows with Qty, Unit cost,
- * Cost type, Builder cost, Markup, Client total, plus a sticky totals bar.
+ * Handoff-style estimate spreadsheet: grouped collapsible rows with Qty chip,
+ * Unit cost, Cost type pills, Builder cost, Markup, Client total, sticky totals.
  */
+
+"use client";
+
+import { useState } from "react";
 
 import { formatMoney, formatPercent } from "@/lib/format";
 
@@ -93,20 +97,23 @@ export function EstimateSpreadsheet({
       </div>
 
       <div
-        className="sticky bottom-0 z-10 mt-3 flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4"
+        className="sticky bottom-0 z-10 mt-3 flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4"
         style={{
           borderColor: "var(--bt-border)",
-          background: "var(--bt-panel-bg)",
+          background: "color-mix(in srgb, var(--bt-panel-bg) 92%, transparent)",
+          backdropFilter: "blur(8px)",
           boxShadow: "0 -4px 12px color-mix(in srgb, var(--bt-text) 6%, transparent)",
         }}
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--bt-muted)]">
           <span>
             Profit margin{" "}
-            <strong style={{ color: "var(--bt-primary)" }}>{formatPercent(marginBasisPoints)}</strong>
+            <strong className="text-sm" style={{ color: "var(--bt-primary)" }}>
+              {formatPercent(marginBasisPoints)}
+            </strong>
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-[var(--bt-muted)]">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:justify-end sm:text-sm text-[var(--bt-muted)]">
           <span>
             Total cost <strong className="text-[var(--bt-text)]">{formatMoney(totalBuilderCostCents)}</strong>
           </span>
@@ -117,7 +124,7 @@ export function EstimateSpreadsheet({
           <span aria-hidden>=</span>
           <span>
             Estimate total{" "}
-            <strong className="text-base text-[var(--bt-text)]">{formatMoney(totalClientCents)}</strong>
+            <strong className="text-base sm:text-lg text-[var(--bt-text)]">{formatMoney(totalClientCents)}</strong>
           </span>
         </div>
       </div>
@@ -126,71 +133,88 @@ export function EstimateSpreadsheet({
 }
 
 function GroupRows({ group }: { readonly group: SpreadsheetGroup }) {
+  const [open, setOpen] = useState(true);
   return (
     <>
       <tr style={{ background: "var(--bt-panel-bg-muted)" }}>
         <td colSpan={7} className="px-3 py-2 sm:px-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-semibold text-[var(--bt-text)]">{group.label}</span>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-3 text-left"
+            aria-expanded={open}
+          >
+            <span className="flex items-center gap-2 text-xs font-semibold text-[var(--bt-text)]">
+              <span className="inline-block w-3 text-[10px] text-[var(--bt-muted)]" aria-hidden>
+                {open ? "▾" : "▸"}
+              </span>
+              {group.label}
+              <span className="font-normal text-[var(--bt-muted)]">({group.items.length})</span>
+            </span>
             <span className="text-xs font-semibold tabular-nums text-[var(--bt-text)]">
               {formatMoney(group.groupClientTotalCents)}
             </span>
-          </div>
+          </button>
         </td>
       </tr>
-      {group.items.map((item, i) => {
-        const typeStyle = COST_TYPE_STYLE[item.costType] ?? COST_TYPE_STYLE.NONE;
-        return (
-          <tr key={item.id} className="border-t align-top" style={{ borderColor: "var(--bt-border)" }}>
-            <td className="px-3 py-2.5 sm:px-4">
-              <div className="flex gap-2">
-                <span className="mt-0.5 shrink-0 text-[10px] tabular-nums text-[var(--bt-muted)]">{i + 1}</span>
-                <div className="min-w-0">
-                  <div className="font-medium text-[var(--bt-text)]">{item.title}</div>
-                  <div className="text-[11px] text-[var(--bt-muted)]">{item.costCodeLabel}</div>
-                  {item.description ? (
-                    <p className="mt-0.5 text-[11px] text-[var(--bt-muted)]">{item.description}</p>
-                  ) : null}
-                  <div className="mt-1 sm:hidden">
-                    <span
-                      className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                      style={{ background: typeStyle.bg, color: typeStyle.text }}
-                    >
-                      {costTypeLabel(item.costType)}
-                    </span>
+      {open
+        ? group.items.map((item, i) => {
+            const typeStyle = COST_TYPE_STYLE[item.costType] ?? COST_TYPE_STYLE.NONE;
+            return (
+              <tr key={item.id} className="border-t align-top" style={{ borderColor: "var(--bt-border)" }}>
+                <td className="px-3 py-2.5 sm:px-4">
+                  <div className="flex gap-2">
+                    <span className="mt-0.5 shrink-0 text-[10px] tabular-nums text-[var(--bt-muted)]">{i + 1}</span>
+                    <div className="min-w-0">
+                      <div className="font-medium text-[var(--bt-text)]">{item.title}</div>
+                      <div className="text-[11px] text-[var(--bt-muted)]">{item.costCodeLabel}</div>
+                      {item.description ? (
+                        <p className="mt-0.5 text-[11px] text-[var(--bt-muted)]">{item.description}</p>
+                      ) : null}
+                      <div className="mt-1 sm:hidden">
+                        <span
+                          className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{ background: typeStyle.bg, color: typeStyle.text }}
+                        >
+                          {costTypeLabel(item.costType)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </td>
-            <td className="px-2 py-2.5 text-right tabular-nums text-[var(--bt-text)]">
-              <span className="inline-block rounded-md px-1.5 py-0.5" style={{ background: "var(--bt-panel-bg-muted)" }}>
-                {formatQty(item.quantityMilli)}
-              </span>
-            </td>
-            <td className="px-2 py-2.5 text-right tabular-nums text-[var(--bt-text)]">
-              {formatMoney(item.unitCostCents)}
-            </td>
-            <td className="hidden px-2 py-2.5 sm:table-cell">
-              <span
-                className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{ background: typeStyle.bg, color: typeStyle.text }}
-              >
-                {costTypeLabel(item.costType)}
-              </span>
-            </td>
-            <td className="hidden px-2 py-2.5 text-right tabular-nums text-[var(--bt-muted)] md:table-cell">
-              {formatMoney(item.builderCostCents)}
-            </td>
-            <td className="hidden px-2 py-2.5 text-right tabular-nums text-[var(--bt-muted)] lg:table-cell">
-              {formatPercent(item.rateBasisPoints)}
-              {item.rateMode === "MARGIN" ? " mar" : ""}
-            </td>
-            <td className="px-3 py-2.5 text-right text-sm font-medium tabular-nums text-[var(--bt-text)] sm:px-4">
-              {formatMoney(item.clientTotalCents)}
-            </td>
-          </tr>
-        );
-      })}
+                </td>
+                <td className="px-2 py-2.5 text-right tabular-nums text-[var(--bt-text)]">
+                  <span
+                    className="inline-block rounded-md px-1.5 py-0.5"
+                    style={{ background: "var(--bt-panel-bg-muted)" }}
+                  >
+                    {formatQty(item.quantityMilli)}
+                  </span>
+                </td>
+                <td className="px-2 py-2.5 text-right tabular-nums text-[var(--bt-text)]">
+                  {formatMoney(item.unitCostCents)}
+                </td>
+                <td className="hidden px-2 py-2.5 sm:table-cell">
+                  <span
+                    className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                    style={{ background: typeStyle.bg, color: typeStyle.text }}
+                  >
+                    {costTypeLabel(item.costType)}
+                  </span>
+                </td>
+                <td className="hidden px-2 py-2.5 text-right tabular-nums text-[var(--bt-muted)] md:table-cell">
+                  {formatMoney(item.builderCostCents)}
+                </td>
+                <td className="hidden px-2 py-2.5 text-right tabular-nums text-[var(--bt-muted)] lg:table-cell">
+                  {formatPercent(item.rateBasisPoints)}
+                  {item.rateMode === "MARGIN" ? " mar" : ""}
+                </td>
+                <td className="px-3 py-2.5 text-right text-sm font-medium tabular-nums text-[var(--bt-text)] sm:px-4">
+                  {formatMoney(item.clientTotalCents)}
+                </td>
+              </tr>
+            );
+          })
+        : null}
     </>
   );
 }

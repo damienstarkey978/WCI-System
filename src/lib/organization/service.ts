@@ -16,6 +16,8 @@ export interface UpdateOrganizationInfoInput {
   readonly postalCode?: string | null;
   readonly contactEmail?: string | null;
   readonly contactPhone?: string | null;
+  readonly slogan?: string | null;
+  readonly defaultProposalTerms?: string | null;
 }
 
 export async function updateOrganizationInfo(organizationId: string, input: UpdateOrganizationInfoInput) {
@@ -30,6 +32,10 @@ export async function updateOrganizationInfo(organizationId: string, input: Upda
       postalCode: input.postalCode ?? null,
       contactEmail: input.contactEmail ?? null,
       contactPhone: input.contactPhone ?? null,
+      slogan: input.slogan ?? null,
+      ...(input.defaultProposalTerms !== undefined
+        ? { defaultProposalTerms: input.defaultProposalTerms }
+        : {}),
     },
   });
 }

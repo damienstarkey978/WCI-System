@@ -18,8 +18,10 @@ import { sendEstimateToBudget } from "@/lib/budget/send-to-budget";
 import { moveLeadAttachmentsToJob } from "@/lib/crm/attachments";
 import { db } from "@/lib/db";
 import { totalDrawPercentage } from "@/lib/invoicing/calc";
+import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 import { readTemplateDraws, readTemplateSections } from "@/lib/proposal-templates/content";
 import { getProposalTemplate } from "@/lib/proposal-templates/service";
+import { hashProposalSignature } from "@/lib/proposals/e-sign";
 import { transitionJobStatus } from "@/lib/jobs";
 import type { BasisPoints } from "@/lib/money";
 import { emitEvent } from "@/lib/webhooks";
@@ -223,6 +225,15 @@ export async function createProposal(input: CreateProposalInput) {
   const client = await db.client.findFirst({ where: { id: input.clientId, organizationId: input.organizationId }, select: { id: true } });
   if (!client) throw new ClientNotFoundError(input.clientId);
 
+  const org = await db.organization.findUnique({
+    where: { id: input.organizationId },
+    select: { defaultProposalTerms: true },
+  });
+  const termsText = resolveProposalTermsText({
+    proposalTerms: null,
+    organizationTerms: org?.defaultProposalTerms,
+  });
+
   const proposal = await db.proposal.create({
     data: {
       organizationId: input.organizationId,
@@ -231,6 +242,7 @@ export async function createProposal(input: CreateProposalInput) {
       clientId: input.clientId,
       title: input.title,
       coverMessage: input.coverMessage ?? null,
+      termsText,
       options: {
         create: input.options.map((option, index) => ({ estimateId: option.estimateId, label: option.label, sortOrder: index })),
       },
@@ -443,18 +455,95 @@ export async function deleteProposalDraw(organizationId: string, drawId: string)
 }
 
 export async function sendProposal(organizationId: string, proposalId: string) {
-  const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId } });
+  const proposal = await db.proposal.findFirst({
+    where: { id: proposalId, organizationId },
+    include: { organization: { select: { defaultProposalTerms: true } } },
+  });
   if (!proposal) throw new ProposalNotFoundError(proposalId);
   if (proposal.status !== ProposalStatus.DRAFT) throw new ProposalNotDraftError(proposalId, proposal.status);
 
+  const termsText =
+    proposal.termsText?.trim() ||
+    resolveProposalTermsText({
+      proposalTerms: null,
+      organizationTerms: proposal.organization.defaultProposalTerms,
+    });
+
   const updated = await db.proposal.update({
     where: { id: proposal.id },
-    data: { status: ProposalStatus.SENT, sentAt: new Date() },
+    data: { status: ProposalStatus.SENT, sentAt: new Date(), termsText },
   });
 
   await emitEvent(organizationId, "proposal.sent", { proposalId: updated.id, jobId: updated.jobId });
 
   return updated;
+}
+
+export class ProposalAlreadyCompanySignedError extends Error {
+  constructor(proposalId: string) {
+    super(`Proposal ${proposalId} already has a World Construction Inc. signature.`);
+    this.name = "ProposalAlreadyCompanySignedError";
+  }
+}
+
+/**
+ * WCI company counter-sign (staff). Allowed on DRAFT or SENT proposals so staff
+ * can sign before Email/Text; client still signs on the review link to accept.
+ */
+export async function companySignProposal(input: {
+  readonly organizationId: string;
+  readonly proposalId: string;
+  readonly userId: string;
+  readonly signatureName: string;
+  readonly signatureIp?: string | null;
+}) {
+  const proposal = await db.proposal.findFirst({
+    where: { id: input.proposalId, organizationId: input.organizationId },
+    select: {
+      id: true,
+      status: true,
+      companySignedAt: true,
+      termsText: true,
+      selectedOptionId: true,
+      organization: { select: { defaultProposalTerms: true, name: true } },
+      companySignatureUser: { select: { name: true } },
+    },
+  });
+  if (!proposal) throw new ProposalNotFoundError(input.proposalId);
+  if (proposal.status === ProposalStatus.DECLINED || proposal.status === ProposalStatus.ACCEPTED) {
+    throw new ProposalNotEditableError(input.proposalId, proposal.status);
+  }
+  if (proposal.companySignedAt) throw new ProposalAlreadyCompanySignedError(input.proposalId);
+
+  const name = input.signatureName.trim();
+  if (!name) throw new Error("Signature name is required.");
+
+  const signedAt = new Date();
+  const termsText = resolveProposalTermsText({
+    proposalTerms: proposal.termsText,
+    organizationTerms: proposal.organization.defaultProposalTerms,
+  });
+  const signatureHash = hashProposalSignature({
+    proposalId: proposal.id,
+    role: "company",
+    signatureName: name,
+    signedAtIso: signedAt.toISOString(),
+    signatureIp: input.signatureIp ?? null,
+    termsText,
+    selectedOptionId: proposal.selectedOptionId,
+  });
+
+  return db.proposal.update({
+    where: { id: proposal.id },
+    data: {
+      companySignatureName: name,
+      companySignedAt: signedAt,
+      companySignatureIp: input.signatureIp ?? null,
+      companySignatureHash: signatureHash,
+      companySignatureUserId: input.userId,
+      termsText,
+    },
+  });
 }
 
 export interface AcceptProposalInput {
@@ -516,14 +605,36 @@ export async function acceptProposal(input: AcceptProposalInput) {
   const selectedOption = proposal.options.find((option) => option.id === selectedOptionId);
   if (!selectedOption) throw new ProposalOptionNotFoundError(selectedOptionId);
 
+  const signedAt = new Date();
+  const clientSignatureName = input.clientSignatureName ?? proposal.client.name;
+  const fullProposal = await db.proposal.findFirst({
+    where: { id: proposal.id },
+    select: { termsText: true, organization: { select: { defaultProposalTerms: true } } },
+  });
+  const termsText = resolveProposalTermsText({
+    proposalTerms: fullProposal?.termsText,
+    organizationTerms: fullProposal?.organization.defaultProposalTerms,
+  });
+  const clientSignatureHash = hashProposalSignature({
+    proposalId: proposal.id,
+    role: "client",
+    signatureName: clientSignatureName,
+    signedAtIso: signedAt.toISOString(),
+    signatureIp: input.clientSignatureIp ?? null,
+    termsText,
+    selectedOptionId: selectedOption.id,
+  });
+
   const updated = await db.proposal.update({
     where: { id: proposal.id },
     data: {
       status: ProposalStatus.ACCEPTED,
       selectedOptionId: selectedOption.id,
-      clientSignatureName: input.clientSignatureName ?? proposal.client.name,
-      clientSignedAt: new Date(),
+      clientSignatureName,
+      clientSignedAt: signedAt,
       clientSignatureIp: input.clientSignatureIp ?? null,
+      clientSignatureHash,
+      termsText,
     },
   });
 

@@ -32,6 +32,7 @@ import {
   LastOptionError,
   ProposalDrawNotFoundError,
   ProposalDrawOverallocatedError,
+  ProposalAlreadyCompanySignedError,
   ProposalNotDraftError,
   ProposalNotEditableError,
   ProposalNotFoundError,
@@ -45,6 +46,7 @@ import {
   addProposalSection,
   addProposalSectionBullet,
   applyProposalTemplate,
+  companySignProposal,
   declineProposal,
   deleteProposalDraw,
   deleteProposalSection,
@@ -90,6 +92,7 @@ const KNOWN_ERRORS = [
   TooManyOptionsError,
   LastOptionError,
   ProposalTemplateNotFoundError,
+  ProposalAlreadyCompanySignedError,
   MoneyError,
 ];
 
@@ -378,6 +381,31 @@ export async function sendProposalPageAction(formData: FormData): Promise<void> 
   }
 
   revalidate(proposalId);
+}
+
+export async function companySignProposalAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  const signatureName = String(formData.get("signatureName") ?? "").trim() || user.name || user.email;
+  const h = await headers();
+  const signatureIp = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
+
+  try {
+    await companySignProposal({
+      organizationId: user.organizationId,
+      proposalId,
+      userId: user.id,
+      signatureName,
+      signatureIp,
+    });
+  } catch (error) {
+    const message = handled(error);
+    if (message) return { error: message };
+    throw error;
+  }
+
+  revalidate(proposalId);
+  return { ok: true };
 }
 
 async function requestOrigin(): Promise<string | undefined> {

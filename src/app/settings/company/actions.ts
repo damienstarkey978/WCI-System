@@ -26,6 +26,8 @@ export async function updateCompanyInfoAction(_previous: ActionState, formData: 
     postalCode: String(formData.get("postalCode") ?? "").trim() || null,
     contactEmail: String(formData.get("contactEmail") ?? "").trim() || null,
     contactPhone: String(formData.get("contactPhone") ?? "").trim() || null,
+    slogan: String(formData.get("slogan") ?? "").trim() || null,
+    defaultProposalTerms: String(formData.get("defaultProposalTerms") ?? "").trim() || null,
   });
 
   revalidatePath("/settings/company");

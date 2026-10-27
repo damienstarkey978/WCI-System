@@ -4,6 +4,7 @@ import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budg
 import { InvalidActionTokenError, peekActionToken } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
+import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 
 import { AcceptOptionForm } from "./accept-option-form";
 import { FeedbackForm } from "./feedback-form";
@@ -89,6 +90,8 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
       postalCode: true,
       contactEmail: true,
       contactPhone: true,
+      slogan: true,
+      defaultProposalTerms: true,
     },
   });
 
@@ -183,6 +186,20 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
         accentColor={accentColor}
         logoUrl={proposal.logoUrl}
         organizationLogoPath={organization?.logoPath ?? null}
+        termsText={resolveProposalTermsText({
+          proposalTerms: proposal.termsText,
+          organizationTerms: organization?.defaultProposalTerms,
+        })}
+        clientSignature={{
+          name: proposal.clientSignatureName,
+          signedAt: proposal.clientSignedAt,
+          hash: proposal.clientSignatureHash,
+        }}
+        companySignature={{
+          name: proposal.companySignatureName,
+          signedAt: proposal.companySignedAt,
+          hash: proposal.companySignatureHash,
+        }}
         mode="review"
         acceptSlot={acceptSlot}
         feedbackSlot={feedbackSlot}

@@ -12,12 +12,14 @@ import { db } from "@/lib/db";
 import { isTransactionalEmailConfigured, isTransactionalSmsConfigured } from "@/lib/env";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
+import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 import { MAX_PROPOSAL_OPTIONS } from "@/lib/proposals/service";
 
 import { AddLineItemForm } from "./add-line-item-form";
 import { AddSectionForm } from "./add-section-form";
 import { BrandingForm } from "./branding-form";
 import { ApplyTemplateForm } from "./apply-template-form";
+import { CompanySignButton } from "./company-sign-button";
 import { CoverMessageEditor } from "./cover-message-editor";
 import { EstimateLineItemRow } from "./estimate-line-item-row";
 import { OptionTabs } from "./option-tabs";
@@ -92,6 +94,8 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
         postalCode: true,
         contactEmail: true,
         contactPhone: true,
+        slogan: true,
+        defaultProposalTerms: true,
       },
     }),
     db.costCode.findMany({
@@ -371,6 +375,29 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               accentColor={proposal.accentColor}
               logoUrl={proposal.logoUrl}
               organizationLogoPath={organization?.logoPath ?? null}
+              termsText={resolveProposalTermsText({
+                proposalTerms: proposal.termsText,
+                organizationTerms: organization?.defaultProposalTerms,
+              })}
+              clientSignature={{
+                name: proposal.clientSignatureName,
+                signedAt: proposal.clientSignedAt,
+                hash: proposal.clientSignatureHash,
+              }}
+              companySignature={{
+                name: proposal.companySignatureName,
+                signedAt: proposal.companySignedAt,
+                hash: proposal.companySignatureHash,
+              }}
+              companySignCta={
+                proposal.status === "DRAFT" || proposal.status === "SENT" ? (
+                  <CompanySignButton
+                    proposalId={proposal.id}
+                    defaultName={user.name ?? user.email}
+                    alreadySigned={Boolean(proposal.companySignedAt)}
+                  />
+                ) : undefined
+              }
               mode="preview"
             />
           </div>

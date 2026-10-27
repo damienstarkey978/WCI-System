@@ -10,6 +10,7 @@ import { issueApprovalLink } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
 import { EmailNotConfiguredError, EmailSendError, sendEmail } from "@/lib/email/send";
 import { appBaseUrlFromEnv, isTransactionalEmailConfigured, isTransactionalSmsConfigured } from "@/lib/env";
+import { formatCompanyAddress, resolveCompanySlogan } from "@/lib/organization/company-defaults";
 import { normalizePhoneE164, SmsNotConfiguredError, SmsSendError, sendSms } from "@/lib/sms/send";
 
 import { ProposalNotFoundError, sendProposal } from "./service";
@@ -47,7 +48,19 @@ async function loadProposalForDelivery(organizationId: string, proposalId: strin
     include: {
       client: { select: { id: true, name: true, email: true, phone: true } },
       lead: { select: { email: true, phone: true, name: true } },
-      organization: { select: { name: true, contactEmail: true, logoPath: true } },
+      organization: {
+        select: {
+          name: true,
+          contactEmail: true,
+          contactPhone: true,
+          logoPath: true,
+          slogan: true,
+          addressLine1: true,
+          city: true,
+          state: true,
+          postalCode: true,
+        },
+      },
     },
   });
   if (!proposal) throw new ProposalNotFoundError(proposalId);
@@ -105,6 +118,9 @@ export async function emailProposalToClient(input: {
   const { reviewUrl, status } = await ensureSentAndIssueLink(input.organizationId, proposal, input.requestOrigin);
   const orgName = proposal.organization.name;
   const logoSrc = absoluteOutboundLogoUrl(proposal.logoUrl, proposal.organization.logoPath, input.requestOrigin);
+  const slogan = resolveCompanySlogan(proposal.organization.slogan);
+  const companyAddress = formatCompanyAddress(proposal.organization);
+  const phone = proposal.organization.contactPhone?.trim() || null;
 
   try {
     await sendEmail({
@@ -115,18 +131,30 @@ export async function emailProposalToClient(input: {
         `Hi ${proposal.client.name},`,
         "",
         `${orgName} sent you a proposal: ${proposal.title}.`,
+        slogan,
+        companyAddress ?? "",
+        phone ?? "",
         "",
-        `Review and respond here:`,
+        `Review, sign, and respond here:`,
         reviewUrl,
         "",
+        "The full proposal includes Terms & Conditions, payment schedule, and signature blocks for you and World Construction Inc.",
+        "",
         "If the link expires, reply to this email and we'll send a fresh one.",
-      ].join("\n"),
+      ]
+        .filter((line) => line !== null)
+        .join("\n"),
       html: `
         <div style="font-family:system-ui,sans-serif;color:#1a1a1a;max-width:560px">
-          <p style="margin:0 0 16px"><img src="${escapeAttr(logoSrc)}" alt="${escapeAttr(orgName)}" width="200" style="height:auto;max-width:200px;display:block" /></p>
+          <p style="margin:0 0 8px"><img src="${escapeAttr(logoSrc)}" alt="${escapeAttr(orgName)}" width="200" style="height:auto;max-width:200px;display:block" /></p>
+          <p style="margin:0 0 4px;font-weight:600">${escapeHtml(orgName)}</p>
+          <p style="margin:0 0 4px;font-style:italic;color:#6b7280;font-size:13px">${escapeHtml(slogan)}</p>
+          ${companyAddress ? `<p style="margin:0;color:#6b7280;font-size:12px">${escapeHtml(companyAddress)}</p>` : ""}
+          ${phone ? `<p style="margin:0 0 16px;color:#6b7280;font-size:12px">${escapeHtml(phone)}</p>` : `<p style="margin:0 0 16px"></p>`}
           <p>Hi ${escapeHtml(proposal.client.name)},</p>
           <p><strong>${escapeHtml(orgName)}</strong> sent you a proposal: <strong>${escapeHtml(proposal.title)}</strong>.</p>
-          <p><a href="${escapeAttr(reviewUrl)}" style="display:inline-block;padding:10px 16px;background:#1a5c3a;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review and respond</a></p>
+          <p style="color:#6b7280;font-size:13px">Open the link to review scope, Terms &amp; Conditions, and apply your digital signature. World Construction Inc. counter-signs on the same document.</p>
+          <p><a href="${escapeAttr(reviewUrl)}" style="display:inline-block;padding:10px 16px;background:#1a5c3a;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review and sign</a></p>
           <p style="color:#6b7280;font-size:12px">If the button does not work, open: ${escapeHtml(reviewUrl)}</p>
         </div>
       `.trim(),
