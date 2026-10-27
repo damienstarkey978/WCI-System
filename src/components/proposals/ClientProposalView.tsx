@@ -7,6 +7,7 @@
 
 import type { ReactNode } from "react";
 
+import { OutboundBrandMark } from "@/components/branding/OutboundBrandMark";
 import { formatDate, formatMoney } from "@/lib/format";
 
 export type ClientProposalOrg = {
@@ -61,6 +62,7 @@ export function ClientProposalView({
   options,
   accentColor,
   logoUrl,
+  organizationLogoPath = null,
   mode = "preview",
   acceptSlot,
   feedbackSlot,
@@ -76,6 +78,7 @@ export function ClientProposalView({
   readonly options: readonly ClientProposalOption[];
   readonly accentColor: string | null;
   readonly logoUrl: string | null;
+  readonly organizationLogoPath?: string | null;
   /** preview = staff/PDF; review = client link with accept/feedback slots. */
   readonly mode?: "preview" | "review" | "print";
   readonly acceptSlot?: ReactNode;
@@ -91,18 +94,11 @@ export function ClientProposalView({
       style={isPrint ? undefined : { borderColor: "#e5e7eb" }}
     >
       <header className="flex flex-col items-center gap-2 text-center">
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- branding URL may be external
-          <img src={logoUrl} alt="" className="h-14 w-auto object-contain" />
-        ) : (
-          <div
-            className="flex h-12 w-12 items-center justify-center rounded-full text-base font-bold text-white"
-            style={{ background: accent }}
-            aria-hidden
-          >
-            {(organization?.name ?? "W").charAt(0)}
-          </div>
-        )}
+        <OutboundBrandMark
+          logoUrl={logoUrl}
+          organizationLogoPath={organizationLogoPath}
+          className="h-14 w-auto max-w-[14rem] object-contain sm:h-16"
+        />
         <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6b7280]">
           {organization?.name ?? "Proposal"}
         </div>

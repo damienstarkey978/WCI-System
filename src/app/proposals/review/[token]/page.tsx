@@ -80,7 +80,16 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
 
   const organization = await db.organization.findUnique({
     where: { id: proposal.organizationId },
-    select: { name: true, addressLine1: true, city: true, state: true, postalCode: true, contactEmail: true, contactPhone: true },
+    select: {
+      name: true,
+      logoPath: true,
+      addressLine1: true,
+      city: true,
+      state: true,
+      postalCode: true,
+      contactEmail: true,
+      contactPhone: true,
+    },
   });
 
   const accentColor = proposal.accentColor ?? DEFAULT_ACCENT;
@@ -173,6 +182,7 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
         options={options}
         accentColor={accentColor}
         logoUrl={proposal.logoUrl}
+        organizationLogoPath={organization?.logoPath ?? null}
         mode="review"
         acceptSlot={acceptSlot}
         feedbackSlot={feedbackSlot}

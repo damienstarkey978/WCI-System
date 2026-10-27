@@ -5,6 +5,7 @@
  */
 
 import { ClientActionTokenPurpose } from "@/generated/prisma/enums";
+import { absoluteOutboundLogoUrl } from "@/lib/branding/logo";
 import { issueApprovalLink } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
 import { EmailNotConfiguredError, EmailSendError, sendEmail } from "@/lib/email/send";
@@ -46,7 +47,7 @@ async function loadProposalForDelivery(organizationId: string, proposalId: strin
     include: {
       client: { select: { id: true, name: true, email: true, phone: true } },
       lead: { select: { email: true, phone: true, name: true } },
-      organization: { select: { name: true, contactEmail: true } },
+      organization: { select: { name: true, contactEmail: true, logoPath: true } },
     },
   });
   if (!proposal) throw new ProposalNotFoundError(proposalId);
@@ -103,6 +104,7 @@ export async function emailProposalToClient(input: {
 
   const { reviewUrl, status } = await ensureSentAndIssueLink(input.organizationId, proposal, input.requestOrigin);
   const orgName = proposal.organization.name;
+  const logoSrc = absoluteOutboundLogoUrl(proposal.logoUrl, proposal.organization.logoPath, input.requestOrigin);
 
   try {
     await sendEmail({
@@ -120,10 +122,13 @@ export async function emailProposalToClient(input: {
         "If the link expires, reply to this email and we'll send a fresh one.",
       ].join("\n"),
       html: `
-        <p>Hi ${escapeHtml(proposal.client.name)},</p>
-        <p><strong>${escapeHtml(orgName)}</strong> sent you a proposal: <strong>${escapeHtml(proposal.title)}</strong>.</p>
-        <p><a href="${escapeAttr(reviewUrl)}">Review and respond to your proposal</a></p>
-        <p style="color:#6b7280;font-size:12px">If the link expires, reply to this email and we'll send a fresh one.</p>
+        <div style="font-family:system-ui,sans-serif;color:#1a1a1a;max-width:560px">
+          <p style="margin:0 0 16px"><img src="${escapeAttr(logoSrc)}" alt="${escapeAttr(orgName)}" width="200" style="height:auto;max-width:200px;display:block" /></p>
+          <p>Hi ${escapeHtml(proposal.client.name)},</p>
+          <p><strong>${escapeHtml(orgName)}</strong> sent you a proposal: <strong>${escapeHtml(proposal.title)}</strong>.</p>
+          <p><a href="${escapeAttr(reviewUrl)}" style="display:inline-block;padding:10px 16px;background:#1a5c3a;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review and respond</a></p>
+          <p style="color:#6b7280;font-size:12px">If the button does not work, open: ${escapeHtml(reviewUrl)}</p>
+        </div>
       `.trim(),
     });
   } catch (error) {

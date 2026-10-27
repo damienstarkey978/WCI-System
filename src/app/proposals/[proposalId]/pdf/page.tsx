@@ -79,10 +79,6 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
     }
   }
 
-  const logoUrl =
-    proposal.logoUrl ??
-    (organization?.logoPath?.startsWith("http") ? organization.logoPath : null);
-
   const projectAddress = proposal.lead
     ? [proposal.lead.addressLine1, proposal.lead.city, proposal.lead.state, proposal.lead.postalCode].filter(Boolean).join(", ") || null
     : null;
@@ -116,7 +112,8 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
         draws={proposal.draws}
         options={optionTotals}
         accentColor={proposal.accentColor}
-        logoUrl={logoUrl}
+        logoUrl={proposal.logoUrl}
+        organizationLogoPath={organization?.logoPath ?? null}
         mode="print"
       />
     </div>

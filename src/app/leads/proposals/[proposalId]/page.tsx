@@ -83,7 +83,16 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
     }),
     db.organization.findUnique({
       where: { id: user.organizationId },
-      select: { name: true, addressLine1: true, city: true, state: true, postalCode: true, contactEmail: true, contactPhone: true },
+      select: {
+        name: true,
+        logoPath: true,
+        addressLine1: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        contactEmail: true,
+        contactPhone: true,
+      },
     }),
     db.costCode.findMany({
       where: { organizationId: user.organizationId, isActive: true },
@@ -361,6 +370,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               options={optionTabs}
               accentColor={proposal.accentColor}
               logoUrl={proposal.logoUrl}
+              organizationLogoPath={organization?.logoPath ?? null}
               mode="preview"
             />
           </div>

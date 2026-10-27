@@ -48,7 +48,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
   const job = await db.job.findFirst({
     where: { id: jobId, organizationId: user.organizationId },
     include: {
-      organization: { select: { name: true } },
+      organization: { select: { name: true, logoPath: true } },
       // A job reaches its client through ClientJobAccess, not a direct relation —
       // the portal is per-client-per-job. The first one is who the invoice is billed to.
       clientAccess: { take: 1, include: { client: { select: { name: true } } } },
@@ -248,6 +248,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
       <ClientPreview
         data={{
           organizationName: job.organization.name,
+          organizationLogoPath: job.organization.logoPath,
           clientName: job.clientAccess[0]?.client.name ?? null,
           jobName: job.name,
           jobAddress: [job.addressLine1, job.city, job.state].filter(Boolean).join(", ") || null,
