@@ -59,9 +59,9 @@ const JOB_STATUS_LABEL: Record<string, string> = {
  * job list — everything else about which jobs to show still comes from the server
  * (sidebarJobsForOrg already scopes it to what this user can open).
  *
- * Hidden entirely below `md` (a permanent 256px — or even the collapsed 48px —
- * column has no reasonable place on a phone-width screen): TopNav's hamburger
- * opens MobileMenuDrawer instead, which has its own simpler job jump-list.
+ * Hidden entirely below `md` (Buildertrend's ~176px rail — or the collapsed
+ * 48px strip — has no reasonable place on a phone-width screen): TopNav's
+ * hamburger opens MobileMenuDrawer instead, which has its own simpler job jump-list.
  */
 export function JobSidebar({
   jobs,
@@ -159,22 +159,28 @@ export function JobSidebar({
 
   return (
     <aside
+      data-testid="job-sidebar"
       className="hidden shrink-0 flex-col border-r bg-[var(--bt-sidebar-bg)] md:flex"
-      style={{ borderColor: "var(--bt-border)", width: "var(--bt-job-sidebar-width)" }}
+      style={{
+        borderColor: "var(--bt-border)",
+        width: "var(--bt-job-sidebar-width)",
+        minWidth: "var(--bt-job-sidebar-width)",
+        maxWidth: "var(--bt-job-sidebar-width)",
+      }}
     >
-      <div className="flex items-start justify-between gap-2 border-b px-3 py-2.5" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="flex items-start justify-between gap-1.5 border-b px-2.5 py-2" style={{ borderColor: "var(--bt-border)" }}>
         {activeJob ? (
-          <Link href={`/jobs/${activeJob.id}`} className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-[var(--bt-muted)]">
-              <HomeIcon className="h-3.5 w-3.5 shrink-0" />
+          <Link href={`/jobs/${activeJob.id}`} className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-[var(--bt-muted)]">
+              <HomeIcon className="h-3 w-3 shrink-0" />
               Current job
             </div>
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-sm font-semibold text-[var(--bt-text)]">{activeJob.name}</span>
+            <div className="flex min-w-0 items-center gap-1">
+              <span className="truncate text-[13px] font-semibold leading-snug text-[var(--bt-text)]">{activeJob.name}</span>
               {activeJob.qboLinked ? <QbBadge /> : null}
             </div>
-            {activeJob.clientName ? <div className="truncate text-xs text-[var(--bt-muted)]">{activeJob.clientName}</div> : null}
-            {activeJob.address ? <div className="truncate text-xs text-[var(--bt-muted)]">{activeJob.address}</div> : null}
+            {activeJob.clientName ? <div className="truncate text-[11px] leading-snug text-[var(--bt-muted)]">{activeJob.clientName}</div> : null}
+            {activeJob.address ? <div className="truncate text-[11px] leading-snug text-[var(--bt-muted)]">{activeJob.address}</div> : null}
             <span
               className="w-fit rounded px-1.5 py-0.5 text-[10px] font-semibold"
               style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
@@ -183,25 +189,25 @@ export function JobSidebar({
             </span>
           </Link>
         ) : (
-          <span className="text-sm font-semibold text-[var(--bt-text)]">Jobs</span>
+          <span className="text-[13px] font-semibold text-[var(--bt-text)]">Jobs</span>
         )}
         <button
           type="button"
           onClick={toggleCollapsed}
           aria-label="Collapse job list"
           title="Collapse job list"
-          className="shrink-0 rounded p-1.5 text-[var(--bt-muted)] hover:bg-black/5"
+          className="shrink-0 rounded p-1 text-[var(--bt-muted)] hover:bg-black/5"
         >
-          <ChevronDownIcon className="h-4 w-4 rotate-90" />
+          <ChevronDownIcon className="h-3.5 w-3.5 rotate-90" />
         </button>
       </div>
 
-      <div className="flex items-center justify-between border-b px-3 pt-2" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="flex gap-3 text-xs font-semibold">
+      <div className="flex items-center justify-between border-b px-2.5 pt-1.5" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="flex gap-2.5 text-[11px] font-semibold">
           <button
             type="button"
             onClick={() => setTab("jobs")}
-            className="border-b-2 pb-2"
+            className="border-b-2 pb-1.5"
             style={tab === "jobs" ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" } : { borderColor: "transparent", color: "var(--bt-muted)" }}
           >
             Jobs
@@ -209,7 +215,7 @@ export function JobSidebar({
           <button
             type="button"
             onClick={() => setTab("templates")}
-            className="border-b-2 pb-2"
+            className="border-b-2 pb-1.5"
             style={tab === "templates" ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" } : { borderColor: "transparent", color: "var(--bt-muted)" }}
           >
             Templates
@@ -217,20 +223,20 @@ export function JobSidebar({
         </div>
         <Link
           href="/jobs/new"
-          className="mb-1.5 rounded px-2.5 py-1 text-xs font-semibold text-[var(--bt-on-primary)]"
+          className="mb-1 rounded px-2 py-0.5 text-[11px] font-semibold text-[var(--bt-on-primary)]"
           style={{ background: "var(--bt-primary)" }}
         >
           + Job
         </Link>
       </div>
 
-      <div className="flex flex-col gap-2 border-b px-3 py-2.5" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="flex items-center gap-1.5">
+      <div className="flex flex-col gap-1.5 border-b px-2.5 py-2" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="flex items-center gap-1">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search jobs…"
-            className="flex-1 rounded border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--bt-primary)]"
+            className="min-w-0 flex-1 rounded border px-2 py-1 text-xs outline-none focus:border-[var(--bt-primary)]"
             style={{ borderColor: "var(--bt-border)" }}
           />
           <button
@@ -238,19 +244,19 @@ export function JobSidebar({
             onClick={() => setSortMode((mode) => (mode === "recent" ? "name" : "recent"))}
             aria-label="Sort"
             title={sortMode === "recent" ? "Sorted by most recent — click to sort by name" : "Sorted by name — click to sort by most recent"}
-            className="shrink-0 rounded border p-1.5 text-[var(--bt-muted)] hover:bg-black/5"
+            className="shrink-0 rounded border p-1 text-[var(--bt-muted)] hover:bg-black/5"
             style={{ borderColor: "var(--bt-border)" }}
           >
             <SortIcon className="h-3.5 w-3.5" />
           </button>
         </div>
         {tab === "jobs" ? (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <FunnelIcon className="h-3.5 w-3.5 shrink-0 text-[var(--bt-muted)]" />
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-              className="flex-1 rounded border px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bt-primary)]"
+              className="min-w-0 flex-1 rounded border px-2 py-1 text-[11px] outline-none focus:border-[var(--bt-primary)]"
               style={{ borderColor: "var(--bt-border)" }}
             >
               {STATUS_FILTERS.map((status) => (
@@ -263,15 +269,15 @@ export function JobSidebar({
         ) : null}
       </div>
 
-      <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+      <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
         ALL {filteredJobs.length} {tab === "templates" ? "TEMPLATE" : statusFilter === "ALL" ? "" : STATUS_FILTER_LABEL[statusFilter].toUpperCase()} JOB
         {filteredJobs.length === 1 ? "" : "S"}
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-2">
+      <div className="flex-1 overflow-y-auto pb-1.5">
         {[...groups.entries()].map(([groupName, groupJobs]) => (
-          <div key={groupName} className="mb-2">
-            <div className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+          <div key={groupName} className="mb-1">
+            <div className="px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
               {groupName}
             </div>
             {groupJobs.map((job) => {
@@ -280,7 +286,7 @@ export function JobSidebar({
                 <Link
                   key={job.id}
                   href={jobHref(job.id)}
-                  className={`flex items-center gap-1.5 truncate px-3 text-[13px] leading-snug transition ${isActive ? "" : "hover:bg-black/5"}`}
+                  className={`flex items-center gap-1 truncate px-2.5 text-[13px] leading-snug transition ${isActive ? "" : "hover:bg-black/5"}`}
                   style={
                     isActive
                       ? {
@@ -297,7 +303,7 @@ export function JobSidebar({
                   }
                 >
                   <span className="truncate">
-                    {job.prefix ? <span className="mr-1.5 font-mono text-[11px] text-[var(--bt-muted)]">{job.prefix}</span> : null}
+                    {job.prefix ? <span className="mr-1 font-mono text-[11px] text-[var(--bt-muted)]">{job.prefix}</span> : null}
                     {job.name}
                   </span>
                   {job.qboLinked ? <QbBadge /> : null}
@@ -307,7 +313,7 @@ export function JobSidebar({
           </div>
         ))}
 
-        {filteredJobs.length === 0 ? <p className="px-3 py-2 text-sm text-[var(--bt-muted)]">{tab === "templates" ? "No templates match." : "No jobs match."}</p> : null}
+        {filteredJobs.length === 0 ? <p className="px-2.5 py-2 text-xs text-[var(--bt-muted)]">{tab === "templates" ? "No templates match." : "No jobs match."}</p> : null}
       </div>
     </aside>
   );
