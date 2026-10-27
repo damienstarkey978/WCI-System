@@ -437,3 +437,38 @@ export function ShieldIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Daily Log like — outline heart (fill via CSS currentColor when liked). */
+export function HeartIcon({ className, filled }: IconProps & { filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 20 20" fill={filled ? "currentColor" : "none"} className={className} aria-hidden="true">
+      <path
+        d="M10 16.25s-5.5-3.35-5.5-7.1A3.4 3.4 0 0 1 10 5.85 3.4 3.4 0 0 1 15.5 9.15c0 3.75-5.5 7.1-5.5 7.1Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Video file placeholder in galleries. */
+export function VideoIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <rect x="2.75" y="5" width="10.5" height="10" rx="1.3" stroke="currentColor" strokeWidth="1.35" />
+      <path d="M13.25 8.5 17.25 6v8l-4-2.5V8.5Z" stroke="currentColor" strokeWidth="1.35" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Broken / unsigned URL warning in file galleries. */
+export function AlertIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M10 3.25 17.25 16H2.75L10 3.25Z" stroke="currentColor" strokeWidth="1.35" strokeLinejoin="round" />
+      <path d="M10 8v3.5" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+      <circle cx="10" cy="14" r="0.85" fill="currentColor" />
+    </svg>
+  );
+}

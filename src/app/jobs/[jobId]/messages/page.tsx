@@ -66,19 +66,9 @@ export default async function MessagesPage({ params, searchParams }: PageProps<"
       ) : (
         <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)_14rem]">
           <nav className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-            <div className="flex gap-1 border-b px-2 pt-2" style={{ borderColor: "var(--bt-border)" }}>
-              {["All", "Unread", "Archived"].map((tab, index) => (
-                <span
-                  key={tab}
-                  className="-mb-px border-b-2 px-2 py-1.5 text-xs font-medium"
-                  style={{
-                    borderColor: index === 0 ? "var(--bt-primary)" : "transparent",
-                    color: index === 0 ? "var(--bt-primary)" : "var(--bt-muted)",
-                  }}
-                >
-                  {tab}
-                </span>
-              ))}
+            {/* Unread/Archived filters are not wired yet — show only the working All view (no decorative fake tabs). */}
+            <div className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+              Threads
             </div>
             {threads.map((thread) => {
               const active = thread.id === selected?.id;
