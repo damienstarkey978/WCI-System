@@ -273,6 +273,12 @@ describe("normalizeEstimateDraft — the float-to-integer boundary", () => {
     expect(draft.lineItems[1].quantityMilli).toBe(12_500);
   });
 
+  it("preserves unit of measure when the model supplies one", () => {
+    const draft = normalizeEstimateDraft(raw);
+    expect(draft.lineItems[0].unit).toBe("hr");
+    expect(draft.lineItems[1].unit).toBeNull();
+  });
+
   it("converts dollars to cents", () => {
     const draft = normalizeEstimateDraft(raw);
     expect(draft.lineItems[0].unitCostCents).toBe(4_500);

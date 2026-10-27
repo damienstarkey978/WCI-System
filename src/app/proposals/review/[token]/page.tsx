@@ -3,6 +3,7 @@ import { ClientProposalView } from "@/components/proposals/ClientProposalView";
 import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { InvalidActionTokenError, peekActionToken } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
+import { formatQuantityGlance, resolveLineUnit } from "@/lib/estimates/units";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
@@ -56,8 +57,12 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
             include: {
               lineItems: {
                 select: {
+                  id: true,
+                  title: true,
                   groupLabel: true,
                   quantityMilli: true,
+                  unit: true,
+                  costType: true,
                   unitCostCents: true,
                   rateMode: true,
                   rateBasisPoints: true,
@@ -134,6 +139,15 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
     ? [proposal.lead.addressLine1, proposal.lead.city, proposal.lead.state, proposal.lead.postalCode].filter(Boolean).join(", ") || null
     : null;
 
+  const quantities = (activeEstimate?.lineItems ?? [])
+    .filter((item) => item.quantityMilli > 0)
+    .slice(0, 12)
+    .map((item) => ({
+      id: item.id,
+      label: item.title,
+      quantityLabel: formatQuantityGlance(item.quantityMilli, resolveLineUnit(item.unit, item.costType)),
+    }));
+
   const acceptSlot =
     proposal.status === "ACCEPTED" ? (
       <div className="rounded-lg border-2 p-4 text-center" style={{ borderColor: accentColor }}>
@@ -204,6 +218,7 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
         logoUrl={proposal.logoUrl}
         organizationLogoPath={organization?.logoPath ?? null}
         photos={photos}
+        quantities={quantities}
         termsText={resolveProposalTermsText({
           proposalTerms: proposal.termsText,
           organizationTerms: organization?.defaultProposalTerms,

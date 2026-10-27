@@ -5,6 +5,7 @@ import { ClientProposalView } from "@/components/proposals/ClientProposalView";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { formatQuantityGlance, resolveLineUnit } from "@/lib/estimates/units";
 import { resolveFileUrl } from "@/lib/files/service";
 import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 
@@ -42,8 +43,12 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
               include: {
                 lineItems: {
                   select: {
+                    id: true,
+                    title: true,
                     groupLabel: true,
                     quantityMilli: true,
+                    unit: true,
+                    costType: true,
                     unitCostCents: true,
                     rateMode: true,
                     rateBasisPoints: true,
@@ -112,6 +117,15 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
     ? [proposal.lead.addressLine1, proposal.lead.city, proposal.lead.state, proposal.lead.postalCode].filter(Boolean).join(", ") || null
     : null;
 
+  const quantities = (activeEstimate?.lineItems ?? [])
+    .filter((item) => item.quantityMilli > 0)
+    .slice(0, 12)
+    .map((item) => ({
+      id: item.id,
+      label: item.title,
+      quantityLabel: formatQuantityGlance(item.quantityMilli, resolveLineUnit(item.unit, item.costType)),
+    }));
+
   return (
     <div className="min-h-screen bg-[#f3f4f6] px-3 py-6 sm:px-6 sm:py-10 print:bg-white print:px-0 print:py-0">
       <style>{`
@@ -144,6 +158,7 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
         logoUrl={proposal.logoUrl}
         organizationLogoPath={organization?.logoPath ?? null}
         photos={photos}
+        quantities={quantities}
         termsText={resolveProposalTermsText({
           proposalTerms: proposal.termsText,
           organizationTerms: organization?.defaultProposalTerms,

@@ -223,6 +223,7 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     title: line.title,
     description: line.description,
     quantityMilli: line.quantityMilli,
+    unit: line.unit,
     unitCostCents: line.unitCostCents,
     rateMode: line.rateMode,
     rateBasisPoints: line.rateBasisPoints,

@@ -3,15 +3,19 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CommentThread } from "@/components/comments/CommentThread";
+import { EstimateHandyDock } from "@/components/estimates/EstimateHandyDock";
 import { EstimateProposalToggle } from "@/components/estimates/EstimateProposalToggle";
 import { EstimateSpreadsheet, type SpreadsheetGroup } from "@/components/estimates/EstimateSpreadsheet";
+import { LeadEstimateWorkspaceNav } from "@/components/estimates/LeadEstimateWorkspaceNav";
 import { ClientProposalView } from "@/components/proposals/ClientProposalView";
 import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isTransactionalEmailConfigured, isTransactionalSmsConfigured } from "@/lib/env";
+import { isAnthropicConfigured, isTransactionalEmailConfigured, isTransactionalSmsConfigured } from "@/lib/env";
+import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
+import { formatQuantityGlance, resolveLineUnit } from "@/lib/estimates/units";
 import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 import { MAX_PROPOSAL_OPTIONS } from "@/lib/proposals/service";
 
@@ -67,12 +71,15 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
           select: {
             id: true,
             name: true,
+            title: true,
+            notes: true,
             email: true,
             phone: true,
             addressLine1: true,
             city: true,
             state: true,
             postalCode: true,
+            convertedJobId: true,
           },
         },
         options: {
@@ -147,6 +154,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
         costCodeLabel: `${item.costCode.code} · ${item.costCode.name}`,
         costType: item.costType,
         quantityMilli: item.quantityMilli,
+        unit: item.unit,
         unitCostCents: item.unitCostCents,
         rateMode: item.rateMode,
         rateBasisPoints: item.rateBasisPoints,
@@ -201,29 +209,74 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
     (photo): photo is { id: string; fileName: string; url: string } => Boolean(photo.url),
   );
 
+  const quantities = activeEstimate.lineItems
+    .filter((item) => item.quantityMilli > 0)
+    .slice(0, 12)
+    .map((item) => ({
+      id: item.id,
+      label: item.title,
+      quantityLabel: formatQuantityGlance(item.quantityMilli, resolveLineUnit(item.unit, item.costType)),
+    }));
+
+  const totalMarkupCents = activeTotalCents - totalBuilderCostCents;
+  const marginLabel =
+    activeTotalCents > 0 ? `${((totalMarkupCents / activeTotalCents) * 100).toFixed(1)}%` : null;
+
+  const siblingEstimates = proposal.lead
+    ? await db.estimate.findMany({
+        where: {
+          organizationId: user.organizationId,
+          OR: [
+            { leadId: proposal.lead.id },
+            ...(proposal.lead.convertedJobId ? [{ jobId: proposal.lead.convertedJobId }] : []),
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          lineItems: {
+            select: { quantityMilli: true, unitCostCents: true, rateMode: true, rateBasisPoints: true },
+          },
+          proposalOptions: { select: { proposalId: true }, take: 1 },
+        },
+      })
+    : [];
+  const navEstimates = siblingEstimates.map((row) => ({
+    id: row.id,
+    title: row.title,
+    totalLabel: formatMoney(estimateTotalCents(row.lineItems)),
+    status: row.status,
+    proposalId: row.proposalOptions[0]?.proposalId ?? null,
+    active: row.id === activeEstimate.id,
+  }));
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3 pb-24 sm:gap-4 sm:p-6 sm:pb-10">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={proposal.lead ? `/leads/${proposal.lead.id}?tab=proposals` : "/leads/proposals"} className="text-xs text-[var(--bt-muted)] hover:underline">
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col gap-3 p-2 pb-20 sm:p-3 sm:pb-6 lg:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <Link
+          href={proposal.lead ? `/leads/${proposal.lead.id}?tab=proposals&compose=1` : "/leads/proposals"}
+          className="text-xs text-[var(--bt-muted)] hover:underline lg:hidden"
+        >
           ← Back to {proposal.lead ? proposal.lead.name : "proposals"}
         </Link>
-        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-[var(--bt-muted)]">
-          <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
-            1. Notes
-          </span>
-          <span aria-hidden>→</span>
-          <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
-            2. Estimate
-          </span>
-          <span aria-hidden>→</span>
-          <span className="rounded px-2 py-1 font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
-            3. Proposal
-          </span>
-        </div>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--bt-muted)]">
+          Proposal workspace · Jarvis docked right
+        </p>
       </div>
 
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:items-start">
+        {proposal.lead ? (
+          <LeadEstimateWorkspaceNav
+            leadId={proposal.lead.id}
+            leadName={proposal.lead.name}
+            leadTitle={proposal.lead.title}
+            estimates={navEstimates}
+            activeKind="proposal"
+          />
+        ) : null}
+
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
       <div
-        className="sticky top-0 z-20 -mx-3 border-b px-3 py-2.5 backdrop-blur-md sm:mx-0 sm:rounded-lg sm:border sm:px-4 sm:py-3"
+        className="sticky top-0 z-20 border-b px-3 py-2.5 backdrop-blur-md sm:rounded-lg sm:border sm:px-4 sm:py-3"
         style={{
           borderColor: "var(--bt-border)",
           background: "color-mix(in srgb, var(--bt-panel-bg) 92%, transparent)",
@@ -314,6 +367,9 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
             groups={spreadsheetGroups}
             totalBuilderCostCents={totalBuilderCostCents}
             totalClientCents={activeTotalCents}
+            estimateId={activeEstimate.id}
+            proposalId={proposal.id}
+            reorderable={editable}
           />
           {editable ? (
             <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
@@ -388,6 +444,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               logoUrl={proposal.logoUrl}
               organizationLogoPath={organization?.logoPath ?? null}
               photos={clientPhotos}
+              quantities={quantities}
               termsText={resolveProposalTermsText({
                 proposalTerms: proposal.termsText,
                 organizationTerms: organization?.defaultProposalTerms,
@@ -482,6 +539,25 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
         revalidate={`/leads/proposals/${proposal.id}`}
         title="Internal notes (staff only — never visible to the client)"
       />
+        </div>
+
+        {proposal.lead ? (
+          <EstimateHandyDock
+            leadId={proposal.lead.id}
+            leadName={proposal.lead.name}
+            estimateId={activeEstimate.id}
+            proposalId={proposal.id}
+            jarvisUiEnabled={isJarvisUiEnabled()}
+            anthropicConfigured={isAnthropicConfigured()}
+            scopeNotes={proposal.lead.notes}
+            pricingSummary={{
+              totalLabel: formatMoney(activeTotalCents),
+              lineItemCount: activeEstimate.lineItems.length,
+              marginLabel,
+            }}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
