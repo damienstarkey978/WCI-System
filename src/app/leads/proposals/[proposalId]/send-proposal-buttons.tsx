@@ -59,7 +59,7 @@ export function SendProposalButtons({
       {!emailConfigured || !smsConfigured ? (
         <p className="max-w-sm text-[11px] text-[var(--bt-muted)]">
           {!emailConfigured ? "Email needs EMAIL_PROVIDER_API_KEY + EMAIL_FROM on Netlify. " : null}
-          {!smsConfigured ? "Text needs TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER." : null}
+          {!smsConfigured ? "Text needs QUO_API_KEY and QUO_FROM_NUMBER (Quo inbox E.164)." : null}
         </p>
       ) : null}
     </div>

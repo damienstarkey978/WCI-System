@@ -213,27 +213,19 @@ export function transactionalEmailSettings(): { apiKey: string; from: string } |
 }
 
 /**
- * Transactional SMS (proposal Text-to-client). Twilio Messages API:
- * TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_FROM_NUMBER (E.164).
- * Without all three, Text actions return a clear not-configured error.
+ * Transactional SMS (proposal Text-to-client) via Quo (formerly OpenPhone).
+ * QUO_API_KEY from Workspace Settings → API; QUO_FROM_NUMBER is a Quo inbox
+ * number in E.164 (must belong to the workspace). Without both, Text actions
+ * return a clear not-configured error.
  */
 export function isTransactionalSmsConfigured(): boolean {
-  return (
-    optional("TWILIO_ACCOUNT_SID") !== undefined &&
-    optional("TWILIO_AUTH_TOKEN") !== undefined &&
-    optional("TWILIO_FROM_NUMBER") !== undefined
-  );
+  return optional("QUO_API_KEY") !== undefined && optional("QUO_FROM_NUMBER") !== undefined;
 }
 
-export function transactionalSmsSettings(): {
-  accountSid: string;
-  authToken: string;
-  fromNumber: string;
-} | null {
-  const accountSid = optional("TWILIO_ACCOUNT_SID");
-  const authToken = optional("TWILIO_AUTH_TOKEN");
-  const fromNumber = optional("TWILIO_FROM_NUMBER");
-  return accountSid && authToken && fromNumber ? { accountSid, authToken, fromNumber } : null;
+export function transactionalSmsSettings(): { apiKey: string; fromNumber: string } | null {
+  const apiKey = optional("QUO_API_KEY");
+  const fromNumber = optional("QUO_FROM_NUMBER");
+  return apiKey && fromNumber ? { apiKey, fromNumber } : null;
 }
 
 /** Public origin of this deployment (no trailing slash), for links that leave the app — e.g. https://app.worldconstructionjax.com. */
