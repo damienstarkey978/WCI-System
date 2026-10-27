@@ -1046,7 +1046,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
           clientPhone: input.clientPhone ?? null,
         });
         ctx.sideEffects.push(`Queued an estimate draft (job ${job.id}) for lead ${input.leadId} — not drafted yet`);
-        return "Queued that up — drafting the estimate (line items first) against the full cost code catalog, which takes longer than I can wait on in one reply. I'll post the result right here once it's done, usually within a couple minutes. After you review the estimate, use Convert to Proposal to convert it.";
+        return "Queued that up — drafting the estimate (line items first, narrative in a separate pass) against the full cost code catalog, which takes longer than I can wait on in one reply. I'll post the result right here once it's done, usually within a couple minutes. After you review the estimate, use Convert to Proposal; then list_proposal_templates / apply_proposal_template if you want standard prose or a payment schedule from a saved template.";
       } catch (error) {
         // Dev / missing CRON_SECRET: run the same draft inline so notes → estimate
         // still works instead of failing hard with a worker-config error.
@@ -1065,7 +1065,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
             clientPhone: input.clientPhone ?? null,
           });
           ctx.sideEffects.push(`Drafted estimate ${estimate.id} for lead ${input.leadId}`);
-          return `Drafted estimate "${estimate.title}" (id: ${estimate.id}) with line items — status DRAFT. Review it at /leads/estimates/${estimate.id}, then use Convert to Proposal to turn it into a client-facing DRAFT proposal. Nothing is sent until a human sends it.`;
+          return `Drafted estimate "${estimate.title}" (id: ${estimate.id}) with line items — status DRAFT. Review it at /leads/estimates/${estimate.id}, then use Convert to Proposal to turn it into a client-facing DRAFT proposal. After that, apply_proposal_template can add saved prose/payment-schedule sections without changing pricing. Nothing is sent until a human sends it.`;
         } catch (draftError) {
           if (draftError instanceof AiNotConfiguredError) return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
           if (draftError instanceof LeadProposalLeadNotFoundError) return `No lead found with id ${input.leadId} in this organization.`;

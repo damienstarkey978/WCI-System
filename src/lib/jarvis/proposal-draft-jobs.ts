@@ -120,7 +120,7 @@ async function runOneJob(job: { id: string; organizationId: string; leadId: stri
     });
     await postConversationMessage(
       job.conversationId,
-      `Drafted estimate "${estimate.title}" for the lead — status DRAFT, review line items at /leads/estimates/${estimate.id}. When it looks right, use Convert to Proposal there to turn it into a client-facing DRAFT proposal.`,
+      `Drafted estimate "${estimate.title}" for the lead — status DRAFT, review line items at /leads/estimates/${estimate.id}. When it looks right, use Convert to Proposal there to turn it into a client-facing DRAFT proposal. After convert, apply_proposal_template can add saved prose or a payment schedule without changing pricing.`,
     );
     return { succeeded: true };
   } catch (error) {
