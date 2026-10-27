@@ -435,7 +435,7 @@ function JarvisChatBody({
                     key={suggestion}
                     type="button"
                     onClick={() => fillSuggestion(suggestion)}
-                    className={`max-w-full rounded-full border text-left leading-snug text-[var(--bt-text)] hover:bg-black/5 ${
+                    className={`max-w-full rounded-full border text-left leading-snug text-[var(--bt-text)] hover:bg-[color-mix(in_srgb,var(--bt-text)_5%,transparent)] ${
                       docked
                         ? "truncate px-2 py-0.5 text-[10px]"
                         : "px-2.5 py-1.5 text-[11px] sm:text-xs"
@@ -492,7 +492,14 @@ function JarvisChatBody({
           <p className="text-center text-xs text-[var(--bt-muted)]">Still drafting — this chat will update when it finishes…</p>
         ) : null}
         {pendingCount > 0 && conversationId && pendingActions.length === 0 ? (
-          <div className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+          <div
+            className="rounded border px-2.5 py-1.5 text-xs"
+            style={{
+              borderColor: "color-mix(in srgb, var(--bt-hazard) 40%, var(--bt-border))",
+              background: "color-mix(in srgb, var(--bt-hazard) 14%, var(--bt-panel-bg))",
+              color: "var(--bt-hazard)",
+            }}
+          >
             {pendingCount} action{pendingCount === 1 ? "" : "s"} waiting on your confirmation —{" "}
             <Link href={`/jarvis/${conversationId}`} className="font-semibold hover:underline">
               review in full conversation
@@ -537,7 +544,7 @@ function JarvisChatBody({
                 type="button"
                 onClick={seedGeneralNotes}
                 disabled={pending || preparing}
-                className="min-h-10 touch-manipulation rounded-full border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
+                className="min-h-10 touch-manipulation rounded-full border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-[color-mix(in_srgb,var(--bt-text)_5%,transparent)] disabled:opacity-50 sm:min-h-0 sm:py-1.5"
                 style={{ borderColor: "var(--bt-primary)" }}
               >
                 Use General notes
@@ -546,7 +553,7 @@ function JarvisChatBody({
                 type="button"
                 onClick={() => void seedGeneralPhotos()}
                 disabled={pending || preparing || loadingGeneralPhotos}
-                className="min-h-10 touch-manipulation rounded-full border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
+                className="min-h-10 touch-manipulation rounded-full border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-[color-mix(in_srgb,var(--bt-text)_5%,transparent)] disabled:opacity-50 sm:min-h-0 sm:py-1.5"
                 style={{ borderColor: "var(--bt-primary)" }}
               >
                 {loadingGeneralPhotos ? "Loading photos…" : "Use General photos"}

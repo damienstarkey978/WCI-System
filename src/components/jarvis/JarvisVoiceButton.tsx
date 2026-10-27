@@ -153,7 +153,7 @@ export function JarvisVoiceButton({
       className={`inline-flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full transition sm:h-9 sm:w-9 ${
         listening
           ? "animate-pulse text-[var(--bt-on-primary)]"
-          : "text-[var(--bt-muted)] hover:bg-black/5 hover:text-[var(--bt-text)] disabled:cursor-not-allowed disabled:opacity-40"
+          : "text-[var(--bt-muted)] hover:bg-[color-mix(in_srgb,var(--bt-text)_5%,transparent)] hover:text-[var(--bt-text)] disabled:cursor-not-allowed disabled:opacity-40"
       }`}
       style={listening ? { background: "var(--bt-primary)" } : undefined}
     >

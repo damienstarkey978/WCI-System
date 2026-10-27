@@ -159,7 +159,11 @@ export function ConvertToMenu({
           })}
         </div>
       ) : null}
-      {state.error ? <p className="max-w-xs text-xs text-red-600">{state.error}</p> : null}
+      {state.error ? (
+        <p className="max-w-xs text-xs" style={{ color: "var(--bt-danger)" }}>
+          {state.error}
+        </p>
+      ) : null}
     </div>
   );
 }

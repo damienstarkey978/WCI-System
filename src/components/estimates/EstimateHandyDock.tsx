@@ -1,7 +1,7 @@
 /**
  * Right-rail Jarvis Handy companion — Handoff metaphor: scrollable scope prose,
  * compact estimate card, Ask Handy chat pinned to the bottom of the rail.
- * WCI colors (not dark-mode copy).
+ * Uses shared --bt-* tokens so the existing dark-theme toggle applies.
  */
 
 "use client";

@@ -4,9 +4,13 @@
  * Prepared for/by/Date, Client Message, numbered scope sections with prices,
  * optional photo strip, Payment Schedule, Pricing summary (Subtotal/Tax/Total),
  * dual signatures, Terms.
+ *
+ * On-screen preview/review honors the app `[data-theme]` toggle via `--bt-*`
+ * tokens. Print/PDF forces a paper palette locally so dark mode never bleeds
+ * into the printable document.
  */
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { OutboundBrandMark } from "@/components/branding/OutboundBrandMark";
 import { ProposalSignatureBlocks, type ProposalSignatureSide } from "@/components/proposals/ProposalSignatureBlocks";
@@ -63,6 +67,20 @@ export type ClientProposalQuantity = {
   readonly label: string;
   readonly quantityLabel: string;
 };
+
+/** Paper look for PDF/print — scoped custom props so children keep using --bt-*. */
+const PRINT_PAPER_VARS = {
+  "--bt-panel-bg": "#ffffff",
+  "--bt-panel-bg-muted": "#fafafa",
+  "--bt-border": "#e5e7eb",
+  "--bt-muted": "#6b7280",
+  "--bt-text": "#1a1a1a",
+  "--bt-primary": "#1a5c3a",
+  "--bt-on-primary": "#ffffff",
+  "--bt-status-open-bg": "#ecfdf5",
+  "--bt-status-open-text": "#065f46",
+  "--bt-hazard": "#d97706",
+} as CSSProperties;
 
 export function ClientProposalView({
   title,
@@ -136,10 +154,14 @@ export function ClientProposalView({
 
   return (
     <article
-      className={`mx-auto w-full max-w-3xl bg-white text-[#1a1a1a] ${
+      className={`mx-auto w-full max-w-3xl bg-[var(--bt-panel-bg)] text-[var(--bt-text)] ${
         isPrint ? "px-0 py-0" : "rounded-lg border px-3 py-5 shadow-sm sm:px-10 sm:py-10"
       }`}
-      style={isPrint ? undefined : { borderColor: "#e5e7eb" }}
+      style={
+        isPrint
+          ? PRINT_PAPER_VARS
+          : ({ borderColor: "var(--bt-border)" } satisfies CSSProperties)
+      }
     >
       <header className="flex flex-col items-center gap-1.5 text-center sm:gap-2">
         <OutboundBrandMark
@@ -147,10 +169,10 @@ export function ClientProposalView({
           organizationLogoPath={organizationLogoPath}
           className="h-12 w-auto max-w-[12rem] object-contain sm:h-16 sm:max-w-[14rem]"
         />
-        <div className="text-sm font-semibold tracking-tight text-[#1a1a1a] sm:text-base">{orgName}</div>
-        <p className="max-w-md text-[11px] italic leading-snug text-[#6b7280] sm:text-sm">{slogan}</p>
+        <div className="text-sm font-semibold tracking-tight text-[var(--bt-text)] sm:text-base">{orgName}</div>
+        <p className="max-w-md text-[11px] italic leading-snug text-[var(--bt-muted)] sm:text-sm">{slogan}</p>
         {(companyAddress || phone) && (
-          <div className="mt-0.5 space-y-0.5 text-[10px] leading-relaxed text-[#6b7280] sm:text-xs">
+          <div className="mt-0.5 space-y-0.5 text-[10px] leading-relaxed text-[var(--bt-muted)] sm:text-xs">
             {companyAddress ? <div>{companyAddress}</div> : null}
             {phone ? (
               <div>
@@ -163,59 +185,61 @@ export function ClientProposalView({
         )}
       </header>
 
-      <div className="mt-5 border-t border-[#e5e7eb] pt-4 text-center sm:mt-6 sm:pt-5 sm:text-left">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9ca3af]">Proposal</div>
+      <div className="mt-5 border-t border-[var(--bt-border)] pt-4 text-center sm:mt-6 sm:pt-5 sm:text-left">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--bt-muted)]">Proposal</div>
         <h1 className="mt-1 text-xl font-semibold tracking-tight sm:text-[1.75rem] sm:leading-tight">{title}</h1>
-        {projectAddress ? <p className="mt-1 text-sm text-[#6b7280]">{projectAddress}</p> : null}
+        {projectAddress ? <p className="mt-1 text-sm text-[var(--bt-muted)]">{projectAddress}</p> : null}
       </div>
 
-      <div className="mt-5 grid gap-4 border-t border-[#e5e7eb] pt-4 text-sm sm:mt-6 sm:grid-cols-3 sm:gap-6 sm:pt-5">
+      <div className="mt-5 grid gap-4 border-t border-[var(--bt-border)] pt-4 text-sm sm:mt-6 sm:grid-cols-3 sm:gap-6 sm:pt-5">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Prepared for</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Prepared for</div>
           <div className="mt-1 font-medium">{client.name}</div>
-          {projectAddress ? <div className="mt-0.5 text-xs text-[#6b7280]">{projectAddress}</div> : null}
+          {projectAddress ? <div className="mt-0.5 text-xs text-[var(--bt-muted)]">{projectAddress}</div> : null}
           {client.email ? (
-            <a href={`mailto:${client.email}`} className="mt-0.5 block break-all text-xs text-[#6b7280] hover:underline">
+            <a href={`mailto:${client.email}`} className="mt-0.5 block break-all text-xs text-[var(--bt-muted)] hover:underline">
               {client.email}
             </a>
           ) : null}
           {client.phone ? (
-            <a href={`tel:${client.phone.replace(/[^\d+]/g, "")}`} className="block text-xs text-[#6b7280] hover:underline">
+            <a href={`tel:${client.phone.replace(/[^\d+]/g, "")}`} className="block text-xs text-[var(--bt-muted)] hover:underline">
               {client.phone}
             </a>
           ) : null}
         </div>
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Prepared by</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Prepared by</div>
           <div className="mt-1 font-medium">{orgName}</div>
           {organization?.contactEmail ? (
             <a
               href={`mailto:${organization.contactEmail}`}
-              className="mt-0.5 block break-all text-xs text-[#6b7280] hover:underline"
+              className="mt-0.5 block break-all text-xs text-[var(--bt-muted)] hover:underline"
             >
               {organization.contactEmail}
             </a>
           ) : null}
-          {phone ? <div className="text-xs text-[#6b7280]">{phone}</div> : null}
-          {companyAddress ? <div className="text-xs text-[#6b7280]">{companyAddress}</div> : null}
+          {phone ? <div className="text-xs text-[var(--bt-muted)]">{phone}</div> : null}
+          {companyAddress ? <div className="text-xs text-[var(--bt-muted)]">{companyAddress}</div> : null}
         </div>
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Date</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Date</div>
           <div className="mt-1 font-medium">{formatDate(createdAt)}</div>
         </div>
       </div>
 
-      <section className="mt-5 border-t border-[#e5e7eb] pt-4 sm:mt-6 sm:pt-5">
+      <section className="mt-5 border-t border-[var(--bt-border)] pt-4 sm:mt-6 sm:pt-5">
         <h2 className="text-sm font-semibold">Client Message</h2>
         {coverMessage ? (
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#374151]">{coverMessage}</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--bt-text)] opacity-90">
+            {coverMessage}
+          </p>
         ) : (
-          <p className="mt-2 text-sm italic text-[#9ca3af]">No cover message yet.</p>
+          <p className="mt-2 text-sm italic text-[var(--bt-muted)]">No cover message yet.</p>
         )}
       </section>
 
       {photos.length > 0 ? (
-        <section className="mt-5 border-t border-[#e5e7eb] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
+        <section className="mt-5 border-t border-[var(--bt-border)] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
           <h2 className="text-sm font-semibold">Project photos</h2>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
             {photos.map((photo) => (
@@ -224,7 +248,7 @@ export function ClientProposalView({
                 href={photo.url}
                 target="_blank"
                 rel="noreferrer"
-                className="block aspect-[4/3] overflow-hidden rounded-md border border-[#e5e7eb] bg-[#f9fafb]"
+                className="block aspect-[4/3] overflow-hidden rounded-md border border-[var(--bt-border)] bg-[var(--bt-panel-bg-muted)]"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- signed/short-lived URLs */}
                 <img src={photo.url} alt={photo.fileName} className="h-full w-full object-cover" />
@@ -235,10 +259,10 @@ export function ClientProposalView({
       ) : null}
 
       {sections.map((section, index) => (
-        <section key={section.id} className="mt-5 border-t border-[#e5e7eb] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
+        <section key={section.id} className="mt-5 border-t border-[var(--bt-border)] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-semibold sm:text-[15px]">
-              <span className="mr-1.5 tabular-nums text-[#9ca3af]">{index + 1}.</span>
+              <span className="mr-1.5 tabular-nums text-[var(--bt-muted)]">{index + 1}.</span>
               {section.title}
             </h2>
             {section.priceCents != null ? (
@@ -248,9 +272,9 @@ export function ClientProposalView({
             ) : null}
           </div>
           {section.bullets.length === 0 ? (
-            <p className="mt-2 text-sm text-[#9ca3af]">No details in this section.</p>
+            <p className="mt-2 text-sm text-[var(--bt-muted)]">No details in this section.</p>
           ) : (
-            <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-[#374151]">
+            <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-[var(--bt-text)] opacity-90">
               {section.bullets.map((bullet) => (
                 <li key={bullet.id}>{bullet.text}</li>
               ))}
@@ -260,13 +284,13 @@ export function ClientProposalView({
       ))}
 
       {quantities.length > 0 ? (
-        <section className="mt-5 border-t border-[#e5e7eb] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
+        <section className="mt-5 border-t border-[var(--bt-border)] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
           <h2 className="text-sm font-semibold">Quantities at a Glance</h2>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-[#374151]">
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-[var(--bt-text)] opacity-90">
             {quantities.map((qty) => (
               <li key={qty.id}>
                 <span className="font-medium">{qty.label}</span>
-                <span className="text-[#6b7280]"> — {qty.quantityLabel}</span>
+                <span className="text-[var(--bt-muted)]"> — {qty.quantityLabel}</span>
               </li>
             ))}
           </ul>
@@ -274,7 +298,7 @@ export function ClientProposalView({
       ) : null}
 
       {draws.length > 0 ? (
-        <section className="mt-5 rounded-lg border border-[#e5e7eb] bg-[#fafafa] p-3 sm:mt-6 sm:p-4 break-inside-avoid">
+        <section className="mt-5 rounded-lg border border-[var(--bt-border)] bg-[var(--bt-panel-bg-muted)] p-3 sm:mt-6 sm:p-4 break-inside-avoid">
           <h2 className="text-sm font-semibold">Payment Schedule</h2>
           <ul className="mt-2 space-y-1.5 text-sm sm:mt-3 sm:space-y-2">
             {draws.map((draw) => {
@@ -285,11 +309,11 @@ export function ClientProposalView({
               return (
                 <li
                   key={draw.id}
-                  className="flex items-center justify-between gap-3 border-b border-dashed border-[#e5e7eb] py-1.5 last:border-0"
+                  className="flex items-center justify-between gap-3 border-b border-dashed border-[var(--bt-border)] py-1.5 last:border-0"
                 >
                   <span>
                     {draw.title}{" "}
-                    <span className="text-[#9ca3af]">({(draw.pctOfContractBasisPoints / 100).toFixed(0)}%)</span>
+                    <span className="text-[var(--bt-muted)]">({(draw.pctOfContractBasisPoints / 100).toFixed(0)}%)</span>
                   </span>
                   <span className="font-medium tabular-nums">
                     {amount != null ? formatMoney(amount) : `${(draw.pctOfContractBasisPoints / 100).toFixed(1)}%`}
@@ -301,27 +325,27 @@ export function ClientProposalView({
         </section>
       ) : null}
 
-      <section className="mt-5 border-t border-[#e5e7eb] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
+      <section className="mt-5 border-t border-[var(--bt-border)] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
         {options.length <= 1 ? (
           <>
             <h2 className="text-sm font-semibold">Pricing summary</h2>
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-[#6b7280]">Subtotal</dt>
+                <dt className="text-[var(--bt-muted)]">Subtotal</dt>
                 <dd className="tabular-nums font-medium">{formatMoney(subtotalCents)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-[#6b7280]">Tax</dt>
-                <dd className="tabular-nums text-[#6b7280]">0.0%</dd>
+                <dt className="text-[var(--bt-muted)]">Tax</dt>
+                <dd className="tabular-nums text-[var(--bt-muted)]">0.0%</dd>
               </div>
-              <div className="flex items-baseline justify-between gap-3 border-t border-[#e5e7eb] pt-2">
+              <div className="flex items-baseline justify-between gap-3 border-t border-[var(--bt-border)] pt-2">
                 <dt className="font-semibold">Total</dt>
                 <dd className="text-2xl font-semibold tabular-nums sm:text-3xl" style={{ color: accent }}>
                   {formatMoney(totalCents)}
                 </dd>
               </div>
             </dl>
-            <p className="mt-3 text-sm leading-relaxed text-[#374151]">
+            <p className="mt-3 text-sm leading-relaxed text-[var(--bt-text)] opacity-90">
               The total estimated investment for this project is{" "}
               <strong className="tabular-nums" style={{ color: accent }}>
                 {formatMoney(totalCents)}
@@ -333,7 +357,7 @@ export function ClientProposalView({
                 <span className="font-semibold" style={{ color: accent }}>
                   from {monthlyLabel}/month
                 </span>{" "}
-                <span className="text-xs text-[#6b7280]">
+                <span className="text-xs text-[var(--bt-muted)]">
                   illustrative equal payments over 60 months — ask us about financing options
                 </span>
               </p>
@@ -346,7 +370,7 @@ export function ClientProposalView({
               {options.map((option) => (
                 <li
                   key={option.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-[#e5e7eb] px-3 py-2.5"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-[var(--bt-border)] px-3 py-2.5"
                 >
                   <span className="text-sm font-medium">{option.label}</span>
                   <span className="text-lg font-semibold tabular-nums" style={{ color: accent }}>
@@ -372,8 +396,8 @@ export function ClientProposalView({
 
       {termsText ? <ProposalTermsBlock termsText={termsText} /> : null}
 
-      <footer className="mt-8 border-t border-[#e5e7eb] pt-4 text-center text-[11px] leading-relaxed text-[#6b7280] sm:text-xs">
-        <div className="font-medium text-[#374151]">{orgName}</div>
+      <footer className="mt-8 border-t border-[var(--bt-border)] pt-4 text-center text-[11px] leading-relaxed text-[var(--bt-muted)] sm:text-xs">
+        <div className="font-medium text-[var(--bt-text)]">{orgName}</div>
         <div className="italic">{slogan}</div>
         {companyAddress ? <div className="mt-1">{companyAddress}</div> : null}
         {phone ? <div>{phone}</div> : null}

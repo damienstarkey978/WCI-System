@@ -5,13 +5,14 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ConvertToMenu } from "@/components/estimates/ConvertToMenu";
 import { EstimateHandyDock } from "@/components/estimates/EstimateHandyDock";
 import { EstimateProposalToggle } from "@/components/estimates/EstimateProposalToggle";
 import { EstimateSpreadsheet, type SpreadsheetGroup } from "@/components/estimates/EstimateSpreadsheet";
 import { ClientProposalView } from "@/components/proposals/ClientProposalView";
+import { THEME_STORAGE_KEY, type ThemePreference } from "@/components/settings/theme";
 
 const DEMO_GROUPS: SpreadsheetGroup[] = [
   {
@@ -94,10 +95,27 @@ type Panel = "estimate" | "handy" | "proposal" | "mobile";
 
 export default function HandoffParityFixturePage() {
   const [panel, setPanel] = useState<Panel>("estimate");
+  const [theme, setTheme] = useState<ThemePreference>("light");
+
+  useEffect(() => {
+    const current =
+      (document.documentElement.getAttribute("data-theme") as ThemePreference | null) ?? "light";
+    queueMicrotask(() => setTheme(current === "dark" ? "dark" : "light"));
+  }, []);
+
+  function setThemePreference(next: ThemePreference) {
+    setTheme(next);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+    document.documentElement.setAttribute("data-theme", next);
+  }
 
   return (
-    <div className="min-h-screen bg-[var(--bt-page-bg,#f3f4f6)] p-3 sm:p-4">
-      <div className="mx-auto mb-3 flex max-w-[1400px] flex-wrap gap-2">
+    <div className="min-h-screen bg-[var(--bt-page-bg)] p-3 sm:p-4">
+      <div className="mx-auto mb-3 flex max-w-[1400px] flex-wrap items-center gap-2">
         {(
           [
             ["estimate", "Estimate desktop"],
@@ -110,7 +128,7 @@ export default function HandoffParityFixturePage() {
             key={id}
             type="button"
             onClick={() => setPanel(id)}
-            className="rounded-md border px-3 py-1.5 text-xs font-semibold"
+            className="min-h-10 touch-manipulation rounded-md border px-3 py-1.5 text-xs font-semibold sm:min-h-0"
             style={{
               borderColor: "var(--bt-border)",
               background: panel === id ? "var(--bt-primary)" : "var(--bt-panel-bg)",
@@ -120,6 +138,23 @@ export default function HandoffParityFixturePage() {
             {label}
           </button>
         ))}
+        <div className="ml-auto flex gap-1" data-testid="parity-theme-toggle">
+          {(["light", "dark"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setThemePreference(mode)}
+              className="min-h-10 touch-manipulation rounded-md border px-3 py-1.5 text-xs font-semibold capitalize sm:min-h-0"
+              style={{
+                borderColor: "var(--bt-border)",
+                background: theme === mode ? "var(--bt-primary)" : "var(--bt-panel-bg)",
+                color: theme === mode ? "var(--bt-on-primary)" : "var(--bt-text)",
+              }}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
       </div>
 
       {panel === "estimate" || panel === "mobile" ? (

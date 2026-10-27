@@ -36,13 +36,32 @@ export type SpreadsheetGroup = {
   readonly groupClientTotalCents: number;
 };
 
+/** Theme-aware pills — mix into --bt-panel-* so light and dark both read. */
 const COST_TYPE_STYLE: Record<string, { bg: string; text: string }> = {
-  LABOR: { bg: "#dbeafe", text: "#1e40af" },
-  MATERIAL: { bg: "#f3f4f6", text: "#374151" },
-  EQUIPMENT: { bg: "#fef3c7", text: "#92400e" },
-  SUBCONTRACTOR: { bg: "#ede9fe", text: "#5b21b6" },
-  OTHER: { bg: "#f3f4f6", text: "#4b5563" },
-  NONE: { bg: "#f3f4f6", text: "#6b7280" },
+  LABOR: {
+    bg: "color-mix(in srgb, var(--bt-primary) 18%, var(--bt-panel-bg-muted))",
+    text: "var(--bt-primary)",
+  },
+  MATERIAL: {
+    bg: "var(--bt-panel-bg-muted)",
+    text: "var(--bt-text)",
+  },
+  EQUIPMENT: {
+    bg: "color-mix(in srgb, var(--bt-hazard) 18%, var(--bt-panel-bg))",
+    text: "var(--bt-hazard)",
+  },
+  SUBCONTRACTOR: {
+    bg: "color-mix(in srgb, #8b5cf6 16%, var(--bt-panel-bg))",
+    text: "color-mix(in srgb, #8b5cf6 55%, var(--bt-text))",
+  },
+  OTHER: {
+    bg: "var(--bt-panel-bg-muted)",
+    text: "var(--bt-muted)",
+  },
+  NONE: {
+    bg: "var(--bt-panel-bg-muted)",
+    text: "var(--bt-muted)",
+  },
 };
 
 function costTypeLabel(costType: string): string {

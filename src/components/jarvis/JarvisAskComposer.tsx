@@ -156,7 +156,7 @@ export function JarvisAskComposer({
             disabled={busy}
             aria-label="Attach photos"
             title="Attach photos"
-            className="inline-flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full text-[var(--bt-muted)] transition hover:bg-black/5 hover:text-[var(--bt-text)] disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
+            className="inline-flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full text-[var(--bt-muted)] transition hover:bg-[color-mix(in_srgb,var(--bt-text)_5%,transparent)] hover:text-[var(--bt-text)] disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
           >
             {compact ? <PlusAttachIcon /> : <PaperclipIcon />}
           </button>
