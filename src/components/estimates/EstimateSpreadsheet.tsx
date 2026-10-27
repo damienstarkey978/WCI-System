@@ -1,7 +1,7 @@
 /**
- * Handoff-style estimate spreadsheet: numbered collapsible groups, nested
- * 1.1 rows, drag-reorder (persisted), Qty + unit chips, Cost type pills,
- * sticky totals bar.
+ * Handoff-density estimate spreadsheet: compact rows, Handoff column set
+ * (Item · Quantity · Unit cost · Cost type · Client total), sticky totals
+ * with optional cost/markup breakdown. WCI colors.
  */
 
 "use client";
@@ -54,10 +54,17 @@ function formatQty(quantityMilli: number): string {
   return (quantityMilli / 1000).toLocaleString("en-US", { maximumFractionDigits: 3 });
 }
 
+function formatQtyWithUnit(quantityMilli: number, unit: string): string {
+  return `${formatQty(quantityMilli)} ${unit.toUpperCase()}`;
+}
+
 function DragHandle() {
   return (
-    <span className="mt-0.5 hidden shrink-0 cursor-grab text-[var(--bt-muted)] opacity-60 active:cursor-grabbing sm:inline-flex" aria-hidden>
-      <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+    <span
+      className="mt-px hidden shrink-0 cursor-grab text-[var(--bt-muted)] opacity-50 active:cursor-grabbing sm:inline-flex"
+      aria-hidden
+    >
+      <svg width="8" height="12" viewBox="0 0 10 14" fill="currentColor">
         <circle cx="3" cy="2" r="1.1" />
         <circle cx="7" cy="2" r="1.1" />
         <circle cx="3" cy="7" r="1.1" />
@@ -97,6 +104,7 @@ export function EstimateSpreadsheet({
     setLocalGroups(groups);
   }
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const [reorderState, reorderAction] = useActionState(reorderEstimateLineItemsAction, {} as ReorderActionState);
   const [, startTransition] = useTransition();
 
@@ -132,7 +140,6 @@ export function EstimateSpreadsheet({
       }
     }
     if (sourceGroup < 0 || targetGroup < 0) return;
-    // Keep reorder within the same group (Handoff groups are phase buckets).
     if (sourceGroup !== targetGroup) return;
     const [moved] = next[sourceGroup].items.splice(sourceIndex, 1);
     next[sourceGroup].items.splice(targetIndex, 0, moved);
@@ -145,33 +152,31 @@ export function EstimateSpreadsheet({
   }
 
   const displayGroups = reorderable ? localGroups : groups;
+  const colCount = 5;
 
   return (
     <div className="flex flex-col gap-0">
       <div
-        className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]"
+        className="overflow-x-auto rounded-md border bg-[var(--bt-panel-bg)]"
         style={{ borderColor: "var(--bt-border)" }}
       >
-        <table className="w-full min-w-[40rem] border-collapse text-left text-sm sm:min-w-[48rem]">
+        <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
           <thead>
             <tr
               className="border-b text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
               style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
             >
-              <th className="px-2 py-2 sm:px-3">Item</th>
-              <th className="px-1.5 py-2 text-right sm:px-2">Qty</th>
-              <th className="px-1.5 py-2 text-right sm:px-2">Unit</th>
-              <th className="px-1.5 py-2 text-right sm:px-2">Unit cost</th>
-              <th className="hidden px-2 py-2 sm:table-cell">Cost type</th>
-              <th className="hidden px-2 py-2 text-right md:table-cell">Builder cost</th>
-              <th className="hidden px-2 py-2 text-right lg:table-cell">Markup</th>
-              <th className="px-2 py-2 text-right sm:px-3">Client total</th>
+              <th className="px-2 py-1.5 font-semibold sm:px-2.5">Item</th>
+              <th className="px-1.5 py-1.5 text-right font-semibold">Quantity</th>
+              <th className="px-1.5 py-1.5 text-right font-semibold">Unit cost</th>
+              <th className="hidden px-1.5 py-1.5 font-semibold sm:table-cell">Cost type</th>
+              <th className="px-2 py-1.5 text-right font-semibold sm:px-2.5">Client total</th>
             </tr>
           </thead>
           <tbody>
             {displayGroups.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-sm text-[var(--bt-muted)]">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-sm text-[var(--bt-muted)]">
                   No line items on this estimate yet.
                 </td>
               </tr>
@@ -181,6 +186,7 @@ export function EstimateSpreadsheet({
                 key={group.label}
                 group={group}
                 groupNumber={groupIndex + 1}
+                showBreakdown={showBreakdown}
                 reorderable={reorderable}
                 draggingId={draggingId}
                 onDragStart={setDraggingId}
@@ -193,38 +199,50 @@ export function EstimateSpreadsheet({
       </div>
 
       {reorderState.error ? <p className="mt-1 text-xs text-red-600">{reorderState.error}</p> : null}
-      {reorderable && flatIds.length > 1 ? (
-        <p className="mt-1 text-[11px] text-[var(--bt-muted)]">Drag the handles to reorder lines within a group.</p>
-      ) : null}
 
       <div
-        className="sticky bottom-0 z-10 -mx-1 mt-2 flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 backdrop-blur-md sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4"
+        className="sticky bottom-0 z-10 mt-1.5 flex flex-col gap-1 rounded-md border px-2.5 py-1.5 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-3"
         style={{
           borderColor: "var(--bt-border)",
-          background: "color-mix(in srgb, var(--bt-panel-bg) 94%, transparent)",
-          boxShadow: "0 -6px 16px color-mix(in srgb, var(--bt-text) 8%, transparent)",
+          background: "color-mix(in srgb, var(--bt-panel-bg) 96%, transparent)",
+          boxShadow: "0 -4px 12px color-mix(in srgb, var(--bt-text) 6%, transparent)",
         }}
       >
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[var(--bt-muted)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--bt-muted)]">
+          <button
+            type="button"
+            onClick={() => setShowBreakdown((v) => !v)}
+            className="rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide hover:bg-[var(--bt-panel-bg-muted)]"
+            style={{ borderColor: "var(--bt-border)" }}
+            aria-pressed={showBreakdown}
+          >
+            {showBreakdown ? "Hide breakdown" : "Show breakdown"}
+          </button>
           <span>
             Profit margin{" "}
-            <strong className="text-sm tabular-nums" style={{ color: "var(--bt-primary)" }}>
+            <strong className="text-xs tabular-nums" style={{ color: "var(--bt-primary)" }}>
               {formatPercent(marginBasisPoints)}
             </strong>
           </span>
         </div>
-        <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs sm:justify-end sm:text-sm text-[var(--bt-muted)]">
-          <span>
-            Total cost <strong className="tabular-nums text-[var(--bt-text)]">{formatMoney(totalBuilderCostCents)}</strong>
-          </span>
-          <span aria-hidden>+</span>
-          <span>
-            Total markup <strong className="tabular-nums text-[var(--bt-text)]">{formatMoney(totalMarkupCents)}</strong>
-          </span>
-          <span aria-hidden>=</span>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] text-[var(--bt-muted)] sm:justify-end sm:text-xs">
+          {showBreakdown ? (
+            <>
+              <span>
+                Total cost{" "}
+                <strong className="tabular-nums text-[var(--bt-text)]">{formatMoney(totalBuilderCostCents)}</strong>
+              </span>
+              <span aria-hidden>+</span>
+              <span>
+                Total markup{" "}
+                <strong className="tabular-nums text-[var(--bt-text)]">{formatMoney(totalMarkupCents)}</strong>
+              </span>
+              <span aria-hidden>=</span>
+            </>
+          ) : null}
           <span>
             Estimate total{" "}
-            <strong className="text-base tabular-nums text-[var(--bt-text)] sm:text-lg">
+            <strong className="text-sm tabular-nums text-[var(--bt-text)] sm:text-base">
               {formatMoney(totalClientCents)}
             </strong>
           </span>
@@ -237,6 +255,7 @@ export function EstimateSpreadsheet({
 function GroupRows({
   group,
   groupNumber,
+  showBreakdown,
   reorderable,
   draggingId,
   onDragStart,
@@ -245,6 +264,7 @@ function GroupRows({
 }: {
   readonly group: SpreadsheetGroup;
   readonly groupNumber: number;
+  readonly showBreakdown: boolean;
   readonly reorderable: boolean;
   readonly draggingId: string | null;
   readonly onDragStart: (id: string) => void;
@@ -255,22 +275,22 @@ function GroupRows({
   return (
     <>
       <tr style={{ background: "var(--bt-panel-bg-muted)" }}>
-        <td colSpan={8} className="px-2 py-1.5 sm:px-3">
+        <td colSpan={5} className="px-2 py-1 sm:px-2.5">
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="flex w-full min-h-9 touch-manipulation items-center justify-between gap-3 text-left sm:min-h-0"
+            className="flex w-full min-h-8 touch-manipulation items-center justify-between gap-2 text-left sm:min-h-0"
             aria-expanded={open}
           >
-            <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-[var(--bt-text)]">
-              <span className="inline-block w-3 shrink-0 text-[10px] text-[var(--bt-muted)]" aria-hidden>
+            <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-[var(--bt-text)]">
+              <span className="inline-block w-2.5 shrink-0 text-[9px] text-[var(--bt-muted)]" aria-hidden>
                 {open ? "▾" : "▸"}
               </span>
               <span className="tabular-nums text-[var(--bt-muted)]">{groupNumber}</span>
               <span className="truncate">{group.label}</span>
               <span className="shrink-0 font-normal text-[var(--bt-muted)]">({group.items.length})</span>
             </span>
-            <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--bt-text)]">
+            <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--bt-text)]">
               {formatMoney(group.groupClientTotalCents)}
             </span>
           </button>
@@ -305,26 +325,33 @@ function GroupRows({
                   if (sourceId) onDropOn(sourceId, item.id);
                   onDragEnd();
                 }}
-                className={`border-t align-top ${isDragging ? "opacity-50" : ""}`}
+                className={`border-t align-middle ${isDragging ? "opacity-50" : ""}`}
                 style={{ borderColor: "var(--bt-border)" }}
               >
-                <td className="px-2 py-1.5 sm:px-3">
-                  <div className="flex gap-1.5 sm:gap-2">
-                    {reorderable ? <DragHandle /> : <DragHandle />}
-                    <span className="mt-0.5 w-7 shrink-0 text-[10px] tabular-nums text-[var(--bt-muted)] sm:w-8">
+                <td className="px-2 py-1 sm:px-2.5">
+                  <div className="flex items-start gap-1 sm:gap-1.5">
+                    {reorderable ? <DragHandle /> : null}
+                    <span className="mt-px w-6 shrink-0 text-[9px] tabular-nums text-[var(--bt-muted)] sm:w-7">
                       {rowLabel}
                     </span>
                     <div className="min-w-0">
-                      <div className="text-[13px] font-medium leading-snug text-[var(--bt-text)]">{item.title}</div>
-                      <div className="text-[10px] leading-snug text-[var(--bt-muted)]">{item.costCodeLabel}</div>
-                      {item.description ? (
-                        <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-[var(--bt-muted)]">
+                      <div className="text-[12px] font-medium leading-tight text-[var(--bt-text)]">{item.title}</div>
+                      <div className="truncate text-[9px] leading-tight text-[var(--bt-muted)]">{item.costCodeLabel}</div>
+                      {showBreakdown && item.description ? (
+                        <p className="mt-0.5 line-clamp-1 text-[9px] leading-tight text-[var(--bt-muted)]">
                           {item.description}
                         </p>
                       ) : null}
-                      <div className="mt-1 sm:hidden">
+                      {showBreakdown ? (
+                        <p className="mt-0.5 text-[9px] tabular-nums text-[var(--bt-muted)]">
+                          Cost {formatMoney(item.builderCostCents)} ·{" "}
+                          {formatPercent(item.rateBasisPoints)}
+                          {item.rateMode === "MARGIN" ? " mar" : " mk"}
+                        </p>
+                      ) : null}
+                      <div className="mt-0.5 sm:hidden">
                         <span
-                          className="inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                          className="inline-block rounded px-1 py-px text-[8px] font-semibold"
                           style={{ background: typeStyle.bg, color: typeStyle.text }}
                         >
                           {costTypeLabel(item.costType)}
@@ -333,41 +360,21 @@ function GroupRows({
                     </div>
                   </div>
                 </td>
-                <td className="px-1.5 py-1.5 text-right tabular-nums text-[var(--bt-text)] sm:px-2">
-                  <span
-                    className="inline-block rounded-md px-1.5 py-0.5 text-[12px]"
-                    style={{ background: "var(--bt-panel-bg-muted)" }}
-                  >
-                    {formatQty(item.quantityMilli)}
-                  </span>
+                <td className="px-1.5 py-1 text-right text-[11px] tabular-nums text-[var(--bt-text)]">
+                  {formatQtyWithUnit(item.quantityMilli, unit)}
                 </td>
-                <td className="px-1.5 py-1.5 text-right sm:px-2">
-                  <span
-                    className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
-                    style={{ background: "var(--bt-panel-bg-muted)" }}
-                  >
-                    {unit}
-                  </span>
-                </td>
-                <td className="px-1.5 py-1.5 text-right text-[12px] tabular-nums text-[var(--bt-text)] sm:px-2">
+                <td className="px-1.5 py-1 text-right text-[11px] tabular-nums text-[var(--bt-text)]">
                   {formatMoney(item.unitCostCents)}
                 </td>
-                <td className="hidden px-2 py-1.5 sm:table-cell">
+                <td className="hidden px-1.5 py-1 sm:table-cell">
                   <span
-                    className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                    className="inline-block rounded px-1.5 py-px text-[9px] font-semibold"
                     style={{ background: typeStyle.bg, color: typeStyle.text }}
                   >
                     {costTypeLabel(item.costType)}
                   </span>
                 </td>
-                <td className="hidden px-2 py-1.5 text-right text-[12px] tabular-nums text-[var(--bt-muted)] md:table-cell">
-                  {formatMoney(item.builderCostCents)}
-                </td>
-                <td className="hidden px-2 py-1.5 text-right text-[12px] tabular-nums text-[var(--bt-muted)] lg:table-cell">
-                  {formatPercent(item.rateBasisPoints)}
-                  {item.rateMode === "MARGIN" ? " mar" : ""}
-                </td>
-                <td className="px-2 py-1.5 text-right text-[13px] font-medium tabular-nums text-[var(--bt-text)] sm:px-3">
+                <td className="px-2 py-1 text-right text-[12px] font-medium tabular-nums text-[var(--bt-text)] sm:px-2.5">
                   {formatMoney(item.clientTotalCents)}
                 </td>
               </tr>

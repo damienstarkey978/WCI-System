@@ -29,33 +29,33 @@ export function LeadEstimateWorkspaceNav({
 }) {
   return (
     <aside
-      className="flex w-full shrink-0 flex-col gap-3 rounded-xl border p-3 lg:sticky lg:top-2 lg:w-[13.5rem] lg:self-start xl:w-[15rem]"
+      className="flex w-full shrink-0 flex-col gap-2 rounded-md border p-2 lg:sticky lg:top-2 lg:w-[12.5rem] lg:self-start xl:w-[13.5rem]"
       style={{
         borderColor: "var(--bt-border)",
         background: "var(--bt-panel-bg)",
-        maxHeight: "calc(100vh - 5rem)",
+        maxHeight: "calc(100vh - 4.5rem)",
       }}
     >
       <div className="min-w-0">
         <Link
           href={`/leads/${leadId}?tab=proposals&compose=1`}
-          className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--bt-muted)] hover:text-[var(--bt-primary)] hover:underline"
+          className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--bt-muted)] hover:text-[var(--bt-primary)] hover:underline"
         >
           ← All proposals
         </Link>
-        <p className="mt-1 truncate text-sm font-semibold text-[var(--bt-text)]">{leadTitle ?? leadName}</p>
-        <p className="truncate text-xs text-[var(--bt-muted)]">{leadName}</p>
+        <p className="mt-0.5 truncate text-[12px] font-semibold text-[var(--bt-text)]">{leadTitle ?? leadName}</p>
+        <p className="truncate text-[10px] text-[var(--bt-muted)]">{leadName}</p>
       </div>
 
-      <nav className="flex flex-col gap-0.5" aria-label="Lead estimate workspace">
+      <nav className="flex flex-col gap-px" aria-label="Lead estimate workspace">
         <Link
           href={`/leads/${leadId}`}
-          className="rounded-md px-2.5 py-2 text-xs font-medium text-[var(--bt-muted)] hover:bg-[var(--bt-panel-bg-muted)] hover:text-[var(--bt-text)]"
+          className="rounded px-2 py-1.5 text-[11px] font-medium text-[var(--bt-muted)] hover:bg-[var(--bt-panel-bg-muted)] hover:text-[var(--bt-text)]"
         >
           Overview
         </Link>
         <span
-          className="rounded-md px-2.5 py-2 text-xs font-semibold"
+          className="rounded px-2 py-1.5 text-[11px] font-semibold"
           style={{
             background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)",
             color: "var(--bt-primary)",
@@ -65,14 +65,14 @@ export function LeadEstimateWorkspaceNav({
         </span>
         <Link
           href={`/leads/${leadId}?tab=proposals&compose=1`}
-          className="rounded-md px-2.5 py-2 text-xs font-medium text-[var(--bt-muted)] hover:bg-[var(--bt-panel-bg-muted)] hover:text-[var(--bt-text)]"
+          className="rounded px-2 py-1.5 text-[11px] font-medium text-[var(--bt-muted)] hover:bg-[var(--bt-panel-bg-muted)] hover:text-[var(--bt-text)]"
         >
           Proposals
         </Link>
       </nav>
 
-      <div className="min-h-0 flex-1 overflow-y-auto border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>
-        <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+      <div className="min-h-0 flex-1 overflow-y-auto border-t pt-2" style={{ borderColor: "var(--bt-border)" }}>
+        <p className="mb-1 px-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
           This lead
         </p>
         {estimates.length === 0 ? (

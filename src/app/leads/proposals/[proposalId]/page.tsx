@@ -12,10 +12,11 @@ import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budg
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isAnthropicConfigured, isTransactionalEmailConfigured, isTransactionalSmsConfigured } from "@/lib/env";
+import { buildHandyPricingTerms, buildHandyScopeGroups } from "@/lib/estimates/handy-scope";
+import { formatQuantityGlance, resolveLineUnit } from "@/lib/estimates/units";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
-import { formatQuantityGlance, resolveLineUnit } from "@/lib/estimates/units";
 import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 import { MAX_PROPOSAL_OPTIONS } from "@/lib/proposals/service";
 
@@ -218,9 +219,13 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
       quantityLabel: formatQuantityGlance(item.quantityMilli, resolveLineUnit(item.unit, item.costType)),
     }));
 
-  const totalMarkupCents = activeTotalCents - totalBuilderCostCents;
-  const marginLabel =
-    activeTotalCents > 0 ? `${((totalMarkupCents / activeTotalCents) * 100).toFixed(1)}%` : null;
+  const scopeGroups = buildHandyScopeGroups(spreadsheetGroups);
+  const pricingTerms = buildHandyPricingTerms({
+    groups: spreadsheetGroups,
+    totalClientCents: activeTotalCents,
+    totalBuilderCostCents,
+    lineItemCount: activeEstimate.lineItems.length,
+  });
 
   const siblingEstimates = proposal.lead
     ? await db.estimate.findMany({
@@ -547,14 +552,12 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
             leadName={proposal.lead.name}
             estimateId={activeEstimate.id}
             proposalId={proposal.id}
+            estimateTitle={proposal.title}
             jarvisUiEnabled={isJarvisUiEnabled()}
             anthropicConfigured={isAnthropicConfigured()}
             scopeNotes={proposal.lead.notes}
-            pricingSummary={{
-              totalLabel: formatMoney(activeTotalCents),
-              lineItemCount: activeEstimate.lineItems.length,
-              marginLabel,
-            }}
+            scopeGroups={scopeGroups}
+            pricingTerms={pricingTerms}
           />
         ) : null}
       </div>

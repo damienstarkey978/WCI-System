@@ -1,7 +1,6 @@
 /**
- * Right-rail Jarvis Handy companion for the three-panel estimate workspace.
- * Handoff docks Handy on the RIGHT with scope / pricing context above Ask chat.
- * WCI colors — not a dark-mode clone.
+ * Right-rail Jarvis Handy companion — Handoff metaphor: scope prose by trade,
+ * Pricing & terms, then Ask Jarvis. WCI colors (not dark-mode copy).
  */
 
 "use client";
@@ -13,29 +12,47 @@ import { JARVIS_LEAD_PROPOSAL_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 const STORAGE_KEY = "wci-estimate-handy-open";
 
+export type HandyScopeGroup = {
+  readonly label: string;
+  readonly summary: string;
+  readonly hoursLabel: string | null;
+  readonly totalLabel: string;
+  readonly lineCount: number;
+};
+
+export type HandyPricingTerms = {
+  readonly totalLabel: string;
+  readonly costLabel: string;
+  readonly markupLabel: string;
+  readonly marginLabel: string;
+  readonly lineItemCount: number;
+  readonly laborRateLabel: string | null;
+  readonly typicalMarkupLabel: string | null;
+  readonly notes: string | null;
+};
+
 export function EstimateHandyDock({
   leadId,
   leadName,
   estimateId,
   proposalId,
+  estimateTitle,
   jarvisUiEnabled,
   anthropicConfigured,
   scopeNotes,
-  pricingSummary,
+  scopeGroups,
+  pricingTerms,
 }: {
   readonly leadId: string;
   readonly leadName: string;
   readonly estimateId: string | null;
   readonly proposalId: string | null;
+  readonly estimateTitle?: string | null;
   readonly jarvisUiEnabled: boolean;
   readonly anthropicConfigured: boolean;
-  /** Lead / estimate scope prose shown above Ask Jarvis (Handoff Handy metaphor). */
   readonly scopeNotes?: string | null;
-  readonly pricingSummary?: {
-    readonly totalLabel: string;
-    readonly lineItemCount: number;
-    readonly marginLabel?: string | null;
-  } | null;
+  readonly scopeGroups?: readonly HandyScopeGroup[];
+  readonly pricingTerms?: HandyPricingTerms | null;
 }) {
   const ready = jarvisUiEnabled && anthropicConfigured;
   const [open, setOpen] = useState(true);
@@ -66,11 +83,11 @@ export function EstimateHandyDock({
 
   if (!open) {
     return (
-      <div className="flex shrink-0 flex-col gap-2 lg:w-10">
+      <div className="flex shrink-0 flex-col gap-2 lg:w-9">
         <button
           type="button"
           onClick={toggle}
-          className="inline-flex min-h-11 touch-manipulation items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold lg:min-h-0 lg:flex-col lg:px-1.5 lg:py-3"
+          className="inline-flex min-h-11 touch-manipulation items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold lg:min-h-0 lg:flex-col lg:px-1 lg:py-3"
           style={{
             borderColor: "color-mix(in srgb, var(--bt-primary) 35%, var(--bt-border))",
             background: "color-mix(in srgb, var(--bt-primary) 10%, var(--bt-panel-bg))",
@@ -80,7 +97,7 @@ export function EstimateHandyDock({
         >
           <span aria-hidden>✦</span>
           <span className="text-[10px] uppercase tracking-wide lg:[writing-mode:vertical-rl] lg:rotate-180">
-            Ask Jarvis
+            Handy
           </span>
         </button>
       </div>
@@ -88,91 +105,151 @@ export function EstimateHandyDock({
   }
 
   const trimmedNotes = scopeNotes?.trim() ?? "";
+  const groups = scopeGroups ?? [];
 
   return (
     <aside
-      className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border lg:sticky lg:top-2 lg:w-[20rem] lg:self-start xl:w-[22rem]"
+      className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border lg:sticky lg:top-2 lg:w-[19.5rem] lg:self-start xl:w-[21rem]"
       style={{
         borderColor: "color-mix(in srgb, var(--bt-primary) 28%, var(--bt-border))",
         background: "var(--bt-panel-bg)",
-        maxHeight: "calc(100vh - 5rem)",
+        maxHeight: "calc(100vh - 4.5rem)",
       }}
     >
       <div
-        className="flex items-center justify-between gap-2 border-b px-3 py-2"
+        className="flex items-center justify-between gap-2 border-b px-3 py-1.5"
         style={{ borderColor: "var(--bt-border)" }}
       >
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--bt-primary)" }}>
-            Ask Jarvis
-          </p>
-          <p className="truncate text-xs text-[var(--bt-muted)]">{leadName}</p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span
+            className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-[var(--bt-on-primary)]"
+            style={{ background: "var(--bt-primary)" }}
+            aria-hidden
+          >
+            ✦
+          </span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-[var(--bt-text)]">Handy</p>
+            <p className="truncate text-[10px] text-[var(--bt-muted)]">{leadName}</p>
+          </div>
         </div>
         <button
           type="button"
           onClick={toggle}
-          className="rounded px-2 py-1 text-xs text-[var(--bt-muted)] hover:text-[var(--bt-text)]"
-          aria-label="Collapse Jarvis"
+          className="rounded px-1.5 py-0.5 text-xs text-[var(--bt-muted)] hover:text-[var(--bt-text)]"
+          aria-label="Collapse Handy"
         >
           »
         </button>
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
-        {trimmedNotes || pricingSummary ? (
-          <div
-            className="space-y-2 rounded-lg border px-2.5 py-2"
-            style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
-          >
-            {trimmedNotes ? (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Scope</p>
-                <p className="mt-1 max-h-28 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-[var(--bt-text)]">
-                  {trimmedNotes.length > 600 ? `${trimmedNotes.slice(0, 600)}…` : trimmedNotes}
-                </p>
-              </div>
+        {groups.length > 0 || trimmedNotes ? (
+          <div className="space-y-2 px-0.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Scope</p>
+            {groups.length > 0 ? (
+              <ul className="space-y-2">
+                {groups.map((group) => (
+                  <li key={group.label} className="text-[11px] leading-snug text-[var(--bt-text)]">
+                    <p className="font-semibold">
+                      {group.label}
+                      {group.hoursLabel ? (
+                        <span className="ml-1 font-normal text-[var(--bt-muted)]">({group.hoursLabel})</span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-[var(--bt-muted)]">{group.summary}</p>
+                    <p className="mt-0.5 tabular-nums text-[var(--bt-muted)]">
+                      {group.lineCount} line{group.lineCount === 1 ? "" : "s"} · {group.totalLabel}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : trimmedNotes ? (
+              <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--bt-text)]">
+                {trimmedNotes.length > 800 ? `${trimmedNotes.slice(0, 800)}…` : trimmedNotes}
+              </p>
             ) : null}
-            {pricingSummary ? (
-              <div className={trimmedNotes ? "border-t pt-2" : ""} style={{ borderColor: "var(--bt-border)" }}>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
-                  Pricing &amp; terms
+            {groups.length > 0 && trimmedNotes ? (
+              <details className="text-[10px] text-[var(--bt-muted)]">
+                <summary className="cursor-pointer font-semibold hover:text-[var(--bt-text)]">Lead notes</summary>
+                <p className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                  {trimmedNotes.length > 500 ? `${trimmedNotes.slice(0, 500)}…` : trimmedNotes}
                 </p>
-                <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--bt-text)]">
-                  Client total: {pricingSummary.totalLabel}
-                </p>
-                <p className="text-[11px] text-[var(--bt-muted)]">
-                  {pricingSummary.lineItemCount} line{pricingSummary.lineItemCount === 1 ? "" : "s"}
-                  {pricingSummary.marginLabel ? ` · Margin ${pricingSummary.marginLabel}` : ""}
-                </p>
-                <p className="mt-1 text-[10px] text-[var(--bt-muted)]">
-                  Illustrative only until Convert → Proposal. Nothing sends until you send.
-                </p>
-              </div>
+              </details>
             ) : null}
           </div>
         ) : null}
 
-        {ready ? (
-          <JarvisChatPanel
-            context={{
-              page: "lead_detail",
-              leadId,
-              leadName,
-              estimateId,
-              proposalId,
-              tab: "proposals",
-            }}
-            storageKey={`estimate-handy:${leadId}:${estimateId ?? proposalId ?? "none"}`}
-            suggestions={[...JARVIS_LEAD_PROPOSAL_SUGGESTIONS]}
-            emptyStateHint="Ask Jarvis to adjust quantities, add trades, or tighten the proposal narrative. Changes stay DRAFT until you send."
-            heightClassName="h-[20rem] min-h-[14rem] sm:h-[24rem] lg:h-[min(52vh,28rem)]"
-            navigateOnEstimateDraft
-          />
-        ) : (
-          <p className="p-3 text-xs text-[var(--bt-muted)]">
-            Jarvis needs NEXT_PUBLIC_JARVIS_UI_ENABLED and ANTHROPIC_API_KEY to chat here.
+        {pricingTerms ? (
+          <div
+            className="space-y-1 rounded-lg border px-2.5 py-2"
+            style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+              Pricing &amp; terms
+            </p>
+            {pricingTerms.laborRateLabel || pricingTerms.typicalMarkupLabel ? (
+              <ul className="space-y-0.5 text-[11px] text-[var(--bt-text)]">
+                {pricingTerms.laborRateLabel ? <li>Labor {pricingTerms.laborRateLabel}</li> : null}
+                {pricingTerms.typicalMarkupLabel ? (
+                  <li>Typical markup {pricingTerms.typicalMarkupLabel}</li>
+                ) : null}
+                {pricingTerms.notes ? <li className="text-[var(--bt-muted)]">{pricingTerms.notes}</li> : null}
+              </ul>
+            ) : null}
+            <p className="pt-1 text-[12px] font-semibold tabular-nums text-[var(--bt-text)]">
+              Client grand total: {pricingTerms.totalLabel}
+            </p>
+            <p className="text-[10px] tabular-nums text-[var(--bt-muted)]">
+              Cost {pricingTerms.costLabel} + markup {pricingTerms.markupLabel} · margin{" "}
+              {pricingTerms.marginLabel} · {pricingTerms.lineItemCount} lines
+            </p>
+          </div>
+        ) : null}
+
+        {estimateId ? (
+          <div
+            className="rounded-lg border px-2.5 py-2"
+            style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg)" }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Estimate</p>
+            <p className="mt-0.5 truncate text-[12px] font-semibold text-[var(--bt-text)]">
+              {estimateTitle ?? "Current draft"}
+            </p>
+            {pricingTerms ? (
+              <p className="text-[11px] tabular-nums text-[var(--bt-muted)]">
+                {pricingTerms.lineItemCount} items · {pricingTerms.totalLabel}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="border-t pt-2" style={{ borderColor: "var(--bt-border)" }}>
+          <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+            Ask Handy
           </p>
-        )}
+          {ready ? (
+            <JarvisChatPanel
+              context={{
+                page: "lead_detail",
+                leadId,
+                leadName,
+                estimateId,
+                proposalId,
+                tab: "proposals",
+              }}
+              storageKey={`estimate-handy:${leadId}:${estimateId ?? proposalId ?? "none"}`}
+              suggestions={[...JARVIS_LEAD_PROPOSAL_SUGGESTIONS]}
+              emptyStateHint="Ask Handy to adjust quantities, add trades, or tighten narrative. DRAFT until you send."
+              heightClassName="h-[16rem] min-h-[12rem] sm:h-[18rem] lg:h-[min(40vh,22rem)]"
+              navigateOnEstimateDraft
+            />
+          ) : (
+            <p className="p-2 text-xs text-[var(--bt-muted)]">
+              Jarvis needs NEXT_PUBLIC_JARVIS_UI_ENABLED and ANTHROPIC_API_KEY to chat here.
+            </p>
+          )}
+        </div>
       </div>
     </aside>
   );
