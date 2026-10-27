@@ -10,6 +10,7 @@ import { getInspectionPictureFolder } from "@/lib/permitting/inspection-pictures
 import { tradeLabel } from "@/lib/permitting/service";
 
 import { InspectionPhotoCapture } from "../photo-capture";
+import { InspectionShareLinkButton } from "../share-link-button";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,18 @@ export default async function InspectionPictureFolderPage({
           ) : null}
         </aside>
       )}
+
+      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <h2 className="mb-2 text-sm font-semibold text-[var(--bt-text)]">Share with inspector</h2>
+        <p className="mb-3 text-xs text-[var(--bt-muted)]">
+          Signed link — view and upload photos with no login. Creating a new link revokes the previous one for this folder.
+        </p>
+        <InspectionShareLinkButton
+          jobId={job.id}
+          inspectionId={folder.inspectionId}
+          inspectionName={folder.name}
+        />
+      </section>
 
       <InspectionPhotoCapture jobId={job.id} folderId={folder.folderId} existing={photos} />
     </div>

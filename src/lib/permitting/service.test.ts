@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPermitReminderEmail, tradeLabel } from "@/lib/permitting/service";
+import {
+  buildPermitReminderEmail,
+  catalogInspectionNamesForTrade,
+  DEMO_INSPECTIONS_BY_TRADE,
+  tradeLabel,
+} from "@/lib/permitting/service";
 import { PermitTrade } from "@/generated/prisma/enums";
 
 describe("permitting helpers", () => {
@@ -20,5 +25,11 @@ describe("permitting helpers", () => {
     expect(message.subject).toContain("Electrical permit reminder");
     expect(message.text).toContain("Hi Sam,");
     expect(message.html).toContain("Scratch Parity Job");
+  });
+
+  it("exposes a per-trade catalog without auto-attaching every type to a job", () => {
+    expect(catalogInspectionNamesForTrade(PermitTrade.BUILDING)).toEqual(DEMO_INSPECTIONS_BY_TRADE.BUILDING);
+    expect(catalogInspectionNamesForTrade(PermitTrade.PLUMBING)).toContain("Plumbing Rough");
+    expect(catalogInspectionNamesForTrade(PermitTrade.OTHER)).toEqual([]);
   });
 });
