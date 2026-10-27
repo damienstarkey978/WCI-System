@@ -241,6 +241,7 @@ export function EstimateHandyDock({
               storageKey={`estimate-handy:${leadId}:${estimateId ?? proposalId ?? "none"}`}
               suggestions={[...JARVIS_LEAD_PROPOSAL_SUGGESTIONS]}
               emptyStateHint="Ask Handy to adjust quantities, add trades, or tighten narrative. DRAFT until you send."
+              composerPlaceholder="Ask Handy"
               heightClassName="h-[16rem] min-h-[12rem] sm:h-[18rem] lg:h-[min(40vh,22rem)]"
               navigateOnEstimateDraft
             />

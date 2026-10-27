@@ -185,6 +185,7 @@ export function LeadProposalHandy({
                 storageKey={`lead-proposal:${leadId}`}
                 suggestions={[...JARVIS_LEAD_PROPOSAL_SUGGESTIONS]}
                 emptyStateHint="Seed General notes/photos, then ask Jarvis to draft. You'll open the estimate spreadsheet workspace next."
+                composerPlaceholder="Ask Jarvis"
                 heightClassName="h-[22rem] min-h-[16rem] sm:h-[26rem]"
                 generalNotes={leadNotes}
                 generalPhotos={generalPhotos}

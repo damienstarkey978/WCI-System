@@ -29,8 +29,8 @@ import {
 } from "@/app/jarvis/actions";
 import { loadLeadGeneralPhotosForJarvisAction } from "@/app/leads/[leadId]/jarvis-seed-actions";
 import { prepareJarvisAttachments } from "@/lib/client/prepare-jarvis-attachments";
+import { JarvisAskComposer } from "@/components/jarvis/JarvisAskComposer";
 import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
-import { JarvisVoiceButton } from "@/components/jarvis/JarvisVoiceButton";
 import { useFunUi } from "@/components/jarvis/useFunUi";
 import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
@@ -50,6 +50,8 @@ interface JarvisChatPanelProps {
   readonly storageKey?: string;
   readonly suggestions?: readonly string[];
   readonly emptyStateHint?: string;
+  /** Placeholder for the Ask composer textarea (Handoff uses “Ask Handy”). */
+  readonly composerPlaceholder?: string;
   readonly onClose?: () => void;
   readonly heightClassName?: string;
   /** Lets an embedding (JarvisLauncher's docked button) react to a request being in
@@ -173,6 +175,7 @@ function JarvisChatBody({
   storageKeyFull,
   suggestions,
   emptyStateHint,
+  composerPlaceholder,
   onClose,
   onNewChat,
   heightClassName,
@@ -186,6 +189,7 @@ function JarvisChatBody({
   storageKeyFull: string;
   suggestions: readonly string[];
   emptyStateHint: string;
+  composerPlaceholder: string;
   onClose?: () => void;
   onNewChat: () => void;
   heightClassName: string;
@@ -294,13 +298,6 @@ function JarvisChatBody({
     }
   }
 
-  // Fires once dictation stops with something actually said — sends it straight to
-  // Jarvis, the same as tapping Send, so talking is the whole interaction rather
-  // than dictate-then-remember-to-submit.
-  function sendVoiceMessage() {
-    formRef.current?.requestSubmit();
-  }
-
   function seedGeneralNotes() {
     setSeedStatus(null);
     setAttachmentError(null);
@@ -395,16 +392,16 @@ function JarvisChatBody({
 
       <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
         {messages.length === 0 && pendingActions.length === 0 ? (
-          <div className="flex flex-1 flex-col justify-center gap-2">
-            <p className="text-center text-sm text-[var(--bt-muted)]">{emptyStateHint}</p>
+          <div className="flex flex-1 flex-col justify-end gap-2 pb-1">
+            <p className="text-center text-xs text-[var(--bt-muted)] sm:text-sm">{emptyStateHint}</p>
             {suggestions.length > 0 ? (
-              <div className="mt-2 flex flex-col gap-1.5">
+              <div className="flex flex-wrap justify-center gap-1.5">
                 {suggestions.map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
                     onClick={() => fillSuggestion(suggestion)}
-                    className="rounded border px-2.5 py-1.5 text-left text-xs text-[var(--bt-text)] hover:bg-black/5"
+                    className="max-w-full rounded-full border px-2.5 py-1.5 text-left text-[11px] leading-snug text-[var(--bt-text)] hover:bg-black/5 sm:text-xs"
                     style={{ borderColor: "var(--bt-border)" }}
                   >
                     {suggestion}
@@ -466,9 +463,18 @@ function JarvisChatBody({
         ) : null}
       </div>
 
-      <form
-        ref={formRef}
-        action={async (formData) => {
+      <JarvisAskComposer
+        formRef={formRef}
+        fileInputRef={fileInputRef}
+        conversationId={conversationId}
+        contextJson={context ? JSON.stringify(context) : ""}
+        placeholder={composerPlaceholder}
+        pending={pending}
+        preparing={preparing}
+        funUi={funUi}
+        rows={2}
+        onTranscript={appendVoiceTranscript}
+        onSubmit={async (formData) => {
           setAttachmentError(null);
           sendEpochRef.current += 1;
           setOverlayState(null);
@@ -483,72 +489,40 @@ function JarvisChatBody({
           });
           formRef.current?.reset();
         }}
-        className="flex flex-col gap-1.5 border-t p-2.5"
-        style={{ borderColor: "var(--bt-border)" }}
-      >
-        {conversationId ? <input type="hidden" name="conversationId" value={conversationId} /> : null}
-        <input type="hidden" name="context" value={context ? JSON.stringify(context) : ""} />
-        {showGeneralSeedActions ? (
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center">
-            <button
-              type="button"
-              onClick={seedGeneralNotes}
-              disabled={pending || preparing}
-              className="min-h-10 touch-manipulation rounded border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
-              style={{ borderColor: "var(--bt-primary)" }}
-            >
-              Use General notes
-            </button>
-            <button
-              type="button"
-              onClick={() => void seedGeneralPhotos()}
-              disabled={pending || preparing || loadingGeneralPhotos}
-              className="min-h-10 touch-manipulation rounded border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
-              style={{ borderColor: "var(--bt-primary)" }}
-            >
-              {loadingGeneralPhotos ? "Loading photos…" : "Use General photos"}
-            </button>
-          </div>
-        ) : null}
-        <JarvisVoiceButton onTranscript={appendVoiceTranscript} onFinish={sendVoiceMessage} funUi={funUi} />
-        <div className="flex items-end gap-2">
-          <textarea
-            name="text"
-            required
-            rows={2}
-            placeholder="Ask Jarvis…"
-            // text-base (16px), not text-sm — iOS Safari auto-zooms the page on focus
-            // for any input under 16px, which on a phone shoves the whole layout
-            // sideways the moment you tap in to type.
-            className={`flex-1 resize-none border px-2.5 py-2 text-base outline-none focus:border-[var(--bt-primary)] ${funUi ? "rounded-xl" : "rounded"}`}
-            style={{ borderColor: "var(--bt-border)" }}
-          />
-          <button
-            type="submit"
-            disabled={pending || preparing}
-            className={`px-3.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 disabled:shadow-none ${funUi ? "wci-fun-chunky-btn rounded-xl py-2.5 active:scale-95" : "rounded py-1.5"}`}
-            style={{ background: "var(--bt-primary)" }}
-          >
-            {preparing ? "…" : pending ? "…" : "Send"}
-          </button>
-        </div>
-        <label className="flex items-center gap-1.5 text-xs text-[var(--bt-muted)]">
-          <span>Attach photos:</span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            name="attachments"
-            multiple
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            className="max-w-full text-xs"
-          />
-        </label>
-      </form>
-      {seedStatus ? <p className="px-2.5 pb-1 text-xs text-[var(--bt-muted)]">{seedStatus}</p> : null}
-      {preparing ? <p className="px-2.5 pb-2 text-xs text-[var(--bt-muted)]">Preparing photos…</p> : null}
-      {attachmentError ?? viewState.error ? (
-        <p className="px-2.5 pb-2 text-xs text-red-600">{attachmentError ?? viewState.error}</p>
-      ) : null}
+        seedActions={
+          showGeneralSeedActions ? (
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center">
+              <button
+                type="button"
+                onClick={seedGeneralNotes}
+                disabled={pending || preparing}
+                className="min-h-10 touch-manipulation rounded-full border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
+                style={{ borderColor: "var(--bt-primary)" }}
+              >
+                Use General notes
+              </button>
+              <button
+                type="button"
+                onClick={() => void seedGeneralPhotos()}
+                disabled={pending || preparing || loadingGeneralPhotos}
+                className="min-h-10 touch-manipulation rounded-full border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
+                style={{ borderColor: "var(--bt-primary)" }}
+              >
+                {loadingGeneralPhotos ? "Loading photos…" : "Use General photos"}
+              </button>
+            </div>
+          ) : null
+        }
+        footer={
+          <>
+            {seedStatus ? <p className="px-0.5 text-xs text-[var(--bt-muted)]">{seedStatus}</p> : null}
+            {preparing ? <p className="px-0.5 text-xs text-[var(--bt-muted)]">Preparing photos…</p> : null}
+            {attachmentError ?? viewState.error ? (
+              <p className="px-0.5 text-xs text-red-600">{attachmentError ?? viewState.error}</p>
+            ) : null}
+          </>
+        }
+      />
     </div>
   );
 }
@@ -561,6 +535,7 @@ export function JarvisChatPanel({
   storageKey = "default",
   suggestions = JARVIS_SUGGESTIONS,
   emptyStateHint = "Ask Jarvis to look up a job, draft a change order, log a note, or queue an invoice or proposal to send — it can't send anything client-facing without your confirmation first.",
+  composerPlaceholder = "Ask Jarvis",
   onClose,
   heightClassName = "h-[32rem]",
   onPendingChange,
@@ -585,6 +560,7 @@ export function JarvisChatPanel({
       suggestions={suggestions}
       onPendingChange={onPendingChange}
       emptyStateHint={emptyStateHint}
+      composerPlaceholder={composerPlaceholder}
       onClose={onClose}
       onNewChat={startNewChat}
       heightClassName={heightClassName}
