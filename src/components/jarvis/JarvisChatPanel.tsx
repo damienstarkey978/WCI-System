@@ -17,6 +17,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   confirmPendingActionLauncherAction,
@@ -61,6 +62,11 @@ interface JarvisChatPanelProps {
   readonly generalPhotos?: readonly JarvisGeneralPhotoSeed[];
   /** Required with generalPhotos so the server action can load bytes for the Attach photos input. */
   readonly leadIdForGeneralPhotos?: string | null;
+  /**
+   * When Jarvis finishes drafting an estimate, navigate into the three-panel
+   * workspace (`/leads/estimates/{id}`) instead of leaving staff on the launcher.
+   */
+  readonly navigateOnEstimateDraft?: boolean;
 }
 
 function isWaitingOnAsyncDraft(messages: readonly { role: string; content: string }[]): boolean {
@@ -70,6 +76,13 @@ function isWaitingOnAsyncDraft(messages: readonly { role: string; content: strin
     lastAssistant.content.includes("Queued that up") ||
     lastAssistant.content.includes("I'll post the result right here")
   );
+}
+
+const ESTIMATE_WORKSPACE_PATH = /\/leads\/estimates\/([a-z0-9]+)/i;
+
+function extractEstimateWorkspaceHref(content: string): string | null {
+  const match = content.match(ESTIMATE_WORKSPACE_PATH);
+  return match ? `/leads/estimates/${match[1]}` : null;
 }
 
 function EmbeddedPendingActionCard({
@@ -167,6 +180,7 @@ function JarvisChatBody({
   generalNotes,
   generalPhotos,
   leadIdForGeneralPhotos,
+  navigateOnEstimateDraft = false,
 }: {
   context: Record<string, unknown> | null;
   storageKeyFull: string;
@@ -179,8 +193,11 @@ function JarvisChatBody({
   generalNotes?: string | null;
   generalPhotos?: readonly JarvisGeneralPhotoSeed[];
   leadIdForGeneralPhotos?: string | null;
+  navigateOnEstimateDraft?: boolean;
 }) {
+  const router = useRouter();
   const funUi = useFunUi();
+  const navigatedEstimateHref = useRef<string | null>(null);
   const [initialConversationId] = useState<string | undefined>(() =>
     typeof window !== "undefined" ? (sessionStorage.getItem(storageKeyFull) ?? undefined) : undefined,
   );
@@ -249,6 +266,17 @@ function JarvisChatBody({
     }, DRAFT_POLL_MS);
     return () => window.clearInterval(timer);
   }, [conversationId, waitingOnDraft, pending]);
+
+  useEffect(() => {
+    if (!navigateOnEstimateDraft || pending || waitingOnDraft) return;
+    const thread = viewState.messages ?? [];
+    const lastAssistant = [...thread].reverse().find((message) => message.role === "ASSISTANT");
+    if (!lastAssistant) return;
+    const href = extractEstimateWorkspaceHref(lastAssistant.content);
+    if (!href || navigatedEstimateHref.current === href) return;
+    navigatedEstimateHref.current = href;
+    router.push(href);
+  }, [navigateOnEstimateDraft, viewState.messages, pending, waitingOnDraft, router]);
 
   function fillSuggestion(suggestion: string) {
     const textarea = formRef.current?.elements.namedItem("text");
@@ -539,6 +567,7 @@ export function JarvisChatPanel({
   generalNotes,
   generalPhotos,
   leadIdForGeneralPhotos,
+  navigateOnEstimateDraft = false,
 }: JarvisChatPanelProps) {
   const [chatKey, setChatKey] = useState(0);
   const storageKeyFull = `${STORAGE_KEY_PREFIX}:${storageKey}`;
@@ -562,6 +591,7 @@ export function JarvisChatPanel({
       generalNotes={generalNotes}
       generalPhotos={generalPhotos}
       leadIdForGeneralPhotos={leadIdForGeneralPhotos}
+      navigateOnEstimateDraft={navigateOnEstimateDraft}
     />
   );
 }

@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { OutboundBrandMark } from "@/components/branding/OutboundBrandMark";
 import { ProposalSignatureBlocks, type ProposalSignatureSide } from "@/components/proposals/ProposalSignatureBlocks";
 import { ProposalTermsBlock } from "@/components/proposals/ProposalTermsBlock";
+import { formatIllustrativeMonthly } from "@/lib/estimates/financing";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatCompanyAddress, resolveCompanySlogan } from "@/lib/organization/company-defaults";
 
@@ -57,6 +58,12 @@ export type ClientProposalPhoto = {
   readonly url: string;
 };
 
+export type ClientProposalQuantity = {
+  readonly id: string;
+  readonly label: string;
+  readonly quantityLabel: string;
+};
+
 export function ClientProposalView({
   title,
   projectAddress,
@@ -72,6 +79,8 @@ export function ClientProposalView({
   organizationLogoPath = null,
   termsText = null,
   photos = [],
+  quantities = [],
+  showFinancing = true,
   clientSignature,
   companySignature,
   mode = "preview",
@@ -94,6 +103,10 @@ export function ClientProposalView({
   readonly organizationLogoPath?: string | null;
   readonly termsText?: string | null;
   readonly photos?: readonly ClientProposalPhoto[];
+  /** Handoff "Quantities at a Glance" — derived from estimate line items. */
+  readonly quantities?: readonly ClientProposalQuantity[];
+  /** Illustrative "from $X/month" strip (not a lender quote). */
+  readonly showFinancing?: boolean;
   readonly clientSignature?: ProposalSignatureSide | null;
   readonly companySignature?: ProposalSignatureSide | null;
   /** preview = staff/PDF; review = client link with accept/feedback slots. */
@@ -119,6 +132,7 @@ export function ClientProposalView({
     (options.length > 0 ? Math.min(...options.map((o) => o.totalCents)) : 0);
   const taxCents = 0;
   const totalCents = primaryTotal ?? subtotalCents + taxCents;
+  const monthlyLabel = showFinancing && options.length <= 1 ? formatIllustrativeMonthly(totalCents) : null;
 
   return (
     <article
@@ -244,6 +258,20 @@ export function ClientProposalView({
         </section>
       ))}
 
+      {quantities.length > 0 ? (
+        <section className="mt-5 border-t border-[#e5e7eb] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
+          <h2 className="text-sm font-semibold">Quantities at a Glance</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-[#374151]">
+            {quantities.map((qty) => (
+              <li key={qty.id}>
+                <span className="font-medium">{qty.label}</span>
+                <span className="text-[#6b7280]"> — {qty.quantityLabel}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {draws.length > 0 ? (
         <section className="mt-5 rounded-lg border border-[#e5e7eb] bg-[#fafafa] p-3 sm:mt-6 sm:p-4 break-inside-avoid">
           <h2 className="text-sm font-semibold">Payment Schedule</h2>
@@ -299,6 +327,16 @@ export function ClientProposalView({
               </strong>
               .
             </p>
+            {monthlyLabel ? (
+              <p className="mt-3 text-sm">
+                <span className="font-semibold" style={{ color: accent }}>
+                  from {monthlyLabel}/month
+                </span>{" "}
+                <span className="text-xs text-[#6b7280]">
+                  illustrative equal payments over 60 months — ask us about financing options
+                </span>
+              </p>
+            ) : null}
           </>
         ) : (
           <div>

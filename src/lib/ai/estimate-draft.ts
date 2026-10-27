@@ -232,6 +232,7 @@ export interface NormalizedEstimateLine {
   readonly title: string;
   readonly description: string | null;
   readonly quantityMilli: number;
+  readonly unit: string | null;
   readonly unitCostCents: Cents;
   readonly rateMode: RateMode;
   readonly rateBasisPoints: BasisPoints;
@@ -274,6 +275,7 @@ function normalizeLine(line: RawEstimateLineItem): NormalizedEstimateLine {
     title: line.title,
     description: line.description ?? null,
     quantityMilli: Math.round(line.quantity * 1_000),
+    unit: line.unit?.trim() || null,
     unitCostCents: parseDollarsToCents(line.unitCostDollars),
     rateMode: line.rateMode,
     rateBasisPoints: parsePercentToBasisPoints(line.ratePercent),

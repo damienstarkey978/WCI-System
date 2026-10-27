@@ -53,6 +53,8 @@ export interface CreateEstimateLineItemInput {
   readonly title: string;
   readonly description?: string | null;
   readonly quantityMilli?: number;
+  /** Unit of measure (hr, ea, sf, …). Optional — UI falls back by cost type. */
+  readonly unit?: string | null;
   readonly unitCostCents: number;
   readonly rateMode?: RateMode;
   readonly rateBasisPoints?: BasisPoints;
@@ -130,6 +132,7 @@ export async function createEstimate(input: CreateEstimateInput) {
           title: item.title,
           description: item.description ?? null,
           quantityMilli: item.quantityMilli ?? 1_000,
+          unit: item.unit?.trim() || null,
           unitCostCents: item.unitCostCents,
           rateMode: item.rateMode ?? rateMode,
           rateBasisPoints: item.rateBasisPoints ?? defaultRateBasisPoints,
@@ -200,6 +203,7 @@ export async function addEstimateLineItem(input: AddEstimateLineItemInput) {
       title: input.title,
       description: input.description ?? null,
       quantityMilli: input.quantityMilli ?? 1_000,
+      unit: input.unit?.trim() || null,
       unitCostCents: input.unitCostCents,
       rateMode: input.rateMode ?? estimate.rateMode,
       rateBasisPoints: input.rateBasisPoints ?? estimate.defaultRateBasisPoints,
@@ -218,6 +222,7 @@ export interface UpdateEstimateLineItemInput {
   readonly title?: string;
   readonly description?: string | null;
   readonly quantityMilli?: number;
+  readonly unit?: string | null;
   readonly unitCostCents?: number;
   readonly rateBasisPoints?: BasisPoints;
   readonly groupLabel?: string | null;
@@ -235,6 +240,7 @@ export async function updateEstimateLineItem(input: UpdateEstimateLineItemInput)
       title: input.title ?? lineItem.title,
       description: input.description === undefined ? lineItem.description : input.description,
       quantityMilli: input.quantityMilli ?? lineItem.quantityMilli,
+      unit: input.unit === undefined ? lineItem.unit : input.unit?.trim() || null,
       unitCostCents: input.unitCostCents ?? lineItem.unitCostCents,
       rateBasisPoints: input.rateBasisPoints ?? lineItem.rateBasisPoints,
       groupLabel: input.groupLabel === undefined ? lineItem.groupLabel : input.groupLabel,
@@ -248,4 +254,31 @@ export async function deleteEstimateLineItem(organizationId: string, estimateId:
   const lineItem = await db.estimateLineItem.findFirst({ where: { id: lineItemId, estimateId }, select: { id: true } });
   if (!lineItem) return;
   await db.estimateLineItem.delete({ where: { id: lineItem.id } });
+}
+
+/**
+ * Persist a new line-item order (Handoff drag handles). `orderedIds` must be the
+ * full set of line item ids for the estimate; sortOrder becomes the array index.
+ */
+export async function reorderEstimateLineItems(
+  organizationId: string,
+  estimateId: string,
+  orderedIds: readonly string[],
+) {
+  await requireEditableEstimate(organizationId, estimateId);
+
+  const existing = await db.estimateLineItem.findMany({
+    where: { estimateId },
+    select: { id: true },
+  });
+  const existingIds = new Set(existing.map((row) => row.id));
+  if (orderedIds.length !== existing.length || orderedIds.some((id) => !existingIds.has(id))) {
+    throw new Error("Reorder list must include every line item on the estimate exactly once.");
+  }
+
+  await db.$transaction(
+    orderedIds.map((id, index) =>
+      db.estimateLineItem.update({ where: { id }, data: { sortOrder: index } }),
+    ),
+  );
 }

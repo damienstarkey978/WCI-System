@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { LeadProposalHandy } from "@/components/jarvis/LeadProposalHandy";
@@ -44,8 +44,12 @@ export default async function LeadDetailPage({
   searchParams,
 }: PageProps<"/leads/[leadId]">) {
   const { leadId } = await params;
-  const { tab: tabRaw } = await searchParams;
+  const resolvedSearch = await searchParams;
+  const tabRaw = resolvedSearch.tab;
+  const composeRaw = resolvedSearch.compose;
   const tab = (Array.isArray(tabRaw) ? tabRaw[0] : tabRaw) ?? "general";
+  const composeMode =
+    (Array.isArray(composeRaw) ? composeRaw[0] : composeRaw) === "1";
 
   let user;
   try {
@@ -103,6 +107,14 @@ export default async function LeadDetailPage({
     lineItemCount: estimate.lineItems.length,
     proposalId: estimate.proposalOptions[0]?.proposalId ?? null,
   }));
+
+  // Existing draft estimates open the three-panel workspace — not the Proposals launcher.
+  if (tab === "proposals" && !composeMode) {
+    const pendingWorkspace = handyEstimates.find((estimate) => !estimate.proposalId);
+    if (pendingWorkspace) {
+      redirect(`/leads/estimates/${pendingWorkspace.id}`);
+    }
+  }
 
   const preSalePhotoFiles = lead.convertedJob
     ? await db.file.findMany({
@@ -282,6 +294,7 @@ export default async function LeadDetailPage({
             estimates={handyEstimates}
             jarvisUiEnabled={isJarvisUiEnabled()}
             anthropicConfigured={isAnthropicConfigured()}
+            composeMode={composeMode}
             manualForm={
               <CreateLeadProposalForm
                 leadId={lead.id}

@@ -860,6 +860,9 @@ model EstimateLineItem {
   description   String?
   /// Quantity × 1000. 2.5 units is stored as 2500.
   quantityMilli Int     @default(1000)
+  /// Unit of measure chip (hr, ea, sf, ls, …). AI drafts often supply this;
+  /// null means the UI falls back to a cost-type default.
+  unit          String?
   unitCostCents Int     @default(0)
 
   rateMode        RateMode @default(MARKUP)
