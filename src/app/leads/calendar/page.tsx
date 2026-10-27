@@ -1,28 +1,13 @@
 import Link from "next/link";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { ActivityTypeIcon, activityTypeLabel } from "@/components/leads/activity-type";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-const ACTIVITY_TYPE_LABEL: Record<string, string> = {
-  CALL: "Call",
-  EMAIL: "Email",
-  MEETING: "Meeting",
-  NOTE: "Note",
-  TASK: "Task",
-};
-
-const ACTIVITY_TYPE_COLOR: Record<string, string> = {
-  CALL: "#dbeafe",
-  EMAIL: "#ede9fe",
-  MEETING: "#fef3c7",
-  NOTE: "#e5e7eb",
-  TASK: "#fee2e2",
-};
-
-const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function monthKey(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -88,60 +73,65 @@ export default async function LeadActivityCalendarPage({ searchParams }: PagePro
   const monthLabel = rangeStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead Activity Calendar</h1>
         <div className="flex items-center gap-3 text-sm">
-          <Link href={`/leads/calendar?month=${monthKey(prevMonth.year, prevMonth.month)}`} className="text-[var(--bt-primary)] hover:underline">
+          <Link href={`/leads/calendar?month=${monthKey(prevMonth.year, prevMonth.month)}`} className="min-h-10 px-2 py-2 text-[var(--bt-primary)] hover:underline sm:min-h-0 sm:py-0">
             ← Prev
           </Link>
           <span className="font-semibold text-[var(--bt-text)]">{monthLabel}</span>
-          <Link href={`/leads/calendar?month=${monthKey(nextMonth.year, nextMonth.month)}`} className="text-[var(--bt-primary)] hover:underline">
+          <Link href={`/leads/calendar?month=${monthKey(nextMonth.year, nextMonth.month)}`} className="min-h-10 px-2 py-2 text-[var(--bt-primary)] hover:underline sm:min-h-0 sm:py-0">
             Next →
           </Link>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="grid grid-cols-7 border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-          {WEEKDAY_NAMES.map((name) => (
-            <div key={name} className="border-r px-2 py-2 last:border-r-0" style={{ borderColor: "var(--bt-border)" }}>
-              {name}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
-          {cells.map((day, index) => {
-            const key = day !== null ? `${monthKey(year, month)}-${String(day).padStart(2, "0")}` : `blank-${index}`;
-            const dayActivities = day !== null ? (byDay.get(key) ?? []) : [];
-            return (
-              <div
-                key={key}
-                className="min-h-28 border-b border-r p-1.5 last:border-r-0"
-                style={{ borderColor: "var(--bt-border)", background: day === null ? "var(--bt-page-bg)" : undefined }}
-              >
-                {day !== null ? (
-                  <>
-                    <div className="text-xs font-semibold text-[var(--bt-muted)]">{day}</div>
-                    <div className="mt-1 flex flex-col gap-1">
-                      {dayActivities.slice(0, 4).map((activity) => (
-                        <Link
-                          key={activity.id}
-                          href={`/leads/${activity.lead.id}?tab=activities`}
-                          className="truncate rounded px-1 py-0.5 text-[10px] font-medium"
-                          style={{ background: ACTIVITY_TYPE_COLOR[activity.type] ?? "#e5e7eb", color: "#1f2937" }}
-                          title={`${ACTIVITY_TYPE_LABEL[activity.type] ?? activity.type}: ${activity.lead.title ?? activity.lead.name}`}
-                        >
-                          {ACTIVITY_TYPE_LABEL[activity.type] ?? activity.type} — {activity.lead.title ?? activity.lead.name}
-                        </Link>
-                      ))}
-                      {dayActivities.length > 4 ? <span className="text-[10px] text-[var(--bt-muted)]">+{dayActivities.length - 4} more</span> : null}
-                    </div>
-                  </>
-                ) : null}
+      <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="min-w-[40rem]">
+          <div className="grid grid-cols-7 border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+            {WEEKDAY_NAMES.map((name) => (
+              <div key={name} className="border-r px-2 py-2 last:border-r-0" style={{ borderColor: "var(--bt-border)" }}>
+                {name}
               </div>
-            );
-          })}
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {cells.map((day, index) => {
+              const key = day !== null ? `${monthKey(year, month)}-${String(day).padStart(2, "0")}` : `blank-${index}`;
+              const dayActivities = day !== null ? (byDay.get(key) ?? []) : [];
+              return (
+                <div
+                  key={key}
+                  className="min-h-24 border-b border-r p-1.5 last:border-r-0 sm:min-h-28"
+                  style={{ borderColor: "var(--bt-border)", background: day === null ? "var(--bt-page-bg)" : undefined }}
+                >
+                  {day !== null ? (
+                    <>
+                      <div className="text-xs font-semibold text-[var(--bt-muted)]">{day}</div>
+                      <div className="mt-1 flex flex-col gap-1">
+                        {dayActivities.slice(0, 4).map((activity) => (
+                          <Link
+                            key={activity.id}
+                            href={`/leads/${activity.lead.id}?tab=activities`}
+                            className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-[10px] font-medium hover:bg-black/5"
+                            style={{ color: "var(--bt-text)" }}
+                            title={`${activityTypeLabel(activity.type)}: ${activity.lead.title ?? activity.lead.name}`}
+                          >
+                            <ActivityTypeIcon type={activity.type} size="sm" completed={activity.completedAt !== null} />
+                            <span className="truncate">
+                              {activityTypeLabel(activity.type)} — {activity.lead.title ?? activity.lead.name}
+                            </span>
+                          </Link>
+                        ))}
+                        {dayActivities.length > 4 ? <span className="text-[10px] text-[var(--bt-muted)]">+{dayActivities.length - 4} more</span> : null}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

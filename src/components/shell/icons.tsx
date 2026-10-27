@@ -265,3 +265,67 @@ export function SortArrowsIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Lead activity — Call (Buildertrend phone handset metaphor). */
+export function PhoneIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M6.2 3.8c.4-.4 1-.5 1.5-.3l1.6.6c.5.2.8.7.7 1.2l-.3 1.5a1.2 1.2 0 0 1-.7.9l-.9.4a9.2 9.2 0 0 0 3.8 3.8l.4-.9a1.2 1.2 0 0 1 .9-.7l1.5-.3c.5-.1 1 .2 1.2.7l.6 1.6c.2.5.1 1.1-.3 1.5l-.9.9c-.4.4-1 .6-1.5.5A12.4 12.4 0 0 1 4.8 6.2c-.1-.5.1-1.1.5-1.5l.9-.9Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Lead activity — Meeting / appointment (calendar). */
+export function CalendarIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <rect x="3" y="4.5" width="14" height="12" rx="1.4" stroke="currentColor" strokeWidth="1.35" />
+      <path d="M3 8h14M7 3v3M13 3v3" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+      <path d="M6.5 11.5h2M9.5 11.5h2M12.5 11.5h1.5M6.5 14h2M9.5 14h2" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Lead activity — Note (sticky note / page). */
+export function NoteIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M5 3.5h7.2L15.5 6.8V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+      <path d="M12 3.5V7h3.5M7 10.5h6M7 13.5h4" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Lead activity — Task (checkbox). */
+export function TaskIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <rect x="3.5" y="3.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.35" />
+      <path d="M6.5 10.2 8.8 12.5 13.5 7.5" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Buildertrend-style funnel (slightly wider mouth than FilterIcon). */
+export function FunnelIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M3.5 4.5h13l-4.5 5.2V15l-4 1.5v-6.8L3.5 4.5Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
