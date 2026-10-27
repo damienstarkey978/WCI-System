@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CommentThread } from "@/components/comments/CommentThread";
+import { ConvertToMenu } from "@/components/estimates/ConvertToMenu";
 import { EstimateHandyDock } from "@/components/estimates/EstimateHandyDock";
 import { EstimateProposalToggle } from "@/components/estimates/EstimateProposalToggle";
 import { EstimateSpreadsheet, type SpreadsheetGroup } from "@/components/estimates/EstimateSpreadsheet";
@@ -328,32 +329,53 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               />
               <span className="text-sm font-semibold tabular-nums text-[var(--bt-text)]">{headerTotalLabel}</span>
             </div>
+            {/* Handoff-like action strip: Convert · Preview · Email/Text */}
             <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+              <ConvertToMenu
+                estimateId={activeEstimate.id}
+                linkedProposalId={proposal.id}
+                canConvertToProposal={false}
+                pdfHref={`/proposals/${proposal.id}/pdf`}
+                csvHref={`/leads/estimates/${activeEstimate.id}/csv`}
+              />
               <Link
                 href={`/proposals/${proposal.id}/pdf`}
                 target="_blank"
                 className="inline-flex min-h-9 touch-manipulation items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-[var(--bt-text)] sm:min-h-0"
                 style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg)" }}
               >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                  />
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.75" />
+                </svg>
                 Preview
               </Link>
+              <SendProposalButtons
+                proposalId={proposal.id}
+                clientEmail={clientEmail}
+                clientPhone={clientPhone}
+                emailConfigured={emailConfigured}
+                smsConfigured={smsConfigured}
+                compact
+              />
               {proposal.status === "SENT" ? (
                 <form action={declineProposalPageAction}>
                   <input type="hidden" name="proposalId" value={proposal.id} />
-                  <button type="submit" className="rounded-md border px-2.5 py-1.5 text-xs font-medium text-[var(--bt-muted)] hover:text-red-600" style={{ borderColor: "var(--bt-border)" }}>
+                  <button
+                    type="submit"
+                    className="rounded-md border px-2.5 py-1.5 text-xs font-medium text-[var(--bt-muted)] hover:text-red-600"
+                    style={{ borderColor: "var(--bt-border)" }}
+                  >
                     Mark declined
                   </button>
                 </form>
               ) : null}
+              {proposal.status === "SENT" ? <ReviewLinkButton proposalId={proposal.id} /> : null}
             </div>
-            <SendProposalButtons
-              proposalId={proposal.id}
-              clientEmail={clientEmail}
-              clientPhone={clientPhone}
-              emailConfigured={emailConfigured}
-              smsConfigured={smsConfigured}
-            />
-            {proposal.status === "SENT" ? <ReviewLinkButton proposalId={proposal.id} /> : null}
           </div>
         </div>
       </div>
@@ -369,7 +391,10 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
         </div>
       ) : null}
 
-      <div className="rounded-md border bg-[var(--bt-panel-bg)] px-2.5 py-2" style={{ borderColor: "var(--bt-border)" }}>
+      <div
+        className="rounded-md border bg-[var(--bt-panel-bg)] px-2.5 py-1.5 sm:py-2"
+        style={{ borderColor: "var(--bt-border)" }}
+      >
         <OptionTabs
           proposalId={proposal.id}
           options={optionTabs}

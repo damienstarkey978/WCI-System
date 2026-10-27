@@ -95,7 +95,8 @@ export function ConvertToMenu({
           className="absolute right-0 top-full z-30 mt-1 w-[min(100vw-2rem,16rem)] overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)] py-1 shadow-lg"
           style={{ borderColor: "var(--bt-border)" }}
         >
-          {targets.map((target) => {
+          {targets.map((target, index) => {
+            const showDivider = index === 3;
             if (target.kind === "proposal") {
               return (
                 <form key="proposal" action={formAction} role="none">
@@ -104,9 +105,12 @@ export function ConvertToMenu({
                     type="submit"
                     role="menuitem"
                     disabled={!target.enabled || pending}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-medium text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)] disabled:cursor-not-allowed disabled:opacity-45"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)] disabled:cursor-not-allowed disabled:opacity-45"
                   >
-                    <span>{pending ? "Converting…" : target.label}</span>
+                    <span className="inline-flex items-center gap-2">
+                      <ConvertMenuIcon kind="proposal" />
+                      {pending ? "Converting…" : target.label}
+                    </span>
                     <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--bt-primary)" }}>
                       Primary
                     </span>
@@ -116,28 +120,40 @@ export function ConvertToMenu({
             }
             if (target.kind === "link") {
               return (
-                <Link
-                  key={target.label}
-                  href={target.href}
-                  role="menuitem"
-                  target={target.label === "PDF" || target.label === "CSV" ? "_blank" : undefined}
-                  className="block px-3 py-2.5 text-sm text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]"
-                  onClick={() => setOpen(false)}
-                >
-                  {target.label}
-                </Link>
+                <div key={target.label}>
+                  {showDivider ? (
+                    <div className="my-1 border-t" style={{ borderColor: "var(--bt-border)" }} role="separator" />
+                  ) : null}
+                  <Link
+                    href={target.href}
+                    role="menuitem"
+                    target={target.label === "PDF" || target.label === "CSV" ? "_blank" : undefined}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]"
+                    onClick={() => setOpen(false)}
+                  >
+                    <ConvertMenuIcon kind={target.label === "PDF" || target.label === "CSV" ? "export" : "doc"} />
+                    {target.label}
+                  </Link>
+                </div>
               );
             }
             return (
-              <div
-                key={target.label}
-                role="menuitem"
-                aria-disabled="true"
-                title={target.reason}
-                className="flex cursor-not-allowed items-center justify-between gap-2 px-3 py-2.5 text-sm text-[var(--bt-muted)] opacity-60"
-              >
-                <span>{target.label}</span>
-                <span className="text-[10px]">Soon</span>
+              <div key={target.label}>
+                {showDivider ? (
+                  <div className="my-1 border-t" style={{ borderColor: "var(--bt-border)" }} role="separator" />
+                ) : null}
+                <div
+                  role="menuitem"
+                  aria-disabled="true"
+                  title={target.reason}
+                  className="flex cursor-not-allowed items-center justify-between gap-2 px-3 py-2 text-sm text-[var(--bt-muted)] opacity-60"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <ConvertMenuIcon kind="soon" />
+                    {target.label}
+                  </span>
+                  <span className="text-[10px]">Soon</span>
+                </div>
               </div>
             );
           })}
@@ -145,5 +161,30 @@ export function ConvertToMenu({
       ) : null}
       {state.error ? <p className="max-w-xs text-xs text-red-600">{state.error}</p> : null}
     </div>
+  );
+}
+
+function ConvertMenuIcon({ kind }: { readonly kind: "proposal" | "export" | "doc" | "soon" }) {
+  const stroke = "currentColor";
+  if (kind === "proposal") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden className="opacity-70">
+        <path d="M7 3h7l5 5v13H7V3Z" stroke={stroke} strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M14 3v5h5" stroke={stroke} strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (kind === "export") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden className="opacity-70">
+        <path d="M12 4v10M8 10l4 4 4-4M5 18h14" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden className="opacity-50">
+      <rect x="5" y="4" width="14" height="16" rx="1.5" stroke={stroke} strokeWidth="1.6" />
+      <path d="M8 9h8M8 13h6" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
   );
 }

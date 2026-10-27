@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { CreateProposalFromEstimateButton } from "@/app/leads/estimates/[estimateId]/create-proposal-button";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { JARVIS_LEAD_PROPOSAL_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
@@ -45,7 +46,7 @@ export function EstimateHandyDock({
   scopeGroups,
   pricingTerms,
   projectAddress = null,
-  convertHref = null,
+  canConvertToProposal = false,
 }: {
   readonly leadId: string;
   readonly leadName: string;
@@ -59,8 +60,8 @@ export function EstimateHandyDock({
   readonly pricingTerms?: HandyPricingTerms | null;
   /** Truncated location chip in Ask Handy (Handoff shows job address). */
   readonly projectAddress?: string | null;
-  /** When estimate is converted, primary CTA on the estimate card. */
-  readonly convertHref?: string | null;
+  /** One-click Convert on the estimate card (lands on Proposal view). */
+  readonly canConvertToProposal?: boolean;
 }) {
   const ready = jarvisUiEnabled && anthropicConfigured;
   const [open, setOpen] = useState(true);
@@ -122,7 +123,7 @@ export function EstimateHandyDock({
 
   return (
     <aside
-      className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border lg:sticky lg:top-2 lg:h-[calc(100vh-4.5rem)] lg:w-[19.5rem] lg:self-start xl:w-[21rem]"
+      className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border lg:sticky lg:top-2 lg:h-[calc(100vh-4.5rem)] lg:w-[20rem] lg:self-start xl:w-[22rem]"
       style={{
         borderColor: "color-mix(in srgb, var(--bt-primary) 28%, var(--bt-border))",
         background: "var(--bt-panel-bg)",
@@ -240,14 +241,8 @@ export function EstimateHandyDock({
               >
                 View proposal
               </Link>
-            ) : convertHref ? (
-              <Link
-                href={convertHref}
-                className="mt-2 inline-flex min-h-8 w-full touch-manipulation items-center justify-center rounded-md px-2 py-1.5 text-[11px] font-semibold text-[var(--bt-on-primary)]"
-                style={{ background: "var(--bt-primary)" }}
-              >
-                Convert to proposal
-              </Link>
+            ) : canConvertToProposal && estimateId ? (
+              <CreateProposalFromEstimateButton estimateId={estimateId} variant="dock" />
             ) : (
               <p className="mt-1.5 text-[10px] text-[var(--bt-muted)]">
                 Use Convert to → Proposal when numbers look right.
@@ -257,9 +252,12 @@ export function EstimateHandyDock({
         ) : null}
       </div>
 
-      {/* Pinned Ask Handy — not buried in the scroll region */}
-      <div className="flex min-h-0 shrink-0 flex-col border-t" style={{ borderColor: "var(--bt-border)" }}>
-        <p className="px-2.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+      {/* Pinned Ask Handy — flex child so Overview keeps room above the composer */}
+      <div
+        className="flex min-h-0 flex-[1.15] flex-col border-t lg:min-h-[12rem]"
+        style={{ borderColor: "var(--bt-border)" }}
+      >
+        <p className="shrink-0 px-2.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
           Ask Handy
         </p>
         {ready ? (
@@ -276,17 +274,85 @@ export function EstimateHandyDock({
             suggestions={[...JARVIS_LEAD_PROPOSAL_SUGGESTIONS]}
             emptyStateHint="Adjust quantities, add trades, or tighten narrative. DRAFT until you send."
             composerPlaceholder="Ask Handy"
-            heightClassName="h-[14rem] min-h-[11rem] sm:h-[16rem] lg:h-[min(36vh,20rem)]"
+            heightClassName="min-h-0 flex-1"
             chrome="docked"
             locationChip={addressChip}
             navigateOnEstimateDraft
           />
         ) : (
-          <p className="p-2.5 text-xs text-[var(--bt-muted)]">
-            Jarvis needs NEXT_PUBLIC_JARVIS_UI_ENABLED and ANTHROPIC_API_KEY to chat here.
-          </p>
+          <HandyComposerStub
+            locationChip={addressChip}
+            suggestions={JARVIS_LEAD_PROPOSAL_SUGGESTIONS.slice(0, 3)}
+          />
         )}
       </div>
     </aside>
+  );
+}
+
+/** Visual Ask Handy chrome when Jarvis keys are off — keeps the dock Handoff-shaped. */
+function HandyComposerStub({
+  locationChip,
+  suggestions,
+}: {
+  readonly locationChip: string | null;
+  readonly suggestions: readonly string[];
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-1 flex-col justify-end gap-1.5 p-2">
+        <p className="text-center text-[10px] leading-snug text-[var(--bt-muted)]">
+          Adjust quantities, add trades, or tighten narrative. DRAFT until you send.
+        </p>
+        <div className="flex flex-wrap justify-start gap-1">
+          {suggestions.map((suggestion) => (
+            <span
+              key={suggestion}
+              className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] text-[var(--bt-muted)]"
+              style={{ borderColor: "var(--bt-border)" }}
+              title={suggestion}
+            >
+              {suggestion.length > 36 ? `${suggestion.slice(0, 34)}…` : suggestion}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="border-t p-1.5" style={{ borderColor: "var(--bt-border)" }}>
+        <div
+          className="overflow-hidden rounded-xl border bg-[var(--bt-panel-bg)]"
+          style={{ borderColor: "var(--bt-border)" }}
+        >
+          <p className="px-3 pt-2 text-base text-[var(--bt-muted)]">Ask Handy</p>
+          <p className="px-3 pb-0.5 text-[10px] text-[var(--bt-muted)]">Use Ctrl + Enter to submit</p>
+          <div className="flex items-center gap-1 px-1.5 pb-1 pt-0.5">
+            <span
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--bt-muted)]"
+              aria-hidden
+            >
+              +
+            </span>
+            {locationChip ? (
+              <span
+                className="inline-flex max-w-[7.5rem] items-center gap-0.5 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-[var(--bt-muted)]"
+                style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
+              >
+                {locationChip}
+              </span>
+            ) : null}
+            <div className="min-w-0 flex-1" />
+            <span
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--bt-on-primary)] opacity-50"
+              style={{ background: "var(--bt-primary)" }}
+              aria-hidden
+            >
+              ↑
+            </span>
+          </div>
+        </div>
+        <p className="mt-1 px-0.5 text-[10px] text-[var(--bt-muted)]">
+          Enable Jarvis UI + Anthropic to chat here.
+        </p>
+      </div>
+    </div>
   );
 }

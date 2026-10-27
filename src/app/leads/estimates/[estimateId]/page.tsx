@@ -340,13 +340,7 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
             projectAddress={
               [lead.addressLine1, lead.city, lead.state].filter(Boolean).join(", ") || null
             }
-            convertHref={
-              linkedProposalId
-                ? null
-                : canConvert
-                  ? `#convert-to-proposal`
-                  : null
-            }
+            canConvertToProposal={canConvert}
           />
         ) : null}
       </div>
