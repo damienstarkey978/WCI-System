@@ -167,6 +167,7 @@ describe("agent default scopes", () => {
     const duke = AGENT_DEFAULT_SCOPES.duke;
     expect(grantsScope(duke, "purchase-orders:write")).toBe(true);
     expect(grantsScope(duke, "bills:write")).toBe(true);
+    expect(grantsScope(duke, "takeoffs:write")).toBe(true);
     expect(grantsScope(duke, "invoices:write")).toBe(false);
     expect(grantsScope(duke, "jobs:write")).toBe(false);
   });

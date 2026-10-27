@@ -214,6 +214,37 @@ export const aiDraftEstimateSchema = z.object({
   notes: z.string().trim().min(10).max(10_000),
 });
 
+export const aiDraftTakeoffSchema = z.object({
+  jobId: z.string().min(1).max(64),
+  notes: z.string().trim().min(10).max(10_000),
+});
+
+export const queueTakeoffPurchasingSchema = z.object({
+  lineIds: z.array(z.string().min(1).max(64)).min(1).max(200).optional(),
+  vendorHint: z.string().trim().min(1).max(255).nullish(),
+  notes: z.string().trim().max(2_000).nullish(),
+});
+
+export const pushTakeoffToPurchaseOrderSchema = z.object({
+  poNumber: z.string().trim().min(1).max(64),
+  vendorName: z.string().trim().min(1).max(255),
+  vendorId: z.string().min(1).max(64).nullish(),
+  lineIds: z.array(z.string().min(1).max(64)).min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(255).nullish(),
+});
+
+export const listPurchasingIntentsQuerySchema = z.object({
+  jobId: z.string().min(1).max(64).optional(),
+  status: z.enum(["QUEUED", "CLAIMED", "CONVERTED", "CANCELLED"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+});
+
+export const convertPurchasingIntentSchema = z.object({
+  poNumber: z.string().trim().min(1).max(64),
+  vendorName: z.string().trim().min(1).max(255),
+  vendorId: z.string().min(1).max(64).nullish(),
+});
+
 const base64Pattern = /^[A-Za-z0-9+/]+=*$/;
 
 const billOcrDocumentSchema = z.object({

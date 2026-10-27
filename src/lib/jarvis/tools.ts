@@ -31,6 +31,15 @@ import { ChangeOrderMode, ChangeOrderStatus, ContractType, InvoiceStatus, JobSta
 import { AiNotConfiguredError, DraftGenerationError } from "@/lib/ai/estimate-assistant";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
 import {
+  AiNotConfiguredError as TakeoffAiNotConfiguredError,
+  DraftGenerationError as TakeoffDraftGenerationError,
+} from "@/lib/ai/takeoff-assistant";
+import {
+  createAiTakeoffDraft,
+  JobNotFoundError as TakeoffJobNotFoundError,
+  NoCostCodesError as TakeoffNoCostCodesError,
+} from "@/lib/ai/takeoff-service";
+import {
   ClientNotFoundError as AiDraftClientNotFoundError,
   createAiChangeOrderDraft,
   createAiEstimateDraft,
@@ -94,6 +103,13 @@ import { createPendingAction } from "@/lib/jarvis/pending-actions";
 import { createMaterialCatalogItem, listMaterialCatalogItems, searchAndSaveWebPrice } from "@/lib/materials/service";
 import { parseDollarsToCents } from "@/lib/money";
 import { createPurchaseOrder } from "@/lib/purchase-orders/service";
+import { loadJobPurchasingSummary } from "@/lib/takeoffs/load-purchasing-summary";
+import {
+  listTakeoffsForJob,
+  queueTakeoffForPurchasing,
+  TakeoffLinesNotConvertibleError,
+  TakeoffNotFoundError,
+} from "@/lib/takeoffs/service";
 import {
   getBillableMilestones,
   getCostInboxItems,
@@ -624,6 +640,111 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         ],
       });
       return `Created DRAFT purchase order ${po.poNumber} (${formatMoney(po.totalCents)}) to ${input.vendorName} for ${job.name}.`;
+    },
+  });
+
+  const listTakeoffsForJobTool = betaZodTool({
+    name: "list_takeoffs_for_job",
+    description: "List quantity takeoffs for a job (AI or manual). Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+      const takeoffs = await listTakeoffsForJob(ctx.organizationId, job.id);
+      if (takeoffs.length === 0) return `${job.name} has no takeoffs yet.`;
+      return takeoffs
+        .map(
+          (takeoff) =>
+            `${takeoff.id} | ${takeoff.title} | ${takeoff.status} | ${takeoff.lines.length} lines${takeoff.aiGenerated ? " | AI" : ""}`,
+        )
+        .join("\n");
+    },
+  });
+
+  const draftTakeoffWithAiTool = betaZodTool({
+    name: "draft_takeoff_with_ai",
+    description:
+      "Draft a quantity takeoff from plan/measurement notes for a job. Always DRAFT for human review — never queues Duke or creates a PO. After review, use queue_takeoff_for_purchasing.",
+    inputSchema: z.object({
+      jobId: z.string().describe("The job's id, from list_jobs"),
+      notes: z.string().describe("Plan/measurement notes — quantities, rooms, waste, materials to buy"),
+    }),
+    run: async (input) => {
+      try {
+        const result = await createAiTakeoffDraft({
+          organizationId: ctx.organizationId,
+          jobId: input.jobId,
+          notes: input.notes,
+        });
+        ctx.sideEffects.push(`Drafted takeoff ${result.takeoffId} for job ${input.jobId}`);
+        return `Drafted takeoff "${result.title}" (id: ${result.takeoffId}) with ${result.lineItemCount} line${
+          result.lineItemCount === 1 ? "" : "s"
+        }. Status DRAFT — a human should review, then queue_takeoff_for_purchasing or Push to PO. View at /jobs/${input.jobId}/takeoffs/${result.takeoffId}.`;
+      } catch (error) {
+        if (error instanceof TakeoffAiNotConfiguredError) {
+          return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
+        }
+        if (error instanceof TakeoffJobNotFoundError) return `No job found with id ${input.jobId} in this organization.`;
+        if (error instanceof TakeoffNoCostCodesError || error instanceof TakeoffDraftGenerationError) {
+          return error.message;
+        }
+        throw error;
+      }
+    },
+  });
+
+  const queueTakeoffForPurchasingTool = betaZodTool({
+    name: "queue_takeoff_for_purchasing",
+    description:
+      "Explicit Send to Purchasing — queues takeoff lines for Duke. Never implied by drafting a takeoff. Pass takeoff id from list_takeoffs_for_job.",
+    inputSchema: z.object({
+      takeoffId: z.string().describe("The takeoff id from list_takeoffs_for_job"),
+      vendorHint: z.string().optional().describe("Optional preferred vendor name for Duke"),
+      notes: z.string().optional().describe("Optional notes for the purchasing agent"),
+    }),
+    run: async (input) => {
+      try {
+        const result = await queueTakeoffForPurchasing({
+          organizationId: ctx.organizationId,
+          takeoffId: input.takeoffId,
+          vendorHint: input.vendorHint,
+          notes: input.notes,
+        });
+        ctx.sideEffects.push(`Queued takeoff ${input.takeoffId} for purchasing (${result.intents.length} intents)`);
+        return `Queued ${result.intents.length} purchasing intent(s) for takeoff ${input.takeoffId} on job ${result.jobId}. Duke can claim them via GET /api/v1/purchasing-intents?status=QUEUED.`;
+      } catch (error) {
+        if (error instanceof TakeoffNotFoundError || error instanceof TakeoffLinesNotConvertibleError) {
+          return error.message;
+        }
+        throw error;
+      }
+    },
+  });
+
+  const getJobPurchasingSummaryTool = betaZodTool({
+    name: "get_job_purchasing_summary",
+    description:
+      "Job purchasing rollup: not-yet purchased takeoff lines, queued for Duke, on-order POs, and purchased/complete POs. Pass the job's id from list_jobs.",
+    inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
+    run: async (input) => {
+      const job = await requireJob(ctx.organizationId, input.jobId);
+      if (!job) return `No job found with id ${input.jobId} in this organization.`;
+      const { summary } = await loadJobPurchasingSummary(ctx.organizationId, job.id);
+      const { totals } = summary;
+      const lines = [
+        `${job.name} purchasing:`,
+        `Not yet: ${totals.notYetCount} (${formatMoney(totals.notYetCents)})`,
+        `Queued for Duke: ${totals.queuedCount} (${formatMoney(totals.queuedCents)})`,
+        `On order: ${totals.onOrderCount} (${formatMoney(totals.onOrderCents)})`,
+        `Purchased/complete: ${totals.purchasedCount} (${formatMoney(totals.purchasedCents)})`,
+      ];
+      if (summary.rows.length > 0) {
+        lines.push("", "Top items:");
+        for (const row of summary.rows.slice(0, 15)) {
+          lines.push(`- [${row.bucket}] ${row.label} | ${row.statusLabel} | ${formatMoney(row.amountCents)}`);
+        }
+      }
+      return lines.join("\n");
     },
   });
 
@@ -2328,6 +2449,10 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
     createSelectionTool,
     listPurchaseOrdersForJob,
     createPurchaseOrderDraft,
+    listTakeoffsForJobTool,
+    draftTakeoffWithAiTool,
+    queueTakeoffForPurchasingTool,
+    getJobPurchasingSummaryTool,
     listBillsForJob,
     createBillTool,
     getScheduleOverview,
