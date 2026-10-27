@@ -1,11 +1,19 @@
 import Link from "next/link";
 
+import { AlertIcon, DocumentIcon, VideoIcon } from "@/components/shell/icons";
+
 export interface GalleryFile {
   readonly id: string;
   readonly fileName: string;
   readonly category: string;
   /** Null when the storage object could not be signed (see resolveFileUrlSafe). */
   readonly url: string | null;
+}
+
+function GalleryPlaceholder({ file }: { file: GalleryFile }) {
+  if (file.url === null) return <AlertIcon className="h-8 w-8" />;
+  if (file.category === "VIDEO") return <VideoIcon className="h-8 w-8" />;
+  return <DocumentIcon className="h-8 w-8" />;
 }
 
 /** Up to four tiles across, the last one showing "+N" when there are more, linking to the log's page. */
@@ -29,7 +37,9 @@ export function LogGallery({ files, href }: { files: readonly GalleryFile[]; hre
               // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching
               <img src={file.url} alt={file.fileName} className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-3xl text-[var(--bt-muted)]">{file.url === null ? "⚠️" : file.category === "VIDEO" ? "🎬" : "📄"}</div>
+              <div className="flex h-full w-full items-center justify-center text-[var(--bt-muted)]">
+                <GalleryPlaceholder file={file} />
+              </div>
             )}
             {showMore ? <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-2xl font-semibold text-white">+{extra}</span> : null}
           </Link>

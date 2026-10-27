@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { EmptyState } from "@/components/shell/EmptyState";
+import { PhotoIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -44,16 +46,20 @@ export default async function InspectionPicturesPage({
       </p>
 
       {folders.length === 0 ? (
-        <p
-          className="rounded-lg border px-4 py-10 text-center text-sm text-[var(--bt-muted)]"
-          style={{ borderColor: "var(--bt-border)" }}
-        >
-          No inspection folders yet. Open{" "}
-          <Link href={`/jobs/${job.id}/permitting`} className="font-medium text-[var(--bt-primary)] hover:underline">
-            Permitting
-          </Link>{" "}
-          and add the inspections this job needs — folders appear here automatically.
-        </p>
+        <EmptyState
+          icon={<PhotoIcon className="h-10 w-10" />}
+          title="No inspection folders yet"
+          description="Add the inspections this job needs on Permitting — folders appear here automatically."
+          action={
+            <Link
+              href={`/jobs/${job.id}/permitting`}
+              className="rounded px-3 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
+              style={{ background: "var(--bt-primary)" }}
+            >
+              Open Permitting
+            </Link>
+          }
+        />
       ) : (
         <ul className="grid gap-3">
           {folders.map((folder) => (

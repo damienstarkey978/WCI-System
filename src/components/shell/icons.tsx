@@ -367,3 +367,108 @@ export function FunnelIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Documents folder row — BT folder glyph (replaces emoji). */
+export function FolderIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M3.25 6.25V15a1.25 1.25 0 0 0 1.25 1.25h11a1.25 1.25 0 0 0 1.25-1.25V8.5A1.25 1.25 0 0 0 15.5 7.25H10L8.4 5.5H4.5A1.25 1.25 0 0 0 3.25 6.75v-.5Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Attached Documents pseudo-folder — paperclip (BT metaphor). */
+export function PaperclipIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M15.2 9.4 9.05 15.55a3.25 3.25 0 0 1-4.6-4.6L10.6 4.8a2.15 2.15 0 1 1 3.05 3.05L7.5 14"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Photos / Inspection Pictures empty + Files Photos metaphor. */
+export function PhotoIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <rect x="2.75" y="4.5" width="14.5" height="11" rx="1.4" stroke="currentColor" strokeWidth="1.35" />
+      <circle cx="7.25" cy="8.5" r="1.35" stroke="currentColor" strokeWidth="1.35" />
+      <path d="m6.5 14.5 3.2-3.4 2.1 2.2 2.4-2.8 2.3 4" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** RFI / clipboard list. */
+export function ClipboardIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M7 3.75h6a1 1 0 0 1 1 1V5.5h1.25A1.25 1.25 0 0 1 16.5 6.75v9A1.25 1.25 0 0 1 15.25 17H4.75A1.25 1.25 0 0 1 3.5 15.75v-9A1.25 1.25 0 0 1 4.75 5.5H6V4.75a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+      <path d="M7.5 3.75h5V5h-5V3.75ZM7 9.5h6M7 12.5h4" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Warranty claim shield. */
+export function ShieldIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M10 2.75 15.5 5v4.4c0 3.4-2.2 5.9-5.5 7.35C6.7 15.3 4.5 12.8 4.5 9.4V5L10 2.75Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+      <path d="m7.5 10 1.8 1.8 3.4-3.6" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Daily Log like — outline heart (fill via CSS currentColor when liked). */
+export function HeartIcon({ className, filled }: IconProps & { filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 20 20" fill={filled ? "currentColor" : "none"} className={className} aria-hidden="true">
+      <path
+        d="M10 16.25s-5.5-3.35-5.5-7.1A3.4 3.4 0 0 1 10 5.85 3.4 3.4 0 0 1 15.5 9.15c0 3.75-5.5 7.1-5.5 7.1Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Video file placeholder in galleries. */
+export function VideoIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <rect x="2.75" y="5" width="10.5" height="10" rx="1.3" stroke="currentColor" strokeWidth="1.35" />
+      <path d="M13.25 8.5 17.25 6v8l-4-2.5V8.5Z" stroke="currentColor" strokeWidth="1.35" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Broken / unsigned URL warning in file galleries. */
+export function AlertIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M10 3.25 17.25 16H2.75L10 3.25Z" stroke="currentColor" strokeWidth="1.35" strokeLinejoin="round" />
+      <path d="M10 8v3.5" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+      <circle cx="10" cy="14" r="0.85" fill="currentColor" />
+    </svg>
+  );
+}

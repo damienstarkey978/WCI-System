@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { MailIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { resolvePrimaryClientEmail } from "@/lib/ai/weekly-summary-service";
 import { currentAppUser } from "@/lib/auth";
@@ -43,6 +44,7 @@ export default async function ClientUpdatesPage({ params }: PageProps<"/jobs/[jo
 
       {summaries.length === 0 ? (
         <EmptyState
+          icon={<MailIcon className="h-10 w-10" />}
           title="Keep clients in the loop"
           description="Generate a weekly update from this job's client-visible daily logs and schedule items. Edit it in place, then Approve and Email to the primary client."
           action={<GenerateSummaryButton jobId={job.id} />}

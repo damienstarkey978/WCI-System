@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { EmptyState } from "@/components/shell/EmptyState";
+import { ChatIcon, HeartIcon, NoteIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -132,9 +134,16 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
 
       <div className="flex flex-col gap-4">
         {cards.length === 0 ? (
-          <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-10 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-            {filterCount > 0 ? "No daily logs match the filter." : "No daily logs yet. Use + Daily Log to add the first one."}
-          </p>
+          <EmptyState
+            icon={<NoteIcon className="h-10 w-10" />}
+            title={filterCount > 0 ? "No daily logs match the filter" : "No daily logs yet"}
+            description={
+              filterCount > 0
+                ? "Try clearing search or date filters."
+                : "Use + Daily Log to add the first one — notes, photos, and weather for the day."
+            }
+            action={filterCount > 0 ? undefined : <DailyLogCreateModal jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />}
+          />
         ) : (
           cards.map(({ log, files }) => {
             const weather = weatherSummary(log.weather);
@@ -178,12 +187,12 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
                       <input type="hidden" name="jobId" value={job.id} />
                       <input type="hidden" name="logId" value={log.id} />
                       <button type="submit" aria-pressed={liked} className="inline-flex items-center gap-1.5 hover:text-[var(--bt-text)]" style={liked ? { color: "var(--bt-danger)" } : undefined}>
-                        <span aria-hidden>{liked ? "♥" : "♡"}</span>
+                        <HeartIcon className="h-4 w-4" filled={liked} />
                         {log._count.likes}
                       </button>
                     </form>
                     <Link href={detailHref} className="inline-flex items-center gap-1.5 hover:text-[var(--bt-text)]">
-                      <span aria-hidden>💬</span>
+                      <ChatIcon className="h-4 w-4" />
                       {commentsByLog.get(log.id) ?? 0}
                     </Link>
                   </div>

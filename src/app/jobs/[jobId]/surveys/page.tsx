@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { ChatIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatDateUtc } from "@/lib/format";
@@ -120,7 +121,12 @@ export default async function SurveysPage({ params, searchParams }: PageProps<"/
 
       {view === "questions" ? (
         questionLibrary.length === 0 ? (
-          <EmptyState title="No questions yet" description="Questions from saved surveys will appear here as a library." action={createModal} />
+          <EmptyState
+            icon={<ChatIcon className="h-10 w-10" />}
+            title="No questions yet"
+            description="Questions from saved surveys will appear here as a library."
+            action={createModal}
+          />
         ) : (
           <ul className="divide-y rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
             {questionLibrary.map((prompt) => (
@@ -133,6 +139,7 @@ export default async function SurveysPage({ params, searchParams }: PageProps<"/
       ) : view === "grouped" ? (
         grouped.length === 0 ? (
           <EmptyState
+            icon={<ChatIcon className="h-10 w-10" />}
             title="Hear from your customers with Surveys"
             description="Group identical survey titles to see response totals across releases."
             action={
@@ -155,6 +162,7 @@ export default async function SurveysPage({ params, searchParams }: PageProps<"/
         )
       ) : surveys.length === 0 ? (
         <EmptyState
+          icon={<ChatIcon className="h-10 w-10" />}
           title="Hear from your customers with Surveys"
           description="Collect feedback at key points in the job with surveys."
           action={

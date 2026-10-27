@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { ClipboardIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -90,8 +91,14 @@ export default async function RfisPage({ params, searchParams }: PageProps<"/job
 
       {rfis.length === 0 ? (
         <EmptyState
+          icon={<ClipboardIcon className="h-10 w-10" />}
           title="Clarify the unknown with RFIs"
           description="Streamline formal requests for information with Subs/Vendors to keep the project moving."
+          action={
+            <CreateModal triggerLabel="+ RFI" title="New RFI" size="lg">
+              <CreateRfiForm jobId={job.id} users={users} />
+            </CreateModal>
+          }
         />
       ) : (
         <RfisGrid

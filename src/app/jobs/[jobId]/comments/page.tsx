@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { ChatIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
+import { logHeading } from "@/lib/daily-logs/display";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +24,11 @@ interface CommentRow {
 /**
  * "Comments" (Buildertrend screenshot gap-analysis pass) — distinct from Messages
  * (the job-level client-facing thread at src/app/jobs/[jobId]/messages): this is a
- * read-only, job-scoped rollup of the internal discussion threads already wired to
- * this job's own records via the unified Comment layer (src/lib/comments/service.ts)
- * — currently Invoices and Proposals, the two job-linked entities with a
- * CommentThread embedded on their own page. Posting still happens on each record's
- * page; this is "see everything discussed on this job at a glance."
+ * read-only, job-scoped rollup of the unified Comment layer
+ * (src/lib/comments/service.ts). Includes Invoices, Proposals, and Daily Logs —
+ * the job-linked entities that already embed CommentThread / daily-log comments.
+ * Posting still happens on each record's page; this is "see everything discussed
+ * on this job at a glance."
  */
 export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobId]/comments">) {
   const { jobId } = await params;
@@ -44,9 +46,10 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId }, select: { id: true, name: true } });
   if (!job) notFound();
 
-  const [invoices, proposals] = await Promise.all([
+  const [invoices, proposals, dailyLogs] = await Promise.all([
     db.invoice.findMany({ where: { jobId: job.id }, select: { id: true, invoiceNumber: true } }),
     db.proposal.findMany({ where: { jobId: job.id }, select: { id: true, title: true } }),
+    db.dailyLog.findMany({ where: { jobId: job.id }, select: { id: true, title: true, createdAt: true } }),
   ]);
 
   const comments = await db.comment.findMany({
@@ -55,6 +58,7 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
       OR: [
         { featureType: "Invoice", featureId: { in: invoices.map((i) => i.id) } },
         { featureType: "Proposal", featureId: { in: proposals.map((p) => p.id) } },
+        { featureType: "DailyLog", featureId: { in: dailyLogs.map((log) => log.id) } },
       ],
     },
     include: { authorUser: { select: { name: true, email: true } } },
@@ -63,15 +67,36 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
 
   const invoiceById = new Map(invoices.map((invoice) => [invoice.id, invoice]));
   const proposalById = new Map(proposals.map((proposal) => [proposal.id, proposal]));
+  const dailyLogById = new Map(dailyLogs.map((log) => [log.id, log]));
 
   const rows: CommentRow[] = comments.map((comment) => {
-    const isInvoice = comment.featureType === "Invoice";
-    const invoice = isInvoice ? invoiceById.get(comment.featureId) : undefined;
-    const proposal = !isInvoice ? proposalById.get(comment.featureId) : undefined;
+    if (comment.featureType === "Invoice") {
+      const invoice = invoiceById.get(comment.featureId);
+      return {
+        id: comment.id,
+        sourceLabel: `Invoice ${invoice?.invoiceNumber ?? comment.featureId}`,
+        sourceHref: `/jobs/${job.id}/invoices/${comment.featureId}`,
+        authorLabel: comment.authorUser?.name ?? comment.authorUser?.email ?? "Unknown",
+        body: comment.body,
+        createdAt: comment.createdAt,
+      };
+    }
+    if (comment.featureType === "DailyLog") {
+      const log = dailyLogById.get(comment.featureId);
+      return {
+        id: comment.id,
+        sourceLabel: log ? `Daily Log — ${logHeading(log.createdAt, log.title)}` : `Daily Log ${comment.featureId}`,
+        sourceHref: `/jobs/${job.id}/daily-logs/${comment.featureId}`,
+        authorLabel: comment.authorUser?.name ?? comment.authorUser?.email ?? "Unknown",
+        body: comment.body,
+        createdAt: comment.createdAt,
+      };
+    }
+    const proposal = proposalById.get(comment.featureId);
     return {
       id: comment.id,
-      sourceLabel: isInvoice ? `Invoice ${invoice?.invoiceNumber ?? comment.featureId}` : `Proposal "${proposal?.title ?? comment.featureId}"`,
-      sourceHref: isInvoice ? `/jobs/${job.id}/invoices/${comment.featureId}` : `/leads/proposals/${comment.featureId}`,
+      sourceLabel: `Proposal "${proposal?.title ?? comment.featureId}"`,
+      sourceHref: `/leads/proposals/${comment.featureId}`,
       authorLabel: comment.authorUser?.name ?? comment.authorUser?.email ?? "Unknown",
       body: comment.body,
       createdAt: comment.createdAt,
@@ -83,7 +108,11 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
       <PageHeader jobName={job.name} title="Comments" />
 
       {rows.length === 0 ? (
-        <EmptyState title="No comments yet" description="Internal discussion left on this job's invoices and proposals will appear here." />
+        <EmptyState
+          icon={<ChatIcon className="h-10 w-10" />}
+          title="No comments yet"
+          description="Internal discussion on this job's daily logs, invoices, and proposals will appear here."
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((row) => (

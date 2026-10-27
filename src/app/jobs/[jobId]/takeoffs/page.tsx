@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { NoteIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { extendedCostCents } from "@/lib/budget/funnel";
@@ -60,6 +61,7 @@ export default async function TakeoffsPage({ params }: PageProps<"/jobs/[jobId]/
 
       {takeoffs.length === 0 ? (
         <EmptyState
+          icon={<NoteIcon className="h-10 w-10" />}
           title="No takeoffs yet"
           description="Draft one from plan or measurement notes. Nothing is purchased until you Send to Purchasing or Push to PO."
         />

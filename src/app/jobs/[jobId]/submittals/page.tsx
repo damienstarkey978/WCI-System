@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { ClipboardIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -118,6 +119,7 @@ export default async function SubmittalsPage({ params, searchParams }: PageProps
       {view === "packages" ? (
         packageNames.length === 0 ? (
           <EmptyState
+            icon={<ClipboardIcon className="h-10 w-10" />}
             title="Add a package"
             description="Group submittals together to stay organized and track progress more easily. Enter a package name on a submittal to start."
             action={
@@ -155,6 +157,7 @@ export default async function SubmittalsPage({ params, searchParams }: PageProps
 
           {submittals.length === 0 ? (
             <EmptyState
+              icon={<ClipboardIcon className="h-10 w-10" />}
               title="Add a Submittal"
               description="Send submittals and manage approvals for materials, plans, and other job requirements."
               action={

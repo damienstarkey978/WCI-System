@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { ChatIcon, DocumentIcon, HeartIcon, VideoIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { listComments } from "@/lib/comments/service";
@@ -80,7 +81,7 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
                     <img src={file.url} alt={file.fileName} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--bt-muted)]">
-                      <span className="text-3xl">{file.category === "VIDEO" ? "🎬" : "📄"}</span>
+                      {file.category === "VIDEO" ? <VideoIcon className="h-8 w-8" /> : <DocumentIcon className="h-8 w-8" />}
                       <span className="max-w-full truncate px-2 text-xs">{file.fileName}</span>
                     </div>
                   )}
@@ -99,12 +100,12 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="logId" value={log.id} />
             <button type="submit" aria-pressed={liked} className="inline-flex items-center gap-1.5 hover:text-[var(--bt-text)]" style={liked ? { color: "var(--bt-danger)" } : undefined}>
-              <span aria-hidden>{liked ? "♥" : "♡"}</span>
+              <HeartIcon className="h-4 w-4" filled={liked} />
               {log._count.likes}
             </button>
           </form>
-          <span>
-            <span aria-hidden>💬</span> {comments.length}
+          <span className="inline-flex items-center gap-1.5">
+            <ChatIcon className="h-4 w-4" /> {comments.length}
           </span>
         </div>
 

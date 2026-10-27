@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { CheckIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDateUtc, formatMoney } from "@/lib/format";
@@ -127,8 +128,14 @@ export default async function SelectionsPage({ params, searchParams }: PageProps
       {view === "allowances" ? (
         allowances.length === 0 ? (
           <EmptyState
+            icon={<CheckIcon className="h-10 w-10" />}
             title="No allowances."
             description="Easily add and track how allowances impact your budget as choices are being made."
+            action={
+              <CreateModal triggerLabel="+ Allowance" title="New allowance" variant="secondary">
+                <CreateAllowanceForm jobId={job.id} costCodes={costCodes} />
+              </CreateModal>
+            }
           />
         ) : (
           <AllowancesGrid
@@ -163,8 +170,14 @@ export default async function SelectionsPage({ params, searchParams }: PageProps
       ) : view === "hierarchy" ? (
         selections.length === 0 ? (
           <EmptyState
+            icon={<CheckIcon className="h-10 w-10" />}
             title="Manage project selections"
             description="Improve the selection process, and get decisions from customers sooner."
+            action={
+              <CreateModal triggerLabel="+ Selection" title="New selection" size="lg">
+                <CreateSelectionForm jobId={job.id} allowances={allowances} />
+              </CreateModal>
+            }
           />
         ) : (
           <div className="flex flex-col gap-4">
@@ -213,8 +226,14 @@ export default async function SelectionsPage({ params, searchParams }: PageProps
         )
       ) : selections.length === 0 ? (
         <EmptyState
+          icon={<CheckIcon className="h-10 w-10" />}
           title="Manage project selections"
           description="Improve the selection process, and get decisions from customers sooner."
+          action={
+            <CreateModal triggerLabel="+ Selection" title="New selection" size="lg">
+              <CreateSelectionForm jobId={job.id} allowances={allowances} />
+            </CreateModal>
+          }
         />
       ) : (
         <div className="flex flex-col gap-4">
