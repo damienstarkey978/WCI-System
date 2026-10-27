@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { HammerIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
@@ -105,8 +106,18 @@ export default async function JobPurchasingPage({ params }: PageProps<"/jobs/[jo
 
       {summary.rows.length === 0 ? (
         <EmptyState
+          icon={<HammerIcon className="h-10 w-10" />}
           title="Nothing to track yet"
           description="Draft a takeoff or create a purchase order for this job to see purchased vs not-yet here."
+          action={
+            <Link
+              href={`/jobs/${job.id}/takeoffs`}
+              className="rounded px-3 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
+              style={{ background: "var(--bt-primary)" }}
+            >
+              Open Takeoffs
+            </Link>
+          }
         />
       ) : (
         <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "var(--bt-border)" }}>

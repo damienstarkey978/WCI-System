@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { CalendarIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -134,6 +135,7 @@ export default async function TimeClockPage({ params, searchParams }: PageProps<
           </p>
           {entries.length === 0 ? (
             <EmptyState
+              icon={<CalendarIcon className="h-10 w-10" />}
               title="Simplify timekeeping with Time Clock"
               description="Clock in to track hours and breaks on the job."
               action={clockInModal}
@@ -191,6 +193,7 @@ export default async function TimeClockPage({ params, searchParams }: PageProps<
         </div>
       ) : entries.length === 0 ? (
         <EmptyState
+          icon={<CalendarIcon className="h-10 w-10" />}
           title="Simplify timekeeping with Time Clock"
           description="Clock in to track hours and breaks on the job."
           action={clockInModal}

@@ -4,11 +4,13 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { FolderIcon, PaperclipIcon, PhotoIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { resolveFileUrlSafe } from "@/lib/files/service";
+import { listInspectionPictureFolders } from "@/lib/permitting/inspection-pictures";
 
 import { listFolders } from "@/lib/files/folders";
 
@@ -53,8 +55,14 @@ export default async function FilesPage({
 
   const folders = await listFolders(user.organizationId, job.id);
   const openAttached = activeCategory === "DOCUMENT" && folderParam === "attached";
-  const openFolder = activeCategory === "DOCUMENT" && typeof folderParam === "string" ? (folders.find((f) => f.id === folderParam) ?? null) : null;
+  const openFolder =
+    activeCategory === "DOCUMENT" && typeof folderParam === "string" && folderParam !== "attached"
+      ? (folders.find((f) => f.id === folderParam) ?? null)
+      : null;
   const showFolderTable = activeCategory === "DOCUMENT" && openFolder === null && !openAttached;
+  // Only needed on the Documents landing table (Inspection Pictures discoverability).
+  const inspectionFolders = showFolderTable && !trashView ? await listInspectionPictureFolders(user.organizationId, job.id) : [];
+  const inspectionPhotoCount = inspectionFolders.reduce((sum, folder) => sum + folder.photoCount, 0);
 
   // Buildertrend's "Attached Documents": files that belong to another record (a bill, PO,
   // invoice, selection option or daily log) rather than sitting loose in the job's documents.
@@ -209,11 +217,34 @@ export default async function FilesPage({
               </tr>
             </thead>
             <tbody>
+              <tr className="border-b" style={{ borderColor: "var(--bt-border)" }}>
+                <td className="px-4 py-3">
+                  <Link
+                    href={`/jobs/${job.id}/files/inspection-pictures`}
+                    className="inline-flex items-center gap-2 font-medium text-[var(--bt-primary)] hover:underline"
+                  >
+                    <PhotoIcon className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
+                    Inspection Pictures
+                  </Link>
+                </td>
+                <td className="px-4 py-3 text-xs text-[var(--bt-muted)]">
+                  {inspectionFolders.length === 0
+                    ? "Add inspections on Permitting — folders appear here automatically"
+                    : `${inspectionFolders.length} inspection folder${inspectionFolders.length === 1 ? "" : "s"}`}
+                </td>
+                <td className="px-4 py-3" />
+                <td className="px-4 py-3" />
+                <td className="px-4 py-3 text-right text-[var(--bt-muted)]">{inspectionPhotoCount}</td>
+                <td className="px-4 py-3" />
+              </tr>
               {attachedCount > 0 ? (
                 <tr className="border-b" style={{ borderColor: "var(--bt-border)" }}>
                   <td className="px-4 py-3">
-                    <Link href={`/jobs/${job.id}/files?folder=attached`} className="font-medium text-[var(--bt-primary)] hover:underline">
-                      {"📎 "}
+                    <Link
+                      href={`/jobs/${job.id}/files?folder=attached`}
+                      className="inline-flex items-center gap-2 font-medium text-[var(--bt-primary)] hover:underline"
+                    >
+                      <PaperclipIcon className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
                       Attached Documents
                     </Link>
                   </td>
@@ -227,8 +258,11 @@ export default async function FilesPage({
               {folders.map((folder) => (
                 <tr key={folder.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
                   <td className="px-4 py-3">
-                    <Link href={`/jobs/${job.id}/files?folder=${folder.id}`} className="font-medium text-[var(--bt-primary)] hover:underline">
-                      {"📁 "}
+                    <Link
+                      href={`/jobs/${job.id}/files?folder=${folder.id}`}
+                      className="inline-flex items-center gap-2 font-medium text-[var(--bt-primary)] hover:underline"
+                    >
+                      <FolderIcon className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
                       {folder.name}
                     </Link>
                   </td>
@@ -272,7 +306,7 @@ export default async function FilesPage({
               {folders.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-[var(--bt-muted)]">
-                    No folders yet. Use + Folder to add one.
+                    No document folders yet. Use + Folder to add one — Inspection Pictures lives under Files → Inspection Pictures.
                   </td>
                 </tr>
               ) : null}
@@ -283,15 +317,24 @@ export default async function FilesPage({
 
       {showFolderTable && !trashView && filesWithUrls.length > 0 ? <h2 className="text-sm font-semibold text-[var(--bt-text)]">Documents not in a folder</h2> : null}
 
-      {trashView ? null : filesWithUrls.length === 0 && !(showFolderTable && (folders.length > 0 || attachedCount > 0)) ? (
-        <EmptyState title="No files yet" description="Documents, photos, and videos attached to this job will appear here." />
-      ) : (
+      {trashView ? null : filesWithUrls.length === 0 && !showFolderTable ? (
+        <EmptyState
+          icon={activeCategory === "PHOTO" || activeCategory === "PRESALE_PHOTO" ? <PhotoIcon className="h-10 w-10" /> : <FolderIcon className="h-10 w-10" />}
+          title="No files yet"
+          description="Documents, photos, and videos attached to this job will appear here."
+          action={
+            <CreateModal triggerLabel="+ Upload" title="Upload a file" variant="secondary">
+              <UploadForm jobId={job.id} folderId={openFolder?.id} />
+            </CreateModal>
+          }
+        />
+      ) : filesWithUrls.length > 0 ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {filesWithUrls.map((file) => (
             <FileCard key={file.id} jobId={job.id} file={file} folders={folders.map((f) => ({ id: f.id, name: f.name }))} />
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

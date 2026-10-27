@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { DocumentIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -104,13 +105,16 @@ export default async function PlansAndSpecsPage({ params, searchParams }: PagePr
 
       {tab === "plans" ? (
         plans.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-6 py-12 text-center" style={{ borderColor: "var(--bt-border)" }}>
-            <h2 className="text-base font-semibold text-[var(--bt-text)]">Add a plan</h2>
-            <p className="max-w-md text-sm text-[var(--bt-muted)]">Upload blueprint plans to keep drawings, layouts, and revisions in one place. Your crew can view and reference them anytime.</p>
-            <div className="w-full max-w-md text-left">
-              <UploadForm jobId={job.id} fixedCategory="PLAN" />
-            </div>
-          </div>
+          <EmptyState
+            icon={<DocumentIcon className="h-10 w-10" />}
+            title="Add a plan"
+            description="Upload blueprint plans to keep drawings, layouts, and revisions in one place. Your crew can view and reference them anytime."
+            action={
+              <CreateModal triggerLabel="+ Plan" title="Add a plan">
+                <UploadForm jobId={job.id} fixedCategory="PLAN" />
+              </CreateModal>
+            }
+          />
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {plans.map((plan) => (
@@ -121,7 +125,16 @@ export default async function PlansAndSpecsPage({ params, searchParams }: PagePr
       ) : null}
 
       {tab === "specs" && specifications.length === 0 ? (
-        <EmptyState title="No specifications yet" description="Specification books generated for this job will appear here." />
+        <EmptyState
+          icon={<DocumentIcon className="h-10 w-10" />}
+          title="No specifications yet"
+          description="Specification books generated for this job will appear here."
+          action={
+            <CreateModal triggerLabel="Generate from estimate" title="Generate specification from estimate" variant="secondary">
+              <GenerateSpecForm jobId={job.id} estimates={estimates} />
+            </CreateModal>
+          }
+        />
       ) : tab === "specs" ? (
         <div className="flex flex-col gap-4">
           {specifications.map((spec) => (

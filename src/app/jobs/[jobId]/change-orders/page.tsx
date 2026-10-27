@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { DocumentIcon } from "@/components/shell/icons";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -156,7 +157,16 @@ export default async function ChangeOrdersPage({ params, searchParams }: PagePro
       </nav>
 
       {filtered.length === 0 ? (
-        <EmptyState title="No change orders yet" description="Change orders created for this job will appear here." />
+        <EmptyState
+          icon={<DocumentIcon className="h-10 w-10" />}
+          title="No change orders yet"
+          description="Change orders created for this job will appear here."
+          action={
+            <CreateModal triggerLabel="+ Change Order" title="New change order" size="lg">
+              <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
+            </CreateModal>
+          }
+        />
       ) : (
         <ChangeOrdersGrid rows={filtered} />
       )}

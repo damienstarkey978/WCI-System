@@ -5,6 +5,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { ShieldIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -90,6 +91,7 @@ export default async function WarrantiesPage({ params, searchParams }: PageProps
 
       {claims.length === 0 ? (
         <EmptyState
+          icon={<ShieldIcon className="h-10 w-10" />}
           title="Track warranty claims"
           description="Manage claims from creation through completion with warranties."
           action={

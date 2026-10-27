@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
+import { EmptyState } from "@/components/shell/EmptyState";
+import { CalendarIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -67,10 +69,12 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
     return (
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         <PageHeader jobName={job.name} title="Schedule" />
-        <div className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center" style={{ borderColor: "var(--bt-border)" }}>
-          <p className="mb-3 text-sm text-[var(--bt-muted)]">No schedule yet.</p>
-          <CreateScheduleButton jobId={job.id} />
-        </div>
+        <EmptyState
+          icon={<CalendarIcon className="h-10 w-10" />}
+          title="No schedule yet"
+          description="Create a schedule to plan phases, calendar items, and the Gantt for this job."
+          action={<CreateScheduleButton jobId={job.id} />}
+        />
       </div>
     );
   }
