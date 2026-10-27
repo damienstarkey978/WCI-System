@@ -1,13 +1,14 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { DEFAULT_PO_SCOPE_OF_WORK } from "@/lib/purchase-orders/default-scope";
+import { nextAutoPoNumber } from "@/lib/purchase-orders/po-number";
 
-import { CreatePoForm } from "./create-po-form";
+import { CreatePoModal } from "./create-po-modal";
 import { PurchaseOrdersBillsTabs, FinancialPageHeader } from "../financial-tabs";
 import { PurchaseOrdersGrid } from "./purchase-orders-grid";
 
@@ -29,7 +30,7 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const [purchaseOrders, costCodes] = await Promise.all([
+  const [purchaseOrders, costCodes, vendors, suggestedPoNumber, defaultTemplate] = await Promise.all([
     db.purchaseOrder.findMany({
       where: { jobId: job.id },
       orderBy: { createdAt: "desc" },
@@ -40,7 +41,19 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
       orderBy: { sortOrder: "asc" },
       select: { id: true, code: true, name: true },
     }),
+    db.vendor.findMany({
+      where: { organizationId: user.organizationId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
+    }),
+    nextAutoPoNumber(user.organizationId),
+    db.pOAgreementTemplate.findFirst({
+      where: { organizationId: user.organizationId, isActive: true, isDefault: true },
+      select: { body: true },
+    }),
   ]);
+
+  const defaultScopeOfWork = defaultTemplate?.body ?? DEFAULT_PO_SCOPE_OF_WORK;
 
   const rows = purchaseOrders.map((po) => ({
     id: po.id,
@@ -57,13 +70,18 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
   }));
 
   const createAction = (
-    <CreateModal triggerLabel="+ Purchase Order" title="New purchase order">
-      <CreatePoForm jobId={job.id} costCodes={costCodes} />
-    </CreateModal>
+    <CreatePoModal
+      jobId={job.id}
+      jobName={job.name}
+      costCodes={costCodes}
+      vendors={vendors}
+      suggestedPoNumber={suggestedPoNumber}
+      defaultScopeOfWork={defaultScopeOfWork}
+    />
   );
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <FinancialPageHeader jobName={job.name} title="Purchase Orders" action={createAction} />
 
       <PurchaseOrdersBillsTabs jobId={job.id} active="purchase-orders" />

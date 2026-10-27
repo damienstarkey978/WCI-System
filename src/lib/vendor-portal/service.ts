@@ -7,6 +7,7 @@
 
 import { PurchaseOrderStatus, type ScheduleScope } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
+import { approvePurchaseOrder } from "@/lib/purchase-orders/workflow";
 import { emitEvent } from "@/lib/webhooks";
 
 export class JobNotFoundError extends Error {
@@ -159,10 +160,10 @@ export interface AcceptPurchaseOrderInput {
 
 /**
  * A vendor's e-sign acceptance of a PO (CLAUDE.md 3: "PO acceptance+e-sign in
- * portal"). Deliberately does not change PurchaseOrderStatus — internal
- * approval and vendor acceptance are two different facts about a PO, tracked
- * in separate fields (status vs vendorSignedAt), exactly as ChangeOrder keeps
- * `status` and `clientSignedAt` independent.
+ * portal"). From PENDING_APPROVAL this routes through approvePurchaseOrder with
+ * approvedBy=VENDOR so status, agreement snapshot, and signature fields stay in
+ * sync. An already-APPROVED PO that somehow lacks a vendor signature only stamps
+ * the signature fields (legacy / internal-approved then forwarded path).
  */
 export async function acceptPurchaseOrder(input: AcceptPurchaseOrderInput) {
   const po = await db.purchaseOrder.findFirst({
@@ -170,28 +171,47 @@ export async function acceptPurchaseOrder(input: AcceptPurchaseOrderInput) {
   });
   if (!po) throw new PurchaseOrderNotFoundError(input.purchaseOrderId);
   if (po.vendorId !== input.vendorId) throw new PurchaseOrderNotAssignedToVendorError(input.purchaseOrderId);
-  if (po.status !== PurchaseOrderStatus.APPROVED) {
-    throw new PurchaseOrderNotAcceptableError(input.purchaseOrderId, po.status);
-  }
 
   const vendor = await db.vendor.findUniqueOrThrow({ where: { id: input.vendorId }, select: { name: true } });
+  const signatureName = input.signatureName ?? vendor.name;
 
-  const updated = await db.purchaseOrder.update({
-    where: { id: po.id },
-    data: {
-      vendorSignatureName: input.signatureName ?? vendor.name,
-      vendorSignedAt: new Date(),
+  if (po.status === PurchaseOrderStatus.PENDING_APPROVAL) {
+    const updated = await approvePurchaseOrder({
+      organizationId: input.organizationId,
+      purchaseOrderId: input.purchaseOrderId,
+      approvedBy: "VENDOR",
+      vendorSignatureName: signatureName,
       vendorSignatureIp: input.signatureIp ?? null,
-    },
-  });
+    });
+    await emitEvent(input.organizationId, "po.vendor_accepted", {
+      purchaseOrderId: updated.id,
+      jobId: updated.jobId,
+      vendorId: input.vendorId,
+    });
+    return updated;
+  }
 
-  await emitEvent(input.organizationId, "po.vendor_accepted", {
-    purchaseOrderId: updated.id,
-    jobId: updated.jobId,
-    vendorId: input.vendorId,
-  });
+  if (po.status === PurchaseOrderStatus.APPROVED && !po.vendorSignedAt) {
+    const updated = await db.purchaseOrder.update({
+      where: { id: po.id },
+      data: {
+        vendorSignatureName: signatureName,
+        vendorSignedAt: new Date(),
+        vendorSignatureIp: input.signatureIp ?? null,
+        agreementSnapshot: po.agreementSnapshot ?? po.scopeOfWork,
+        agreementSnapshotAt: po.agreementSnapshotAt ?? new Date(),
+        approvedBy: "VENDOR",
+      },
+    });
+    await emitEvent(input.organizationId, "po.vendor_accepted", {
+      purchaseOrderId: updated.id,
+      jobId: updated.jobId,
+      vendorId: input.vendorId,
+    });
+    return updated;
+  }
 
-  return updated;
+  throw new PurchaseOrderNotAcceptableError(input.purchaseOrderId, po.status);
 }
 
 export interface UpdateVendorContactInput {
