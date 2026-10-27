@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import type { AddFromSource } from "@/components/financial/PoCostLineItems";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -30,30 +31,107 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const [purchaseOrders, costCodes, vendors, suggestedPoNumber, defaultTemplate] = await Promise.all([
-    db.purchaseOrder.findMany({
-      where: { jobId: job.id },
-      orderBy: { createdAt: "desc" },
-      include: { lineItems: true },
-    }),
-    db.costCode.findMany({
-      where: { organizationId: user.organizationId, isActive: true },
-      orderBy: { sortOrder: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
-    db.vendor.findMany({
-      where: { organizationId: user.organizationId },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true },
-    }),
-    nextAutoPoNumber(user.organizationId),
-    db.pOAgreementTemplate.findFirst({
-      where: { organizationId: user.organizationId, isActive: true, isDefault: true },
-      select: { body: true },
-    }),
-  ]);
+  const [purchaseOrders, costCodes, vendors, suggestedPoNumber, defaultTemplate, schedules, estimates, changeOrders] =
+    await Promise.all([
+      db.purchaseOrder.findMany({
+        where: { jobId: job.id },
+        orderBy: { createdAt: "desc" },
+        include: { lineItems: true },
+      }),
+      db.costCode.findMany({
+        where: { organizationId: user.organizationId, isActive: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, code: true, name: true },
+      }),
+      db.vendor.findMany({
+        where: { organizationId: user.organizationId },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, email: true },
+      }),
+      nextAutoPoNumber(user.organizationId),
+      db.pOAgreementTemplate.findFirst({
+        where: { organizationId: user.organizationId, isActive: true, isDefault: true },
+        select: { body: true },
+      }),
+      db.schedule.findMany({
+        where: { jobId: job.id, organizationId: user.organizationId },
+        select: {
+          items: {
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, title: true },
+          },
+        },
+      }),
+      db.estimate.findMany({
+        where: { jobId: job.id, organizationId: user.organizationId, status: { in: ["LOCKED", "SENT"] } },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          title: true,
+          lineItems: {
+            orderBy: { sortOrder: "asc" },
+            select: {
+              id: true,
+              title: true,
+              costCodeId: true,
+              costType: true,
+              unitCostCents: true,
+              quantityMilli: true,
+            },
+          },
+        },
+      }),
+      db.changeOrder.findMany({
+        where: { jobId: job.id, organizationId: user.organizationId, status: "APPROVED" },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        select: {
+          id: true,
+          number: true,
+          title: true,
+          lineItems: {
+            orderBy: { sortOrder: "asc" },
+            select: {
+              id: true,
+              title: true,
+              costCodeId: true,
+              costType: true,
+              unitCostCents: true,
+              quantityMilli: true,
+            },
+          },
+        },
+      }),
+    ]);
 
   const defaultScopeOfWork = defaultTemplate?.body ?? DEFAULT_PO_SCOPE_OF_WORK;
+  const scheduleItems = schedules.flatMap((schedule) => schedule.items);
+
+  const addFromSources: AddFromSource[] = [
+    ...estimates.flatMap((estimate) =>
+      estimate.lineItems.map((line) => ({
+        id: `estimate:${line.id}`,
+        groupLabel: `Estimate — ${estimate.title ?? "Untitled"}`,
+        title: line.title,
+        costCodeId: line.costCodeId,
+        costType: line.costType,
+        unitCostCents: line.unitCostCents,
+        quantityMilli: line.quantityMilli,
+      })),
+    ),
+    ...changeOrders.flatMap((changeOrder) =>
+      changeOrder.lineItems.map((line) => ({
+        id: `co:${line.id}`,
+        groupLabel: `CO ${String(changeOrder.number).padStart(4, "0")} — ${changeOrder.title}`,
+        title: line.title,
+        costCodeId: line.costCodeId,
+        costType: line.costType,
+        unitCostCents: line.unitCostCents,
+        quantityMilli: line.quantityMilli,
+      })),
+    ),
+  ];
 
   const rows = purchaseOrders.map((po) => ({
     id: po.id,
@@ -75,6 +153,8 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
       jobName={job.name}
       costCodes={costCodes}
       vendors={vendors}
+      scheduleItems={scheduleItems}
+      addFromSources={addFromSources}
       suggestedPoNumber={suggestedPoNumber}
       defaultScopeOfWork={defaultScopeOfWork}
     />

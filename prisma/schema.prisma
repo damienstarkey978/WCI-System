@@ -986,8 +986,16 @@ model PurchaseOrder {
   /// office treats it (no scope of work to agree to, no lien-waiver exposure).
   materialsOnly Boolean @default(false)
 
+  /// Buildertrend "Mark as a Variance PO" — flags a PO that sits outside the original
+  /// estimate/budget path (change-driven or catch-up work). Display/filter only for v1.
+  isVariance Boolean @default(false)
+
   scheduledCompletionOn DateTime?
   completedOn           DateTime?
+
+  /// Optional schedule task this PO's work is tied to (BT "Link to Schedule").
+  linkedScheduleItemId String?
+  linkedScheduleItem   ScheduleItem? @relation(fields: [linkedScheduleItemId], references: [id], onDelete: SetNull)
 
   /// The subcontractor agreement the vendor is accepting — work schedule, site
   /// cleanliness, safety/PPE, workmanship standards. Markdown.
@@ -1033,6 +1041,7 @@ model PurchaseOrder {
   @@index([jobId, status])
   @@index([jobId, workStatus])
   @@index([vendorId])
+  @@index([linkedScheduleItemId])
 }
 
 /// Reusable subcontractor-agreement boilerplate. WCI pastes the same
@@ -1876,6 +1885,9 @@ model ScheduleItem {
 
   /// Bills booked against this schedule task.
   bills Bill[]
+
+  /// Purchase orders linked to this schedule task (BT "Link to Schedule").
+  purchaseOrders PurchaseOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

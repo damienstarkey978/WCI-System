@@ -2,12 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-import { CreateBillForm } from "../bills/create-bill-form";
+import { CreateBillModal } from "../bills/create-bill-modal";
 import { FinancialPageHeader } from "../financial-tabs";
 import { CostInboxGrid } from "./cost-inbox-grid";
 
@@ -34,7 +33,7 @@ export default async function CostInboxPage({ params }: PageProps<"/jobs/[jobId]
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const [bills, costCodes, purchaseOrders] = await Promise.all([
+  const [bills, costCodes, purchaseOrders, vendors, schedules] = await Promise.all([
     db.bill.findMany({
       where: {
         jobId: job.id,
@@ -49,8 +48,23 @@ export default async function CostInboxPage({ params }: PageProps<"/jobs/[jobId]
       orderBy: { sortOrder: "asc" },
       select: { id: true, code: true, name: true },
     }),
-    db.purchaseOrder.findMany({ where: { jobId: job.id }, select: { id: true, poNumber: true }, orderBy: { createdAt: "desc" } }),
+    db.purchaseOrder.findMany({
+      where: { jobId: job.id },
+      select: { id: true, poNumber: true, title: true, vendorId: true, vendorName: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.vendor.findMany({
+      where: { organizationId: user.organizationId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    db.schedule.findMany({
+      where: { jobId: job.id, organizationId: user.organizationId },
+      select: { items: { orderBy: { sortOrder: "asc" }, select: { id: true, title: true } } },
+    }),
   ]);
+
+  const scheduleItems = schedules.flatMap((schedule) => schedule.items);
 
   const rows = bills.map((bill) => ({
     id: bill.id,
@@ -68,9 +82,15 @@ export default async function CostInboxPage({ params }: PageProps<"/jobs/[jobId]
         jobName={job.name}
         title="Cost Inbox"
         action={
-          <CreateModal triggerLabel="+ Receipt" title="New bill from receipt">
-            <CreateBillForm jobId={job.id} costCodes={costCodes} purchaseOrders={purchaseOrders} />
-          </CreateModal>
+          <CreateBillModal
+            jobId={job.id}
+            jobName={job.name}
+            costCodes={costCodes}
+            purchaseOrders={purchaseOrders}
+            vendors={vendors}
+            scheduleItems={scheduleItems}
+            triggerLabel="+ Receipt"
+          />
         }
       />
 

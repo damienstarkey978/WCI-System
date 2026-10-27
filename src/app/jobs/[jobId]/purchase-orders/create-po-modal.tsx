@@ -3,8 +3,9 @@
 import { useState } from "react";
 
 import type { CostCodeOption } from "@/components/financial/CostCodeLineItems";
+import type { AddFromSource } from "@/components/financial/PoCostLineItems";
 
-import { CreatePoForm, type VendorOption } from "./create-po-form";
+import { CreatePoForm, type ScheduleOption, type VendorOption } from "./create-po-form";
 
 /**
  * Opens the Buildertrend-sized Purchase Order create dialog from "+ Purchase Order".
@@ -14,6 +15,8 @@ export function CreatePoModal({
   jobName,
   costCodes,
   vendors,
+  scheduleItems,
+  addFromSources,
   suggestedPoNumber,
   defaultScopeOfWork,
   triggerLabel = "+ Purchase Order",
@@ -22,6 +25,8 @@ export function CreatePoModal({
   jobName: string;
   costCodes: readonly CostCodeOption[];
   vendors: readonly VendorOption[];
+  scheduleItems: readonly ScheduleOption[];
+  addFromSources: readonly AddFromSource[];
   suggestedPoNumber: string;
   defaultScopeOfWork: string;
   triggerLabel?: string;
@@ -52,6 +57,8 @@ export function CreatePoModal({
               jobName={jobName}
               costCodes={costCodes}
               vendors={vendors}
+              scheduleItems={scheduleItems}
+              addFromSources={addFromSources}
               suggestedPoNumber={suggestedPoNumber}
               defaultScopeOfWork={defaultScopeOfWork}
               onClose={() => setOpen(false)}

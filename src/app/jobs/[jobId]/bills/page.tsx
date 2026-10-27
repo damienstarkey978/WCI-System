@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { currentAppUser } from "@/lib/auth";
 import { billStatusCounts, billingInboxAddress } from "@/lib/bills/intake";
@@ -10,7 +9,7 @@ import { db } from "@/lib/db";
 
 import { BillsGrid } from "./bills-grid";
 import { BillUploader } from "./bill-uploader";
-import { CreateBillForm } from "./create-bill-form";
+import { CreateBillModal } from "./create-bill-modal";
 import { EmailToInboxButton } from "./email-to-inbox-button";
 import { PurchaseOrdersBillsTabs, FinancialPageHeader } from "../financial-tabs";
 
@@ -59,7 +58,7 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
   const statusFilter =
     activeTab === "ALL" ? { approvalStatus: { not: "VOID" as const } } : { approvalStatus: activeTab };
 
-  const [bills, counts, costCodes, purchaseOrders, qboConnection, organization] = await Promise.all([
+  const [bills, counts, costCodes, purchaseOrders, vendors, schedules, qboConnection, organization] = await Promise.all([
     db.bill.findMany({
       where: { jobId: job.id, ...statusFilter },
       orderBy: { createdAt: "desc" },
@@ -75,12 +74,26 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
       orderBy: { sortOrder: "asc" },
       select: { id: true, code: true, name: true },
     }),
-    db.purchaseOrder.findMany({ where: { jobId: job.id }, select: { id: true, poNumber: true }, orderBy: { createdAt: "desc" } }),
+    db.purchaseOrder.findMany({
+      where: { jobId: job.id },
+      select: { id: true, poNumber: true, title: true, vendorId: true, vendorName: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.vendor.findMany({
+      where: { organizationId: user.organizationId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    db.schedule.findMany({
+      where: { jobId: job.id, organizationId: user.organizationId },
+      select: { items: { orderBy: { sortOrder: "asc" }, select: { id: true, title: true } } },
+    }),
     db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } }),
     db.organization.findUniqueOrThrow({ where: { id: user.organizationId }, select: { slug: true } }),
   ]);
   const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
   const inboxAddress = billingInboxAddress(organization.slug);
+  const scheduleItems = schedules.flatMap((schedule) => schedule.items);
 
   const rows = bills.map((bill) => ({
     id: bill.id,
@@ -100,12 +113,21 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
     qboBillId: bill.qboBillId,
   }));
 
+  const createBill = (
+    <CreateBillModal
+      jobId={job.id}
+      jobName={job.name}
+      costCodes={costCodes}
+      purchaseOrders={purchaseOrders}
+      vendors={vendors}
+      scheduleItems={scheduleItems}
+    />
+  );
+
   const createAction = (
     <div className="flex items-center gap-2">
       <EmailToInboxButton inboxAddress={inboxAddress} />
-      <CreateModal triggerLabel="+ Bill" title="New bill">
-        <CreateBillForm jobId={job.id} costCodes={costCodes} purchaseOrders={purchaseOrders} />
-      </CreateModal>
+      {createBill}
     </div>
   );
 
@@ -148,11 +170,7 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
                 : `Nothing in ${TABS.find((t) => t.key === activeTab)?.label}`
           }
           description="Drop a receipt above, forward one to the inbox address, or add a bill by hand."
-          action={
-            <CreateModal triggerLabel="+ Bill" title="New bill">
-              <CreateBillForm jobId={job.id} costCodes={costCodes} purchaseOrders={purchaseOrders} />
-            </CreateModal>
-          }
+          action={createBill}
         />
       ) : (
         <BillsGrid rows={rows} isQboConnected={isQboConnected} />
