@@ -120,7 +120,7 @@ async function runOneJob(job: { id: string; organizationId: string; leadId: stri
     });
     await postConversationMessage(
       job.conversationId,
-      `Drafted estimate "${estimate.title}" for the lead — status DRAFT, review line items at /leads/estimates/${estimate.id}. When it looks right, use Create Proposal there to convert it into a client-facing DRAFT proposal.`,
+      `Drafted estimate "${estimate.title}" for the lead — status DRAFT, review line items at /leads/estimates/${estimate.id}. When it looks right, use Convert to Proposal there to turn it into a client-facing DRAFT proposal.`,
     );
     return { succeeded: true };
   } catch (error) {

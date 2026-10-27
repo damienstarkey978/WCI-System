@@ -15,10 +15,11 @@ export function CreateProposalFromEstimateButton({ estimateId }: { readonly esti
       <button
         type="submit"
         disabled={pending}
-        className="min-h-11 touch-manipulation rounded px-4 py-2.5 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 sm:min-h-0 sm:py-1.5 sm:text-xs"
+        className="inline-flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded px-4 py-2.5 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 sm:min-h-0 sm:py-2 sm:text-xs"
         style={{ background: "var(--bt-primary)" }}
       >
-        {pending ? "Creating…" : "Create Proposal"}
+        {pending ? "Converting…" : "Convert to Proposal"}
+        {!pending ? <span aria-hidden className="text-[10px] opacity-80">▾</span> : null}
       </button>
       {state.error ? <p className="max-w-xs text-xs text-red-600">{state.error}</p> : null}
     </form>
