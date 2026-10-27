@@ -3,6 +3,7 @@ import { ClientProposalView } from "@/components/proposals/ClientProposalView";
 import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { InvalidActionTokenError, peekActionToken } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
+import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 
@@ -95,6 +96,22 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
     },
   });
 
+  const preSalePhotoFiles = proposal.jobId
+    ? await db.file.findMany({
+        where: { jobId: proposal.jobId, category: "PRESALE_PHOTO", deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, fileName: true, url: true },
+      })
+    : [];
+  const photos = (
+    await Promise.all(
+      preSalePhotoFiles.map(async (photo) => {
+        const url = await resolveFileUrl(photo.url).catch(() => null);
+        return url ? { id: photo.id, fileName: photo.fileName, url } : null;
+      }),
+    )
+  ).filter((photo): photo is { id: string; fileName: string; url: string } => photo !== null);
+
   const accentColor = proposal.accentColor ?? DEFAULT_ACCENT;
   const options = proposal.options.map((option) => ({
     id: option.id,
@@ -167,7 +184,7 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
     ) : null;
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] px-3 py-6 sm:px-6 sm:py-10">
+    <div className="min-h-screen bg-[#f3f4f6] px-2 py-4 sm:px-6 sm:py-10">
       <ClientProposalView
         title={proposal.title}
         projectAddress={projectAddress}
@@ -186,6 +203,7 @@ export default async function ProposalReviewPage({ params }: PageProps<"/proposa
         accentColor={accentColor}
         logoUrl={proposal.logoUrl}
         organizationLogoPath={organization?.logoPath ?? null}
+        photos={photos}
         termsText={resolveProposalTermsText({
           proposalTerms: proposal.termsText,
           organizationTerms: organization?.defaultProposalTerms,
