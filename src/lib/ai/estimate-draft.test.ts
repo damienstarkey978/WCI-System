@@ -3,10 +3,16 @@ import { describe, expect, it } from "vitest";
 import { RateMode } from "@/generated/prisma/enums";
 import {
   buildEstimateDraftSchema,
+  buildEstimateNarrativeDraftSchema,
+  buildEstimatePricingContinuationSchema,
+  buildEstimatePricingDraftSchema,
   buildLineItemSchema,
   EmptyCostCodeCatalogError,
+  ESTIMATE_LINE_ITEMS_PER_PASS,
   formatCostCodeCatalog,
   formatMaterialCatalog,
+  mergeEstimateDraftParts,
+  mergeEstimateLineItemChunks,
   normalizeEstimateDraft,
   type CostCodeOption,
   type RawEstimateDraft,
@@ -119,6 +125,111 @@ describe("buildEstimateDraftSchema", () => {
       assumptions: ["Assumes standard 8ft ceilings"],
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("split pricing / narrative schemas", () => {
+  const baseLine = {
+    costCodeId: "cc_paint_labor",
+    groupLabel: "Painting",
+    title: "Paint labor — rooms as noted",
+    description: "Living + hall; two coats",
+    quantity: 40,
+    unitCostDollars: 45,
+    ratePercent: 20,
+    confidence: "HIGH" as const,
+    priceSource: "MARKET_RATE" as const,
+  };
+
+  it("accepts a pricing pass without narrative fields", () => {
+    const schema = buildEstimatePricingDraftSchema(["cc_paint_labor"]);
+    const result = schema.safeParse({
+      title: "Interior paint",
+      lineItems: [baseLine],
+      assumptions: [],
+      incomplete: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("caps pricing-pass line items at ESTIMATE_LINE_ITEMS_PER_PASS", () => {
+    const schema = buildEstimatePricingDraftSchema(["cc_paint_labor"]);
+    const tooMany = Array.from({ length: ESTIMATE_LINE_ITEMS_PER_PASS + 1 }, (_, i) => ({
+      ...baseLine,
+      title: `Line ${i}`,
+    }));
+    expect(schema.safeParse({ title: "Huge", lineItems: tooMany, assumptions: [], incomplete: true }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts a continuation pricing pass", () => {
+    const schema = buildEstimatePricingContinuationSchema(["cc_paint_labor"]);
+    expect(
+      schema.safeParse({ lineItems: [baseLine], assumptions: ["more left"], incomplete: true }).success,
+    ).toBe(true);
+  });
+
+  it("accepts a narrative-only pass", () => {
+    const schema = buildEstimateNarrativeDraftSchema();
+    expect(
+      schema.safeParse({
+        projectDescription: "A two-room interior repaint.",
+        proposalSections: [{ title: "Painting", bullets: ["Paint two rooms"] }],
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("mergeEstimateLineItemChunks / mergeEstimateDraftParts", () => {
+  const paintLabor = {
+    costCodeId: "cc_paint_labor",
+    groupLabel: "Painting",
+    title: "Paint labor",
+    quantity: 40,
+    unitCostDollars: 45,
+    ratePercent: 20,
+    rateMode: RateMode.MARKUP,
+    confidence: "HIGH" as const,
+    priceSource: "MARKET_RATE" as const,
+  };
+  const paintMat = {
+    costCodeId: "cc_paint_mat",
+    groupLabel: "Painting",
+    title: "Paint materials",
+    quantity: 10,
+    unitCostDollars: 50,
+    ratePercent: 10,
+    rateMode: RateMode.MARKUP,
+    confidence: "MEDIUM" as const,
+    priceSource: "CATALOG" as const,
+  };
+
+  it("merges chunks and drops duplicate title+costCode+group lines", () => {
+    const merged = mergeEstimateLineItemChunks([[paintLabor, paintMat], [paintLabor]]);
+    expect(merged).toHaveLength(2);
+    expect(merged.map((l) => l.title)).toEqual(["Paint labor", "Paint materials"]);
+  });
+
+  it("builds a full raw draft from pricing + narrative parts", () => {
+    const raw = mergeEstimateDraftParts({
+      title: "Interior paint",
+      lineItems: [paintLabor],
+      assumptions: ["Assumes two coats"],
+      projectDescription: "A two-room interior repaint.",
+      proposalSections: [{ title: "Painting", bullets: ["Paint two rooms"] }],
+    });
+    expect(raw.lineItems).toHaveLength(1);
+    expect(raw.proposalSections[0].title).toBe("Painting");
+    expect(() =>
+      mergeEstimateDraftParts({
+        title: "x",
+        lineItems: [],
+        assumptions: [],
+        projectDescription: "y",
+        proposalSections: [{ title: "z", bullets: ["b"] }],
+      }),
+    ).toThrow(/no line items/);
   });
 });
 
