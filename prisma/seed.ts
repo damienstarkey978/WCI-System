@@ -29,6 +29,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../src/generated/prisma/client";
 import { AiPreferenceForType, CostType } from "../src/generated/prisma/enums";
+import { WCI_COMPANY_DEFAULTS } from "../src/lib/organization/company-defaults";
+import { loadCanonicalProposalTerms } from "../src/lib/organization/proposal-terms";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -42,6 +44,7 @@ const prisma = new PrismaClient({ adapter });
 const ORGANIZATION = {
   name: "World Construction Inc",
   slug: process.env.DEV_ORGANIZATION_SLUG ?? "world-construction",
+  ...WCI_COMPANY_DEFAULTS,
 };
 
 interface SeedCostCode {
@@ -149,10 +152,21 @@ const COST_CODES: readonly SeedCostCode[] = [
 ];
 
 async function main(): Promise<void> {
+  const defaultProposalTerms = loadCanonicalProposalTerms();
   const organization = await prisma.organization.upsert({
     where: { slug: ORGANIZATION.slug },
-    update: { name: ORGANIZATION.name },
-    create: ORGANIZATION,
+    update: {
+      name: ORGANIZATION.name,
+      addressLine1: ORGANIZATION.addressLine1,
+      city: ORGANIZATION.city,
+      state: ORGANIZATION.state,
+      postalCode: ORGANIZATION.postalCode,
+      contactPhone: ORGANIZATION.contactPhone,
+      contactEmail: ORGANIZATION.contactEmail,
+      slogan: ORGANIZATION.slogan,
+      defaultProposalTerms,
+    },
+    create: { ...ORGANIZATION, defaultProposalTerms },
   });
   console.log(`✓ Organization ${organization.name} (${organization.slug})`);
 

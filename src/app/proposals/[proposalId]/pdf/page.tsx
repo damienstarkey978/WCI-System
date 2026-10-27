@@ -5,6 +5,7 @@ import { ClientProposalView } from "@/components/proposals/ClientProposalView";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
+import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 
 import { PrintButton } from "./print-button";
 
@@ -57,7 +58,18 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
     }),
     db.organization.findUnique({
       where: { id: user.organizationId },
-      select: { name: true, logoPath: true, addressLine1: true, city: true, state: true, postalCode: true, contactEmail: true, contactPhone: true },
+      select: {
+        name: true,
+        logoPath: true,
+        addressLine1: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        contactEmail: true,
+        contactPhone: true,
+        slogan: true,
+        defaultProposalTerms: true,
+      },
     }),
   ]);
   if (!proposal) notFound();
@@ -114,6 +126,20 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
         accentColor={proposal.accentColor}
         logoUrl={proposal.logoUrl}
         organizationLogoPath={organization?.logoPath ?? null}
+        termsText={resolveProposalTermsText({
+          proposalTerms: proposal.termsText,
+          organizationTerms: organization?.defaultProposalTerms,
+        })}
+        clientSignature={{
+          name: proposal.clientSignatureName,
+          signedAt: proposal.clientSignedAt,
+          hash: proposal.clientSignatureHash,
+        }}
+        companySignature={{
+          name: proposal.companySignatureName,
+          signedAt: proposal.companySignedAt,
+          hash: proposal.companySignatureHash,
+        }}
         mode="print"
       />
     </div>

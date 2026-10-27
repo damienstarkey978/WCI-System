@@ -98,6 +98,11 @@ model Organization {
   postalCode   String?
   contactEmail String?
   contactPhone String?
+  /// Client-facing tagline under the logo on proposals / PDFs / email letterhead.
+  slogan       String?
+  /// Default Terms & Conditions pasted onto new proposals (Settings → Company).
+  /// Exact WCI legal wording — do not invent; seed from canonical terms doc.
+  defaultProposalTerms String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -209,6 +214,7 @@ model User {
   dailyLogLikes             DailyLogLike[]
   jarvisConversations       JarvisConversation[]
   proposalDraftJobs         ProposalDraftJob[]
+  companySignedProposals    Proposal[]               @relation("ProposalCompanySigner")
   oauthAuthorizationCodes   OAuthAuthorizationCode[]
   oauthAccessTokens         OAuthAccessToken[]
   oauthRefreshTokens        OAuthRefreshToken[]
@@ -2967,7 +2973,22 @@ model Proposal {
   clientSignatureName String?
   clientSignedAt      DateTime?
   clientSignatureIp   String?
-  declinedAt          DateTime?
+  /// sha256 of the client e-sign payload (CLAUDE.md native e-sign: hash + timestamp + IP).
+  clientSignatureHash String?
+
+  /// WCI company counter-signature (staff). Optional before Email/Text; visible on client doc/PDF.
+  companySignatureName   String?
+  companySignedAt        DateTime?
+  companySignatureIp     String?
+  companySignatureHash   String?
+  companySignatureUserId String?
+  companySignatureUser   User?     @relation("ProposalCompanySigner", fields: [companySignatureUserId], references: [id], onDelete: SetNull)
+
+  /// Snapshot of Terms & Conditions shown/signed with this proposal (copied from
+  /// Organization.defaultProposalTerms on create/send so later org edits don't rewrite signed docs).
+  termsText String? @db.Text
+
+  declinedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

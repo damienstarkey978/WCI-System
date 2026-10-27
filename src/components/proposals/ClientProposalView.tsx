@@ -1,14 +1,17 @@
 /**
  * Client-facing proposal layout matching Handoff Preview:
- * centered brand, PROPOSAL title + address, Prepared for/by/Date,
- * Client Message, scoped sections with optional group prices,
- * Payment Schedule with dollar amounts, Investment total, accept area.
+ * centered brand + slogan + company address/phone, PROPOSAL title + address,
+ * Prepared for/by/Date, Client Message, scoped sections with optional group prices,
+ * Payment Schedule with dollar amounts, Investment total, dual signatures, Terms.
  */
 
 import type { ReactNode } from "react";
 
 import { OutboundBrandMark } from "@/components/branding/OutboundBrandMark";
+import { ProposalSignatureBlocks, type ProposalSignatureSide } from "@/components/proposals/ProposalSignatureBlocks";
+import { ProposalTermsBlock } from "@/components/proposals/ProposalTermsBlock";
 import { formatDate, formatMoney } from "@/lib/format";
+import { formatCompanyAddress, resolveCompanySlogan } from "@/lib/organization/company-defaults";
 
 export type ClientProposalOrg = {
   readonly name: string;
@@ -18,6 +21,7 @@ export type ClientProposalOrg = {
   readonly postalCode: string | null;
   readonly contactEmail: string | null;
   readonly contactPhone: string | null;
+  readonly slogan: string | null;
 } | null;
 
 export type ClientProposalClient = {
@@ -46,10 +50,6 @@ export type ClientProposalOption = {
   readonly totalCents: number;
 };
 
-function orgAddress(org: NonNullable<ClientProposalOrg>): string {
-  return [org.addressLine1, org.city, org.state, org.postalCode].filter(Boolean).join(", ");
-}
-
 export function ClientProposalView({
   title,
   projectAddress,
@@ -63,9 +63,14 @@ export function ClientProposalView({
   accentColor,
   logoUrl,
   organizationLogoPath = null,
+  termsText = null,
+  clientSignature,
+  companySignature,
   mode = "preview",
   acceptSlot,
   feedbackSlot,
+  clientSignCta,
+  companySignCta,
 }: {
   readonly title: string;
   readonly projectAddress: string | null;
@@ -79,14 +84,26 @@ export function ClientProposalView({
   readonly accentColor: string | null;
   readonly logoUrl: string | null;
   readonly organizationLogoPath?: string | null;
+  readonly termsText?: string | null;
+  readonly clientSignature?: ProposalSignatureSide | null;
+  readonly companySignature?: ProposalSignatureSide | null;
   /** preview = staff/PDF; review = client link with accept/feedback slots. */
   readonly mode?: "preview" | "review" | "print";
   readonly acceptSlot?: ReactNode;
   readonly feedbackSlot?: ReactNode;
+  readonly clientSignCta?: ReactNode;
+  readonly companySignCta?: ReactNode;
 }) {
   const accent = accentColor?.trim() || "var(--bt-primary, #1a5c3a)";
   const primaryTotal = options.length === 1 ? options[0].totalCents : null;
   const isPrint = mode === "print";
+  const companyAddress = formatCompanyAddress(organization);
+  const slogan = resolveCompanySlogan(organization?.slogan);
+  const phone = organization?.contactPhone?.trim() || null;
+  const orgName = organization?.name ?? "World Construction Inc";
+
+  const clientSide: ProposalSignatureSide = clientSignature ?? { name: null, signedAt: null, hash: null };
+  const companySide: ProposalSignatureSide = companySignature ?? { name: null, signedAt: null, hash: null };
 
   return (
     <article
@@ -99,9 +116,20 @@ export function ClientProposalView({
           organizationLogoPath={organizationLogoPath}
           className="h-14 w-auto max-w-[14rem] object-contain sm:h-16"
         />
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6b7280]">
-          {organization?.name ?? "Proposal"}
-        </div>
+        <div className="text-sm font-semibold tracking-tight text-[#1a1a1a] sm:text-base">{orgName}</div>
+        <p className="max-w-md text-xs italic leading-snug text-[#6b7280] sm:text-sm">{slogan}</p>
+        {(companyAddress || phone) && (
+          <div className="mt-1 space-y-0.5 text-[11px] leading-relaxed text-[#6b7280] sm:text-xs">
+            {companyAddress ? <div>{companyAddress}</div> : null}
+            {phone ? (
+              <div>
+                <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className="hover:underline">
+                  {phone}
+                </a>
+              </div>
+            ) : null}
+          </div>
+        )}
       </header>
 
       <div className="mt-6 border-t border-[#e5e7eb] pt-5 text-center sm:text-left">
@@ -119,12 +147,12 @@ export function ClientProposalView({
         </div>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Prepared by</div>
-          <div className="mt-1 font-medium">{organization?.name ?? "—"}</div>
-          {organization && orgAddress(organization) ? (
-            <div className="text-xs text-[#6b7280]">{orgAddress(organization)}</div>
+          <div className="mt-1 font-medium">{orgName}</div>
+          {companyAddress ? <div className="text-xs text-[#6b7280]">{companyAddress}</div> : null}
+          {phone ? <div className="text-xs text-[#6b7280]">{phone}</div> : null}
+          {organization?.contactEmail ? (
+            <div className="break-all text-xs text-[#6b7280]">{organization.contactEmail}</div>
           ) : null}
-          {organization?.contactEmail ? <div className="break-all text-xs text-[#6b7280]">{organization.contactEmail}</div> : null}
-          {organization?.contactPhone ? <div className="text-xs text-[#6b7280]">{organization.contactPhone}</div> : null}
         </div>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Date</div>
@@ -223,8 +251,25 @@ export function ClientProposalView({
         )}
       </section>
 
-      {acceptSlot ? <section className="mt-8">{acceptSlot}</section> : null}
+      <ProposalSignatureBlocks
+        client={clientSide}
+        company={companySide}
+        companyLabel={orgName}
+        clientCta={clientSignCta}
+        companyCta={companySignCta}
+      />
+
+      {acceptSlot ? <section className="mt-6">{acceptSlot}</section> : null}
       {feedbackSlot ? <section className="mt-6">{feedbackSlot}</section> : null}
+
+      {termsText ? <ProposalTermsBlock termsText={termsText} /> : null}
+
+      <footer className="mt-8 border-t border-[#e5e7eb] pt-4 text-center text-[11px] leading-relaxed text-[#6b7280] sm:text-xs">
+        <div className="font-medium text-[#374151]">{orgName}</div>
+        <div className="italic">{slogan}</div>
+        {companyAddress ? <div className="mt-1">{companyAddress}</div> : null}
+        {phone ? <div>{phone}</div> : null}
+      </footer>
     </article>
   );
 }

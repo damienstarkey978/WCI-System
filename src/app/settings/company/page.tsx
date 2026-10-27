@@ -69,7 +69,18 @@ export default async function CompanySettingsPage() {
 
   const organization = await db.organization.findUnique({
     where: { id: user.organizationId },
-    select: { name: true, logoPath: true, addressLine1: true, city: true, state: true, postalCode: true, contactEmail: true, contactPhone: true },
+    select: {
+      name: true,
+      logoPath: true,
+      addressLine1: true,
+      city: true,
+      state: true,
+      postalCode: true,
+      contactEmail: true,
+      contactPhone: true,
+      slogan: true,
+      defaultProposalTerms: true,
+    },
   });
   if (!organization) return <SetupNotice detail="Organization not found." />;
 

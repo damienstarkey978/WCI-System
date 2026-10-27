@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { normalizePhoneE164, QUO_API_VERSION, SmsNotConfiguredError, SmsSendError, sendSms } from "./send";
 
@@ -17,6 +17,11 @@ describe("normalizePhoneE164", () => {
 });
 
 describe("sendSms (Quo)", () => {
+  beforeEach(() => {
+    delete process.env.QUO_API_KEY;
+    delete process.env.QUO_FROM_NUMBER;
+  });
+
   afterEach(() => {
     delete process.env.QUO_API_KEY;
     delete process.env.QUO_FROM_NUMBER;
