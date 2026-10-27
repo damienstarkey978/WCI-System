@@ -2,12 +2,38 @@
 
 import { revalidatePath } from "next/cache";
 
-import { createClient } from "@/lib/client-portal/service";
 import { requireAppUser } from "@/lib/auth";
+import { createClient } from "@/lib/client-portal/service";
+import { importClients, InvalidClientSheetError, parseClientSheet, type ClientImportSummary } from "@/lib/client-portal/import";
 
 export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
+}
+
+export interface ImportClientsState {
+  readonly error?: string;
+  readonly summary?: ClientImportSummary;
+}
+
+export async function importClientsAction(_previous: ImportClientsState, formData: FormData): Promise<ImportClientsState> {
+  const user = await requireAppUser();
+
+  const file = formData.get("sheet");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV file to import." };
+  if (/\.xlsx?$/i.test(file.name)) {
+    return { error: "That's an Excel file. Open it in Excel (or Numbers) and use File → Save As / Export → CSV, then upload the CSV." };
+  }
+
+  try {
+    const rows = parseClientSheet(await file.text());
+    const summary = await importClients(user.organizationId, rows);
+    revalidatePath("/clients");
+    return { summary };
+  } catch (error) {
+    if (error instanceof InvalidClientSheetError) return { error: error.message };
+    throw error;
+  }
 }
 
 export async function createClientAction(_previous: ActionState, formData: FormData): Promise<ActionState> {

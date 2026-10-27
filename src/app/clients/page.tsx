@@ -9,6 +9,7 @@ import { activationOf, activationWhere } from "@/lib/directory/activation";
 import { directoryHref, parseDirectoryParams, type ActivationFilter } from "@/lib/directory/params";
 
 import { CreateClientForm } from "./create-client-form";
+import { ImportClientsForm } from "./import-clients-form";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,10 @@ export default async function ClientContactsPage({ searchParams }: PageProps<"/c
             <FilterMenu options={filterOptions} activeCount={params.status ? 1 : 0} />
           </>
         }
-        panels={[{ id: "create", label: "Contact", variant: "primary", content: <CreateClientForm /> }]}
+        panels={[
+          { id: "create", label: "Contact", variant: "primary", content: <CreateClientForm /> },
+          { id: "import", label: "Import", variant: "secondary", content: <ImportClientsForm /> },
+        ]}
       />
 
       <DirectoryTable
