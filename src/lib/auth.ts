@@ -15,6 +15,7 @@
 import { auth as clerkAuth, currentUser as clerkCurrentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
+import { Prisma } from "@/generated/prisma/client";
 import type { UserModel } from "@/generated/prisma/models";
 import { UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
@@ -137,12 +138,27 @@ async function devFallbackUser(): Promise<AppUser | null> {
   });
   if (existing) return existing;
 
-  return db.user.create({
-    data: {
-      organizationId: organization.id,
-      email,
-      name: "Local Developer",
-      role: UserRole.ADMIN,
-    },
-  });
+  // Concurrent first hits (layout + page RSC, or parallel navigations) can both
+  // miss the findUnique above and race on create. Treat the unique constraint as
+  // "already created" and re-read rather than surfacing a setup-notice error.
+  try {
+    return await db.user.create({
+      data: {
+        organizationId: organization.id,
+        email,
+        name: "Local Developer",
+        role: UserRole.ADMIN,
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return db.user.findUniqueOrThrow({
+        where: { organizationId_email: { organizationId: organization.id, email } },
+      });
+    }
+    throw error;
+  }
 }

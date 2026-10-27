@@ -4,6 +4,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
+import { JarvisSetupNotice } from "@/components/jarvis/JarvisSetupNotice";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
@@ -84,15 +85,22 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
         }
       />
 
-      {isAnthropicConfigured() && isJarvisUiEnabled() ? (
+      {isJarvisUiEnabled() && isAnthropicConfigured() ? (
         <JarvisChatPanel
           context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "estimates" }}
           storageKey={`job-estimates:${job.id}`}
           suggestions={[...JARVIS_JOB_ESTIMATE_SUGGESTIONS]}
           emptyStateHint="Describe the scope of work — measurements, materials, anything relevant — and Jarvis drafts a full cost-coded estimate plus the matching client-facing proposal (Handy-style), when a client is linked to this job. Attach photos and it'll factor those in too."
-          heightClassName="h-96"
+          heightClassName="h-[28rem] min-h-[20rem] sm:h-[32rem]"
         />
-      ) : null}
+      ) : (
+        <JarvisSetupNotice
+          uiEnabled={isJarvisUiEnabled()}
+          anthropicConfigured={isAnthropicConfigured()}
+          title="Draft estimate with Jarvis (Handy-style)"
+          hint="Describe scope notes and attach photos to draft a cost-coded estimate (and a proposal when a client is linked). Everything stays DRAFT until you review."
+        />
+      )}
 
       {rows.length === 0 ? (
         <EmptyState

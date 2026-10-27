@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
+import { LeadProposalHandy } from "@/components/jarvis/LeadProposalHandy";
 import { currentAppUser } from "@/lib/auth";
 import { listLeadAttachments } from "@/lib/crm/attachments";
 import { db } from "@/lib/db";
@@ -11,7 +11,6 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { estimateTotalCents } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
-import { JARVIS_LEAD_PROPOSAL_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 import { ConvertToJobButton } from "../convert-form";
 import { StageSelect } from "../stage-select";
@@ -246,31 +245,26 @@ export default async function LeadDetailPage({
               </div>
             </div>
           ) : null}
-          {isAnthropicConfigured() && isJarvisUiEnabled() ? (
-            <JarvisChatPanel
-              context={{
-                page: "lead_detail",
-                leadId: lead.id,
-                leadName: lead.name,
-                leadTitle: lead.title,
-                leadEmail: lead.email,
-                leadPhone: lead.phone,
-                leadAddress: [lead.addressLine1, lead.city, lead.state, lead.postalCode].filter(Boolean).join(", ") || null,
-                leadNotes: lead.notes,
-                tab: "proposals",
-              }}
-              storageKey={`lead-proposal:${lead.id}`}
-              suggestions={[...JARVIS_LEAD_PROPOSAL_SUGGESTIONS]}
-              emptyStateHint="Give Jarvis the scope of work, measurements, and any photos — it drafts a full line-item estimate and the client-facing proposal that goes with it (Handy-style), always as a DRAFT for you to review before anything is sent."
-              heightClassName="h-96"
-            />
-          ) : null}
-          <CreateLeadProposalForm
+          <LeadProposalHandy
             leadId={lead.id}
-            costCodes={costCodes}
-            defaultEmail={lead.email ?? ""}
-            defaultPhone={lead.phone ?? ""}
-            needsContact={!lead.email}
+            leadName={lead.name}
+            leadTitle={lead.title}
+            leadEmail={lead.email}
+            leadPhone={lead.phone}
+            leadAddress={[lead.addressLine1, lead.city, lead.state, lead.postalCode].filter(Boolean).join(", ") || null}
+            leadNotes={lead.notes}
+            jarvisUiEnabled={isJarvisUiEnabled()}
+            anthropicConfigured={isAnthropicConfigured()}
+            manualForm={
+              <CreateLeadProposalForm
+                leadId={lead.id}
+                costCodes={costCodes}
+                defaultEmail={lead.email ?? ""}
+                defaultPhone={lead.phone ?? ""}
+                needsContact={!lead.email}
+                embedded
+              />
+            }
           />
           {proposals.length === 0 ? (
             <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>

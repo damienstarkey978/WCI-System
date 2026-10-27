@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 
 import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
 import { JarvisVoiceButton } from "@/components/jarvis/JarvisVoiceButton";
@@ -16,6 +16,7 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
   const [state, formAction, pending] = useActionState(sendJarvisMessageAction, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
   const funUi = useFunUi();
+  const [, startSend] = useTransition();
   // Separate from `pending`: this covers compressing photos in the browser, which
   // happens *before* formAction (and therefore useActionState's own pending flag)
   // ever starts — without it, attaching a big batch of photos looks like nothing is
@@ -62,7 +63,9 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
             setAttachmentError(prepared.error);
             return;
           }
-          formAction(prepared.formData);
+          startSend(() => {
+            formAction(prepared.formData);
+          });
           formRef.current?.reset();
         }}
         className="flex flex-col gap-2 border-t bg-[var(--bt-panel-bg)] p-3"

@@ -14,6 +14,7 @@ export function CreateLeadProposalForm({
   defaultEmail,
   defaultPhone,
   needsContact,
+  embedded = false,
 }: {
   leadId: string;
   costCodes: readonly CostCodeOption[];
@@ -21,16 +22,26 @@ export function CreateLeadProposalForm({
   defaultPhone: string;
   /** True when the lead has no email on file — the client can't be created without one. */
   needsContact: boolean;
+  /** Drop outer card chrome when nested under LeadProposalHandy's manual section. */
+  embedded?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createLeadProposalAction, INITIAL);
 
   return (
-    <form action={formAction} className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <form
+      action={formAction}
+      className={embedded ? "" : "rounded-lg border bg-[var(--bt-panel-bg)] p-4"}
+      style={embedded ? undefined : { borderColor: "var(--bt-border)" }}
+    >
       <input type="hidden" name="leadId" value={leadId} />
-      <h2 className="text-sm font-semibold text-[var(--bt-text)]">New proposal</h2>
-      <p className="mt-1 text-xs text-[var(--bt-muted)]">
-        Builds a DRAFT estimate and client-facing proposal off this lead. Accepting the proposal later is what creates the Job — nothing is sent or converted until you say so.
-      </p>
+      {embedded ? null : (
+        <>
+          <h2 className="text-sm font-semibold text-[var(--bt-text)]">New proposal</h2>
+          <p className="mt-1 text-xs text-[var(--bt-muted)]">
+            Builds a DRAFT estimate and client-facing proposal off this lead. Accepting the proposal later is what creates the Job — nothing is sent or converted until you say so.
+          </p>
+        </>
+      )}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">

@@ -175,6 +175,11 @@ function JarvisChatBody({
   const [preparing, setPreparing] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [, startRefresh] = useTransition();
+  // useActionState's dispatch must run inside a transition (or as a form action /
+  // formAction prop). Calling it after async attachment prep used to happen outside
+  // one — React then warned and `pending` stayed false, so the UI looked idle while
+  // the server action was still running (or appeared stuck on long drafts).
+  const [, startSend] = useTransition();
 
   // After a send, `state` is authoritative (overlay was cleared in the form submit).
   // After Confirm/Decline/async-draft poll, overlay holds the fresher snapshot.
@@ -365,7 +370,9 @@ function JarvisChatBody({
             setAttachmentError(prepared.error);
             return;
           }
-          formAction(prepared.formData);
+          startSend(() => {
+            formAction(prepared.formData);
+          });
           formRef.current?.reset();
         }}
         className="flex flex-col gap-1.5 border-t p-2.5"
