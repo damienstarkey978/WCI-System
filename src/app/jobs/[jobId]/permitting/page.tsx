@@ -5,13 +5,19 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { listPermittingJobs, tradeLabel } from "@/lib/permitting/service";
+import {
+  catalogInspectionNamesForTrade,
+  listPermittingJobs,
+  tradeLabel,
+} from "@/lib/permitting/service";
 
 import {
+  removePermitInspectionAction,
   setInspectionCompletedAction,
   setNocNtboAction,
   setPermitPulledAction,
 } from "./actions";
+import { AddInspectionForm } from "./add-inspection-form";
 import { AssignVendorForm } from "./assign-vendor-form";
 import { PermitReminderButton } from "./permit-reminder-button";
 
@@ -167,24 +173,31 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
                           vendors={vendors}
                         />
 
-                        {total > 0 ? (
-                          <div className="mt-3">
-                            <p className="mb-1.5 text-xs font-medium text-[var(--bt-muted)]">
-                              Inspections {done}/{total}
+                        <div className="mt-3">
+                          <p className="mb-1.5 text-xs font-medium text-[var(--bt-muted)]">
+                            Inspections required for this job{total > 0 ? ` · ${done}/${total} complete` : ""}
+                          </p>
+                          {total === 0 ? (
+                            <p className="text-xs text-[var(--bt-muted)]">
+                              None yet — add only the inspections this job needs (folders appear under Inspection Pictures).
                             </p>
+                          ) : (
                             <ul className="grid gap-1.5 sm:grid-cols-2">
                               {permit.inspections.map((inspection) => {
                                 const doneFlag = inspection.completedAt != null;
                                 return (
-                                  <li key={inspection.id}>
-                                    <form action={setInspectionCompletedAction}>
+                                  <li
+                                    key={inspection.id}
+                                    className="flex items-stretch gap-1 rounded border"
+                                    style={{ borderColor: "var(--bt-border)" }}
+                                  >
+                                    <form action={setInspectionCompletedAction} className="min-w-0 flex-1">
                                       <input type="hidden" name="jobId" value={job.id} />
                                       <input type="hidden" name="inspectionId" value={inspection.id} />
                                       <input type="hidden" name="completed" value={doneFlag ? "false" : "true"} />
                                       <button
                                         type="submit"
-                                        className="flex w-full items-center gap-2 rounded border px-2.5 py-2 text-left text-xs sm:py-1.5"
-                                        style={{ borderColor: "var(--bt-border)" }}
+                                        className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs sm:py-1.5"
                                       >
                                         <span
                                           aria-hidden
@@ -202,12 +215,29 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
                                         </span>
                                       </button>
                                     </form>
+                                    <form action={removePermitInspectionAction} className="shrink-0 self-center pr-1">
+                                      <input type="hidden" name="jobId" value={job.id} />
+                                      <input type="hidden" name="inspectionId" value={inspection.id} />
+                                      <button
+                                        type="submit"
+                                        aria-label={`Remove ${inspection.name} from this job`}
+                                        className="rounded px-2 py-1 text-[10px] font-semibold text-[var(--bt-muted)] hover:text-red-600"
+                                      >
+                                        Remove
+                                      </button>
+                                    </form>
                                   </li>
                                 );
                               })}
                             </ul>
-                          </div>
-                        ) : null}
+                          )}
+                          <AddInspectionForm
+                            jobId={job.id}
+                            permitId={permit.id}
+                            catalogNames={catalogInspectionNamesForTrade(permit.trade)}
+                            existingNames={permit.inspections.map((i) => i.name)}
+                          />
+                        </div>
                       </div>
                     );
                   })}

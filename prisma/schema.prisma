@@ -2153,8 +2153,9 @@ model File {
   clientVisible Boolean @default(true)
   subVisible    Boolean @default(true)
 
-  uploadedByUserId String
-  uploadedByUser   User   @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  /// Null for headless inspector uploads via InspectionPictureShareLink (no staff User).
+  uploadedByUserId String?
+  uploadedByUser   User?  @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
 
   /// Set when this file was attached to a Daily Log entry (photos/videos).
   dailyLogId String?
@@ -3583,10 +3584,35 @@ model JobPermitInspection {
   folderId String?     @unique
   folder   FileFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
+  /// Headless inspector share links for this inspection's picture folder.
+  shareLinks InspectionPictureShareLink[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([permitId])
+}
+
+/// Signed link an inspector opens with no login — view + upload photos for one
+/// JobPermitInspection folder. Same crypto as SubmittalReviewLink / SurveyResponseLink
+/// (src/lib/secure-tokens.ts); reusable until expiry or revoke (inspectors upload
+/// over multiple visits, unlike single-use approval tokens).
+model InspectionPictureShareLink {
+  id           String               @id @default(cuid())
+  inspectionId String
+  inspection   JobPermitInspection  @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  /// Optional label staff set when issuing (e.g. inspector name / company).
+  label String?
+
+  tokenId      String   @unique
+  hashedSecret String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([inspectionId])
 }
 
 // ---------------------------------------------------------------------------

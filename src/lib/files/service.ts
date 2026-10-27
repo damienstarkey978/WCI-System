@@ -52,7 +52,8 @@ export type FileCategoryInput = "DOCUMENT" | "PHOTO" | "VIDEO" | "PRESALE_PHOTO"
 export interface RegisterFileInput {
   readonly organizationId: string;
   readonly jobId: string;
-  readonly uploadedByUserId: string;
+  /** Null for headless inspector uploads (InspectionPictureShareLink). */
+  readonly uploadedByUserId: string | null;
   readonly fileName: string;
   readonly url: string;
   readonly mimeType?: string | null;
@@ -94,7 +95,8 @@ export async function registerFile(input: RegisterFileInput) {
 export interface UploadAndRegisterFileInput {
   readonly organizationId: string;
   readonly jobId: string;
-  readonly uploadedByUserId: string;
+  /** Null for headless inspector uploads (InspectionPictureShareLink). */
+  readonly uploadedByUserId: string | null;
   readonly fileName: string;
   readonly bytes: Uint8Array | Buffer;
   readonly mimeType?: string | null;

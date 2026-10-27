@@ -5,10 +5,13 @@ import { revalidatePath } from "next/cache";
 import { requireAppUser } from "@/lib/auth";
 import { EmailNotConfiguredError, EmailSendError } from "@/lib/email/send";
 import {
+  addPermitInspection,
   assignPermitVendor,
+  InspectionNotFoundError,
   JobNotFoundError,
   NoVendorEmailError,
   PermitNotFoundError,
+  removePermitInspection,
   sendPermitReminder,
   setInspectionCompleted,
   setJobNocNtbo,
@@ -23,6 +26,7 @@ export interface ActionState {
 
 function revalidate(jobId: string) {
   revalidatePath(`/jobs/${jobId}/permitting`);
+  revalidatePath(`/jobs/${jobId}/files/inspection-pictures`);
 }
 
 export async function setPermitPulledAction(formData: FormData): Promise<void> {
@@ -99,4 +103,33 @@ export async function sendPermitReminderAction(_previous: ActionState, formData:
     }
     return { error: error instanceof Error ? error.message : "Could not send reminder." };
   }
+}
+
+export async function addPermitInspectionAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const permitId = String(formData.get("permitId") ?? "");
+  const name = String(formData.get("name") ?? "");
+  try {
+    await addPermitInspection(user.organizationId, permitId, name);
+  } catch (error) {
+    if (error instanceof PermitNotFoundError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not add inspection." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function removePermitInspectionAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  try {
+    await removePermitInspection(user.organizationId, inspectionId);
+  } catch (error) {
+    if (!(error instanceof InspectionNotFoundError)) {
+      // Refresh either way for missing rows; leave other errors silent on this form.
+    }
+  }
+  revalidate(jobId);
 }

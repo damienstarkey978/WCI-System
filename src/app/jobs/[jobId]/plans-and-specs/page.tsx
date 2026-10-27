@@ -55,7 +55,7 @@ export default async function PlansAndSpecsPage({ params, searchParams }: PagePr
       sizeBytes: file.sizeBytes,
       clientVisible: file.clientVisible,
       subVisible: file.subVisible,
-      uploaderEmail: file.uploadedByUser.email,
+      uploaderEmail: file.uploadedByUser?.email ?? "Inspector upload",
       uploadedAt: formatDate(file.createdAt),
     })),
   );

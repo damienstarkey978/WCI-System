@@ -68,7 +68,12 @@ export function tradeLabel(trade: PermitTrade): string {
   }
 }
 
-/** Ensures BUILDING + MEP rows exist for a job (idempotent). */
+/**
+ * Ensures BUILDING + MEP permit shells exist for a job (idempotent).
+ * Does **not** seed the full demo inspection catalog — inspections are added
+ * explicitly (city software / staff) so Inspection Pictures only shows folders
+ * for inspections required on that job.
+ */
 export async function ensureDefaultPermits(organizationId: string, jobId: string) {
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true, permitNumber: true } });
   if (!job) throw new JobNotFoundError(jobId);
@@ -77,19 +82,51 @@ export async function ensureDefaultPermits(organizationId: string, jobId: string
     const existing = await db.jobPermit.findUnique({ where: { jobId_trade: { jobId, trade } } });
     if (existing) continue;
 
-    const permit = await db.jobPermit.create({
+    await db.jobPermit.create({
       data: {
         organizationId,
         jobId,
         trade,
         permitNumber: trade === PermitTrade.BUILDING ? job.permitNumber : null,
-        inspections: {
-          create: DEMO_INSPECTIONS_BY_TRADE[trade].map((name, index) => ({ name, sortOrder: index })),
-        },
       },
     });
-    void permit;
   }
+}
+
+export async function addPermitInspection(organizationId: string, permitId: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Inspection name is required.");
+
+  const permit = await db.jobPermit.findFirst({
+    where: { id: permitId, organizationId },
+    include: { inspections: { select: { name: true, sortOrder: true }, orderBy: { sortOrder: "desc" }, take: 1 } },
+  });
+  if (!permit) throw new PermitNotFoundError(permitId);
+
+  const duplicate = await db.jobPermitInspection.findFirst({
+    where: { permitId, name: { equals: trimmed, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (duplicate) throw new Error(`Inspection "${trimmed}" is already on this permit.`);
+
+  const nextOrder = (permit.inspections[0]?.sortOrder ?? -1) + 1;
+  return db.jobPermitInspection.create({
+    data: { permitId, name: trimmed, sortOrder: nextOrder },
+  });
+}
+
+export async function removePermitInspection(organizationId: string, inspectionId: string) {
+  const inspection = await db.jobPermitInspection.findFirst({
+    where: { id: inspectionId, permit: { organizationId } },
+    select: { id: true },
+  });
+  if (!inspection) throw new InspectionNotFoundError(inspectionId);
+  await db.jobPermitInspection.delete({ where: { id: inspection.id } });
+}
+
+/** Catalog names staff can add for a trade (demo placeholders until city software wires in). */
+export function catalogInspectionNamesForTrade(trade: PermitTrade): readonly string[] {
+  return DEMO_INSPECTIONS_BY_TRADE[trade] ?? [];
 }
 
 export async function listPermittingJobs(organizationId: string) {

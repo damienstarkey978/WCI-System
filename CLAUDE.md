@@ -676,15 +676,30 @@ Record every architectural decision that departs from the above, with the reason
 - **Permitting is a first-class module with JobPermit / JobPermitInspection (next
   scope):** job settings already had `Job.permitNumber`; the Permitting page under
   Project Management adds `Job.nocOnFile` / `Job.ntboFiled`, per-trade `JobPermit`
-  rows (Building + MEP), and named inspections. Demo jobs seed placeholder inspection
-  names from the Permit Rockstar guide catalog (no pools). Production inspection names
-  are expected to come from city permitting software later. Send Permit Reminder uses
+  rows (Building + MEP), and named inspections. Permit shells are created without
+  auto-attaching every catalog inspection — staff add the ones the job needs from
+  the city-style placeholder catalog (no pools). Production inspection names are
+  expected to come from city permitting software later. Send Permit Reminder uses
   the existing Resend `sendEmail` path (same EMAIL_* env as client progress reports).
 - **Inspection Pictures under Files (next scope):** each `JobPermitInspection` links
   to a `FileFolder` (`Inspection: {name}`). Files > Inspection Pictures lists those
   folders, shows Permit Rockstar guide links + universal photo tips, and supports
   camera/library capture with client-side compress + parallel upload. Termite cert
   on Slab is a disabled checkbox stub only; receive/upload/notify Garry waits on Damien.
+- **Inspection folders are job-required only (not a global catalog dump):**
+  `ensureDefaultPermits` creates BUILDING + MEP permit shells without seeding every
+  demo inspection. Staff add/remove inspections on Permitting from the city-style
+  catalog (`DEMO_INSPECTIONS_BY_TRADE`); Inspection Pictures creates a folder only
+  for inspections that exist on that job. Jobs that already had the old full seed
+  keep those rows until staff removes them.
+- **Inspector share links are a fourth headless token namespace
+  (`InspectionPictureShareLink`, prefix `wciips`):** same crypto as
+  SubmittalReviewLink / SurveyResponseLink — no Client/Vendor seat. Reusable until
+  expiry (90 days) or revoke (inspectors upload across visits); issuing a new link
+  for a folder revokes prior active ones. Public page: `/inspection-pictures/share/
+  [token]`. Uploads set `File.uploadedByUserId` null (nullable for this path).
+  Staff UI copies the URL and can open mailto:/sms: — no automated OS email send
+  (Email/Send hard rule; Damien did not authorize Resend for this flow).
 - **Grokbot agents use API + MCP, not MCP-only (Atlas/Roy/Heather):** `/api/v1` remains
   the source of truth with scoped `ApiKey`s; `/api/mcp` authenticates with the same
   keys and exposes `api_v1_request` plus convenience tools that call the same services

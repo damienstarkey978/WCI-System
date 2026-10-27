@@ -63,6 +63,8 @@ export const WEBHOOK_EVENT_TYPES = [
   "warranty_claim.client_accepted",
   "survey.response_requested",
   "survey.response_submitted",
+  "inspection_pictures.share_link_issued",
+  "inspection_pictures.uploaded_via_share",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
