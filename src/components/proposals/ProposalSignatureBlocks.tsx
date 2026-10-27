@@ -29,12 +29,12 @@ export function ProposalSignatureBlocks({
   readonly companyCta?: ReactNode;
 }) {
   return (
-    <section className="mt-8 border-t border-[#e5e7eb] pt-5">
+    <section className="mt-6 border-t border-[#e5e7eb] pt-4 sm:mt-8 sm:pt-5">
       <h2 className="text-sm font-semibold text-[#1a1a1a]">Signatures</h2>
-      <p className="mt-1 text-xs text-[#6b7280]">
+      <p className="mt-1 text-[11px] text-[#6b7280] sm:text-xs">
         World Construction Inc. may counter-sign before sending. The client signs on the review link to accept.
       </p>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-3 grid gap-3 sm:mt-4 sm:grid-cols-2 sm:gap-4">
         <SignatureCard label={clientLabel} side={client} cta={clientCta} />
         <SignatureCard label={companyLabel} side={company} cta={companyCta} />
       </div>

@@ -109,17 +109,20 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
       : "← Leads";
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 pb-8 sm:p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3 pb-24 sm:gap-4 sm:p-6 sm:pb-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href={backHref} className="text-xs text-[var(--bt-muted)] hover:underline">
           {backLabel}
         </Link>
-        <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-[var(--bt-muted)]">
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-[var(--bt-muted)]">
           <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
             1. Notes
           </span>
           <span aria-hidden>→</span>
-          <span className="rounded px-2 py-1 font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
+          <span
+            className="rounded px-2 py-1 font-semibold text-[var(--bt-on-primary)]"
+            style={{ background: "var(--bt-primary)" }}
+          >
             2. Estimate
           </span>
           <span aria-hidden>→</span>
@@ -129,44 +132,63 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold text-[var(--bt-text)] sm:text-2xl">{estimate.title}</h1>
-            {estimate.aiGenerated ? (
-              <span
-                className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}
-              >
-                Drafted by Jarvis
+      <div
+        className="sticky top-0 z-20 -mx-3 border-b px-3 py-2.5 backdrop-blur-md sm:mx-0 sm:rounded-lg sm:border sm:px-4 sm:py-3"
+        style={{
+          borderColor: "var(--bt-border)",
+          background: "color-mix(in srgb, var(--bt-panel-bg) 92%, transparent)",
+        }}
+      >
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg font-semibold text-[var(--bt-text)] sm:text-2xl">{estimate.title}</h1>
+              {estimate.aiGenerated ? (
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                  style={{
+                    background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)",
+                    color: "var(--bt-primary)",
+                  }}
+                >
+                  Drafted by Jarvis
+                </span>
+              ) : null}
+              <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">
+                {estimate.status}
               </span>
-            ) : null}
-            <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">{estimate.status}</span>
+            </div>
+            <p className="mt-0.5 hidden text-sm text-[var(--bt-muted)] sm:block">
+              Review quantities, unit costs, and markup. Convert to a Proposal when the numbers look right.
+            </p>
+            <p className="mt-0.5 text-sm font-semibold tabular-nums text-[var(--bt-text)] sm:mt-1">
+              {formatMoney(totalClientCents)}
+              <span className="ml-1.5 text-xs font-normal text-[var(--bt-muted)]">
+                · {estimate.lineItems.length} line{estimate.lineItems.length === 1 ? "" : "s"}
+              </span>
+            </p>
           </div>
-          <p className="mt-1 text-sm text-[var(--bt-muted)]">
-            Review quantities, unit costs, and markup. Convert to a Proposal when the numbers look right.
-          </p>
-        </div>
 
-        <div className="flex flex-col gap-2 sm:items-end">
-          <EstimateProposalToggle
-            active="estimate"
-            estimateHref={`/leads/estimates/${estimate.id}`}
-            proposalHref={linkedProposalId ? `/leads/proposals/${linkedProposalId}?view=proposal` : null}
-            proposalDisabledReason="Convert this estimate to unlock the Proposal view"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            {linkedProposalId ? (
-              <Link
-                href={`/leads/proposals/${linkedProposalId}?view=proposal`}
-                className="min-h-11 touch-manipulation rounded px-4 py-2.5 text-center text-sm font-semibold text-[var(--bt-on-primary)] sm:min-h-0 sm:py-2 sm:text-xs"
-                style={{ background: "var(--bt-primary)" }}
-              >
-                Open Proposal
-              </Link>
-            ) : canConvert ? (
-              <CreateProposalFromEstimateButton estimateId={estimate.id} />
-            ) : null}
+          <div className="flex flex-col gap-2 sm:items-end">
+            <EstimateProposalToggle
+              active="estimate"
+              estimateHref={`/leads/estimates/${estimate.id}`}
+              proposalHref={linkedProposalId ? `/leads/proposals/${linkedProposalId}?view=proposal` : null}
+              proposalDisabledReason="Convert this estimate to unlock the Proposal view"
+            />
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+              {linkedProposalId ? (
+                <Link
+                  href={`/leads/proposals/${linkedProposalId}?view=proposal`}
+                  className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center rounded-md px-4 py-2.5 text-center text-sm font-semibold text-[var(--bt-on-primary)] shadow-sm sm:min-h-10 sm:w-auto"
+                  style={{ background: "var(--bt-primary)" }}
+                >
+                  Open Proposal
+                </Link>
+              ) : canConvert ? (
+                <CreateProposalFromEstimateButton estimateId={estimate.id} prominent />
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
@@ -192,11 +214,9 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
         totalClientCents={totalClientCents}
       />
 
-      <p className="text-center text-xs text-[var(--bt-muted)] sm:text-left">
-        Estimate total {formatMoney(totalClientCents)} · {estimate.lineItems.length} line
-        {estimate.lineItems.length === 1 ? "" : "s"}
-        {lead ? ` · Lead ${lead.name}` : ""}
-      </p>
+      {lead ? (
+        <p className="text-center text-xs text-[var(--bt-muted)] sm:text-left">Lead {lead.name}</p>
+      ) : null}
     </div>
   );
 }

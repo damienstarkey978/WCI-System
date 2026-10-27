@@ -197,13 +197,17 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
   const emailConfigured = isTransactionalEmailConfigured();
   const smsConfigured = isTransactionalSmsConfigured();
 
+  const clientPhotos = preSalePhotos.filter(
+    (photo): photo is { id: string; fileName: string; url: string } => Boolean(photo.url),
+  );
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 pb-10 sm:p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3 pb-24 sm:gap-4 sm:p-6 sm:pb-10">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href={proposal.lead ? `/leads/${proposal.lead.id}?tab=proposals` : "/leads/proposals"} className="text-xs text-[var(--bt-muted)] hover:underline">
           ← Back to {proposal.lead ? proposal.lead.name : "proposals"}
         </Link>
-        <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-[var(--bt-muted)]">
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-[var(--bt-muted)]">
           <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
             1. Notes
           </span>
@@ -218,60 +222,68 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold text-[var(--bt-text)] sm:text-2xl">{proposal.title}</h1>
-            {aiGenerated ? (
-              <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
-                Drafted by Jarvis
+      <div
+        className="sticky top-0 z-20 -mx-3 border-b px-3 py-2.5 backdrop-blur-md sm:mx-0 sm:rounded-lg sm:border sm:px-4 sm:py-3"
+        style={{
+          borderColor: "var(--bt-border)",
+          background: "color-mix(in srgb, var(--bt-panel-bg) 92%, transparent)",
+        }}
+      >
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg font-semibold text-[var(--bt-text)] sm:text-2xl">{proposal.title}</h1>
+              {aiGenerated ? (
+                <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
+                  Drafted by Jarvis
+                </span>
+              ) : null}
+              <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
+                {proposal.status}
               </span>
-            ) : null}
-            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-              {proposal.status}
-            </span>
+            </div>
+            <div className="mt-0.5 text-xs text-[var(--bt-muted)] sm:text-sm">
+              {proposal.client.name}
+              {proposal.client.email ? ` · ${proposal.client.email}` : ""}
+              {proposal.client.phone ? ` · ${proposal.client.phone}` : ""}
+            </div>
+            <div className="mt-0.5 text-[11px] text-[var(--bt-muted)]">Created {formatDate(proposal.createdAt)}</div>
           </div>
-          <div className="mt-1 text-sm text-[var(--bt-muted)]">
-            {proposal.client.name}
-            {proposal.client.email ? ` · ${proposal.client.email}` : ""}
-            {proposal.client.phone ? ` · ${proposal.client.phone}` : ""}
-          </div>
-          <div className="mt-0.5 text-xs text-[var(--bt-muted)]">Created {formatDate(proposal.createdAt)}</div>
-        </div>
 
-        <div className="flex flex-col gap-2 sm:items-end">
-          <EstimateProposalToggle
-            active={view}
-            estimateHref={estimateToggleHref}
-            proposalHref={`/leads/proposals/${proposal.id}?view=proposal${optionParam ? `&option=${encodeURIComponent(String(optionParam))}` : ""}`}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-lg font-semibold text-[var(--bt-text)]">{headerTotalLabel}</span>
-            <Link
-              href={`/proposals/${proposal.id}/pdf`}
-              target="_blank"
-              className="inline-flex min-h-10 touch-manipulation items-center gap-1.5 rounded border px-3 py-2 text-xs font-medium text-[var(--bt-text)] sm:min-h-0 sm:py-1.5"
-              style={{ borderColor: "var(--bt-border)" }}
-            >
-              Preview
-            </Link>
-            {proposal.status === "SENT" ? (
-              <form action={declineProposalPageAction}>
-                <input type="hidden" name="proposalId" value={proposal.id} />
-                <button type="submit" className="rounded border px-3 py-1.5 text-xs font-medium text-[var(--bt-muted)] hover:text-red-600" style={{ borderColor: "var(--bt-border)" }}>
-                  Mark declined
-                </button>
-              </form>
-            ) : null}
+          <div className="flex flex-col gap-2 sm:items-end">
+            <EstimateProposalToggle
+              active={view}
+              estimateHref={estimateToggleHref}
+              proposalHref={`/leads/proposals/${proposal.id}?view=proposal${optionParam ? `&option=${encodeURIComponent(String(optionParam))}` : ""}`}
+            />
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <span className="text-base font-semibold tabular-nums text-[var(--bt-text)] sm:text-lg">{headerTotalLabel}</span>
+              <Link
+                href={`/proposals/${proposal.id}/pdf`}
+                target="_blank"
+                className="inline-flex min-h-10 touch-manipulation items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium text-[var(--bt-text)] sm:min-h-0 sm:py-1.5"
+                style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg)" }}
+              >
+                Preview
+              </Link>
+              {proposal.status === "SENT" ? (
+                <form action={declineProposalPageAction}>
+                  <input type="hidden" name="proposalId" value={proposal.id} />
+                  <button type="submit" className="rounded-md border px-3 py-1.5 text-xs font-medium text-[var(--bt-muted)] hover:text-red-600" style={{ borderColor: "var(--bt-border)" }}>
+                    Mark declined
+                  </button>
+                </form>
+              ) : null}
+            </div>
+            <SendProposalButtons
+              proposalId={proposal.id}
+              clientEmail={clientEmail}
+              clientPhone={clientPhone}
+              emailConfigured={emailConfigured}
+              smsConfigured={smsConfigured}
+            />
+            {proposal.status === "SENT" ? <ReviewLinkButton proposalId={proposal.id} /> : null}
           </div>
-          <SendProposalButtons
-            proposalId={proposal.id}
-            clientEmail={clientEmail}
-            clientPhone={clientPhone}
-            emailConfigured={emailConfigured}
-            smsConfigured={smsConfigured}
-          />
-          {proposal.status === "SENT" ? <ReviewLinkButton proposalId={proposal.id} /> : null}
         </div>
       </div>
 
@@ -356,7 +368,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="rounded-xl p-2 sm:p-6" style={{ background: "var(--bt-panel-bg-muted)" }}>
+          <div className="rounded-xl p-1 sm:p-6" style={{ background: "var(--bt-panel-bg-muted)" }}>
             <ClientProposalView
               title={proposal.title}
               projectAddress={leadAddress}
@@ -375,6 +387,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               accentColor={proposal.accentColor}
               logoUrl={proposal.logoUrl}
               organizationLogoPath={organization?.logoPath ?? null}
+              photos={clientPhotos}
               termsText={resolveProposalTermsText({
                 proposalTerms: proposal.termsText,
                 organizationTerms: organization?.defaultProposalTerms,
