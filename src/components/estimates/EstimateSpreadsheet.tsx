@@ -216,7 +216,7 @@ export function EstimateSpreadsheet({
             style={{ borderColor: "var(--bt-border)" }}
             aria-pressed={showBreakdown}
           >
-            {showBreakdown ? "Hide breakdown" : "Show breakdown"}
+            {showBreakdown ? "Hide line detail" : "Show line detail"}
           </button>
           <span>
             Profit margin{" "}
@@ -225,21 +225,18 @@ export function EstimateSpreadsheet({
             </strong>
           </span>
         </div>
+        {/* Handoff always shows cost + markup + total in the sticky footer */}
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] text-[var(--bt-muted)] sm:justify-end sm:text-xs">
-          {showBreakdown ? (
-            <>
-              <span>
-                Total cost{" "}
-                <strong className="tabular-nums text-[var(--bt-text)]">{formatMoney(totalBuilderCostCents)}</strong>
-              </span>
-              <span aria-hidden>+</span>
-              <span>
-                Total markup{" "}
-                <strong className="tabular-nums text-[var(--bt-text)]">{formatMoney(totalMarkupCents)}</strong>
-              </span>
-              <span aria-hidden>=</span>
-            </>
-          ) : null}
+          <span>
+            Total cost{" "}
+            <strong className="tabular-nums text-[var(--bt-text)]">{formatMoney(totalBuilderCostCents)}</strong>
+          </span>
+          <span aria-hidden>+</span>
+          <span>
+            Total markup{" "}
+            <strong className="tabular-nums text-[var(--bt-text)]">{formatMoney(totalMarkupCents)}</strong>
+          </span>
+          <span aria-hidden>=</span>
           <span>
             Estimate total{" "}
             <strong className="text-sm tabular-nums text-[var(--bt-text)] sm:text-base">

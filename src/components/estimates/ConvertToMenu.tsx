@@ -68,7 +68,11 @@ export function ConvertToMenu({
   ];
 
   return (
-    <div ref={rootRef} className="relative inline-flex flex-col items-stretch gap-1 sm:items-end">
+    <div
+      ref={rootRef}
+      id="convert-to-proposal"
+      className="relative inline-flex flex-col items-stretch gap-1 sm:items-end scroll-mt-24"
+    >
       <button
         type="button"
         aria-haspopup="menu"
