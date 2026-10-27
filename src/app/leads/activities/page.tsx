@@ -3,7 +3,7 @@ import Link from "next/link";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { ACTIVITY_TYPE_META, ACTIVITY_TYPE_ORDER, ActivityTypeIcon } from "@/components/leads/activity-type";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { CalendarIcon } from "@/components/shell/icons";
+import { CalendarIcon, TaskIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -87,6 +87,7 @@ export default async function LeadActivitiesPage({ searchParams }: PageProps<"/l
 
       {activities.length === 0 && tab === "all" ? (
         <EmptyState
+          icon={<TaskIcon className="h-10 w-10" />}
           title="No activity yet"
           description="Log a call, email, meeting, note, or follow-up task on a lead — everything shows up here."
         />

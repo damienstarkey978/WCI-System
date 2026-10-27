@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
+import { EmptyState } from "@/components/shell/EmptyState";
+import { FunnelIcon, GearIcon, PeopleIcon, SearchIcon } from "@/components/shell/icons";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -49,11 +51,17 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
     db.client.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
   ]);
 
+  const filtered = leads.filter(
+    (lead) =>
+      (stage === "all" || lead.stage === stage) &&
+      (!query || `${lead.title ?? ""} ${lead.name} ${lead.email ?? ""} ${lead.phone ?? ""}`.toLowerCase().includes(query)),
+  );
+
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 p-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead Opportunities</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CreateModal triggerLabel="Import Leads" title="Import leads from CSV" variant="secondary">
             <ImportLeadsForm />
           </CreateModal>
@@ -69,7 +77,7 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
               <Link
                 key={t.key}
                 href={`/leads${t.key === "all" ? "" : `?stage=${t.key}`}${query ? `${t.key === "all" ? "?" : "&"}q=${encodeURIComponent(query)}` : ""}`}
-                className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+                className="-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition"
                 style={{ borderColor: t.key === stage ? "var(--bt-primary)" : "transparent", color: t.key === stage ? "var(--bt-primary)" : "var(--bt-muted)" }}
               >
                 {t.label} ({count})
@@ -77,19 +85,57 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
             );
           })}
         </div>
-        <form action="/leads" className="flex items-center gap-2 pb-2">
-          {stage !== "all" ? <input type="hidden" name="stage" value={stage} /> : null}
-          <input name="q" defaultValue={query} placeholder="Search leads" aria-label="Search leads" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }} />
-          <button type="submit" className="rounded border px-3 py-1.5 text-sm font-medium" style={{ borderColor: "var(--bt-border)" }}>
-            Search
-          </button>
-        </form>
+        <div className="flex items-center gap-1 pb-2">
+          <form action="/leads" className="flex items-center gap-1.5">
+            {stage !== "all" ? <input type="hidden" name="stage" value={stage} /> : null}
+            <label className="relative flex items-center">
+              <SearchIcon className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[var(--bt-muted)]" />
+              <input
+                name="q"
+                defaultValue={query}
+                placeholder="Search leads"
+                aria-label="Search leads"
+                className="min-h-10 w-40 rounded border py-1.5 pl-8 pr-2 text-sm outline-none focus:border-[var(--bt-primary)] sm:min-h-0 sm:w-48"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
+            </label>
+            <button
+              type="submit"
+              className="min-h-10 rounded border px-3 py-1.5 text-sm font-medium text-[var(--bt-text)] hover:bg-black/5 sm:min-h-0"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
+              Search
+            </button>
+          </form>
+          <span
+            className="inline-flex h-9 w-9 items-center justify-center rounded border text-[var(--bt-muted)]"
+            style={{ borderColor: "var(--bt-border)" }}
+            title="Filter (stage tabs above)"
+            aria-hidden
+          >
+            <FunnelIcon className="h-4 w-4" />
+          </span>
+          <span
+            className="inline-flex h-9 w-9 items-center justify-center rounded border text-[var(--bt-muted)]"
+            style={{ borderColor: "var(--bt-border)" }}
+            title="Column settings"
+            aria-hidden
+          >
+            <GearIcon className="h-4 w-4" />
+          </span>
+        </div>
       </nav>
 
-      <LeadsGrid
-        rows={leads
-          .filter((lead) => (stage === "all" || lead.stage === stage) && (!query || `${lead.title ?? ""} ${lead.name} ${lead.email ?? ""} ${lead.phone ?? ""}`.toLowerCase().includes(query)))
-          .map((lead) => ({
+      {leads.length === 0 ? (
+        <EmptyState
+          icon={<PeopleIcon className="h-10 w-10" />}
+          title="No lead opportunities yet"
+          description="Add a lead to start tracking calls, meetings, and proposals — the same Sales pipeline as Buildertrend."
+          action={<AddLeadOpportunityModal clients={clients} />}
+        />
+      ) : (
+        <LeadsGrid
+          rows={filtered.map((lead) => ({
             id: lead.id,
             title: lead.title ?? lead.name,
             converted: lead.convertedJobId !== null,
@@ -104,7 +150,8 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
             revenueMinCents: lead.estimatedRevenueMinCents,
             revenueMaxCents: lead.estimatedRevenueMaxCents,
           }))}
-      />
+        />
+      )}
     </div>
   );
 }

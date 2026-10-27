@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
-
+import { DocumentIcon } from "@/components/shell/icons";
 import { estimateTotalCents } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -47,8 +47,8 @@ export default async function LeadProposalsPage({ searchParams }: PageProps<"/le
   const proposals = status === "all" ? allProposals : allProposals.filter((proposal) => proposal.status === status);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead proposals</h1>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
+      <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead Proposals</h1>
 
       <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
         {TABS.map((t) => (
@@ -64,7 +64,11 @@ export default async function LeadProposalsPage({ searchParams }: PageProps<"/le
       </nav>
 
       {allProposals.length === 0 ? (
-        <EmptyState title="No proposals yet" description="Proposals created from a lead will appear here." />
+        <EmptyState
+          icon={<DocumentIcon className="h-10 w-10" />}
+          title="No proposals yet"
+          description="Open a lead and use the Proposals tab to draft one — they all show up here."
+        />
       ) : (
         <LeadProposalsGrid
           rows={proposals.map((proposal) => {

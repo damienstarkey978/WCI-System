@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { ThemeToggle } from "@/components/settings/ThemeToggle";
 import { FunUiToggle } from "@/components/settings/FunUiToggle";
+import { ThemeToggle } from "@/components/settings/ThemeToggle";
+import { BuildingIcon, GearIcon } from "@/components/shell/icons";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
 
@@ -29,12 +30,21 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">My Settings</h1>
-        <p className="text-xs text-[var(--bt-muted)]">
-          For your email, password, or two-factor security, use &quot;Manage account&quot; in the avatar menu instead.
-        </p>
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
+      <div className="flex items-start gap-3">
+        <span
+          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+          style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}
+          aria-hidden
+        >
+          <GearIcon className="h-5 w-5" />
+        </span>
+        <div>
+          <h1 className="text-xl font-semibold text-[var(--bt-text)]">My Settings</h1>
+          <p className="text-xs text-[var(--bt-muted)]">
+            For your email, password, or two-factor security, use &quot;Manage account&quot; in the avatar menu instead.
+          </p>
+        </div>
       </div>
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
@@ -56,10 +66,12 @@ export default async function SettingsPage() {
       {user.role === UserRole.ADMIN ? (
         <Link
           href="/settings/company"
-          className="rounded-lg border bg-[var(--bt-panel-bg)] p-4 text-sm font-medium text-[var(--bt-primary)] hover:underline"
+          className="flex items-center gap-3 rounded-lg border bg-[var(--bt-panel-bg)] p-4 text-sm font-medium text-[var(--bt-primary)] hover:bg-black/5"
           style={{ borderColor: "var(--bt-border)" }}
         >
-          Company settings →
+          <BuildingIcon className="h-5 w-5 shrink-0" />
+          <span className="flex-1">Company settings</span>
+          <span aria-hidden>→</span>
         </Link>
       ) : null}
     </div>

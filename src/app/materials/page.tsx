@@ -1,7 +1,8 @@
+import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { NoteIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { listMaterialCatalogItems } from "@/lib/materials/service";
-import { SetupNotice } from "@/app/admin/setup-notice";
 
 import { CreateMaterialForm } from "./create-material-form";
 import { MaterialRow } from "./material-row";
@@ -23,9 +24,9 @@ export default async function MaterialsPage() {
   const items = await listMaterialCatalogItems(user.organizationId);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Materials catalog</h1>
+        <h1 className="text-xl font-semibold text-[var(--bt-text)]">Materials Catalog</h1>
         <p className="mt-1 text-sm text-[var(--bt-muted)]">
           The AI estimate assistant prices materials from this catalog first. Keep it current with what you&apos;re
           actually paying at Lowe&apos;s and Home Depot.
@@ -36,7 +37,11 @@ export default async function MaterialsPage() {
       <SearchWebPriceForm />
 
       {items.length === 0 ? (
-        <EmptyState title="No materials yet" description="Materials you add will be used to price AI-drafted estimates." />
+        <EmptyState
+          icon={<NoteIcon className="h-10 w-10" />}
+          title="No materials yet"
+          description="Materials you add will be used to price AI-drafted estimates."
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
           <table className="w-full text-left text-sm">

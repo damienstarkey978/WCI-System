@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { SearchIcon, SortArrowsIcon } from "@/components/shell/icons";
 import type { ActivationLabel } from "@/lib/directory/activation";
 import { directoryHref, type DirectoryParams } from "@/lib/directory/params";
 
@@ -32,15 +33,18 @@ export function SearchForm({ params, placeholder }: { params: DirectoryParams; p
       {params.status ? <input type="hidden" name="status" value={params.status} /> : null}
       {params.sort ? <input type="hidden" name="sort" value={params.sort} /> : null}
       {params.dir === "desc" ? <input type="hidden" name="dir" value="desc" /> : null}
-      <input
-        type="search"
-        name="q"
-        defaultValue={params.query}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        className="h-9 w-52 rounded-md border bg-[var(--bt-panel-bg)] px-3 text-sm text-[var(--bt-text)] outline-none focus:border-[var(--bt-primary)]"
-        style={{ borderColor: "var(--bt-border)" }}
-      />
+      <label className="relative flex items-center">
+        <SearchIcon className="pointer-events-none absolute left-2.5 h-4 w-4 text-[var(--bt-muted)]" />
+        <input
+          type="search"
+          name="q"
+          defaultValue={params.query}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          className="h-9 w-44 rounded-md border bg-[var(--bt-panel-bg)] py-1.5 pl-8 pr-3 text-sm text-[var(--bt-text)] outline-none focus:border-[var(--bt-primary)] sm:w-52"
+          style={{ borderColor: "var(--bt-border)" }}
+        />
+      </label>
     </form>
   );
 }
@@ -81,7 +85,11 @@ export function DirectoryTable<Row>({
                   {column.sortKey !== undefined ? (
                     <Link href={directoryHref(basePath, params, { sort: column.sortKey, dir: nextDir, page: 1 })} className="inline-flex items-center gap-1 hover:underline">
                       {column.label}
-                      {sorted ? <span aria-hidden="true" className="text-[10px]">{params.dir === "asc" ? "▲" : "▼"}</span> : null}
+                      {sorted ? (
+                        <SortArrowsIcon className="h-3.5 w-3.5 text-[var(--bt-primary)]" />
+                      ) : (
+                        <SortArrowsIcon className="h-3.5 w-3.5 opacity-30" />
+                      )}
                     </Link>
                   ) : (
                     column.label
