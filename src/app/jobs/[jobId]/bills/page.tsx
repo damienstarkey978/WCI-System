@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { ReceiptIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { billStatusCounts, billingInboxAddress } from "@/lib/bills/intake";
 import { db } from "@/lib/db";
@@ -162,6 +163,7 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
 
       {rows.length === 0 ? (
         <EmptyState
+          icon={<ReceiptIcon className="h-10 w-10" />}
           title={
             activeTab === "INBOX"
               ? "You're all caught up"

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { InboxIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -108,6 +109,7 @@ export default async function CostInboxPage({ params }: PageProps<"/jobs/[jobId]
 
       {rows.length === 0 ? (
         <EmptyState
+          icon={<InboxIcon className="h-10 w-10" />}
           title="You're all caught up"
           description="Scanned receipts and bills waiting on review will appear here, or drop them on the Bills page."
           action={

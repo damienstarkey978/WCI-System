@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { BidIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -81,6 +82,7 @@ export default async function BidsPage({ params }: PageProps<"/jobs/[jobId]/bids
 
       {bidPackages.length === 0 ? (
         <EmptyState
+          icon={<BidIcon className="h-10 w-10" />}
           title="Manage your Bids in one place"
           description="Send bids, track responses, and compare bid amounts."
           action={createAction}

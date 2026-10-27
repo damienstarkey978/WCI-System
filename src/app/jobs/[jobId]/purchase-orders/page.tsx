@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { PurchaseOrderIcon } from "@/components/shell/icons";
 import type { AddFromSource } from "@/components/financial/PoCostLineItems";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
@@ -168,6 +169,7 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
 
       {rows.length === 0 ? (
         <EmptyState
+          icon={<PurchaseOrderIcon className="h-10 w-10" />}
           title="No purchase orders yet"
           description="Create a purchase order for materials or subcontract work on this job."
           action={createAction}
