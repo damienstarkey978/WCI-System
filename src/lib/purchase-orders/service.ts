@@ -78,6 +78,7 @@ export interface CreatePurchaseOrderInput {
   readonly title?: string | null;
   readonly materialsOnly?: boolean;
   readonly scheduledCompletionOn?: Date | null;
+  readonly completedOn?: Date | null;
   /**
    * The subcontractor agreement text. When agreementTemplateId is given and this is
    * not, the template's body is copied in — copied, not referenced, so editing the
@@ -140,6 +141,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
         title: input.title ?? null,
         materialsOnly: input.materialsOnly ?? false,
         scheduledCompletionOn: input.scheduledCompletionOn ?? null,
+        completedOn: input.completedOn ?? null,
         scopeOfWork,
         agreementTemplateId: input.agreementTemplateId ?? null,
         internalNotes: input.internalNotes ?? null,

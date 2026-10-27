@@ -44,8 +44,12 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default async function PurchaseOrderDetailPage({
   params,
+  searchParams,
 }: PageProps<"/jobs/[jobId]/purchase-orders/[purchaseOrderId]">) {
   const { jobId, purchaseOrderId } = await params;
+  const query = await searchParams;
+  const acceptUrl = typeof query.acceptUrl === "string" ? query.acceptUrl : null;
+  const emailed = query.emailed === "1";
 
   let user;
   try {
@@ -82,7 +86,24 @@ export default async function PurchaseOrderDetailPage({
   const agreementText = purchaseOrder.agreementSnapshot ?? purchaseOrder.scopeOfWork;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 sm:p-6">
+      {acceptUrl || emailed ? (
+        <div
+          className="rounded-lg border px-4 py-3 text-sm"
+          style={{ borderColor: "var(--bt-border)", background: "color-mix(in srgb, var(--bt-primary) 8%, transparent)" }}
+        >
+          {emailed ? <p className="text-[var(--bt-text)]">Accept link emailed to the vendor.</p> : null}
+          {acceptUrl ? (
+            <p className="break-all text-[var(--bt-text)]">
+              {emailed ? null : <>Sent for approval — share this accept link with the vendor: </>}
+              <a href={acceptUrl} className="font-medium underline" style={{ color: "var(--bt-primary)" }}>
+                {acceptUrl}
+              </a>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link

@@ -1,23 +1,30 @@
+import type { CostType } from "@/generated/prisma/enums";
 import { MoneyError, parseDollarsToCents } from "@/lib/money";
+
+const COST_TYPES = new Set<string>(["LABOR", "MATERIAL", "EQUIPMENT", "SUBCONTRACTOR", "OTHER", "NONE"]);
 
 export interface ParsedCostCodeLineItem {
   readonly costCodeId: string;
   readonly title: string;
   readonly quantityMilli: number;
   readonly unitCostCents: number;
+  /** Present when the form submitted lineCostType[] (PO create). */
+  readonly costType?: CostType;
 }
 
 /**
- * Zips the parallel form arrays produced by CostCodeLineItems (lineCostCodeId[],
- * lineTitle[], lineQuantity[], lineUnitCost[]) back into row objects, dropping any
- * row missing a cost code, title, or unit cost — the client only guarantees those
- * are `required` per-row, not that a stray blank row can't be submitted.
+ * Zips the parallel form arrays produced by CostCodeLineItems / PoCostLineItems
+ * (lineCostCodeId[], lineTitle[], lineQuantity[], lineUnitCost[], optional
+ * lineCostType[]) back into row objects, dropping any row missing a cost code,
+ * title, or unit cost — the client only guarantees those are `required` per-row,
+ * not that a stray blank row can't be submitted.
  */
 export function parseCostCodeLineItems(formData: FormData): ParsedCostCodeLineItem[] {
   const costCodeIds = formData.getAll("lineCostCodeId").map(String);
   const titles = formData.getAll("lineTitle").map(String);
   const quantities = formData.getAll("lineQuantity").map(String);
   const unitCosts = formData.getAll("lineUnitCost").map(String);
+  const costTypes = formData.getAll("lineCostType").map(String);
 
   const rows: ParsedCostCodeLineItem[] = [];
   for (let index = 0; index < costCodeIds.length; index++) {
@@ -32,11 +39,15 @@ export function parseCostCodeLineItems(formData: FormData): ParsedCostCodeLineIt
       throw new MoneyError(`Cannot parse "${quantityRaw}" as a quantity`);
     }
 
+    const costTypeRaw = costTypes[index]?.trim();
+    const costType = costTypeRaw && COST_TYPES.has(costTypeRaw) ? (costTypeRaw as CostType) : undefined;
+
     rows.push({
       costCodeId,
       title,
       quantityMilli,
       unitCostCents: parseDollarsToCents(unitCostRaw),
+      ...(costType ? { costType } : {}),
     });
   }
   return rows;

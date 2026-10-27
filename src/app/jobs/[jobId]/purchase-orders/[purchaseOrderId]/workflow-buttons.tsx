@@ -125,9 +125,17 @@ function ActionForm({
       ) : null}
 
       {state.error ? (
-        <span role="alert" className="text-xs" style={{ color: "var(--bt-danger)" }}>
+        <span role="alert" className="max-w-sm break-all text-xs" style={{ color: "var(--bt-danger)" }}>
           {state.error}
         </span>
+      ) : null}
+      {state.ok && state.emailed ? (
+        <span className="text-xs text-[var(--bt-muted)]">Emailed accept link to vendor.</span>
+      ) : null}
+      {state.ok && state.acceptUrl && !state.error ? (
+        <a href={state.acceptUrl} className="max-w-sm break-all text-xs underline" style={{ color: "var(--bt-primary)" }}>
+          Accept link
+        </a>
       ) : null}
     </form>
   );
@@ -158,7 +166,7 @@ export function WorkflowButtons({
           action={sendForApprovalAction}
           jobId={jobId}
           purchaseOrderId={purchaseOrderId}
-          label="Send to vendor for approval"
+          label="Send"
           variant="primary"
         />
       ) : null}

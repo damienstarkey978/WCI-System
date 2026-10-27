@@ -257,6 +257,29 @@ async function main(): Promise<void> {
     instructionCount++;
   }
   console.log(`✓ ${instructionCount} Handoff AI preference instruction(s) seeded`);
+
+  // Default PO Scope of Work — the Subcontractor Responsibilities clause WCI pastes
+  // into every Buildertrend PO. Copied into PurchaseOrder.scopeOfWork at create time.
+  const { DEFAULT_PO_AGREEMENT_TEMPLATE_NAME, DEFAULT_PO_SCOPE_OF_WORK } = await import(
+    "../src/lib/purchase-orders/default-scope"
+  );
+  await prisma.pOAgreementTemplate.upsert({
+    where: {
+      organizationId_name: {
+        organizationId: organization.id,
+        name: DEFAULT_PO_AGREEMENT_TEMPLATE_NAME,
+      },
+    },
+    update: { body: DEFAULT_PO_SCOPE_OF_WORK, isDefault: true, isActive: true },
+    create: {
+      organizationId: organization.id,
+      name: DEFAULT_PO_AGREEMENT_TEMPLATE_NAME,
+      body: DEFAULT_PO_SCOPE_OF_WORK,
+      isDefault: true,
+      isActive: true,
+    },
+  });
+  console.log(`✓ Default PO agreement template seeded`);
 }
 
 main()
