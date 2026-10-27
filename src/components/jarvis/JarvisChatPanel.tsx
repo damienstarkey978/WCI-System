@@ -50,7 +50,7 @@ interface JarvisChatPanelProps {
   readonly storageKey?: string;
   readonly suggestions?: readonly string[];
   readonly emptyStateHint?: string;
-  /** Placeholder for the Ask composer textarea (Handoff uses “Ask Handy”). */
+  /** Placeholder for the Ask composer textarea (Handoff uses “Ask Handy”; WCI uses “Ask Jarvis”). */
   readonly composerPlaceholder?: string;
   readonly onClose?: () => void;
   readonly heightClassName?: string;
@@ -70,7 +70,7 @@ interface JarvisChatPanelProps {
    */
   readonly navigateOnEstimateDraft?: boolean;
   /**
-   * `docked` = Handy rail: no inner Jarvis chrome (outer rail already has Handy
+   * `docked` = estimate rail: no inner Jarvis chrome (outer rail already has Jarvis
    * header), denser empty state, compact composer. `default` = floating launcher /
    * full embeds.
    */

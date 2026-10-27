@@ -1,5 +1,5 @@
 /**
- * Shown when the Handy / Jarvis surface should be visible but cannot draft yet
+ * Shown when the Jarvis surface should be visible but cannot draft yet
  * (UI flag off, or ANTHROPIC_API_KEY missing). Prefer this over hiding the whole
  * panel so staff never land on a blank manual-only Proposals tab and wonder
  * where notes → estimate → proposal went.
@@ -8,7 +8,7 @@
 export function JarvisSetupNotice({
   uiEnabled,
   anthropicConfigured,
-  title = "Draft with Jarvis (Handy-style)",
+  title = "Draft with Jarvis",
   hint = "Paste scope notes and photos here to draft a cost-coded estimate and client-facing proposal. Everything stays DRAFT until you review and send.",
 }: {
   readonly uiEnabled: boolean;

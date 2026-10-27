@@ -91,14 +91,14 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
           context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "estimates" }}
           storageKey={`job-estimates:${job.id}`}
           suggestions={[...JARVIS_JOB_ESTIMATE_SUGGESTIONS]}
-          emptyStateHint="Describe the scope of work — measurements, materials, anything relevant — and Jarvis drafts a full cost-coded estimate plus the matching client-facing proposal (Handy-style), when a client is linked to this job. Attach photos and it'll factor those in too."
+          emptyStateHint="Describe the scope of work — measurements, materials, anything relevant — and Jarvis drafts a full cost-coded estimate plus the matching client-facing proposal, when a client is linked to this job. Attach photos and it'll factor those in too."
           heightClassName="h-[28rem] min-h-[20rem] sm:h-[32rem]"
         />
       ) : (
         <JarvisSetupNotice
           uiEnabled={isJarvisUiEnabled()}
           anthropicConfigured={isAnthropicConfigured()}
-          title="Draft estimate with Jarvis (Handy-style)"
+          title="Draft estimate with Jarvis"
           hint="Describe scope notes and attach photos to draft a cost-coded estimate (and a proposal when a client is linked). Everything stays DRAFT until you review."
         />
       )}

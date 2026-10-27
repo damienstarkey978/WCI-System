@@ -1,6 +1,6 @@
 /**
- * Right-rail Jarvis Handy companion — Handoff metaphor: scrollable scope prose,
- * compact estimate card, Ask Handy chat pinned to the bottom of the rail.
+ * Right-rail Jarvis companion — Handoff metaphor: scrollable scope prose,
+ * compact estimate card, Ask Jarvis chat pinned to the bottom of the rail.
  * WCI colors (not dark-mode copy).
  */
 
@@ -102,11 +102,11 @@ export function EstimateHandyDock({
             background: "color-mix(in srgb, var(--bt-primary) 10%, var(--bt-panel-bg))",
             color: "var(--bt-primary)",
           }}
-          title="Ask Handy"
+          title="Ask Jarvis"
         >
           <span aria-hidden>✦</span>
           <span className="text-[10px] uppercase tracking-wide lg:[writing-mode:vertical-rl] lg:rotate-180">
-            Handy
+            Jarvis
           </span>
         </button>
       </div>
@@ -143,7 +143,7 @@ export function EstimateHandyDock({
             ✦
           </span>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-[var(--bt-text)]">Handy</p>
+            <p className="text-[11px] font-semibold text-[var(--bt-text)]">Jarvis</p>
             <p className="truncate text-[10px] text-[var(--bt-muted)]">{leadName}</p>
           </div>
         </div>
@@ -152,7 +152,7 @@ export function EstimateHandyDock({
             type="button"
             onClick={toggle}
             className="rounded px-1.5 py-0.5 text-xs text-[var(--bt-muted)] hover:text-[var(--bt-text)]"
-            aria-label="Collapse Handy"
+            aria-label="Collapse Jarvis"
             title="Collapse"
           >
             »
@@ -252,13 +252,13 @@ export function EstimateHandyDock({
         ) : null}
       </div>
 
-      {/* Pinned Ask Handy — flex child so Overview keeps room above the composer */}
+      {/* Pinned Ask Jarvis — flex child so Overview keeps room above the composer */}
       <div
         className="flex min-h-0 flex-[1.15] flex-col border-t lg:min-h-[12rem]"
         style={{ borderColor: "var(--bt-border)" }}
       >
         <p className="shrink-0 px-2.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
-          Ask Handy
+          Ask Jarvis
         </p>
         {ready ? (
           <JarvisChatPanel
@@ -273,7 +273,7 @@ export function EstimateHandyDock({
             storageKey={`estimate-handy:${leadId}:${estimateId ?? proposalId ?? "none"}`}
             suggestions={[...JARVIS_LEAD_PROPOSAL_SUGGESTIONS]}
             emptyStateHint="Adjust quantities, add trades, or tighten narrative. DRAFT until you send."
-            composerPlaceholder="Ask Handy"
+            composerPlaceholder="Ask Jarvis"
             heightClassName="min-h-0 flex-1"
             chrome="docked"
             locationChip={addressChip}
@@ -290,7 +290,7 @@ export function EstimateHandyDock({
   );
 }
 
-/** Visual Ask Handy chrome when Jarvis keys are off — keeps the dock Handoff-shaped. */
+/** Visual Ask Jarvis chrome when Jarvis keys are off — keeps the dock Handoff-shaped. */
 function HandyComposerStub({
   locationChip,
   suggestions,
@@ -322,7 +322,7 @@ function HandyComposerStub({
           className="overflow-hidden rounded-xl border bg-[var(--bt-panel-bg)]"
           style={{ borderColor: "var(--bt-border)" }}
         >
-          <p className="px-3 pt-2 text-base text-[var(--bt-muted)]">Ask Handy</p>
+          <p className="px-3 pt-2 text-base text-[var(--bt-muted)]">Ask Jarvis</p>
           <p className="px-3 pb-0.5 text-[10px] text-[var(--bt-muted)]">Use Ctrl + Enter to submit</p>
           <div className="flex items-center gap-1 px-1.5 pb-1 pt-0.5">
             <span
