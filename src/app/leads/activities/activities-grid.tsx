@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 
+import { ActivityTypeIcon, activityTypeLabel } from "@/components/leads/activity-type";
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
 import { formatDate } from "@/lib/format";
-
-const TYPE_LABEL: Record<string, string> = { CALL: "Call", EMAIL: "Email", MEETING: "Meeting", NOTE: "Note", TASK: "Task" };
 
 export interface ActivityRow {
   readonly id: string;
@@ -23,8 +22,36 @@ export interface ActivityRow {
 export function ActivitiesGrid({ rows }: { rows: readonly ActivityRow[] }) {
   const columns: DataGridColumn<ActivityRow>[] = [
     {
+      key: "type",
+      header: "Type",
+      sortable: true,
+      sortValue: (row) => activityTypeLabel(row.type),
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <ActivityTypeIcon type={row.type} size="sm" completed={row.completed} />
+          <span className="text-sm font-medium text-[var(--bt-text)]">{activityTypeLabel(row.type)}</span>
+        </div>
+      ),
+    },
+    {
+      key: "note",
+      header: "Activity",
+      render: (row) => (
+        <div className="min-w-0">
+          <span className={`line-clamp-2 text-sm ${row.completed ? "text-[var(--bt-muted)] line-through" : "text-[var(--bt-text)]"}`}>
+            {row.note}
+          </span>
+          {row.type === "TASK" ? (
+            <div className="mt-0.5 text-xs text-[var(--bt-muted)]">
+              {row.completed ? "Completed" : row.dueDate ? `Due ${formatDate(new Date(row.dueDate))}` : "Open task"}
+            </div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
       key: "leadName",
-      header: "Lead",
+      header: "Lead opportunity",
       sortable: true,
       render: (row) => (
         <Link href={`/leads/${row.leadId}?tab=activities`} className="font-medium text-[var(--bt-primary)] hover:underline">
@@ -32,21 +59,13 @@ export function ActivitiesGrid({ rows }: { rows: readonly ActivityRow[] }) {
         </Link>
       ),
     },
-    { key: "type", header: "Type", sortable: true, sortValue: (row) => TYPE_LABEL[row.type] ?? row.type, render: (row) => TYPE_LABEL[row.type] ?? row.type },
+    { key: "by", header: "Assigned / by", render: (row) => <span className="text-sm text-[var(--bt-muted)]">{row.by ?? "—"}</span> },
     {
-      key: "note",
-      header: "Note",
-      render: (row) => (
-        <div>
-          <span className="line-clamp-2">{row.note}</span>
-          {row.type === "TASK" ? (
-            <span className="text-xs text-[var(--bt-muted)]">{row.completed ? "Done" : row.dueDate ? `Due ${formatDate(new Date(row.dueDate))}` : "Open"}</span>
-          ) : null}
-        </div>
-      ),
+      key: "occurredAt",
+      header: "Date",
+      sortable: true,
+      render: (row) => <span className="whitespace-nowrap text-sm">{formatDate(new Date(row.occurredAt))}</span>,
     },
-    { key: "by", header: "By", render: (row) => row.by ?? "" },
-    { key: "occurredAt", header: "Date", sortable: true, render: (row) => formatDate(new Date(row.occurredAt)) },
   ];
   return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="lead-activities" selectable emptyMessage="No activity matches." />;
 }

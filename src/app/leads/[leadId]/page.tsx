@@ -3,16 +3,17 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { LeadProposalHandy } from "@/components/jarvis/LeadProposalHandy";
+import type { LeadHandyEstimateSummary } from "@/components/jarvis/LeadProposalHandy";
+import { ActivityTypeIcon, activityTypeLabel } from "@/components/leads/activity-type";
+import { estimateTotalCents } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { listLeadAttachments } from "@/lib/crm/attachments";
 import { listLeadGeneralPhotos } from "@/lib/crm/lead-jarvis-seed";
 import { db } from "@/lib/db";
-import { resolveFileUrl } from "@/lib/files/service";
-import { formatDate, formatMoney } from "@/lib/format";
-import { estimateTotalCents } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
-import type { LeadHandyEstimateSummary } from "@/components/jarvis/LeadProposalHandy";
+import { resolveFileUrl } from "@/lib/files/service";
+import { formatDate, formatMoney } from "@/lib/format";
 
 import { ConvertToJobButton } from "../convert-form";
 import { StageSelect } from "../stage-select";
@@ -30,14 +31,6 @@ const TABS = [
   { value: "activities", label: "Activities" },
   { value: "proposals", label: "Proposals" },
 ] as const;
-
-const ACTIVITY_TYPE_LABEL: Record<string, string> = {
-  CALL: "Call",
-  EMAIL: "Email",
-  MEETING: "Meeting",
-  NOTE: "Note",
-  TASK: "Task",
-};
 
 const PROPOSAL_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   DRAFT: { bg: "#e5e7eb", text: "#374151" },
@@ -216,33 +209,41 @@ export default async function LeadDetailPage({
         <div className="flex flex-col gap-3">
           <LeadActivityForm leadId={lead.id} />
           {activities.length === 0 ? (
-            <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-              No activity logged yet.
+            <p className="rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-8 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+              No activity logged yet. Use the buttons above to log a call, email, meeting, note, or task.
             </p>
           ) : (
-            <div className="flex flex-col gap-2">
-              {activities.map((activity) => (
-                <div key={activity.id} className="rounded-lg border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--bt-muted)]">
-                    <div className="flex items-center gap-2">
-                      <span className="rounded bg-black/5 px-1.5 py-0.5 font-semibold text-[var(--bt-text)]">
-                        {ACTIVITY_TYPE_LABEL[activity.type] ?? activity.type}
-                      </span>
-                      <span>{formatDate(activity.occurredAt)}</span>
-                      {activity.createdByUser ? <span>· {activity.createdByUser.email}</span> : null}
-                    </div>
-                    {activity.type === "TASK" ? (
-                      <div className="flex items-center gap-2">
-                        {activity.dueDate ? <span>Due {formatDate(activity.dueDate)}</span> : null}
-                        {activity.completedAt ? <span className="font-semibold text-[var(--bt-status-open-text)]">Done</span> : null}
-                        <ToggleActivityButton leadId={lead.id} activityId={activity.id} completed={activity.completedAt !== null} />
+            <ul className="flex flex-col divide-y rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+              {activities.map((activity) => {
+                const completed = activity.completedAt !== null;
+                return (
+                  <li key={activity.id} className="flex gap-3 p-3 sm:p-3.5">
+                    <ActivityTypeIcon type={activity.type} completed={completed} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--bt-muted)]">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="font-semibold text-[var(--bt-text)]">{activityTypeLabel(activity.type)}</span>
+                          <span>{formatDate(activity.occurredAt)}</span>
+                          {activity.createdByUser ? <span>· {activity.createdByUser.email}</span> : null}
+                        </div>
+                        {activity.type === "TASK" ? (
+                          <div className="flex items-center gap-2">
+                            {activity.dueDate ? <span>Due {formatDate(activity.dueDate)}</span> : null}
+                            {completed ? <span className="font-semibold text-[var(--bt-status-open-text)]">Done</span> : null}
+                            <ToggleActivityButton leadId={lead.id} activityId={activity.id} completed={completed} />
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{activity.note}</p>
-                </div>
-              ))}
-            </div>
+                      <p
+                        className={`mt-1 whitespace-pre-wrap text-sm ${completed ? "text-[var(--bt-muted)] line-through" : "text-[var(--bt-text)]"}`}
+                      >
+                        {activity.note}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       ) : tab === "proposals" ? (

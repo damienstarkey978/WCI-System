@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { ChevronDownIcon, FilterIcon, HomeIcon, SortIcon } from "./icons";
+import { ChevronDownIcon, FunnelIcon, HomeIcon, SortIcon } from "./icons";
 
 export interface SidebarJob {
   readonly id: string;
@@ -142,7 +142,7 @@ export function JobSidebar({
     return (
       <aside
         className="hidden w-12 shrink-0 flex-col items-center border-r bg-[var(--bt-sidebar-bg)] py-2 md:flex"
-        style={{ borderColor: "var(--bt-border)" }}
+        style={{ borderColor: "var(--bt-border)", width: "3rem" }}
       >
         <button
           type="button"
@@ -159,10 +159,10 @@ export function JobSidebar({
 
   return (
     <aside
-      className="hidden w-64 shrink-0 flex-col border-r bg-[var(--bt-sidebar-bg)] md:flex"
-      style={{ borderColor: "var(--bt-border)" }}
+      className="hidden shrink-0 flex-col border-r bg-[var(--bt-sidebar-bg)] md:flex"
+      style={{ borderColor: "var(--bt-border)", width: "var(--bt-job-sidebar-width)" }}
     >
-      <div className="flex items-start justify-between gap-2 border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="flex items-start justify-between gap-2 border-b px-3 py-2.5" style={{ borderColor: "var(--bt-border)" }}>
         {activeJob ? (
           <Link href={`/jobs/${activeJob.id}`} className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-[var(--bt-muted)]">
@@ -246,7 +246,7 @@ export function JobSidebar({
         </div>
         {tab === "jobs" ? (
           <div className="flex items-center gap-1.5">
-            <FilterIcon className="h-3.5 w-3.5 shrink-0 text-[var(--bt-muted)]" />
+            <FunnelIcon className="h-3.5 w-3.5 shrink-0 text-[var(--bt-muted)]" />
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
@@ -263,15 +263,15 @@ export function JobSidebar({
         ) : null}
       </div>
 
-      <div className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+      <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
         ALL {filteredJobs.length} {tab === "templates" ? "TEMPLATE" : statusFilter === "ALL" ? "" : STATUS_FILTER_LABEL[statusFilter].toUpperCase()} JOB
         {filteredJobs.length === 1 ? "" : "S"}
       </div>
 
       <div className="flex-1 overflow-y-auto pb-2">
         {[...groups.entries()].map(([groupName, groupJobs]) => (
-          <div key={groupName} className="mb-3">
-            <div className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+          <div key={groupName} className="mb-2">
+            <div className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
               {groupName}
             </div>
             {groupJobs.map((job) => {
@@ -280,15 +280,24 @@ export function JobSidebar({
                 <Link
                   key={job.id}
                   href={jobHref(job.id)}
-                  className={`flex items-center gap-1.5 truncate px-4 py-1.5 text-sm transition ${isActive ? "" : "hover:bg-black/5"}`}
+                  className={`flex items-center gap-1.5 truncate px-3 text-[13px] leading-snug transition ${isActive ? "" : "hover:bg-black/5"}`}
                   style={
                     isActive
-                      ? { background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)", color: "var(--bt-primary)" }
-                      : { color: "var(--bt-text)" }
+                      ? {
+                          background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)",
+                          color: "var(--bt-primary)",
+                          paddingTop: "var(--bt-job-sidebar-row-py)",
+                          paddingBottom: "var(--bt-job-sidebar-row-py)",
+                        }
+                      : {
+                          color: "var(--bt-text)",
+                          paddingTop: "var(--bt-job-sidebar-row-py)",
+                          paddingBottom: "var(--bt-job-sidebar-row-py)",
+                        }
                   }
                 >
                   <span className="truncate">
-                    {job.prefix ? <span className="mr-1.5 font-mono text-xs text-[var(--bt-muted)]">{job.prefix}</span> : null}
+                    {job.prefix ? <span className="mr-1.5 font-mono text-[11px] text-[var(--bt-muted)]">{job.prefix}</span> : null}
                     {job.name}
                   </span>
                   {job.qboLinked ? <QbBadge /> : null}
@@ -298,7 +307,7 @@ export function JobSidebar({
           </div>
         ))}
 
-        {filteredJobs.length === 0 ? <p className="px-4 py-2 text-sm text-[var(--bt-muted)]">{tab === "templates" ? "No templates match." : "No jobs match."}</p> : null}
+        {filteredJobs.length === 0 ? <p className="px-3 py-2 text-sm text-[var(--bt-muted)]">{tab === "templates" ? "No templates match." : "No jobs match."}</p> : null}
       </div>
     </aside>
   );
