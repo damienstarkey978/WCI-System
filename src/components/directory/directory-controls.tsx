@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-import { FilterIcon } from "@/components/shell/icons";
+import { FunnelIcon, PlusIcon } from "@/components/shell/icons";
 import { directoryHref, PAGE_SIZES, totalPages, type DirectoryParams } from "@/lib/directory/params";
 
 export interface DirectoryPanel {
@@ -46,9 +46,13 @@ export function DirectoryHeader({ title, toolbar, panels }: { title: string; too
                 style={panel.variant === "primary" ? { background: "var(--bt-primary)" } : { borderColor: "var(--bt-border)" }}
               >
                 {panel.variant === "primary" ? (
-                  <span aria-hidden="true" className="text-base leading-none">
-                    {open ? "×" : "+"}
-                  </span>
+                  open ? (
+                    <span aria-hidden="true" className="text-base leading-none">
+                      ×
+                    </span>
+                  ) : (
+                    <PlusIcon className="h-4 w-4" />
+                  )
                 ) : null}
                 {panel.label}
               </button>
@@ -81,9 +85,14 @@ export function FilterMenu({ options, activeCount }: { options: readonly FilterO
         aria-expanded={open}
         className="relative rounded-md p-2 text-[var(--bt-text)] hover:bg-black/5 dark:hover:bg-white/10"
       >
-        <FilterIcon className="h-5 w-5" />
+        <FunnelIcon className="h-5 w-5" />
         {activeCount > 0 ? (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-100 px-1 text-[10px] font-bold text-sky-800">{activeCount}</span>
+          <span
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold"
+            style={{ background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)", color: "var(--bt-primary)" }}
+          >
+            {activeCount}
+          </span>
         ) : null}
       </button>
       {open ? (

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { SetupNotice } from "@/app/admin/setup-notice";
 import { AppShell } from "@/components/shell/AppShell";
 import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
-import { SetupNotice } from "@/app/admin/setup-notice";
+import { ChartIcon } from "@/components/shell/icons";
 import { LeadStage, UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
@@ -117,10 +118,19 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
 
   return (
     <AppShell jobs={jobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-[var(--bt-text)]">Reports</h1>
-          <p className="text-sm text-[var(--bt-muted)]">Use reports to see job performance, spot issues early, and keep every project on track.</p>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
+        <div className="flex items-start gap-3">
+          <span
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+            style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}
+            aria-hidden
+          >
+            <ChartIcon className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-xl font-semibold text-[var(--bt-text)]">Reports</h1>
+            <p className="text-sm text-[var(--bt-muted)]">Use reports to see job performance, spot issues early, and keep every project on track.</p>
+          </div>
         </div>
 
         <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: "var(--bt-border)" }}>
@@ -128,7 +138,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
             <Link
               key={c}
               href={`/reports?category=${c}`}
-              className="shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap"
+              className="shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap"
               style={category === c ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" } : { borderColor: "transparent", color: "var(--bt-muted)" }}
             >
               {c}
@@ -137,8 +147,8 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         </div>
 
         {active === null ? (
-          <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+            <table className="w-full min-w-[36rem] text-left text-sm">
               <thead>
                 <tr className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
                   <Th>Report</Th>
@@ -150,7 +160,11 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
                 {visibleReports.map((r) => (
                   <tr key={r.key} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
                     <Td>
-                      <Link href={`/reports?category=${category}&report=${r.key}`} className="font-medium text-[var(--bt-primary)] hover:underline">
+                      <Link
+                        href={`/reports?category=${category}&report=${r.key}`}
+                        className="inline-flex items-center gap-2 font-medium text-[var(--bt-primary)] hover:underline"
+                      >
+                        <ChartIcon className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
                         {r.label}
                       </Link>
                     </Td>

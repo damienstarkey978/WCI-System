@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { ChatIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -52,11 +53,16 @@ export default async function MessagesPage({ params, searchParams }: PageProps<"
   );
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
       <PageHeader jobName={job.name} title="Messages" action={createAction} />
 
       {threads.length === 0 ? (
-        <EmptyState title="No messages yet" description="Start a conversation about this job with + New Message." action={createAction} />
+        <EmptyState
+          icon={<ChatIcon className="h-10 w-10" />}
+          title="No messages yet"
+          description="Start a conversation about this job with + New Message."
+          action={createAction}
+        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)_14rem]">
           <nav className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
@@ -80,15 +86,24 @@ export default async function MessagesPage({ params, searchParams }: PageProps<"
                 <Link
                   key={thread.id}
                   href={`/jobs/${job.id}/messages?thread=${thread.id}`}
-                  className="block border-b px-4 py-3 last:border-0"
+                  className="flex gap-2.5 border-b px-3 py-3 last:border-0"
                   style={{ borderColor: "var(--bt-border)", background: active ? "var(--bt-panel-bg-muted)" : undefined }}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-semibold text-[var(--bt-text)]">{thread.subject}</span>
-                    <span className="shrink-0 text-xs text-[var(--bt-muted)]">{thread.messageCount}</span>
+                  <span
+                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                    style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}
+                    aria-hidden
+                  >
+                    <ChatIcon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-semibold text-[var(--bt-text)]">{thread.subject}</span>
+                      <span className="shrink-0 text-xs text-[var(--bt-muted)]">{thread.messageCount}</span>
+                    </div>
+                    <div className="truncate text-xs text-[var(--bt-muted)]">{thread.preview}</div>
+                    <div className="mt-0.5 text-[10px] text-[var(--bt-muted)]">{formatDate(thread.lastMessageAt)}</div>
                   </div>
-                  <div className="truncate text-xs text-[var(--bt-muted)]">{thread.preview}</div>
-                  <div className="mt-0.5 text-[10px] text-[var(--bt-muted)]">{formatDate(thread.lastMessageAt)}</div>
                 </Link>
               );
             })}
