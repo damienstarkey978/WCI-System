@@ -212,6 +212,22 @@ export function transactionalEmailSettings(): { apiKey: string; from: string } |
   return apiKey && from ? { apiKey, from } : null;
 }
 
+/**
+ * Transactional SMS (proposal Text-to-client) via Quo (formerly OpenPhone).
+ * QUO_API_KEY from Workspace Settings → API; QUO_FROM_NUMBER is a Quo inbox
+ * number in E.164 (must belong to the workspace). Without both, Text actions
+ * return a clear not-configured error.
+ */
+export function isTransactionalSmsConfigured(): boolean {
+  return optional("QUO_API_KEY") !== undefined && optional("QUO_FROM_NUMBER") !== undefined;
+}
+
+export function transactionalSmsSettings(): { apiKey: string; fromNumber: string } | null {
+  const apiKey = optional("QUO_API_KEY");
+  const fromNumber = optional("QUO_FROM_NUMBER");
+  return apiKey && fromNumber ? { apiKey, fromNumber } : null;
+}
+
 /** Public origin of this deployment (no trailing slash), for links that leave the app — e.g. https://app.worldconstructionjax.com. */
 export function appBaseUrlFromEnv(): string | undefined {
   return optional("APP_BASE_URL")?.replace(/\/+$/, "");

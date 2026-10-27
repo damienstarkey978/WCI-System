@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { EstimateProposalToggle } from "@/components/estimates/EstimateProposalToggle";
+import { EstimateSpreadsheet, type SpreadsheetGroup } from "@/components/estimates/EstimateSpreadsheet";
 import { estimateTotalCents, extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -13,8 +15,8 @@ import { CreateProposalFromEstimateButton } from "./create-proposal-button";
 export const dynamic = "force-dynamic";
 
 /**
- * Handoff-style estimate-first review: line items and cost codes before any
- * client-facing proposal. Create Proposal is the explicit conversion.
+ * Handoff-style estimate-first review: spreadsheet columns and totals before any
+ * client-facing proposal. Convert to Proposal is the explicit conversion.
  */
 export default async function LeadEstimatePage({ params }: PageProps<"/leads/estimates/[estimateId]">) {
   const { estimateId } = await params;
@@ -56,69 +58,108 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
   const pending = parsePendingProposalDraft(estimate.pendingProposalDraft);
   const canConvert = !linkedProposalId && (pending !== null || estimate.lineItems.length > 0);
 
-  const groups = new Map<string, typeof estimate.lineItems>();
+  const groupMap = new Map<string, typeof estimate.lineItems>();
   for (const item of estimate.lineItems) {
     const key = item.groupLabel ?? "Ungrouped";
-    const existing = groups.get(key);
+    const existing = groupMap.get(key);
     if (existing) existing.push(item);
-    else groups.set(key, [item]);
+    else groupMap.set(key, [item]);
   }
 
-  const totalCents = estimateTotalCents(estimate.lineItems);
+  const groups: SpreadsheetGroup[] = [...groupMap.entries()].map(([label, items]) => {
+    const mapped = items.map((item) => {
+      const builderCostCents = extendedCostCents(item.quantityMilli, item.unitCostCents);
+      const clientTotalCents = priceWithRate(builderCostCents, item.rateMode, item.rateBasisPoints);
+      return {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        costCodeLabel: `${item.costCode.code} · ${item.costCode.name}`,
+        costType: item.costType,
+        quantityMilli: item.quantityMilli,
+        unitCostCents: item.unitCostCents,
+        rateMode: item.rateMode,
+        rateBasisPoints: item.rateBasisPoints,
+        builderCostCents,
+        clientTotalCents,
+      };
+    });
+    return {
+      label,
+      items: mapped,
+      groupClientTotalCents: mapped.reduce((sum, row) => sum + row.clientTotalCents, 0),
+    };
+  });
+
+  const totalClientCents = estimateTotalCents(estimate.lineItems);
+  const totalBuilderCostCents = groups.reduce(
+    (sum, group) => sum + group.items.reduce((s, row) => s + row.builderCostCents, 0),
+    0,
+  );
+
+  const backHref = lead
+    ? `/leads/${lead.id}?tab=proposals`
+    : estimate.job
+      ? `/jobs/${estimate.job.id}/estimates/${estimate.id}`
+      : "/leads";
+  const backLabel = lead
+    ? `← ${lead.title ?? lead.name}`
+    : estimate.job
+      ? "← Job estimate worksheet"
+      : "← Leads";
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 sm:p-6">
-      <div>
-        {lead ? (
-          <Link href={`/leads/${lead.id}?tab=proposals`} className="text-xs text-[var(--bt-muted)] hover:underline">
-            ← Back to {lead.title ?? lead.name} Proposals
-          </Link>
-        ) : estimate.job ? (
-          <Link href={`/jobs/${estimate.job.id}/estimates/${estimate.id}`} className="text-xs text-[var(--bt-muted)] hover:underline">
-            ← Open job estimate worksheet
-          </Link>
-        ) : null}
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 pb-8 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href={backHref} className="text-xs text-[var(--bt-muted)] hover:underline">
+          {backLabel}
+        </Link>
+        <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-[var(--bt-muted)]">
+          <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
+            1. Notes
+          </span>
+          <span aria-hidden>→</span>
+          <span className="rounded px-2 py-1 font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
+            2. Estimate
+          </span>
+          <span aria-hidden>→</span>
+          <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
+            3. Proposal
+          </span>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[var(--bt-muted)]">
-        <span className="rounded px-2 py-1 text-[var(--bt-primary)]" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)" }}>
-          1. Notes
-        </span>
-        <span aria-hidden>→</span>
-        <span className="rounded px-2 py-1 font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
-          2. Estimate
-        </span>
-        <span aria-hidden>→</span>
-        <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
-          3. Proposal
-        </span>
-      </div>
-
-      <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold text-[var(--bt-text)]">{estimate.title}</h1>
-              {estimate.aiGenerated ? (
-                <span
-                  className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                  style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}
-                >
-                  Drafted by Jarvis
-                </span>
-              ) : null}
-              <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">{estimate.status}</span>
-            </div>
-            <p className="mt-1 text-sm text-[var(--bt-muted)]">
-              Review cost-coded line items first. Create a Proposal only when the numbers look right.
-            </p>
-            <p className="mt-2 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totalCents)}</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold text-[var(--bt-text)] sm:text-2xl">{estimate.title}</h1>
+            {estimate.aiGenerated ? (
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}
+              >
+                Drafted by Jarvis
+              </span>
+            ) : null}
+            <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">{estimate.status}</span>
           </div>
-          <div className="flex flex-col gap-2 sm:items-end">
+          <p className="mt-1 text-sm text-[var(--bt-muted)]">
+            Review quantities, unit costs, and markup. Convert to a Proposal when the numbers look right.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:items-end">
+          <EstimateProposalToggle
+            active="estimate"
+            estimateHref={`/leads/estimates/${estimate.id}`}
+            proposalHref={linkedProposalId ? `/leads/proposals/${linkedProposalId}?view=proposal` : null}
+            proposalDisabledReason="Convert this estimate to unlock the Proposal view"
+          />
+          <div className="flex flex-wrap items-center gap-2">
             {linkedProposalId ? (
               <Link
-                href={`/leads/proposals/${linkedProposalId}`}
-                className="min-h-11 touch-manipulation rounded px-4 py-2.5 text-center text-sm font-semibold text-[var(--bt-on-primary)] sm:min-h-0 sm:py-1.5 sm:text-xs"
+                href={`/leads/proposals/${linkedProposalId}?view=proposal`}
+                className="min-h-11 touch-manipulation rounded px-4 py-2.5 text-center text-sm font-semibold text-[var(--bt-on-primary)] sm:min-h-0 sm:py-2 sm:text-xs"
                 style={{ background: "var(--bt-primary)" }}
               >
                 Open Proposal
@@ -130,45 +171,32 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {[...groups.entries()].map(([groupLabel, items]) => (
-          <div key={groupLabel} className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-            <div className="border-b px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-              {groupLabel}
-            </div>
-            <ul className="divide-y" style={{ borderColor: "var(--bt-border)" }}>
-              {items.map((item) => {
-                const costCents = extendedCostCents(item.quantityMilli, item.unitCostCents);
-                const priceCents = priceWithRate(costCents, item.rateMode, item.rateBasisPoints);
-                return (
-                  <li key={item.id} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[var(--bt-text)]">{item.title}</div>
-                      <div className="text-xs text-[var(--bt-muted)]">
-                        {item.costCode.code} · {item.costCode.name}
-                      </div>
-                      {item.description ? <p className="mt-1 text-xs text-[var(--bt-muted)]">{item.description}</p> : null}
-                    </div>
-                    <div className="shrink-0 text-sm font-medium text-[var(--bt-text)] sm:text-right">{formatMoney(priceCents)}</div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-        {estimate.lineItems.length === 0 ? (
-          <p className="rounded-lg border px-4 py-6 text-center text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-            No line items on this estimate yet.
-          </p>
-        ) : null}
-      </div>
-
-      {pending ? (
-        <p className="text-xs text-[var(--bt-muted)]">
-          Client narrative is ready ({pending.sections.length} section{pending.sections.length === 1 ? "" : "s"}). Create Proposal to attach it to a DRAFT
-          proposal linked to this estimate.
-        </p>
+      {pending && !linkedProposalId ? (
+        <div
+          className="rounded-lg border px-3 py-2.5 text-xs sm:text-sm"
+          style={{
+            borderColor: "color-mix(in srgb, var(--bt-primary) 35%, var(--bt-border))",
+            background: "color-mix(in srgb, var(--bt-primary) 8%, transparent)",
+            color: "var(--bt-text)",
+          }}
+        >
+          Client narrative is ready ({pending.sections.length} section{pending.sections.length === 1 ? "" : "s"}
+          {pending.coverMessage ? ", cover message" : ""}). Convert to Proposal to attach it to a DRAFT proposal
+          linked to this estimate.
+        </div>
       ) : null}
+
+      <EstimateSpreadsheet
+        groups={groups}
+        totalBuilderCostCents={totalBuilderCostCents}
+        totalClientCents={totalClientCents}
+      />
+
+      <p className="text-center text-xs text-[var(--bt-muted)] sm:text-left">
+        Estimate total {formatMoney(totalClientCents)} · {estimate.lineItems.length} line
+        {estimate.lineItems.length === 1 ? "" : "s"}
+        {lead ? ` · Lead ${lead.name}` : ""}
+      </p>
     </div>
   );
 }

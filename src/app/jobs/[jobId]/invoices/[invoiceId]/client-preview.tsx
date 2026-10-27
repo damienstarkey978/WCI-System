@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { OutboundBrandMark } from "@/components/branding/OutboundBrandMark";
+
 export interface PreviewLine {
   readonly id: string;
   readonly title: string;
@@ -11,6 +13,7 @@ export interface PreviewLine {
 
 export interface PreviewData {
   readonly organizationName: string;
+  readonly organizationLogoPath?: string | null;
   readonly clientName: string | null;
   readonly jobName: string;
   readonly jobAddress: string | null;
@@ -61,6 +64,10 @@ export function ClientPreview({ data }: { data: PreviewData }) {
         >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
+              <OutboundBrandMark
+                organizationLogoPath={data.organizationLogoPath}
+                className="mb-2 h-12 w-auto max-w-[12rem] object-contain"
+              />
               <div className="text-base font-semibold">{data.organizationName}</div>
               <div className="mt-1 text-xs text-gray-600">{data.jobName}</div>
               {data.jobAddress ? <div className="text-xs text-gray-600">{data.jobAddress}</div> : null}

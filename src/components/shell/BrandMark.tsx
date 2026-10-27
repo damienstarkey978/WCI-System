@@ -6,7 +6,9 @@
  * cleanly on either, so no theme-swap is needed here.
  *
  * The white-background/black-lettering counterpart lives at public/logo-mark-light.png
- * for anywhere the brand sits on a light surface instead (e.g. printed documents).
+ * for anywhere the brand sits on a light surface instead (printed documents, client
+ * proposals, change orders, invoices). Prefer OutboundBrandMark /
+ * resolveOutboundLogoUrl from src/lib/branding/logo.ts for those surfaces.
  */
 export function BrandMark({ className }: { className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element -- fixed-size brand mark, not a content image worth Next's optimizer

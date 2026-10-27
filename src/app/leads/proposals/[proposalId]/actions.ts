@@ -1,11 +1,13 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { ClientActionTokenPurpose } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { ClientNotFoundError as ReviewLinkClientNotFoundError, issueApprovalLink } from "@/lib/client-portal/auth";
 import { db } from "@/lib/db";
+import { EmailNotConfiguredError, EmailSendError } from "@/lib/email/send";
 import {
   UnknownCostCodeError,
   EstimateLineItemNotFoundError,
@@ -19,6 +21,11 @@ import {
 } from "@/lib/estimates/service";
 import { ProposalTemplateNotFoundError } from "@/lib/proposal-templates/service";
 import { MoneyError, parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
+import {
+  emailProposalToClient,
+  ProposalClientContactMissingError,
+  textProposalToClient,
+} from "@/lib/proposals/deliver";
 import {
   EstimateJobMismatchError as ProposalOptionEstimateJobMismatchError,
   EstimateNotFoundError as ProposalOptionEstimateNotFoundError,
@@ -50,10 +57,18 @@ import {
   updateProposalSectionBullet,
   updateProposalSectionTitle,
 } from "@/lib/proposals/service";
+import { SmsNotConfiguredError, SmsSendError } from "@/lib/sms/send";
 
 export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
+  readonly reviewUrl?: string;
+}
+
+export interface DeliveryActionState {
+  readonly error?: string;
+  readonly ok?: boolean;
+  readonly to?: string;
   readonly reviewUrl?: string;
 }
 
@@ -363,6 +378,64 @@ export async function sendProposalPageAction(formData: FormData): Promise<void> 
   }
 
   revalidate(proposalId);
+}
+
+async function requestOrigin(): Promise<string | undefined> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (!host) return undefined;
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
+export async function emailProposalAction(_previous: DeliveryActionState, formData: FormData): Promise<DeliveryActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  try {
+    const result = await emailProposalToClient({
+      organizationId: user.organizationId,
+      proposalId,
+      requestOrigin: await requestOrigin(),
+    });
+    revalidate(proposalId);
+    return { ok: true, to: result.to, reviewUrl: result.reviewUrl };
+  } catch (error) {
+    if (
+      error instanceof EmailNotConfiguredError ||
+      error instanceof EmailSendError ||
+      error instanceof ProposalClientContactMissingError ||
+      error instanceof ProposalNotFoundError ||
+      error instanceof ProposalNotDraftError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+}
+
+export async function textProposalAction(_previous: DeliveryActionState, formData: FormData): Promise<DeliveryActionState> {
+  const user = await requireAppUser();
+  const proposalId = String(formData.get("proposalId") ?? "");
+  try {
+    const result = await textProposalToClient({
+      organizationId: user.organizationId,
+      proposalId,
+      requestOrigin: await requestOrigin(),
+    });
+    revalidate(proposalId);
+    return { ok: true, to: result.to, reviewUrl: result.reviewUrl };
+  } catch (error) {
+    if (
+      error instanceof SmsNotConfiguredError ||
+      error instanceof SmsSendError ||
+      error instanceof ProposalClientContactMissingError ||
+      error instanceof ProposalNotFoundError ||
+      error instanceof ProposalNotDraftError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
 }
 
 export async function declineProposalPageAction(formData: FormData): Promise<void> {
