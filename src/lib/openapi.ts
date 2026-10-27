@@ -83,7 +83,10 @@ import {
   submitSurveyResponseSchema,
   transitionJobStatusSchema,
   updateBillStatusSchema,
+  updateJobPermittingFlagsSchema,
   updateLeadStageSchema,
+  updatePermitInspectionSchema,
+  updatePermitSchema,
   updateScheduleItemSchema,
   updateTodoStatusSchema,
 } from "@/lib/api-schemas";
@@ -114,7 +117,7 @@ const ERROR_SCHEMA = {
 } as const;
 
 interface EndpointDef {
-  readonly method: "get" | "post" | "put" | "delete";
+  readonly method: "get" | "post" | "put" | "patch" | "delete";
   readonly path: string;
   readonly summary: string;
   readonly description?: string;
@@ -187,6 +190,63 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["jobs:write"],
     pathParams: ["jobId"],
     requestSchema: transitionJobStatusSchema,
+  },
+  {
+    method: "get",
+    path: "/jobs/{jobId}/progress",
+    summary: "Get a job's progress rollup",
+    description:
+      "Schedule completion %, open/in-progress/done todos, and permit/inspection counts — " +
+      "Atlas/Heather's fast 'where is this job?' read without N+1 calls.",
+    tags: ["Jobs"],
+    scopes: ["jobs:read"],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "get",
+    path: "/jobs/{jobId}/permits",
+    summary: "List permits for a job",
+    description: "Lazily seeds Building + MEP permit rows when a job has none yet.",
+    tags: ["Permitting"],
+    scopes: ["permits:read"],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "patch",
+    path: "/jobs/{jobId}/permitting-flags",
+    summary: "Update NOC / NTBO flags on a job",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["jobId"],
+    requestSchema: updateJobPermittingFlagsSchema,
+  },
+  {
+    method: "patch",
+    path: "/permits/{permitId}",
+    summary: "Update a permit (pulled, vendor, number)",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["permitId"],
+    requestSchema: updatePermitSchema,
+  },
+  {
+    method: "post",
+    path: "/permits/{permitId}/send-reminder",
+    summary: "Email the assigned vendor a permit-pull reminder",
+    description: "Returns 503 when transactional email is not configured.",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["permitId"],
+    successStatus: 200,
+  },
+  {
+    method: "patch",
+    path: "/permit-inspections/{inspectionId}",
+    summary: "Mark a permit inspection complete or incomplete",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["inspectionId"],
+    requestSchema: updatePermitInspectionSchema,
   },
   {
     method: "get",

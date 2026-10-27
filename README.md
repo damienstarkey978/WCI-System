@@ -179,17 +179,24 @@ it never fabricates a payment.
 
 ## Using the API
 
-Machine consumers (Duke, Heather, Jarvis, …) authenticate with their own API keys —
-never a user session.
+Machine consumers (Duke, Heather, Atlas, Roy, Jarvis, …) authenticate with their own
+API keys — never a user session. The same keys also authenticate `/api/mcp` (MCP
+Streamable HTTP); the `api_v1_request` tool forwards to `/api/v1` so assistants share
+one authorization model with no parallel write path.
 
 ```bash
-npm run issue-api-key -- --name duke      # prints the token exactly once
+npm run issue-api-key -- --name atlas    # Marks — progress / accountability
+npm run issue-api-key -- --name roy      # Garry — financials
+npm run issue-api-key -- --name heather  # office manager
+npm run issue-api-key -- --name duke     # prints the token exactly once
 curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/v1/jobs
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/v1/jobs/$JOB_ID/progress
 ```
 
 Each agent's default scopes come from the roster in `src/lib/api-scopes.ts`, so a key
 is limited to its domain: Duke writes purchase orders and bills but cannot touch
-invoices; Jarvis reads broadly but writes nothing.
+invoices; Jarvis reads broadly but writes nothing; Atlas is all-reads plus targeted
+accountability writes; Roy is financials-heavy.
 
 Phase 0 endpoints:
 

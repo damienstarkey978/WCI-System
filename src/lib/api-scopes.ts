@@ -46,9 +46,13 @@ export const SCOPES = [
   "notifications:read",
   "notifications:write",
   "events:write",
+  // Permitting (first-class module — Heather / Atlas / field ops)
+  "permits:read",
+  "permits:write",
   // Phase 3 — client portal
   "clients:read",
   "clients:write",
+  // Phase 3 continued
   "selections:read",
   "selections:write",
   // Phase 4 — sub/vendor portal + bidding
@@ -112,6 +116,9 @@ const ALL_READ_SCOPES: readonly Scope[] = SCOPES.filter((scope) => scope.endsWit
 /**
  * The default scope set for each agent in the roster (CLAUDE.md section 6).
  * Used by `npm run issue-api-key` so a key's scopes match the documented intent.
+ *
+ * Atlas / Roy / expanded Heather: see docs/agent-access-atlas-roy-heather.md in the
+ * project store. Do not weaken duke/jarvis/hank/vince/neil when extending this map.
  */
 export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = {
   jarvis: [...ALL_READ_SCOPES, "webhooks:write", "events:write"],
@@ -132,14 +139,60 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
   ],
   heather: [
     "jobs:read",
+    "jobs:write",
     "daily-logs:read",
     "daily-logs:write",
     "files:read",
     "files:write",
+    "permits:read",
+    "permits:write",
+    "schedule:read",
+    "schedule:write",
+    "todos:read",
+    "todos:write",
     "comments:read",
     "comments:write",
+    "notifications:read",
+    "notifications:write",
     "clients:read",
     "clients:write",
+    "vendors:read",
+    "vendors:write",
+    "rfis:read",
+    "change-orders:read",
+    "budgets:read",
+    "reports:read",
+    "events:write",
+  ],
+  atlas: [
+    ...ALL_READ_SCOPES,
+    "schedule:write",
+    "todos:write",
+    "comments:write",
+    "notifications:write",
+    "daily-logs:write",
+    "permits:write",
+    "events:write",
+  ],
+  roy: [
+    "jobs:read",
+    "cost-codes:read",
+    "budgets:read",
+    "reports:read",
+    "estimates:read",
+    "purchase-orders:read",
+    "purchase-orders:write",
+    "bills:read",
+    "bills:write",
+    "invoices:read",
+    "invoices:write",
+    "change-orders:read",
+    "time-clock:read",
+    "vendors:read",
+    "vendors:write",
+    "files:read",
+    "files:write",
+    "webhooks:read",
     "events:write",
   ],
   hank: [
@@ -162,6 +215,8 @@ export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = 
     "selections:write",
     "vendors:read",
     "bids:read",
+    "permits:read",
+    "permits:write",
     "specifications:read",
     "specifications:write",
     "submittals:read",

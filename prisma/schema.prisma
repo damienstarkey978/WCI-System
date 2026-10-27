@@ -33,6 +33,10 @@ enum AgentKind {
   HANK
   VINCE
   NEIL
+  /// Marks — job progress monitoring + human accountability (cross-module read, targeted writes).
+  ATLAS
+  /// Garry — financials-heavy ops (POs/bills/invoices + Garry workflows).
+  ROY
 }
 
 /// Branches markup / invoice / report logic system-wide. Never treat as a display

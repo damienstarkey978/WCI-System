@@ -1,7 +1,7 @@
 /**
  * MCP Connection (handoff.ai feature-parity pass) — the tool registry exposed to
- * external MCP clients (Claude Desktop, ChatGPT, etc.) authenticated via an ApiKey
- * (src/lib/api-auth.ts) through /api/mcp.
+ * external MCP clients (Claude Desktop, ChatGPT, Grok bots, etc.) authenticated via
+ * an ApiKey (src/lib/api-auth.ts) through /api/mcp.
  *
  * Deliberately a separate registry from Jarvis's (src/lib/jarvis/tools.ts), not a
  * reuse of it: Jarvis's tools are `BetaRunnableTool` objects built by
@@ -10,22 +10,20 @@
  * service functions (getWipReport, getDailyBrief, etc. — "one place computes the
  * numbers") using @modelcontextprotocol/sdk's own registration API instead.
  *
- * Almost everything here reads. The exception is proposal drafting, and the reason
- * it is an exception is worth stating, because the original objection to MCP writes
- * still stands for everything else: Jarvis's CONFIRM tools queue a
- * JarvisPendingAction scoped to a JarvisConversation, and an MCP call has no
- * conversation to attach one to, so a money-moving or client-facing action here
- * would either skip its confirm-gate (unsafe) or silently fail (confusing).
+ * The authoritative write/read contract is still `/api/v1`. `api_v1_request` forwards
+ * the caller's bearer token to that API so Atlas/Roy/Heather can manipulate any
+ * documented endpoint without a second business-logic path. Convenience tools below
+ * call the same services the routes use (reports, job progress, permits) for speed.
  *
- * Drafting a proposal is neither. It creates a DRAFT that no client can see, and
- * sending — the act that actually reaches a client — is deliberately not exposed
- * here at all. That is the same line inbound email draws: an emailed receipt becomes
- * a bill sitting in INBOX, never an approved one. An outside assistant can do the
- * typing; a person still decides what goes out.
+ * Almost everything here reads. The exceptions are (1) the generic API proxy and
+ * (2) proposal drafting. Proposal drafting creates a DRAFT that no client can see;
+ * sending is deliberately not exposed here. Money-moving confirm-gated Jarvis
+ * actions still require a human Confirm in the chat UI.
  *
  * Every tool is also gated on the calling key's scopes (src/lib/api-scopes.ts) —
  * a key without `reports:read` simply never sees the report tools in its MCP tool
- * list, the same contract /api/v1 already enforces.
+ * list, the same contract /api/v1 already enforces. The proxy tool is always
+ * registered: the API itself enforces scopes per route.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -35,8 +33,18 @@ import { z } from "zod";
 import type { ApiKeyContext } from "@/lib/api-auth";
 import { grantsScope, type Scope } from "@/lib/api-scopes";
 import { formatCostCodeCatalog } from "@/lib/ai/estimate-draft";
+import { estimateTotalCents } from "@/lib/budget/funnel";
+import { createLeadProposal } from "@/lib/crm/lead-proposal";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
+import { getJobProgress, JobNotFoundError as ProgressJobNotFoundError } from "@/lib/jobs/progress";
+import { callApiV1, formatApiV1ProxyResult } from "@/lib/mcp/api-proxy";
+import {
+  ensureDefaultPermits,
+  JobNotFoundError as PermitJobNotFoundError,
+  setInspectionCompleted,
+  setPermitPulled,
+} from "@/lib/permitting/service";
 import {
   getBillableMilestones,
   getCostInboxItems,
@@ -53,8 +61,13 @@ import {
   getProfitabilityReport,
   getWipReport,
 } from "@/lib/reports/service";
-import { createLeadProposal } from "@/lib/crm/lead-proposal";
-import { estimateTotalCents } from "@/lib/budget/funnel";
+
+export interface McpServerOptions {
+  /** Absolute origin of this deployment, e.g. https://app.worldconstructionjax.com */
+  readonly origin: string;
+  /** Raw bearer token from the MCP request — forwarded to /api/v1 by api_v1_request. */
+  readonly bearerToken: string;
+}
 
 function text(value: string): CallToolResult {
   return { content: [{ type: "text", text: value }] };
@@ -103,9 +116,48 @@ function registerScoped(
 }
 
 /** Builds a fresh MCP server for one request, scoped to one authenticated organization. */
-export function buildMcpServer(auth: ApiKeyContext): McpServer {
+export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): McpServer {
   const server = new McpServer({ name: "wci-os", version: "1.0.0" });
   const organizationId = auth.organizationId;
+
+  // Generic REST bridge — always listed; /api/v1 re-checks scopes per route.
+  server.registerTool(
+    "api_v1_request",
+    {
+      description:
+        "Call the WCI OS versioned agent API (/api/v1). Prefer this for any create/update/delete " +
+        "or for endpoints without a dedicated MCP convenience tool. Path is relative to /api/v1 " +
+        "(e.g. /jobs, /jobs/{id}/progress, /bills). Auth uses this connection's API key; scopes " +
+        "are enforced by the API. See GET /api/v1/openapi.json for the contract.",
+      inputSchema: {
+        method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).describe("HTTP method"),
+        path: z.string().describe("Path under /api/v1, e.g. /jobs or jobs/abc/progress"),
+        query: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Query string params"),
+        body: z.unknown().optional().describe("JSON body for POST/PUT/PATCH"),
+      },
+    },
+    (async (rawInput: Record<string, unknown>) => {
+      const input = rawInput as {
+        method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+        path: string;
+        query?: Record<string, string | number | boolean>;
+        body?: unknown;
+      };
+      try {
+        const result = await callApiV1({
+          origin: options.origin,
+          bearerToken: options.bearerToken,
+          method: input.method,
+          path: input.path,
+          query: input.query,
+          body: input.body,
+        });
+        return text(formatApiV1ProxyResult(result));
+      } catch (error) {
+        return refusal(error instanceof Error ? error.message : "api_v1_request failed");
+      }
+    }) as never,
+  );
 
   registerScoped(
     server,
@@ -140,6 +192,250 @@ export function buildMcpServer(auth: ApiKeyContext): McpServer {
       if (!job) return text(`No job found with id ${jobId} in this organization.`);
       const address = [job.addressLine1, job.city, job.state].filter(Boolean).join(", ") || "no address on file";
       return text(`${job.name} | status: ${job.status} | contract: ${job.contractType} | address: ${address}`);
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "jobs:read",
+    "get_job_progress",
+    {
+      description:
+        "Atlas/Heather rollup: schedule % complete, open todos, and permit/inspection counts for one job.",
+      inputSchema: { jobId: z.string().describe("The job's id, from list_jobs") },
+    },
+    async (input) => {
+      const jobId = (input as { jobId: string }).jobId;
+      try {
+        const progress = await getJobProgress(organizationId, jobId);
+        return text(
+          [
+            `${progress.name} | ${progress.status}`,
+            `Schedule: ${progress.schedule.avgPercentComplete}% avg across ${progress.schedule.itemCount} items (${progress.schedule.completedItemCount} at 100%)`,
+            `Todos: ${progress.todos.openCount} open, ${progress.todos.inProgressCount} in progress, ${progress.todos.doneCount} done`,
+            `Permits: ${progress.permits.pulledCount}/${progress.permits.tradeCount} pulled; inspections ${progress.permits.inspectionsCompleted}/${progress.permits.inspectionCount} complete`,
+          ].join("\n"),
+        );
+      } catch (error) {
+        if (error instanceof ProgressJobNotFoundError) return refusal(error.message);
+        throw error;
+      }
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "permits:read",
+    "list_job_permits",
+    {
+      description: "List Building + MEP permits and inspections for a job (seeds defaults if missing).",
+      inputSchema: { jobId: z.string().describe("The job's id") },
+    },
+    async (input) => {
+      const jobId = (input as { jobId: string }).jobId;
+      try {
+        await ensureDefaultPermits(organizationId, jobId);
+      } catch (error) {
+        if (error instanceof PermitJobNotFoundError) return refusal(error.message);
+        throw error;
+      }
+      const permits = await db.jobPermit.findMany({
+        where: { jobId, organizationId },
+        orderBy: { trade: "asc" },
+        include: {
+          vendor: { select: { name: true, email: true } },
+          inspections: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, completedAt: true } },
+        },
+      });
+      if (permits.length === 0) return text("No permits on this job.");
+      return text(
+        permits
+          .map((permit) => {
+            const vendor = permit.vendor ? ` vendor=${permit.vendor.name}` : "";
+            const inspections = permit.inspections
+              .map((inspection) => `  ${inspection.id} | ${inspection.name} | ${inspection.completedAt ? "DONE" : "open"}`)
+              .join("\n");
+            return `${permit.id} | ${permit.trade} | ${permit.pulled ? "PULLED" : "not pulled"}${vendor}\n${inspections}`;
+          })
+          .join("\n"),
+      );
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "permits:write",
+    "set_permit_pulled",
+    {
+      description: "Mark a trade permit pulled or not pulled.",
+      inputSchema: {
+        permitId: z.string().describe("Permit id from list_job_permits"),
+        pulled: z.boolean(),
+      },
+    },
+    async (input) => {
+      const { permitId, pulled } = input as { permitId: string; pulled: boolean };
+      try {
+        const permit = await setPermitPulled(organizationId, permitId, pulled);
+        return text(`${permit.id} | ${permit.trade} | ${permit.pulled ? "PULLED" : "not pulled"}`);
+      } catch (error) {
+        if (error instanceof Error && error.name === "PermitNotFoundError") return refusal(error.message);
+        throw error;
+      }
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "permits:write",
+    "set_inspection_completed",
+    {
+      description: "Mark a permit inspection complete or incomplete.",
+      inputSchema: {
+        inspectionId: z.string().describe("Inspection id from list_job_permits"),
+        completed: z.boolean(),
+      },
+    },
+    async (input) => {
+      const { inspectionId, completed } = input as { inspectionId: string; completed: boolean };
+      try {
+        const inspection = await setInspectionCompleted(organizationId, inspectionId, completed);
+        return text(`${inspection.id} | ${inspection.name} | ${inspection.completedAt ? "DONE" : "open"}`);
+      } catch (error) {
+        if (error instanceof Error && error.name === "InspectionNotFoundError") return refusal(error.message);
+        throw error;
+      }
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "daily-logs:read",
+    "list_daily_logs",
+    {
+      description: "List recent daily logs, optionally for one job.",
+      inputSchema: {
+        jobId: z.string().optional().describe("Filter to one job"),
+        limit: z.number().int().positive().max(50).optional().describe("Max rows (default 20)"),
+      },
+    },
+    async (input) => {
+      const { jobId, limit } = input as { jobId?: string; limit?: number };
+      const logs = await db.dailyLog.findMany({
+        where: { organizationId, ...(jobId ? { jobId } : {}) },
+        orderBy: { createdAt: "desc" },
+        take: limit ?? 20,
+        select: { id: true, jobId: true, note: true, createdAt: true },
+      });
+      if (logs.length === 0) return text("No daily logs found.");
+      return text(
+        logs
+          .map((log) => `${log.id} | job ${log.jobId} | ${formatDate(log.createdAt)} | ${log.note.slice(0, 120)}`)
+          .join("\n"),
+      );
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "clients:read",
+    "list_clients",
+    { description: "List clients (homeowners) for coordination." },
+    async () => {
+      const clients = await db.client.findMany({
+        where: { organizationId },
+        select: { id: true, name: true, email: true, phone: true },
+        orderBy: { name: "asc" },
+        take: 100,
+      });
+      if (clients.length === 0) return text("No clients yet.");
+      return text(clients.map((client) => `${client.id} | ${client.name} | ${client.email ?? "no email"} | ${client.phone ?? ""}`).join("\n"));
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "vendors:read",
+    "list_vendors",
+    { description: "List vendors/subs for coordination." },
+    async () => {
+      const vendors = await db.vendor.findMany({
+        where: { organizationId },
+        select: { id: true, name: true, email: true, tradeType: true },
+        orderBy: { name: "asc" },
+        take: 100,
+      });
+      if (vendors.length === 0) return text("No vendors yet.");
+      return text(
+        vendors
+          .map((vendor) => `${vendor.id} | ${vendor.name} | ${vendor.tradeType ?? ""} | ${vendor.email ?? "no email"}`)
+          .join("\n"),
+      );
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "purchase-orders:read",
+    "list_purchase_orders",
+    {
+      description: "List purchase orders (Roy/Duke financial ops).",
+      inputSchema: { jobId: z.string().optional().describe("Filter to one job"), limit: z.number().int().positive().max(100).optional() },
+    },
+    async (input) => {
+      const { jobId, limit } = input as { jobId?: string; limit?: number };
+      const orders = await db.purchaseOrder.findMany({
+        where: { organizationId, ...(jobId ? { jobId } : {}) },
+        orderBy: { createdAt: "desc" },
+        take: limit ?? 50,
+        select: { id: true, jobId: true, status: true, poNumber: true },
+      });
+      if (orders.length === 0) return text("No purchase orders found.");
+      return text(orders.map((order) => `${order.id} | ${order.poNumber} | job ${order.jobId} | ${order.status}`).join("\n"));
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "bills:read",
+    "list_bills",
+    {
+      description: "List bills (Roy/Duke AP).",
+      inputSchema: { jobId: z.string().optional().describe("Filter to one job"), limit: z.number().int().positive().max(100).optional() },
+    },
+    async (input) => {
+      const { jobId, limit } = input as { jobId?: string; limit?: number };
+      const bills = await db.bill.findMany({
+        where: { organizationId, ...(jobId ? { jobId } : {}) },
+        orderBy: { createdAt: "desc" },
+        take: limit ?? 50,
+        select: {
+          id: true,
+          jobId: true,
+          approvalStatus: true,
+          vendorName: true,
+          billNumber: true,
+          lineItems: { select: { amountCents: true } },
+        },
+      });
+      if (bills.length === 0) return text("No bills found.");
+      return text(
+        bills
+          .map((bill) => {
+            const total = bill.lineItems.reduce((sum, line) => sum + line.amountCents, 0);
+            return `${bill.id} | ${bill.billNumber ?? "no#"} | ${bill.vendorName} | job ${bill.jobId} | ${bill.approvalStatus} | ${formatMoney(total)}`;
+          })
+          .join("\n"),
+      );
     },
   );
 
