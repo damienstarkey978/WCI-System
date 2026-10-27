@@ -46,3 +46,6 @@ next-env.d.ts
 # editor-specific skill copies installed by `prisma init`
 /.windsurf
 /.agents
+
+# Local Netlify folder
+.netlify
