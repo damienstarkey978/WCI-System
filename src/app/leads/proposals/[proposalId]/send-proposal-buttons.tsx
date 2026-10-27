@@ -16,20 +16,23 @@ export function SendProposalButtons({
   clientPhone,
   emailConfigured,
   smsConfigured,
+  compact = false,
 }: {
   readonly proposalId: string;
   readonly clientEmail: string | null;
   readonly clientPhone: string | null;
   readonly emailConfigured: boolean;
   readonly smsConfigured: boolean;
+  /** Inline with Preview/Convert in the Handoff-style proposal toolbar. */
+  readonly compact?: boolean;
 }) {
   const [emailState, emailAction, emailPending] = useActionState(emailProposalAction, INITIAL);
   const [smsState, smsAction, smsPending] = useActionState(textProposalAction, INITIAL);
 
   return (
-    <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
-      <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-        <form action={emailAction} className="min-w-0 flex-1 sm:flex-none">
+    <div className={compact ? "contents" : "flex flex-col items-stretch gap-1.5 sm:items-end"}>
+      <div className={compact ? "contents" : "flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end"}>
+        <form action={emailAction} className={compact ? "inline-flex" : "min-w-0 flex-1 sm:flex-none"}>
           <input type="hidden" name="proposalId" value={proposalId} />
           <button
             type="submit"
@@ -41,14 +44,18 @@ export function SendProposalButtons({
                   ? `Email ${clientEmail}`
                   : "Email provider not configured"
             }
-            className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] shadow-sm disabled:opacity-50 sm:min-h-10 sm:w-auto sm:text-xs"
+            className={
+              compact
+                ? "inline-flex min-h-9 touch-manipulation items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] shadow-sm disabled:opacity-50 sm:min-h-0"
+                : "inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] shadow-sm disabled:opacity-50 sm:min-h-10 sm:w-auto sm:text-xs"
+            }
             style={{ background: "var(--bt-primary)" }}
           >
             <SendIcon />
             {emailPending ? "Sending…" : "Email"}
           </button>
         </form>
-        <form action={smsAction} className="min-w-0 flex-1 sm:flex-none">
+        <form action={smsAction} className={compact ? "inline-flex" : "min-w-0 flex-1 sm:flex-none"}>
           <input type="hidden" name="proposalId" value={proposalId} />
           <button
             type="submit"
@@ -60,21 +67,44 @@ export function SendProposalButtons({
                   ? `Text ${clientPhone}`
                   : "SMS provider not configured"
             }
-            className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold text-[var(--bt-text)] disabled:opacity-50 sm:min-h-10 sm:w-auto sm:text-xs"
+            className={
+              compact
+                ? "inline-flex min-h-9 touch-manipulation items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold text-[var(--bt-text)] disabled:opacity-50 sm:min-h-0"
+                : "inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold text-[var(--bt-text)] disabled:opacity-50 sm:min-h-10 sm:w-auto sm:text-xs"
+            }
             style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg)" }}
           >
             {smsPending ? "Texting…" : "Text"}
           </button>
         </form>
       </div>
-      <DeliveryStatus state={emailState} channel="Email" configured={emailConfigured} hasContact={Boolean(clientEmail)} contact={clientEmail} />
-      <DeliveryStatus state={smsState} channel="Text" configured={smsConfigured} hasContact={Boolean(clientPhone)} contact={clientPhone} />
-      {!emailConfigured || !smsConfigured ? (
-        <p className="max-w-sm text-[11px] text-[var(--bt-muted)]">
-          {!emailConfigured ? "Email needs EMAIL_PROVIDER_API_KEY + EMAIL_FROM on Netlify. " : null}
-          {!smsConfigured ? "Text needs QUO_API_KEY and QUO_FROM_NUMBER (Quo inbox E.164)." : null}
-        </p>
-      ) : null}
+      {!compact ? (
+        <>
+          <DeliveryStatus state={emailState} channel="Email" configured={emailConfigured} hasContact={Boolean(clientEmail)} contact={clientEmail} />
+          <DeliveryStatus state={smsState} channel="Text" configured={smsConfigured} hasContact={Boolean(clientPhone)} contact={clientPhone} />
+          {!emailConfigured || !smsConfigured ? (
+            <p className="max-w-sm text-[11px] text-[var(--bt-muted)]">
+              {!emailConfigured ? "Email needs EMAIL_PROVIDER_API_KEY + EMAIL_FROM on Netlify. " : null}
+              {!smsConfigured ? "Text needs QUO_API_KEY and QUO_FROM_NUMBER (Quo inbox E.164)." : null}
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {emailState.error || smsState.error ? (
+            <p className="basis-full text-xs text-red-600 sm:text-right">
+              {emailState.error ?? smsState.error}
+            </p>
+          ) : null}
+          {emailState.ok || smsState.ok ? (
+            <p className="basis-full text-[11px] text-[var(--bt-muted)] sm:text-right">
+              {emailState.ok ? `Email sent to ${emailState.to}` : null}
+              {emailState.ok && smsState.ok ? " · " : null}
+              {smsState.ok ? `Text sent to ${smsState.to}` : null}
+            </p>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

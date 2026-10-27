@@ -54,10 +54,6 @@ function formatQty(quantityMilli: number): string {
   return (quantityMilli / 1000).toLocaleString("en-US", { maximumFractionDigits: 3 });
 }
 
-function formatQtyWithUnit(quantityMilli: number, unit: string): string {
-  return `${formatQty(quantityMilli)} ${unit.toUpperCase()}`;
-}
-
 function DragHandle() {
   return (
     <span
@@ -212,11 +208,14 @@ export function EstimateSpreadsheet({
           <button
             type="button"
             onClick={() => setShowBreakdown((v) => !v)}
-            className="rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide hover:bg-[var(--bt-panel-bg-muted)]"
+            className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold hover:bg-[var(--bt-panel-bg-muted)]"
             style={{ borderColor: "var(--bt-border)" }}
             aria-pressed={showBreakdown}
           >
-            {showBreakdown ? "Hide line detail" : "Show line detail"}
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden className="opacity-70">
+              <path d="M2 3h8M2 6h8M2 9h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            {showBreakdown ? "Hide breakdown" : "Show breakdown"}
           </button>
           <span>
             Profit margin{" "}
@@ -358,7 +357,15 @@ function GroupRows({
                   </div>
                 </td>
                 <td className="px-1.5 py-1 text-right text-[11px] tabular-nums text-[var(--bt-text)]">
-                  {formatQtyWithUnit(item.quantityMilli, unit)}
+                  <span className="inline-flex items-center justify-end gap-1">
+                    <span>{formatQty(item.quantityMilli)}</span>
+                    <span
+                      className="rounded px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
+                      style={{ background: "var(--bt-panel-bg-muted)" }}
+                    >
+                      {unit}
+                    </span>
+                  </span>
                 </td>
                 <td className="px-1.5 py-1 text-right text-[11px] tabular-nums text-[var(--bt-text)]">
                   {formatMoney(item.unitCostCents)}

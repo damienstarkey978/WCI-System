@@ -164,15 +164,16 @@ export function ClientProposalView({
       </header>
 
       <div className="mt-5 border-t border-[#e5e7eb] pt-4 text-center sm:mt-6 sm:pt-5 sm:text-left">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9ca3af]">Proposal</div>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9ca3af]">Proposal</div>
+        <h1 className="mt-1 text-xl font-semibold tracking-tight sm:text-[1.75rem] sm:leading-tight">{title}</h1>
         {projectAddress ? <p className="mt-1 text-sm text-[#6b7280]">{projectAddress}</p> : null}
       </div>
 
-      <div className="mt-5 grid gap-4 border-t border-[#e5e7eb] pt-4 text-sm sm:mt-6 sm:grid-cols-3 sm:gap-5 sm:pt-5">
+      <div className="mt-5 grid gap-4 border-t border-[#e5e7eb] pt-4 text-sm sm:mt-6 sm:grid-cols-3 sm:gap-6 sm:pt-5">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Prepared for</div>
           <div className="mt-1 font-medium">{client.name}</div>
+          {projectAddress ? <div className="mt-0.5 text-xs text-[#6b7280]">{projectAddress}</div> : null}
           {client.email ? (
             <a href={`mailto:${client.email}`} className="mt-0.5 block break-all text-xs text-[#6b7280] hover:underline">
               {client.email}
@@ -187,16 +188,16 @@ export function ClientProposalView({
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Prepared by</div>
           <div className="mt-1 font-medium">{orgName}</div>
-          {companyAddress ? <div className="text-xs text-[#6b7280]">{companyAddress}</div> : null}
-          {phone ? <div className="text-xs text-[#6b7280]">{phone}</div> : null}
           {organization?.contactEmail ? (
             <a
               href={`mailto:${organization.contactEmail}`}
-              className="block break-all text-xs text-[#6b7280] hover:underline"
+              className="mt-0.5 block break-all text-xs text-[#6b7280] hover:underline"
             >
               {organization.contactEmail}
             </a>
           ) : null}
+          {phone ? <div className="text-xs text-[#6b7280]">{phone}</div> : null}
+          {companyAddress ? <div className="text-xs text-[#6b7280]">{companyAddress}</div> : null}
         </div>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Date</div>

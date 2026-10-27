@@ -437,12 +437,13 @@ function JarvisChatBody({
                     onClick={() => fillSuggestion(suggestion)}
                     className={`max-w-full rounded-full border text-left leading-snug text-[var(--bt-text)] hover:bg-black/5 ${
                       docked
-                        ? "px-2 py-1 text-[10px]"
+                        ? "truncate px-2 py-0.5 text-[10px]"
                         : "px-2.5 py-1.5 text-[11px] sm:text-xs"
                     }`}
                     style={{ borderColor: "var(--bt-border)" }}
+                    title={suggestion}
                   >
-                    {docked && suggestion.length > 42 ? `${suggestion.slice(0, 40)}…` : suggestion}
+                    {docked && suggestion.length > 36 ? `${suggestion.slice(0, 34)}…` : suggestion}
                   </button>
                 ))}
               </div>

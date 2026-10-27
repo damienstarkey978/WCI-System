@@ -24,6 +24,15 @@ function PaperclipIcon() {
   );
 }
 
+/** Handoff Ask Handy uses a + affordance for attach in the dock. */
+function PlusAttachIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function SendArrowIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -132,11 +141,13 @@ export function JarvisAskComposer({
             compact ? "pb-0.5 pt-2" : "pb-1 pt-2.5"
           }`}
         />
-        {!compact ? (
-          <p className="hidden px-3 pb-1 text-[10px] text-[var(--bt-muted)] sm:block">
-            Use {isMac ? "⌘" : "Ctrl"} + Return to submit
-          </p>
-        ) : null}
+        <p
+          className={`px-3 pb-0.5 text-[10px] text-[var(--bt-muted)] ${
+            compact ? "block" : "hidden sm:block"
+          }`}
+        >
+          Use {isMac ? "⌘" : "Ctrl"} + {compact ? "Enter" : "Return"} to submit
+        </p>
 
         <div className={`flex items-center gap-1 px-1.5 pt-0.5 ${compact ? "pb-1" : "pb-1.5"}`}>
           <button
@@ -147,7 +158,7 @@ export function JarvisAskComposer({
             title="Attach photos"
             className="inline-flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-full text-[var(--bt-muted)] transition hover:bg-black/5 hover:text-[var(--bt-text)] disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
           >
-            <PaperclipIcon />
+            {compact ? <PlusAttachIcon /> : <PaperclipIcon />}
           </button>
 
           <input
