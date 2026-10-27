@@ -75,11 +75,11 @@ export function ConvertToMenu({
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold text-[var(--bt-on-primary)] shadow-sm sm:min-h-10 sm:w-auto"
+        className="inline-flex min-h-9 w-full touch-manipulation items-center justify-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] shadow-sm sm:min-h-0 sm:w-auto"
         style={{ background: "var(--bt-primary)" }}
       >
         Convert to
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden className="opacity-90">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden className="opacity-90">
           <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>

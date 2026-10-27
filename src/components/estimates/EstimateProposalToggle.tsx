@@ -18,7 +18,7 @@ export function EstimateProposalToggle({
   readonly proposalDisabledReason?: string;
 }) {
   const base =
-    "min-h-10 flex-1 touch-manipulation rounded-md px-3 py-2 text-center text-xs font-semibold transition-colors sm:min-h-0 sm:flex-none sm:px-4 sm:py-1.5";
+    "min-h-9 flex-1 touch-manipulation rounded-md px-2.5 py-1.5 text-center text-[11px] font-semibold transition-colors sm:min-h-0 sm:flex-none sm:px-3 sm:py-1";
 
   function styleFor(isActive: boolean) {
     if (isActive) {
