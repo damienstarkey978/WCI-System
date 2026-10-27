@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { ChartIcon } from "@/components/shell/icons";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { JarvisSetupNotice } from "@/components/jarvis/JarvisSetupNotice";
 import { currentAppUser } from "@/lib/auth";
@@ -104,6 +105,7 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
 
       {rows.length === 0 ? (
         <EmptyState
+          icon={<ChartIcon className="h-10 w-10" />}
           title="Build your estimate"
           description="Create an estimate worksheet with cost codes, markup, and client pricing. Import CSV or start from a template."
           action={

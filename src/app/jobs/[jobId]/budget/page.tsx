@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { EmptyState } from "@/components/shell/EmptyState";
+import { ChartIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { getJobBudget, JobNotFoundError } from "@/lib/budget/service";
 import type { FunnelLine, FunnelSubtotal, FunnelTotals } from "@/lib/budget/funnel";
@@ -245,11 +247,19 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
         />
       </div>
 
-      <BudgetGrid
-        columnLabels={columns.map((columnId) => BUDGET_COLUMN_LABELS[columnId])}
-        groups={groups}
-        totalCells={columns.map((columnId) => totalsCell(view.funnel.totals, columnId))}
-      />
+      {groups.length === 0 ? (
+        <EmptyState
+          icon={<ChartIcon className="h-10 w-10" />}
+          title="No budget lines yet"
+          description="Send an estimate to budget to populate cost codes and the commitment funnel for this job."
+        />
+      ) : (
+        <BudgetGrid
+          columnLabels={columns.map((columnId) => BUDGET_COLUMN_LABELS[columnId])}
+          groups={groups}
+          totalCells={columns.map((columnId) => totalsCell(view.funnel.totals, columnId))}
+        />
+      )}
     </div>
   );
 }

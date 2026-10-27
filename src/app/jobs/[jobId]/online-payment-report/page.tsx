@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { PaymentCardIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -61,7 +62,11 @@ export default async function OnlinePaymentReportPage({ params }: PageProps<"/jo
       <FinancialPageHeader jobName={job.name} title="Payments" />
 
       {rows.length === 0 ? (
-        <EmptyState title="No online payments yet" description="Payments made through the client portal will appear here." />
+        <EmptyState
+          icon={<PaymentCardIcon className="h-10 w-10" />}
+          title="No online payments yet"
+          description="Payments made through the client portal will appear here."
+        />
       ) : (
         <OnlinePaymentsGrid rows={rows} />
       )}

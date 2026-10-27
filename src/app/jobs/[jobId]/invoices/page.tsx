@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { DocumentIcon, PaymentCardIcon, ReceiptIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -299,6 +300,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
         <>
           {invoices.length === 0 ? (
             <EmptyState
+              icon={<DocumentIcon className="h-10 w-10" />}
               title="No invoices yet"
               description="Create an invoice or draw for this job's client."
               action={
@@ -435,7 +437,11 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
 
       {activeTab === "payments" ? (
         allPayments.length === 0 ? (
-          <EmptyState title="No payments yet" description="Payments recorded against this job's invoices show up here." />
+          <EmptyState
+            icon={<PaymentCardIcon className="h-10 w-10" />}
+            title="No payments yet"
+            description="Payments recorded against this job's invoices show up here."
+          />
         ) : (
           <Panel>
             <Head columns={["Invoice", "Date paid", "Recorded by", "~Payment amount"]} />
@@ -484,6 +490,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
           />
           {creditMemos.length === 0 ? (
             <EmptyState
+              icon={<ReceiptIcon className="h-10 w-10" />}
               title="No credit memos"
               description="A credit memo reduces what a client owes without editing an invoice that already went out."
             />
@@ -516,6 +523,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
           <CreateDepositForm jobId={job.id} />
           {deposits.length === 0 ? (
             <EmptyState
+              icon={<PaymentCardIcon className="h-10 w-10" />}
               title="No deposits"
               description="Money taken before there is an invoice to put it against — a signing deposit, a selections deposit."
             />

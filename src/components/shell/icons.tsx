@@ -472,3 +472,79 @@ export function AlertIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Purchase Orders — clipboard with PO lines. */
+export function PurchaseOrderIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M7 3.75h6a1 1 0 0 1 1 1V5.5h1.25A1.25 1.25 0 0 1 16.5 6.75v9A1.25 1.25 0 0 1 15.25 17H4.75A1.25 1.25 0 0 1 3.5 15.75v-9A1.25 1.25 0 0 1 4.75 5.5H6V4.75a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+      <path d="M7.5 3.75h5V5h-5V3.75ZM7 9.25h6M7 12h4.5M7 14.5h3" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Bills / receipts — folded receipt with lines. */
+export function ReceiptIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M5.5 3.5h9v13.25l-1.5-1-1.5 1-1.5-1-1.5 1-1.5-1-1.5 1V3.5Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+      <path d="M7.5 7h5M7.5 9.75h5M7.5 12.5h3" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Bids / bid packages — tag with price mark. */
+export function BidIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M3.5 10.25V5.75A1.25 1.25 0 0 1 4.75 4.5h4.6c.33 0 .65.13.88.37l5.9 5.9a1.25 1.25 0 0 1 0 1.77l-3.53 3.53a1.25 1.25 0 0 1-1.77 0l-5.9-5.9A1.25 1.25 0 0 1 3.5 10.25Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+      <circle cx="7.25" cy="7.5" r="1.1" stroke="currentColor" strokeWidth="1.35" />
+    </svg>
+  );
+}
+
+/** Online / recorded payments — card. */
+export function PaymentCardIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <rect x="2.75" y="5" width="14.5" height="10" rx="1.4" stroke="currentColor" strokeWidth="1.35" />
+      <path d="M2.75 8.25h14.5M5.5 12h3.5" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Cost Inbox — tray. */
+export function InboxIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M3.5 11.5 5.2 4.9A1.25 1.25 0 0 1 6.4 4h7.2a1.25 1.25 0 0 1 1.2.9l1.7 6.6"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.5 11.5H7l1 2h4l1-2h3.5v3.25A1.25 1.25 0 0 1 15.25 16H4.75A1.25 1.25 0 0 1 3.5 14.75V11.5Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
