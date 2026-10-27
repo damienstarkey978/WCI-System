@@ -5,6 +5,7 @@
  * same validation path instead of a parallel copy of it.
  */
 
+import { Prisma } from "@/generated/prisma/client";
 import type { CostType, LineItemConfidence, LineItemPriceSource, RateMode } from "@/generated/prisma/enums";
 import { LeadNotFoundError } from "@/lib/crm/service";
 import { db } from "@/lib/db";
@@ -76,6 +77,8 @@ export interface CreateEstimateInput {
   readonly lineItems: readonly CreateEstimateLineItemInput[];
   readonly aiGenerated?: boolean;
   readonly aiPromptNotes?: string | null;
+  /** Client narrative held until explicit Create Proposal (lead Jarvis path). */
+  readonly pendingProposalDraft?: unknown | null;
 }
 
 export async function createEstimate(input: CreateEstimateInput) {
@@ -114,6 +117,12 @@ export async function createEstimate(input: CreateEstimateInput) {
       defaultRateBasisPoints,
       aiGenerated: input.aiGenerated ?? false,
       aiPromptNotes: input.aiPromptNotes ?? null,
+      pendingProposalDraft:
+        input.pendingProposalDraft === undefined
+          ? undefined
+          : input.pendingProposalDraft === null
+            ? Prisma.DbNull
+            : (input.pendingProposalDraft as Prisma.InputJsonValue),
       lineItems: {
         create: input.lineItems.map((item, index) => ({
           costCodeId: item.costCodeId,

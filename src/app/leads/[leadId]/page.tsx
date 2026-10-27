@@ -5,12 +5,14 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { LeadProposalHandy } from "@/components/jarvis/LeadProposalHandy";
 import { currentAppUser } from "@/lib/auth";
 import { listLeadAttachments } from "@/lib/crm/attachments";
+import { listLeadGeneralPhotos } from "@/lib/crm/lead-jarvis-seed";
 import { db } from "@/lib/db";
 import { resolveFileUrl } from "@/lib/files/service";
 import { formatDate, formatMoney } from "@/lib/format";
 import { estimateTotalCents } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
+import type { LeadHandyEstimateSummary } from "@/components/jarvis/LeadProposalHandy";
 
 import { ConvertToJobButton } from "../convert-form";
 import { StageSelect } from "../stage-select";
@@ -86,6 +88,28 @@ export default async function LeadDetailPage({
   ]);
 
   const attachments = await listLeadAttachments(user.organizationId, lead.id);
+  const generalPhotos = await listLeadGeneralPhotos(user.organizationId, lead.id);
+
+  const leadEstimates = await db.estimate.findMany({
+    where: {
+      organizationId: user.organizationId,
+      OR: [{ leadId: lead.id }, ...(lead.convertedJobId ? [{ jobId: lead.convertedJobId }] : [])],
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      lineItems: { select: { quantityMilli: true, unitCostCents: true, rateMode: true, rateBasisPoints: true } },
+      proposalOptions: { select: { proposalId: true }, take: 1 },
+    },
+  });
+  const handyEstimates: LeadHandyEstimateSummary[] = leadEstimates.map((estimate) => ({
+    id: estimate.id,
+    title: estimate.title,
+    status: estimate.status,
+    aiGenerated: estimate.aiGenerated,
+    totalLabel: formatMoney(estimateTotalCents(estimate.lineItems)),
+    lineItemCount: estimate.lineItems.length,
+    proposalId: estimate.proposalOptions[0]?.proposalId ?? null,
+  }));
 
   const preSalePhotoFiles = lead.convertedJob
     ? await db.file.findMany({
@@ -253,6 +277,8 @@ export default async function LeadDetailPage({
             leadPhone={lead.phone}
             leadAddress={[lead.addressLine1, lead.city, lead.state, lead.postalCode].filter(Boolean).join(", ") || null}
             leadNotes={lead.notes}
+            generalPhotos={generalPhotos.map((photo) => ({ id: photo.id, fileName: photo.fileName }))}
+            estimates={handyEstimates}
             jarvisUiEnabled={isJarvisUiEnabled()}
             anthropicConfigured={isAnthropicConfigured()}
             manualForm={

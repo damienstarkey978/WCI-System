@@ -1026,7 +1026,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const draftLeadProposalTool = betaZodTool({
     name: "draft_lead_proposal",
     description:
-      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a full estimate + client-facing proposal narrative (Handy-style notes → line items → proposal) — created as DRAFT, never sent, and never converted to a Job (Job creation happens only when a human/client accepts the proposal later). Upserts a Client from the lead contact so the proposal has someone to address; portal login still needs a separate invite. Prefer this on a lead's Proposals tab. Drafting against the full catalog is usually queued and posted back into this conversation when ready; if the async worker isn't configured it runs inline instead. Pass the lead's id from list_leads.",
+      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a DRAFT estimate first (line items + cost codes, Handy/Handoff-style). Client narrative is held on the estimate until a human explicitly converts it to a Proposal. Never sent, never auto-converted to a Job. Prefer this on a lead's Proposals tab. Drafting against the full catalog is usually queued and posted back into this conversation when ready; if the async worker isn't configured it runs inline instead. Pass the lead's id from list_leads.",
     inputSchema: z.object({
       leadId: z.string().describe("The lead's id, from list_leads"),
       notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),
@@ -1045,17 +1045,17 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
           clientEmail: input.clientEmail ?? null,
           clientPhone: input.clientPhone ?? null,
         });
-        ctx.sideEffects.push(`Queued a proposal draft (job ${job.id}) for lead ${input.leadId} — not drafted yet`);
-        return "Queued that up — drafting the estimate and proposal now against the full cost code catalog, which takes longer than I can wait on in one reply. I'll post the result right here once it's done, usually within a couple minutes.";
+        ctx.sideEffects.push(`Queued an estimate draft (job ${job.id}) for lead ${input.leadId} — not drafted yet`);
+        return "Queued that up — drafting the estimate (line items first) against the full cost code catalog, which takes longer than I can wait on in one reply. I'll post the result right here once it's done, usually within a couple minutes. After you review the estimate, use Create Proposal to convert it.";
       } catch (error) {
-        // Dev / missing CRON_SECRET: run the same draft inline so notes → proposal
+        // Dev / missing CRON_SECRET: run the same draft inline so notes → estimate
         // still works instead of failing hard with a worker-config error.
         if (!(error instanceof ProposalDraftWorkerNotConfiguredError)) {
           if (error instanceof LeadProposalLeadNotFoundError) return `No lead found with id ${input.leadId} in this organization.`;
           throw error;
         }
         try {
-          const proposal = await draftLeadProposalFromNotes({
+          const estimate = await draftLeadProposalFromNotes({
             organizationId: ctx.organizationId,
             leadId: input.leadId,
             userId: ctx.userId,
@@ -1064,8 +1064,8 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
             clientEmail: input.clientEmail ?? null,
             clientPhone: input.clientPhone ?? null,
           });
-          ctx.sideEffects.push(`Drafted proposal ${proposal.id} for lead ${input.leadId}`);
-          return `Drafted proposal "${proposal.title}" (id: ${proposal.id}) — status DRAFT, view it at /leads/proposals/${proposal.id}. A human needs to review and send it; accepting later is what creates the Job.`;
+          ctx.sideEffects.push(`Drafted estimate ${estimate.id} for lead ${input.leadId}`);
+          return `Drafted estimate "${estimate.title}" (id: ${estimate.id}) with line items — status DRAFT. Review it at /leads/estimates/${estimate.id}, then use Create Proposal to convert it into a client-facing DRAFT proposal. Nothing is sent until a human sends it.`;
         } catch (draftError) {
           if (draftError instanceof AiNotConfiguredError) return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
           if (draftError instanceof LeadProposalLeadNotFoundError) return `No lead found with id ${input.leadId} in this organization.`;

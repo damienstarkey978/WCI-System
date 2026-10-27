@@ -14,7 +14,7 @@ export const JARVIS_SUGGESTIONS = [
 
 /** Lead Proposals tab — Handy-shaped notes → lines → proposal prompts. */
 export const JARVIS_LEAD_PROPOSAL_SUGGESTIONS = [
-  "Draft a proposal from the lead notes and any photos I attach",
+  "Draft an estimate from the lead notes and any photos I attach",
   "Rewrite the scope in plain language for the homeowner",
   "List open proposals for this lead",
 ] as const;

@@ -824,6 +824,12 @@ model Estimate {
   /// The field notes the AI draft was generated from, kept for audit/re-generation.
   aiPromptNotes String?
 
+  /// Handoff-style estimate-first draft: client narrative (cover + sections) produced
+  /// with the AI estimate, held here until an explicit "Create Proposal" conversion
+  /// materializes a Proposal linked via ProposalOption. Cleared on convert.
+  /// Shape validated by src/lib/crm/pending-proposal-draft.ts.
+  pendingProposalDraft Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3674,7 +3680,10 @@ model ProposalDraftJob {
 
   status ProposalDraftJobStatus @default(QUEUED)
 
-  /// Set once SUCCEEDED.
+  /// Set once SUCCEEDED with an estimate-first draft (Handoff-style).
+  resultEstimateId String?
+  /// Set once a proposal was also created from that estimate (optional; usually
+  /// the human converts via Create Proposal on the estimate page).
   resultProposalId String?
   /// Set once FAILED — the same message a synchronous failure would have shown.
   errorMessage     String?

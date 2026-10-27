@@ -68,3 +68,10 @@ export async function deleteJobFile(path: string): Promise<void> {
   const { error } = await client().storage.from(JOB_FILES_BUCKET).remove([path]);
   if (error) throw new Error(`Storage delete failed for ${path}: ${error.message}`);
 }
+
+/** Server-side byte fetch for a storage path (Jarvis "Use General photos", OCR, etc.). */
+export async function downloadJobFile(path: string): Promise<Uint8Array> {
+  const { data, error } = await client().storage.from(JOB_FILES_BUCKET).download(path);
+  if (error || !data) throw new Error(`Storage download failed for ${path}: ${error?.message ?? "unknown error"}`);
+  return new Uint8Array(await data.arrayBuffer());
+}

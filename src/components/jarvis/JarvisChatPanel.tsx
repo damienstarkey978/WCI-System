@@ -26,6 +26,7 @@ import {
   type LauncherActionState,
   type LauncherPendingActionData,
 } from "@/app/jarvis/actions";
+import { loadLeadGeneralPhotosForJarvisAction } from "@/app/leads/[leadId]/jarvis-seed-actions";
 import { prepareJarvisAttachments } from "@/lib/client/prepare-jarvis-attachments";
 import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
 import { JarvisVoiceButton } from "@/components/jarvis/JarvisVoiceButton";
@@ -34,6 +35,11 @@ import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 const STORAGE_KEY_PREFIX = "jarvis-chat-conversation-id";
 const DRAFT_POLL_MS = 4_000;
+
+export interface JarvisGeneralPhotoSeed {
+  readonly id: string;
+  readonly fileName: string;
+}
 
 interface JarvisChatPanelProps {
   readonly context: Record<string, unknown> | null;
@@ -49,6 +55,12 @@ interface JarvisChatPanelProps {
    *  flight — e.g. swap the mascot's face to "thinking" — without lifting the whole
    *  useActionState up. */
   readonly onPendingChange?: (pending: boolean) => void;
+  /** Lead Proposals: General-tab Lead.notes for the "Use General notes" button. */
+  readonly generalNotes?: string | null;
+  /** Lead Proposals: image attachments (or post-convert Pre-Sale Photos) for "Use General photos". */
+  readonly generalPhotos?: readonly JarvisGeneralPhotoSeed[];
+  /** Required with generalPhotos so the server action can load bytes for the Attach photos input. */
+  readonly leadIdForGeneralPhotos?: string | null;
 }
 
 function isWaitingOnAsyncDraft(messages: readonly { role: string; content: string }[]): boolean {
@@ -136,6 +148,13 @@ function EmbeddedPendingActionCard({
   );
 }
 
+function base64ToFile(fileName: string, mimeType: string, base64: string): File {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], fileName, { type: mimeType });
+}
+
 function JarvisChatBody({
   context,
   storageKeyFull,
@@ -145,6 +164,9 @@ function JarvisChatBody({
   onNewChat,
   heightClassName,
   onPendingChange,
+  generalNotes,
+  generalPhotos,
+  leadIdForGeneralPhotos,
 }: {
   context: Record<string, unknown> | null;
   storageKeyFull: string;
@@ -154,6 +176,9 @@ function JarvisChatBody({
   onNewChat: () => void;
   heightClassName: string;
   onPendingChange?: (pending: boolean) => void;
+  generalNotes?: string | null;
+  generalPhotos?: readonly JarvisGeneralPhotoSeed[];
+  leadIdForGeneralPhotos?: string | null;
 }) {
   const funUi = useFunUi();
   const [initialConversationId] = useState<string | undefined>(() =>
@@ -166,6 +191,7 @@ function JarvisChatBody({
   // so useActionState's reply wins without an effect that resets on every send.
   const [overlayState, setOverlayState] = useState<LauncherActionState | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Bumped on each send so an in-flight draft poll can't overwrite the new reply.
   const sendEpochRef = useRef(0);
@@ -174,12 +200,18 @@ function JarvisChatBody({
   // identical note.
   const [preparing, setPreparing] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [seedStatus, setSeedStatus] = useState<string | null>(null);
+  const [loadingGeneralPhotos, setLoadingGeneralPhotos] = useState(false);
   const [, startRefresh] = useTransition();
   // useActionState's dispatch must run inside a transition (or as a form action /
   // formAction prop). Calling it after async attachment prep used to happen outside
   // one — React then warned and `pending` stayed false, so the UI looked idle while
   // the server action was still running (or appeared stuck on long drafts).
   const [, startSend] = useTransition();
+
+  const trimmedGeneralNotes = generalNotes?.trim() ?? "";
+  const generalPhotoCount = generalPhotos?.length ?? 0;
+  const showGeneralSeedActions = generalNotes !== undefined || generalPhotos !== undefined;
 
   // After a send, `state` is authoritative (overlay was cleared in the form submit).
   // After Confirm/Decline/async-draft poll, overlay holds the fresher snapshot.
@@ -239,6 +271,54 @@ function JarvisChatBody({
   // than dictate-then-remember-to-submit.
   function sendVoiceMessage() {
     formRef.current?.requestSubmit();
+  }
+
+  function seedGeneralNotes() {
+    setSeedStatus(null);
+    setAttachmentError(null);
+    if (!trimmedGeneralNotes) {
+      setSeedStatus("No notes on the General tab yet. Add them there, then try again.");
+      return;
+    }
+    const textarea = formRef.current?.elements.namedItem("text");
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+    textarea.value = trimmedGeneralNotes;
+    textarea.focus();
+    setSeedStatus("General notes loaded into Ask Jarvis.");
+  }
+
+  async function seedGeneralPhotos() {
+    setSeedStatus(null);
+    setAttachmentError(null);
+    if (generalPhotoCount === 0 || !leadIdForGeneralPhotos) {
+      setSeedStatus("No General photos yet. Upload images on the General tab, then try again.");
+      return;
+    }
+    const input = fileInputRef.current;
+    if (!input) return;
+
+    setLoadingGeneralPhotos(true);
+    try {
+      const result = await loadLeadGeneralPhotosForJarvisAction(leadIdForGeneralPhotos);
+      if (!result.ok) {
+        setAttachmentError(result.error);
+        return;
+      }
+      const transfer = new DataTransfer();
+      for (const photo of result.photos) {
+        transfer.items.add(base64ToFile(photo.fileName, photo.mimeType, photo.base64));
+      }
+      input.files = transfer.files;
+      const count = transfer.files.length;
+      const extra = result.truncated ? " (capped at Jarvis attachment limit)" : "";
+      setSeedStatus(
+        count === 1
+          ? `Attached 1 General photo${extra}.`
+          : `Attached ${count} General photos${extra}.`,
+      );
+    } finally {
+      setLoadingGeneralPhotos(false);
+    }
   }
 
   return (
@@ -380,6 +460,28 @@ function JarvisChatBody({
       >
         {conversationId ? <input type="hidden" name="conversationId" value={conversationId} /> : null}
         <input type="hidden" name="context" value={context ? JSON.stringify(context) : ""} />
+        {showGeneralSeedActions ? (
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center">
+            <button
+              type="button"
+              onClick={seedGeneralNotes}
+              disabled={pending || preparing}
+              className="min-h-10 touch-manipulation rounded border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
+              style={{ borderColor: "var(--bt-primary)" }}
+            >
+              Use General notes
+            </button>
+            <button
+              type="button"
+              onClick={() => void seedGeneralPhotos()}
+              disabled={pending || preparing || loadingGeneralPhotos}
+              className="min-h-10 touch-manipulation rounded border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
+              style={{ borderColor: "var(--bt-primary)" }}
+            >
+              {loadingGeneralPhotos ? "Loading photos…" : "Use General photos"}
+            </button>
+          </div>
+        ) : null}
         <JarvisVoiceButton onTranscript={appendVoiceTranscript} onFinish={sendVoiceMessage} funUi={funUi} />
         <div className="flex items-end gap-2">
           <textarea
@@ -404,9 +506,17 @@ function JarvisChatBody({
         </div>
         <label className="flex items-center gap-1.5 text-xs text-[var(--bt-muted)]">
           <span>Attach photos:</span>
-          <input type="file" name="attachments" multiple accept="image/jpeg,image/png,image/webp,image/gif" className="text-xs" />
+          <input
+            ref={fileInputRef}
+            type="file"
+            name="attachments"
+            multiple
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="max-w-full text-xs"
+          />
         </label>
       </form>
+      {seedStatus ? <p className="px-2.5 pb-1 text-xs text-[var(--bt-muted)]">{seedStatus}</p> : null}
       {preparing ? <p className="px-2.5 pb-2 text-xs text-[var(--bt-muted)]">Preparing photos…</p> : null}
       {attachmentError ?? viewState.error ? (
         <p className="px-2.5 pb-2 text-xs text-red-600">{attachmentError ?? viewState.error}</p>
@@ -426,6 +536,9 @@ export function JarvisChatPanel({
   onClose,
   heightClassName = "h-[32rem]",
   onPendingChange,
+  generalNotes,
+  generalPhotos,
+  leadIdForGeneralPhotos,
 }: JarvisChatPanelProps) {
   const [chatKey, setChatKey] = useState(0);
   const storageKeyFull = `${STORAGE_KEY_PREFIX}:${storageKey}`;
@@ -446,6 +559,9 @@ export function JarvisChatPanel({
       onClose={onClose}
       onNewChat={startNewChat}
       heightClassName={heightClassName}
+      generalNotes={generalNotes}
+      generalPhotos={generalPhotos}
+      leadIdForGeneralPhotos={leadIdForGeneralPhotos}
     />
   );
 }

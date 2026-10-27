@@ -104,7 +104,7 @@ async function runOneJob(job: { id: string; organizationId: string; leadId: stri
   const images = (job.images as unknown as DraftEstimateImageInput[] | null) ?? undefined;
 
   try {
-    const proposal = await draftLeadProposalFromNotes({
+    const estimate = await draftLeadProposalFromNotes({
       organizationId: job.organizationId,
       leadId: job.leadId,
       userId: job.userId,
@@ -116,11 +116,11 @@ async function runOneJob(job: { id: string; organizationId: string; leadId: stri
 
     await db.proposalDraftJob.update({
       where: { id: job.id },
-      data: { status: ProposalDraftJobStatus.SUCCEEDED, resultProposalId: proposal.id, finishedAt: new Date() },
+      data: { status: ProposalDraftJobStatus.SUCCEEDED, resultEstimateId: estimate.id, finishedAt: new Date() },
     });
     await postConversationMessage(
       job.conversationId,
-      `Drafted proposal "${proposal.title}" for the lead — status DRAFT, view it at /leads/proposals/${proposal.id}. A human needs to review and send it.`,
+      `Drafted estimate "${estimate.title}" for the lead — status DRAFT, review line items at /leads/estimates/${estimate.id}. When it looks right, use Create Proposal there to convert it into a client-facing DRAFT proposal.`,
     );
     return { succeeded: true };
   } catch (error) {
@@ -129,7 +129,7 @@ async function runOneJob(job: { id: string; organizationId: string; leadId: stri
       where: { id: job.id },
       data: { status: ProposalDraftJobStatus.FAILED, errorMessage: message, finishedAt: new Date() },
     });
-    await postConversationMessage(job.conversationId, `I wasn't able to finish drafting that proposal: ${message}`);
+    await postConversationMessage(job.conversationId, `I wasn't able to finish drafting that estimate: ${message}`);
     return { succeeded: false };
   }
 }

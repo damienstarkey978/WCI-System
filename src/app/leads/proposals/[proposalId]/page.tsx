@@ -122,11 +122,35 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
   const aiGenerated = proposal.options.some((option) => option.estimate.aiGenerated);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <div>
         <Link href={proposal.lead ? `/leads/${proposal.lead.id}?tab=proposals` : "/leads/proposals"} className="text-xs text-[var(--bt-muted)] hover:underline">
           ← Back to {proposal.lead ? proposal.lead.name : "proposals"}
         </Link>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[var(--bt-muted)]">
+        <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
+          1. Notes
+        </span>
+        <span aria-hidden>→</span>
+        {activeEstimate ? (
+          <Link
+            href={`/leads/estimates/${activeEstimate.id}`}
+            className="rounded px-2 py-1 hover:underline"
+            style={{ background: "var(--bt-panel-bg-muted)" }}
+          >
+            2. Estimate
+          </Link>
+        ) : (
+          <span className="rounded px-2 py-1" style={{ background: "var(--bt-panel-bg-muted)" }}>
+            2. Estimate
+          </span>
+        )}
+        <span aria-hidden>→</span>
+        <span className="rounded px-2 py-1 font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
+          3. Proposal
+        </span>
       </div>
 
       <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>

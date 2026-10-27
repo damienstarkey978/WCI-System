@@ -13,13 +13,15 @@ import { AiNotConfiguredError, DraftGenerationError, draftEstimateFromNotes, typ
 import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
 import { listEnabledAiPreferenceInstructions } from "@/lib/ai/preference-instructions";
 import { LeadNotFoundError } from "@/lib/crm/service";
-import { createEstimate, type CreateEstimateLineItemInput } from "@/lib/estimates/service";
+import { Prisma } from "@/generated/prisma/client";
+import type { RateMode } from "@/generated/prisma/enums";
+import { parsePendingProposalDraft } from "@/lib/crm/pending-proposal-draft";
+import { createEstimate, EstimateNotFoundError, type CreateEstimateLineItemInput } from "@/lib/estimates/service";
 import { db } from "@/lib/db";
 import { isSupabaseStorageConfigured } from "@/lib/env";
 import { uploadAndRegisterFile } from "@/lib/files/service";
 import type { BasisPoints } from "@/lib/money";
 import { createProposal, type CreateProposalSectionInput } from "@/lib/proposals/service";
-import type { RateMode } from "@/generated/prisma/enums";
 
 const IMAGE_EXTENSION_BY_MEDIA_TYPE: Record<DraftEstimateImageInput["mediaType"], string> = {
   "image/jpeg": "jpg",
@@ -181,11 +183,9 @@ export interface DraftLeadProposalInput {
 }
 
 /**
- * The Jarvis-style entry point: sales gives Jarvis the scope of work, measurements,
- * and photos for a lead, and it drafts both sides of the estimate/proposal split in
- * one shot (src/lib/ai/estimate-assistant.ts) — then this persists it exactly like a
- * hand-built one via createLeadProposal, so it lands as an ordinary DRAFT proposal a
- * salesperson reviews, edits, and sends. Nothing here is ever auto-sent to a client.
+ * Handoff-style Jarvis entry: draft a real Estimate (line items + cost codes) first.
+ * Client narrative is held on Estimate.pendingProposalDraft until an explicit
+ * createProposalFromLeadEstimate() conversion — never auto-sent.
  */
 export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) {
   const lead = await db.lead.findFirst({ where: { id: input.leadId, organizationId: input.organizationId } });
@@ -231,31 +231,169 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     groupLabel: line.groupLabel,
   }));
 
-  const proposal = await createLeadProposal({
+  const jobId = lead.convertedJobId;
+
+  const estimate = await createEstimate({
     organizationId: input.organizationId,
-    leadId: input.leadId,
+    jobId: jobId ?? undefined,
+    // Always keep the lead link so Create Proposal can find the CRM record even
+    // when this lead already converted and the estimate is also job-scoped.
+    leadId: lead.id,
     title: draft.title,
-    coverMessage: draft.projectDescription,
-    clientEmail: input.clientEmail,
-    clientPhone: input.clientPhone,
     lineItems,
-    proposalSections: draft.proposalSections,
     aiGenerated: true,
     aiPromptNotes: input.notes,
+    pendingProposalDraft: {
+      coverMessage: draft.projectDescription,
+      sections: draft.proposalSections.map((section) => ({
+        title: section.title,
+        bullets: [...section.bullets],
+      })),
+    },
   });
 
   // Only once there's a real Job to file them into (this lead already had an
-  // earlier proposal accepted) — a still-jobless proposal's photos stay in the
-  // AI-drafted proposal content itself; there's no job file library yet to
-  // persist a separate copy into.
-  if (input.images?.length && proposal.jobId) {
+  // earlier proposal accepted). A still-jobless lead has nowhere to file photos yet.
+  if (input.images?.length && jobId) {
     await persistPreSalePhotos({
       organizationId: input.organizationId,
-      jobId: proposal.jobId,
+      jobId,
       uploadedByUserId: input.userId,
       images: input.images,
     });
   }
+
+  return estimate;
+}
+
+export class EstimateAlreadyOnProposalError extends Error {
+  constructor(estimateId: string, proposalId: string) {
+    super(`Estimate ${estimateId} is already linked to proposal ${proposalId}.`);
+    this.name = "EstimateAlreadyOnProposalError";
+  }
+}
+
+export class EstimateMissingProposalDraftError extends Error {
+  constructor(estimateId: string) {
+    super(`Estimate ${estimateId} has no pending client narrative to convert. Re-draft with Jarvis, or create a proposal manually.`);
+    this.name = "EstimateMissingProposalDraftError";
+  }
+}
+
+export class EstimateNotOnLeadError extends Error {
+  constructor(estimateId: string) {
+    super(`Estimate ${estimateId} is not attached to a lead, so it cannot use the lead Create Proposal path.`);
+    this.name = "EstimateNotOnLeadError";
+  }
+}
+
+function deriveSectionsFromLineItems(
+  lineItems: readonly { groupLabel: string | null; title: string; description: string | null }[],
+): CreateProposalSectionInput[] {
+  const groups = new Map<string, string[]>();
+  for (const item of lineItems) {
+    const key = item.groupLabel?.trim() || "Scope of work";
+    const bullet = item.description?.trim() || item.title;
+    const existing = groups.get(key);
+    if (existing) existing.push(bullet);
+    else groups.set(key, [bullet]);
+  }
+  return [...groups.entries()].map(([title, bullets]) => ({ title, bullets }));
+}
+
+/**
+ * Explicit Estimate → Proposal conversion (Handoff / send-to-budget pattern).
+ * Creates a DRAFT proposal linked to this estimate via ProposalOption and clears
+ * pendingProposalDraft so the conversion is one-shot.
+ */
+export async function createProposalFromLeadEstimate(input: {
+  readonly organizationId: string;
+  readonly estimateId: string;
+  readonly clientEmail?: string | null;
+  readonly clientPhone?: string | null;
+}) {
+  const estimate = await db.estimate.findFirst({
+    where: { id: input.estimateId, organizationId: input.organizationId },
+    include: {
+      proposalOptions: { select: { proposalId: true }, take: 1 },
+      lineItems: { orderBy: { sortOrder: "asc" }, select: { groupLabel: true, title: true, description: true } },
+    },
+  });
+  if (!estimate) throw new EstimateNotFoundError(input.estimateId);
+  if (estimate.proposalOptions[0]) {
+    throw new EstimateAlreadyOnProposalError(estimate.id, estimate.proposalOptions[0].proposalId);
+  }
+
+  let lead = estimate.leadId
+    ? await db.lead.findFirst({ where: { id: estimate.leadId, organizationId: input.organizationId } })
+    : null;
+  if (estimate.leadId && !lead) throw new LeadNotFoundError(estimate.leadId);
+  if (!lead && estimate.jobId) {
+    lead = await db.lead.findFirst({
+      where: { organizationId: input.organizationId, convertedJobId: estimate.jobId },
+    });
+  }
+  if (!lead) throw new EstimateNotOnLeadError(estimate.id);
+
+  const pending = parsePendingProposalDraft(estimate.pendingProposalDraft);
+  const sections = pending
+    ? pending.sections.map((section) => ({ title: section.title, bullets: [...section.bullets] }))
+    : deriveSectionsFromLineItems(estimate.lineItems);
+  if (sections.length === 0) throw new EstimateMissingProposalDraftError(estimate.id);
+
+  const clientEmail = input.clientEmail ?? lead.email;
+  if (!clientEmail) throw new LeadMissingContactError(lead.id);
+
+  const jobId = lead.convertedJobId ?? estimate.jobId ?? null;
+
+  const client = await db.client.upsert({
+    where: { organizationId_email: { organizationId: input.organizationId, email: clientEmail } },
+    create: {
+      organizationId: input.organizationId,
+      name: lead.name,
+      email: clientEmail,
+      phone: input.clientPhone ?? lead.phone,
+    },
+    update: {},
+  });
+
+  if (jobId) {
+    await db.clientJobAccess.upsert({
+      where: { clientId_jobId: { clientId: client.id, jobId } },
+      create: {
+        clientId: client.id,
+        jobId,
+        canViewDailyLogs: true,
+        canViewSchedule: true,
+        canViewDocuments: true,
+        canViewBudget: true,
+        canViewInvoices: true,
+        canMakePayments: true,
+        canViewBills: false,
+        canViewSelections: true,
+        canApproveSelections: true,
+        canViewChangeOrders: true,
+        canApproveChangeOrders: true,
+      },
+      update: {},
+    });
+  }
+
+  const proposal = await createProposal({
+    organizationId: input.organizationId,
+    jobId: jobId ?? undefined,
+    leadId: lead.id,
+    clientId: client.id,
+    title: estimate.title,
+    coverMessage: pending?.coverMessage ?? null,
+    options: [{ estimateId: estimate.id, label: "Option 1" }],
+    sections,
+  });
+
+  await db.estimate.update({
+    where: { id: estimate.id },
+    data: { pendingProposalDraft: Prisma.DbNull },
+  });
 
   return proposal;
 }
