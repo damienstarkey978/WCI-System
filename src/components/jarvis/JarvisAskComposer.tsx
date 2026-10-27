@@ -38,6 +38,20 @@ function SendArrowIcon() {
   );
 }
 
+function LocationPinIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="10" r="2.25" stroke="currentColor" strokeWidth="1.75" />
+    </svg>
+  );
+}
+
 export function JarvisAskComposer({
   formRef,
   fileInputRef,
@@ -52,6 +66,8 @@ export function JarvisAskComposer({
   footer,
   funUi = false,
   rows = 3,
+  locationChip = null,
+  compact = false,
 }: {
   readonly formRef: RefObject<HTMLFormElement | null>;
   readonly fileInputRef: RefObject<HTMLInputElement | null>;
@@ -67,6 +83,10 @@ export function JarvisAskComposer({
   readonly footer?: ReactNode;
   readonly funUi?: boolean;
   readonly rows?: number;
+  /** Handoff-style truncated address chip beside attach. */
+  readonly locationChip?: string | null;
+  /** Denser padding for the docked Handy rail. */
+  readonly compact?: boolean;
 }) {
   const inputId = useId();
   const busy = pending || preparing;
@@ -85,7 +105,7 @@ export function JarvisAskComposer({
     <form
       ref={formRef}
       action={onSubmit}
-      className="flex flex-col gap-1.5 border-t p-2 sm:p-2.5"
+      className={`flex flex-col gap-1.5 border-t ${compact ? "p-1.5" : "p-2 sm:p-2.5"}`}
       style={{ borderColor: "var(--bt-border)" }}
     >
       {conversationId ? <input type="hidden" name="conversationId" value={conversationId} /> : null}
@@ -108,13 +128,17 @@ export function JarvisAskComposer({
           disabled={busy}
           onKeyDown={handleKeyDown}
           // text-base (16px) — iOS Safari auto-zooms inputs under 16px.
-          className="block w-full resize-none border-0 bg-transparent px-3 pb-1 pt-2.5 text-base text-[var(--bt-text)] outline-none placeholder:text-[var(--bt-muted)] disabled:opacity-60"
+          className={`block w-full resize-none border-0 bg-transparent px-3 text-base text-[var(--bt-text)] outline-none placeholder:text-[var(--bt-muted)] disabled:opacity-60 ${
+            compact ? "pb-0.5 pt-2" : "pb-1 pt-2.5"
+          }`}
         />
-        <p className="hidden px-3 pb-1 text-[10px] text-[var(--bt-muted)] sm:block">
-          Use {isMac ? "⌘" : "Ctrl"} + Return to submit
-        </p>
+        {!compact ? (
+          <p className="hidden px-3 pb-1 text-[10px] text-[var(--bt-muted)] sm:block">
+            Use {isMac ? "⌘" : "Ctrl"} + Return to submit
+          </p>
+        ) : null}
 
-        <div className="flex items-center gap-1 px-1.5 pb-1.5 pt-0.5">
+        <div className={`flex items-center gap-1 px-1.5 pt-0.5 ${compact ? "pb-1" : "pb-1.5"}`}>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -135,6 +159,17 @@ export function JarvisAskComposer({
             className="sr-only"
             tabIndex={-1}
           />
+
+          {locationChip ? (
+            <span
+              className="inline-flex max-w-[7.5rem] items-center gap-0.5 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-[var(--bt-muted)]"
+              style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
+              title={locationChip}
+            >
+              <LocationPinIcon />
+              <span className="truncate">{locationChip}</span>
+            </span>
+          ) : null}
 
           <div className="min-w-0 flex-1" />
 

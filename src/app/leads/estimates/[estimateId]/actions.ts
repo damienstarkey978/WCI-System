@@ -47,5 +47,6 @@ export async function createProposalFromEstimateAction(
   revalidatePath(`/leads/estimates/${estimateId}`);
   if (leadId) revalidatePath(`/leads/${leadId}`);
   revalidatePath(`/leads/proposals/${proposalId}`);
-  redirect(`/leads/proposals/${proposalId}`);
+  // Land on Proposal view (client document), matching Handoff convert → proposal tab.
+  redirect(`/leads/proposals/${proposalId}?view=proposal`);
 }

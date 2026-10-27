@@ -48,6 +48,10 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
             title: true,
             notes: true,
             convertedJobId: true,
+            addressLine1: true,
+            city: true,
+            state: true,
+            postalCode: true,
           },
         },
         job: { select: { id: true, name: true } },
@@ -69,7 +73,17 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
     (estimate.jobId
       ? await db.lead.findFirst({
           where: { organizationId: user.organizationId, convertedJobId: estimate.jobId },
-          select: { id: true, name: true, title: true, notes: true, convertedJobId: true },
+          select: {
+            id: true,
+            name: true,
+            title: true,
+            notes: true,
+            convertedJobId: true,
+            addressLine1: true,
+            city: true,
+            state: true,
+            postalCode: true,
+          },
         })
       : null);
 
@@ -198,6 +212,24 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
+                <div className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--bt-muted)]">
+                  {lead ? (
+                    <Link href={`/leads/${lead.id}?tab=proposals`} className="hover:underline">
+                      {lead.title ?? lead.name}
+                    </Link>
+                  ) : estimate.job ? (
+                    <Link href={`/jobs/${estimate.job.id}/estimates`} className="hover:underline">
+                      {estimate.job.name}
+                    </Link>
+                  ) : null}
+                  <span aria-hidden>·</span>
+                  <span
+                    className="rounded px-1.5 py-px text-[9px] font-bold tracking-wide text-[var(--bt-on-primary)]"
+                    style={{ background: "var(--bt-primary)" }}
+                  >
+                    EST
+                  </span>
+                </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <h1 className="truncate text-base font-semibold text-[var(--bt-text)] sm:text-lg">
                     {estimate.title}
@@ -305,6 +337,16 @@ export default async function LeadEstimatePage({ params }: PageProps<"/leads/est
             scopeNotes={lead.notes}
             scopeGroups={scopeGroups}
             pricingTerms={pricingTerms}
+            projectAddress={
+              [lead.addressLine1, lead.city, lead.state].filter(Boolean).join(", ") || null
+            }
+            convertHref={
+              linkedProposalId
+                ? null
+                : canConvert
+                  ? `#convert-to-proposal`
+                  : null
+            }
           />
         ) : null}
       </div>

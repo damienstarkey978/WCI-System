@@ -255,20 +255,17 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
   }));
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col gap-3 p-2 pb-20 sm:p-3 sm:pb-6 lg:p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col gap-2 p-1.5 pb-16 sm:gap-2.5 sm:p-2 sm:pb-5 lg:p-3">
+      <div className="flex flex-wrap items-center gap-2 px-1 lg:hidden">
         <Link
           href={proposal.lead ? `/leads/${proposal.lead.id}?tab=proposals&compose=1` : "/leads/proposals"}
-          className="text-xs text-[var(--bt-muted)] hover:underline lg:hidden"
+          className="text-xs text-[var(--bt-muted)] hover:underline"
         >
           ← Back to {proposal.lead ? proposal.lead.name : "proposals"}
         </Link>
-        <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--bt-muted)]">
-          Proposal workspace · Jarvis docked right
-        </p>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:items-start">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row lg:items-start lg:gap-2.5">
         {proposal.lead ? (
           <LeadEstimateWorkspaceNav
             leadId={proposal.lead.id}
@@ -279,47 +276,63 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
           />
         ) : null}
 
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
       <div
-        className="sticky top-0 z-20 border-b px-3 py-2.5 backdrop-blur-md sm:rounded-lg sm:border sm:px-4 sm:py-3"
+        className="sticky top-0 z-20 space-y-1.5 border-b px-2.5 py-2 backdrop-blur-md sm:rounded-md sm:border sm:px-3"
         style={{
           borderColor: "var(--bt-border)",
-          background: "color-mix(in srgb, var(--bt-panel-bg) 92%, transparent)",
+          background: "color-mix(in srgb, var(--bt-panel-bg) 94%, transparent)",
         }}
       >
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold text-[var(--bt-text)] sm:text-2xl">{proposal.title}</h1>
+            <div className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--bt-muted)]">
+              {proposal.lead ? (
+                <Link href={`/leads/${proposal.lead.id}?tab=proposals`} className="hover:underline">
+                  {proposal.lead.title ?? proposal.lead.name}
+                </Link>
+              ) : null}
+              <span aria-hidden>·</span>
+              <span
+                className="rounded px-1.5 py-px text-[9px] font-bold tracking-wide text-[var(--bt-on-primary)]"
+                style={{ background: "var(--bt-primary)" }}
+              >
+                PROP
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <h1 className="truncate text-base font-semibold text-[var(--bt-text)] sm:text-lg">{proposal.title}</h1>
               {aiGenerated ? (
-                <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
-                  Drafted by Jarvis
+                <span className="rounded px-1.5 py-px text-[9px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
+                  Jarvis
                 </span>
               ) : null}
-              <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
+              <span className="rounded px-1.5 py-px text-[9px] font-semibold" style={{ background: style.bg, color: style.text }}>
                 {proposal.status}
               </span>
             </div>
-            <div className="mt-0.5 text-xs text-[var(--bt-muted)] sm:text-sm">
+            <div className="mt-0.5 text-[11px] text-[var(--bt-muted)]">
               {proposal.client.name}
               {proposal.client.email ? ` · ${proposal.client.email}` : ""}
-              {proposal.client.phone ? ` · ${proposal.client.phone}` : ""}
+              {" · "}
+              {formatDate(proposal.createdAt)}
             </div>
-            <div className="mt-0.5 text-[11px] text-[var(--bt-muted)]">Created {formatDate(proposal.createdAt)}</div>
           </div>
 
-          <div className="flex flex-col gap-2 sm:items-end">
-            <EstimateProposalToggle
-              active={view}
-              estimateHref={estimateToggleHref}
-              proposalHref={`/leads/proposals/${proposal.id}?view=proposal${optionParam ? `&option=${encodeURIComponent(String(optionParam))}` : ""}`}
-            />
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <span className="text-base font-semibold tabular-nums text-[var(--bt-text)] sm:text-lg">{headerTotalLabel}</span>
+          <div className="flex flex-col gap-1.5 sm:items-end">
+            <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+              <EstimateProposalToggle
+                active={view}
+                estimateHref={estimateToggleHref}
+                proposalHref={`/leads/proposals/${proposal.id}?view=proposal${optionParam ? `&option=${encodeURIComponent(String(optionParam))}` : ""}`}
+              />
+              <span className="text-sm font-semibold tabular-nums text-[var(--bt-text)]">{headerTotalLabel}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
               <Link
                 href={`/proposals/${proposal.id}/pdf`}
                 target="_blank"
-                className="inline-flex min-h-10 touch-manipulation items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium text-[var(--bt-text)] sm:min-h-0 sm:py-1.5"
+                className="inline-flex min-h-9 touch-manipulation items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-[var(--bt-text)] sm:min-h-0"
                 style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg)" }}
               >
                 Preview
@@ -327,7 +340,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               {proposal.status === "SENT" ? (
                 <form action={declineProposalPageAction}>
                   <input type="hidden" name="proposalId" value={proposal.id} />
-                  <button type="submit" className="rounded-md border px-3 py-1.5 text-xs font-medium text-[var(--bt-muted)] hover:text-red-600" style={{ borderColor: "var(--bt-border)" }}>
+                  <button type="submit" className="rounded-md border px-2.5 py-1.5 text-xs font-medium text-[var(--bt-muted)] hover:text-red-600" style={{ borderColor: "var(--bt-border)" }}>
                     Mark declined
                   </button>
                 </form>
@@ -356,7 +369,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
         </div>
       ) : null}
 
-      <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="rounded-md border bg-[var(--bt-panel-bg)] px-2.5 py-2" style={{ borderColor: "var(--bt-border)" }}>
         <OptionTabs
           proposalId={proposal.id}
           options={optionTabs}
@@ -367,7 +380,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
       </div>
 
       {view === "estimate" ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           <EstimateSpreadsheet
             groups={spreadsheetGroups}
             totalBuilderCostCents={totalBuilderCostCents}
@@ -377,59 +390,64 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
             reorderable={editable}
           />
           {editable ? (
-            <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-              <h2 className="text-sm font-semibold text-[var(--bt-text)]">Edit line items</h2>
-              <p className="mt-0.5 mb-3 text-xs text-[var(--bt-muted)]">
-                Same cost-coded lines as the spreadsheet. Changes stay on the linked estimate.
-              </p>
-              {[...groups.entries()].map(([groupLabel, items]) => (
-                <div key={groupLabel} className="mb-3 rounded border" style={{ borderColor: "var(--bt-border)" }}>
-                  <div className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-                    {groupLabel}
+            <details className="rounded-md border bg-[var(--bt-panel-bg)] open:pb-0" style={{ borderColor: "var(--bt-border)" }}>
+              <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]">
+                Edit line items
+              </summary>
+              <div className="border-t p-3" style={{ borderColor: "var(--bt-border)" }}>
+                <p className="mb-3 text-xs text-[var(--bt-muted)]">
+                  Same cost-coded lines as the spreadsheet. Changes stay on the linked estimate.
+                </p>
+                {[...groups.entries()].map(([groupLabel, items]) => (
+                  <div key={groupLabel} className="mb-3 rounded border" style={{ borderColor: "var(--bt-border)" }}>
+                    <div className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+                      {groupLabel}
+                    </div>
+                    <table className="w-full text-left text-sm">
+                      <tbody>
+                        {items.map((item) => {
+                          const cost = extendedCostCents(item.quantityMilli, item.unitCostCents);
+                          const extendedCents = priceWithRate(cost, item.rateMode, item.rateBasisPoints);
+                          return (
+                            <EstimateLineItemRow
+                              key={item.id}
+                              proposalId={proposal.id}
+                              estimateId={activeEstimate.id}
+                              editable={editable}
+                              item={{
+                                id: item.id,
+                                title: item.title,
+                                groupLabel: item.groupLabel,
+                                costCodeLabel: `${item.costCode.code} — ${item.costCode.name}`,
+                                quantityMilli: item.quantityMilli,
+                                unitCostCents: item.unitCostCents,
+                                rateBasisPoints: item.rateBasisPoints,
+                                extendedCents,
+                                confidence: item.confidence,
+                                priceSource: item.priceSource,
+                              }}
+                            />
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div className="px-3 pb-3">
+                      <AddLineItemForm proposalId={proposal.id} estimateId={activeEstimate.id} costCodes={costCodes} defaultGroupLabel={groupLabel} />
+                    </div>
                   </div>
-                  <table className="w-full text-left text-sm">
-                    <tbody>
-                      {items.map((item) => {
-                        const cost = extendedCostCents(item.quantityMilli, item.unitCostCents);
-                        const extendedCents = priceWithRate(cost, item.rateMode, item.rateBasisPoints);
-                        return (
-                          <EstimateLineItemRow
-                            key={item.id}
-                            proposalId={proposal.id}
-                            estimateId={activeEstimate.id}
-                            editable={editable}
-                            item={{
-                              id: item.id,
-                              title: item.title,
-                              groupLabel: item.groupLabel,
-                              costCodeLabel: `${item.costCode.code} — ${item.costCode.name}`,
-                              quantityMilli: item.quantityMilli,
-                              unitCostCents: item.unitCostCents,
-                              rateBasisPoints: item.rateBasisPoints,
-                              extendedCents,
-                              confidence: item.confidence,
-                              priceSource: item.priceSource,
-                            }}
-                          />
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  <div className="px-3 pb-3">
-                    <AddLineItemForm proposalId={proposal.id} estimateId={activeEstimate.id} costCodes={costCodes} defaultGroupLabel={groupLabel} />
-                  </div>
+                ))}
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">New group</div>
+                  <AddLineItemForm proposalId={proposal.id} estimateId={activeEstimate.id} costCodes={costCodes} />
                 </div>
-              ))}
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">New group</div>
-                <AddLineItemForm proposalId={proposal.id} estimateId={activeEstimate.id} costCodes={costCodes} />
               </div>
-            </div>
+            </details>
           ) : null}
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-xl p-1 sm:p-6" style={{ background: "var(--bt-panel-bg-muted)" }}>
+        <div className="flex flex-col gap-2">
+          {/* Client document first — Handoff Preview-style hero */}
+          <div className="rounded-lg p-1 sm:p-4" style={{ background: "var(--bt-panel-bg-muted)" }}>
             <ClientProposalView
               title={proposal.title}
               projectAddress={leadAddress}
@@ -478,72 +496,79 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
           </div>
 
           {editable ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="flex flex-col gap-3 rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-                <h2 className="text-sm font-semibold text-[var(--bt-text)]">Edit proposal narrative</h2>
-                <p className="text-xs text-[var(--bt-muted)]">Client-facing copy. Pricing lives on the Estimate tab.</p>
+            <details className="rounded-md border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+              <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]">
+                Edit narrative, payment schedule &amp; branding
+              </summary>
+              <div className="grid gap-3 border-t p-3 lg:grid-cols-2" style={{ borderColor: "var(--bt-border)" }}>
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-[var(--bt-muted)]">Client-facing copy. Pricing lives on the Estimate tab.</p>
 
-                {preSalePhotos.length > 0 ? (
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Pre-Sale Photos</span>
-                      <Link href={`/jobs/${proposal.jobId}/files?category=PRESALE_PHOTO`} className="text-xs text-[var(--bt-primary)] hover:underline">
-                        Manage in Files →
-                      </Link>
+                  {preSalePhotos.length > 0 ? (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Pre-Sale Photos</span>
+                        <Link href={`/jobs/${proposal.jobId}/files?category=PRESALE_PHOTO`} className="text-xs text-[var(--bt-primary)] hover:underline">
+                          Manage in Files →
+                        </Link>
+                      </div>
+                      <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1">
+                        {preSalePhotos.map((photo) =>
+                          photo.url ? (
+                            <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer" className="block h-20 w-20 shrink-0 overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching */}
+                              <img src={photo.url} alt={photo.fileName} className="h-full w-full object-cover" />
+                            </a>
+                          ) : null,
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1">
-                      {preSalePhotos.map((photo) =>
-                        photo.url ? (
-                          <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer" className="block h-20 w-20 shrink-0 overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching */}
-                            <img src={photo.url} alt={photo.fileName} className="h-full w-full object-cover" />
-                          </a>
-                        ) : null,
-                      )}
-                    </div>
+                  ) : null}
+
+                  {templates.length > 0 ? <ApplyTemplateForm proposalId={proposal.id} templates={templates} /> : null}
+                  <CoverMessageEditor proposalId={proposal.id} coverMessage={proposal.coverMessage ?? ""} />
+                  {proposal.sections.length === 0 ? (
+                    <p className="text-sm text-[var(--bt-muted)]">No sections yet.</p>
+                  ) : (
+                    proposal.sections.map((section) => <ProposalSectionEditor key={section.id} proposalId={proposal.id} section={section} />)
+                  )}
+                  <AddSectionForm proposalId={proposal.id} />
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
+                    <PaymentScheduleEditor proposalId={proposal.id} draws={proposal.draws} editable={editable} />
                   </div>
-                ) : null}
-
-                {templates.length > 0 ? <ApplyTemplateForm proposalId={proposal.id} templates={templates} /> : null}
-                <CoverMessageEditor proposalId={proposal.id} coverMessage={proposal.coverMessage ?? ""} />
-                {proposal.sections.length === 0 ? (
-                  <p className="text-sm text-[var(--bt-muted)]">No sections yet.</p>
-                ) : (
-                  proposal.sections.map((section) => <ProposalSectionEditor key={section.id} proposalId={proposal.id} section={section} />)
-                )}
-                <AddSectionForm proposalId={proposal.id} />
-              </div>
-
-              <div className="flex flex-col gap-4">
-                <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-                  <PaymentScheduleEditor proposalId={proposal.id} draws={proposal.draws} editable={editable} />
-                </div>
-                <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-                  <h2 className="text-sm font-semibold text-[var(--bt-text)]">Branding</h2>
-                  <p className="mt-0.5 mb-3 text-xs text-[var(--bt-muted)]">Shown on the client review page and PDF export.</p>
-                  <BrandingForm proposalId={proposal.id} accentColor={proposal.accentColor ?? ""} logoUrl={proposal.logoUrl ?? ""} />
+                  <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
+                    <h2 className="text-sm font-semibold text-[var(--bt-text)]">Branding</h2>
+                    <p className="mt-0.5 mb-3 text-xs text-[var(--bt-muted)]">Shown on the client review page and PDF export.</p>
+                    <BrandingForm proposalId={proposal.id} accentColor={proposal.accentColor ?? ""} logoUrl={proposal.logoUrl ?? ""} />
+                  </div>
                 </div>
               </div>
+            </details>
+          ) : proposal.draws.length > 0 ? (
+            <div className="rounded-md border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
+              <PaymentScheduleEditor proposalId={proposal.id} draws={proposal.draws} editable={false} />
             </div>
-          ) : (
-            <>
-              {proposal.draws.length > 0 ? (
-                <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-                  <PaymentScheduleEditor proposalId={proposal.id} draws={proposal.draws} editable={false} />
-                </div>
-              ) : null}
-            </>
-          )}
+          ) : null}
         </div>
       )}
 
-      <CommentThread
-        organizationId={user.organizationId}
-        featureType="Proposal"
-        featureId={proposal.id}
-        revalidate={`/leads/proposals/${proposal.id}`}
-        title="Internal notes (staff only — never visible to the client)"
-      />
+      <details className="rounded-md border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+        <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[var(--bt-muted)] hover:text-[var(--bt-text)]">
+          Internal notes (staff only)
+        </summary>
+        <div className="border-t p-2" style={{ borderColor: "var(--bt-border)" }}>
+          <CommentThread
+            organizationId={user.organizationId}
+            featureType="Proposal"
+            featureId={proposal.id}
+            revalidate={`/leads/proposals/${proposal.id}`}
+            title="Internal notes (staff only — never visible to the client)"
+          />
+        </div>
+      </details>
         </div>
 
         {proposal.lead ? (
@@ -558,6 +583,7 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
             scopeNotes={proposal.lead.notes}
             scopeGroups={scopeGroups}
             pricingTerms={pricingTerms}
+            projectAddress={leadAddress}
           />
         ) : null}
       </div>

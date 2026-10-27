@@ -22,10 +22,11 @@ export function EstimateProposalToggle({
 
   function styleFor(isActive: boolean) {
     if (isActive) {
+      // Handoff: selected segment is filled primary with on-primary text
       return {
-        background: "var(--bt-panel-bg)",
-        color: "var(--bt-primary)",
-        boxShadow: "0 1px 2px color-mix(in srgb, var(--bt-text) 10%, transparent)",
+        background: "var(--bt-primary)",
+        color: "var(--bt-on-primary)",
+        boxShadow: "0 1px 2px color-mix(in srgb, var(--bt-text) 12%, transparent)",
       } as const;
     }
     return {

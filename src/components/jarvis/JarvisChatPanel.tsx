@@ -69,6 +69,14 @@ interface JarvisChatPanelProps {
    * workspace (`/leads/estimates/{id}`) instead of leaving staff on the launcher.
    */
   readonly navigateOnEstimateDraft?: boolean;
+  /**
+   * `docked` = Handy rail: no inner Jarvis chrome (outer rail already has Handy
+   * header), denser empty state, compact composer. `default` = floating launcher /
+   * full embeds.
+   */
+  readonly chrome?: "default" | "docked";
+  /** Truncated address chip in Ask composer (Handoff location pin). */
+  readonly locationChip?: string | null;
 }
 
 function isWaitingOnAsyncDraft(messages: readonly { role: string; content: string }[]): boolean {
@@ -184,6 +192,8 @@ function JarvisChatBody({
   generalPhotos,
   leadIdForGeneralPhotos,
   navigateOnEstimateDraft = false,
+  chrome = "default",
+  locationChip = null,
 }: {
   context: Record<string, unknown> | null;
   storageKeyFull: string;
@@ -198,7 +208,10 @@ function JarvisChatBody({
   generalPhotos?: readonly JarvisGeneralPhotoSeed[];
   leadIdForGeneralPhotos?: string | null;
   navigateOnEstimateDraft?: boolean;
+  chrome?: "default" | "docked";
+  locationChip?: string | null;
 }) {
+  const docked = chrome === "docked";
   const router = useRouter();
   const funUi = useFunUi();
   const navigatedEstimateHref = useRef<string | null>(null);
@@ -348,63 +361,88 @@ function JarvisChatBody({
 
   return (
     <div
-      className={`flex ${heightClassName} w-full flex-col overflow-hidden border bg-[var(--bt-panel-bg)] ${funUi ? "rounded-3xl border-2" : "rounded-lg"}`}
-      style={{ borderColor: funUi ? "var(--bt-primary)" : "var(--bt-border)" }}
+      className={`flex ${heightClassName} w-full flex-col overflow-hidden bg-[var(--bt-panel-bg)] ${
+        docked
+          ? "border-0"
+          : funUi
+            ? "rounded-3xl border-2"
+            : "rounded-lg border"
+      }`}
+      style={docked ? undefined : { borderColor: funUi ? "var(--bt-primary)" : "var(--bt-border)" }}
     >
-      <div
-        className={funUi ? "flex items-center justify-between px-4 py-3" : "flex items-center justify-between border-b px-3 py-2"}
-        style={
-          funUi
-            ? { background: "linear-gradient(135deg, var(--bt-primary), var(--bt-nav))" }
-            : { borderColor: "var(--bt-border)" }
-        }
-      >
-        <span
-          className={
+      {!docked ? (
+        <div
+          className={funUi ? "flex items-center justify-between px-4 py-3" : "flex items-center justify-between border-b px-3 py-2"}
+          style={
             funUi
-              ? "wci-fun-heading flex items-center gap-1.5 text-base font-semibold text-white"
-              : "flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]"
+              ? { background: "linear-gradient(135deg, var(--bt-primary), var(--bt-nav))" }
+              : { borderColor: "var(--bt-border)" }
           }
         >
-          {funUi ? <JarvisMascot expression={pending ? "thinking" : "happy"} size={28} tone="light" /> : <span>✦</span>} Jarvis
-        </span>
-        <div className={funUi ? "flex items-center gap-3 text-xs text-white/90" : "flex items-center gap-2.5 text-xs"}>
-          <button type="button" onClick={onNewChat} className={funUi ? "hover:underline" : "text-[var(--bt-muted)] hover:underline"}>
+          <span
+            className={
+              funUi
+                ? "wci-fun-heading flex items-center gap-1.5 text-base font-semibold text-white"
+                : "flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]"
+            }
+          >
+            {funUi ? <JarvisMascot expression={pending ? "thinking" : "happy"} size={28} tone="light" /> : <span>✦</span>} Jarvis
+          </span>
+          <div className={funUi ? "flex items-center gap-3 text-xs text-white/90" : "flex items-center gap-2.5 text-xs"}>
+            <button type="button" onClick={onNewChat} className={funUi ? "hover:underline" : "text-[var(--bt-muted)] hover:underline"}>
+              New chat
+            </button>
+            {conversationId ? (
+              <Link href={`/jarvis/${conversationId}`} className={funUi ? "font-semibold hover:underline" : "text-[var(--bt-primary)] hover:underline"}>
+                Full view
+              </Link>
+            ) : null}
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close Jarvis"
+                className={funUi ? "text-lg leading-none hover:text-white" : "text-[var(--bt-muted)] hover:text-[var(--bt-text)]"}
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-end gap-2 px-2 pt-0.5 text-[10px]">
+          <button type="button" onClick={onNewChat} className="text-[var(--bt-muted)] hover:underline">
             New chat
           </button>
           {conversationId ? (
-            <Link href={`/jarvis/${conversationId}`} className={funUi ? "font-semibold hover:underline" : "text-[var(--bt-primary)] hover:underline"}>
+            <Link href={`/jarvis/${conversationId}`} className="text-[var(--bt-primary)] hover:underline">
               Full view
             </Link>
           ) : null}
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close Jarvis"
-              className={funUi ? "text-lg leading-none hover:text-white" : "text-[var(--bt-muted)] hover:text-[var(--bt-text)]"}
-            >
-              ✕
-            </button>
-          ) : null}
         </div>
-      </div>
+      )}
 
-      <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
+      <div ref={scrollRef} className={`flex flex-1 flex-col gap-1.5 overflow-y-auto ${docked ? "p-2" : "gap-2 p-3"}`}>
         {messages.length === 0 && pendingActions.length === 0 ? (
-          <div className="flex flex-1 flex-col justify-end gap-2 pb-1">
-            <p className="text-center text-xs text-[var(--bt-muted)] sm:text-sm">{emptyStateHint}</p>
+          <div className={`flex flex-1 flex-col justify-end ${docked ? "gap-1.5 pb-0.5" : "gap-2 pb-1"}`}>
+            <p className={`text-center text-[var(--bt-muted)] ${docked ? "text-[10px] leading-snug" : "text-xs sm:text-sm"}`}>
+              {emptyStateHint}
+            </p>
             {suggestions.length > 0 ? (
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {suggestions.map((suggestion) => (
+              <div className={`flex flex-wrap ${docked ? "justify-start gap-1" : "justify-center gap-1.5"}`}>
+                {(docked ? suggestions.slice(0, 3) : suggestions).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
                     onClick={() => fillSuggestion(suggestion)}
-                    className="max-w-full rounded-full border px-2.5 py-1.5 text-left text-[11px] leading-snug text-[var(--bt-text)] hover:bg-black/5 sm:text-xs"
+                    className={`max-w-full rounded-full border text-left leading-snug text-[var(--bt-text)] hover:bg-black/5 ${
+                      docked
+                        ? "px-2 py-1 text-[10px]"
+                        : "px-2.5 py-1.5 text-[11px] sm:text-xs"
+                    }`}
                     style={{ borderColor: "var(--bt-border)" }}
                   >
-                    {suggestion}
+                    {docked && suggestion.length > 42 ? `${suggestion.slice(0, 40)}…` : suggestion}
                   </button>
                 ))}
               </div>
@@ -472,7 +510,9 @@ function JarvisChatBody({
         pending={pending}
         preparing={preparing}
         funUi={funUi}
-        rows={2}
+        rows={docked ? 2 : 2}
+        compact={docked}
+        locationChip={locationChip}
         onTranscript={appendVoiceTranscript}
         onSubmit={async (formData) => {
           setAttachmentError(null);
@@ -543,6 +583,8 @@ export function JarvisChatPanel({
   generalPhotos,
   leadIdForGeneralPhotos,
   navigateOnEstimateDraft = false,
+  chrome = "default",
+  locationChip = null,
 }: JarvisChatPanelProps) {
   const [chatKey, setChatKey] = useState(0);
   const storageKeyFull = `${STORAGE_KEY_PREFIX}:${storageKey}`;
@@ -568,6 +610,8 @@ export function JarvisChatPanel({
       generalPhotos={generalPhotos}
       leadIdForGeneralPhotos={leadIdForGeneralPhotos}
       navigateOnEstimateDraft={navigateOnEstimateDraft}
+      chrome={chrome}
+      locationChip={locationChip}
     />
   );
 }
