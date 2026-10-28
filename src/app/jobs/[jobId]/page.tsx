@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatTime } from "@/lib/format";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 import { SetupNotice } from "@/app/admin/setup-notice";
 
@@ -199,7 +199,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
 
         <p className="mt-3 text-sm text-[var(--bt-text)]">
           {clockedInCount} internal user{clockedInCount === 1 ? "" : "s"} clocked in as of{" "}
-          {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+          {formatTime(now)}
         </p>
         <Link href={`/jobs/${job.id}/time-clock`} className="text-sm text-[var(--bt-primary)] hover:underline">
           View time sheets

@@ -2,10 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { DashboardFunGreeting } from "@/app/dashboard/fun-greeting";
 import { JarvisHeroCard } from "@/app/dashboard/jarvis-hero-card";
 import { AppShell } from "@/components/shell/AppShell";
-import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
 import { notificationBellDataForUser, sidebarJobsForOrg } from "@/components/shell/data";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
@@ -20,15 +18,6 @@ import {
   getProfitabilityReport,
   getWipReport,
 } from "@/lib/reports/service";
-
-const BUSINESS_ADVISOR_SUGGESTIONS = [
-  "What needs my attention today?",
-  "Which invoices are overdue?",
-  "Are any jobs over budget?",
-  "How profitable are my jobs?",
-  "Which milestones can I bill?",
-  "Which proposals need follow-up?",
-] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -98,74 +87,112 @@ export default async function DashboardPage() {
 
         {jarvisUiEnabled ? <JarvisHeroCard dailyBrief={dailyBrief} /> : null}
 
-        {jarvisUiEnabled ? <DashboardFunGreeting /> : null}
-
-        {jarvisUiEnabled ? (
-          <JarvisChatPanel
-            context={{ page: "dashboard" }}
-            storageKey="dashboard-business-advisor"
-            suggestions={BUSINESS_ADVISOR_SUGGESTIONS}
-            emptyStateHint="Ask Jarvis how the business is doing — which invoices are overdue, whether any jobs are over budget, which proposals need a nudge — and it'll answer from your real numbers."
-            heightClassName="h-80"
-          />
-        ) : null}
-
         <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Daily brief</h2>
           <p className="text-xs text-[var(--bt-muted)]">What needs attention across the whole business right now.</p>
-          <ul className="mt-3 flex flex-col gap-2 text-sm">
-            <li className="flex items-center justify-between">
-              <span className="text-[var(--bt-text)]">Overdue invoices</span>
+          <ul className="mt-3 flex flex-col gap-3 text-sm">
+            <li className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <span className="shrink-0 text-[var(--bt-text)]">Overdue invoices</span>
               {dailyBrief.overdueInvoices.length === 0 ? (
                 <span className="text-[var(--bt-muted)]">None</span>
               ) : (
-                <Link href="/reports?report=invoicing" className="font-semibold text-[var(--bt-primary)] hover:underline">
+                <Link href="/reports?report=invoicing" className="font-semibold text-[var(--bt-primary)] hover:underline sm:text-right">
                   {dailyBrief.overdueInvoices.length} totaling {formatMoney(dailyBrief.overdueInvoiceTotalCents)}
                 </Link>
               )}
             </li>
-            <li className="flex items-center justify-between">
-              <span className="text-[var(--bt-text)]">Jobs over budget</span>
+            <li className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <span className="shrink-0 text-[var(--bt-text)]">Jobs over budget</span>
               {dailyBrief.jobsOverBudget.length === 0 ? (
                 <span className="text-[var(--bt-muted)]">None</span>
               ) : (
-                <Link href="/reports?report=budget-variance" className="font-semibold text-[var(--bt-primary)] hover:underline">
-                  {dailyBrief.jobsOverBudget.map((job) => job.jobName).join(", ")}
-                </Link>
+                <div className="min-w-0 sm:max-w-[min(100%,28rem)] sm:text-right">
+                  <Link href="/reports?report=budget-variance" className="font-semibold text-[var(--bt-primary)] hover:underline">
+                    {dailyBrief.jobsOverBudget.length} job{dailyBrief.jobsOverBudget.length === 1 ? "" : "s"}
+                  </Link>
+                  <ul className="mt-1 flex flex-col gap-0.5 text-xs text-[var(--bt-muted)] sm:items-end">
+                    {dailyBrief.jobsOverBudget.slice(0, 5).map((job) => (
+                      <li key={job.jobId} className="truncate">
+                        <Link href={`/jobs/${job.jobId}`} className="hover:text-[var(--bt-primary)] hover:underline">
+                          {job.jobName}
+                        </Link>
+                        {" — over by "}
+                        {formatMoney(Math.abs(job.varianceCents))}
+                      </li>
+                    ))}
+                    {dailyBrief.jobsOverBudget.length > 5 ? (
+                      <li>
+                        <Link href="/reports?report=budget-variance" className="font-medium text-[var(--bt-primary)] hover:underline">
+                          +{dailyBrief.jobsOverBudget.length - 5} more
+                        </Link>
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
               )}
             </li>
-            <li className="flex items-center justify-between">
-              <span className="text-[var(--bt-text)]">Unapproved timesheets</span>
+            <li className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <span className="shrink-0 text-[var(--bt-text)]">Unapproved timesheets</span>
               <span className={dailyBrief.unapprovedShiftCount === 0 ? "text-[var(--bt-muted)]" : "font-semibold text-[var(--bt-text)]"}>
                 {dailyBrief.unapprovedShiftCount === 0 ? "None" : dailyBrief.unapprovedShiftCount}
               </span>
             </li>
-            <li className="flex items-center justify-between">
-              <span className="text-[var(--bt-text)]">Change orders pending approval</span>
+            <li className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <span className="shrink-0 text-[var(--bt-text)]">Change orders pending approval</span>
               <span className={dailyBrief.pendingChangeOrderCount === 0 ? "text-[var(--bt-muted)]" : "font-semibold text-[var(--bt-text)]"}>
                 {dailyBrief.pendingChangeOrderCount === 0 ? "None" : dailyBrief.pendingChangeOrderCount}
               </span>
             </li>
-            <li className="flex items-center justify-between">
-              <span className="text-[var(--bt-text)]">Proposals needing follow-up</span>
+            <li className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <span className="shrink-0 text-[var(--bt-text)]">Proposals needing follow-up</span>
               {dailyBrief.proposalsNeedingFollowUp.length === 0 ? (
                 <span className="text-[var(--bt-muted)]">None</span>
               ) : (
-                <Link href="/leads/proposals" className="font-semibold text-[var(--bt-primary)] hover:underline">
-                  {dailyBrief.proposalsNeedingFollowUp.map((proposal) => `${proposal.title} (sent ${formatDate(proposal.sentAt)})`).join(", ")}
-                </Link>
+                <div className="min-w-0 sm:max-w-[min(100%,28rem)] sm:text-right">
+                  <Link href="/leads/proposals" className="font-semibold text-[var(--bt-primary)] hover:underline">
+                    {dailyBrief.proposalsNeedingFollowUp.length} proposal{dailyBrief.proposalsNeedingFollowUp.length === 1 ? "" : "s"}
+                  </Link>
+                  <ul className="mt-1 flex flex-col gap-0.5 text-xs text-[var(--bt-muted)] sm:items-end">
+                    {dailyBrief.proposalsNeedingFollowUp.slice(0, 3).map((proposal) => (
+                      <li key={proposal.id} className="truncate">
+                        {proposal.title} (sent {formatDate(proposal.sentAt)})
+                      </li>
+                    ))}
+                    {dailyBrief.proposalsNeedingFollowUp.length > 3 ? (
+                      <li>
+                        <Link href="/leads/proposals" className="font-medium text-[var(--bt-primary)] hover:underline">
+                          +{dailyBrief.proposalsNeedingFollowUp.length - 3} more
+                        </Link>
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
               )}
             </li>
-            <li className="flex items-center justify-between">
-              <span className="text-[var(--bt-text)]">Billable milestones ready</span>
+            <li className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <span className="shrink-0 text-[var(--bt-text)]">Billable milestones ready</span>
               {dailyBrief.billableMilestones.length === 0 ? (
                 <span className="text-[var(--bt-muted)]">None</span>
               ) : (
-                <span className="font-semibold text-[var(--bt-text)]">{dailyBrief.billableMilestones.map((milestone) => milestone.title).join(", ")}</span>
+                <div className="min-w-0 sm:max-w-[min(100%,28rem)] sm:text-right">
+                  <span className="font-semibold text-[var(--bt-text)]">
+                    {dailyBrief.billableMilestones.length} milestone{dailyBrief.billableMilestones.length === 1 ? "" : "s"}
+                  </span>
+                  <ul className="mt-1 flex flex-col gap-0.5 text-xs text-[var(--bt-muted)] sm:items-end">
+                    {dailyBrief.billableMilestones.slice(0, 3).map((milestone) => (
+                      <li key={milestone.drawId} className="truncate">
+                        {milestone.title}
+                      </li>
+                    ))}
+                    {dailyBrief.billableMilestones.length > 3 ? (
+                      <li>+{dailyBrief.billableMilestones.length - 3} more</li>
+                    ) : null}
+                  </ul>
+                </div>
               )}
             </li>
-            <li className="flex items-center justify-between">
-              <span className="text-[var(--bt-text)]">Cost inbox awaiting review</span>
+            <li className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <span className="shrink-0 text-[var(--bt-text)]">Cost inbox awaiting review</span>
               <span className={dailyBrief.costInboxItems.length === 0 ? "text-[var(--bt-muted)]" : "font-semibold text-[var(--bt-text)]"}>
                 {dailyBrief.costInboxItems.length === 0 ? "None" : `${dailyBrief.costInboxItems.length} bill(s)`}
               </span>

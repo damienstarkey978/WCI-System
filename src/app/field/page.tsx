@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { formatTime } from "@/lib/format";
 import { ACTIVE_JOB_STATUSES } from "@/lib/job-status";
 
 import { NotSignedIn } from "./not-signed-in";
@@ -39,7 +40,7 @@ export default async function FieldHomePage() {
         {openEntry ? (
           <p className="mt-1 text-xs text-black/55 dark:text-white/55">
             Clocked in at <span className="font-medium">{openEntry.job.name}</span> since{" "}
-            {openEntry.clockInAt.toLocaleTimeString()}.
+            {formatTime(openEntry.clockInAt)}.
           </p>
         ) : (
           <p className="mt-1 text-xs text-black/55 dark:text-white/55">Not clocked in.</p>

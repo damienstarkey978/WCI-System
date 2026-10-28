@@ -129,19 +129,45 @@ export function catalogInspectionNamesForTrade(trade: PermitTrade): readonly str
   return DEMO_INSPECTIONS_BY_TRADE[trade] ?? [];
 }
 
+const permittingJobInclude = {
+  permits: {
+    orderBy: { trade: "asc" as const },
+    include: {
+      vendor: { select: { id: true, name: true, email: true } },
+      inspections: { orderBy: { sortOrder: "asc" as const } },
+    },
+  },
+} as const;
+
+/**
+ * Single-job permitting payload for `/jobs/{id}/permitting`. Prefer this over
+ * `listPermittingJobs` on that page — listing every PRE_SALE/OPEN/WARRANTY job
+ * (and seeding defaults for each) made a job-scoped URL slow and showed
+ * unrelated pre-sale jobs first.
+ */
+export async function getPermittingJob(organizationId: string, jobId: string) {
+  const existing = await db.job.findFirst({
+    where: { id: jobId, organizationId, isTemplate: false },
+    include: permittingJobInclude,
+  });
+  if (!existing) return null;
+
+  if (existing.permits.length === 0) {
+    await ensureDefaultPermits(organizationId, existing.id);
+    return db.job.findFirstOrThrow({
+      where: { id: existing.id },
+      include: permittingJobInclude,
+    });
+  }
+  return existing;
+}
+
+/** Org-wide permitting rollup (not used by the job-scoped permitting page). */
 export async function listPermittingJobs(organizationId: string) {
   const jobs = await db.job.findMany({
     where: { organizationId, isTemplate: false, status: { in: ["PRE_SALE", "OPEN", "WARRANTY"] } },
     orderBy: [{ status: "asc" }, { name: "asc" }],
-    include: {
-      permits: {
-        orderBy: { trade: "asc" },
-        include: {
-          vendor: { select: { id: true, name: true, email: true } },
-          inspections: { orderBy: { sortOrder: "asc" } },
-        },
-      },
-    },
+    include: permittingJobInclude,
   });
 
   // Lazily seed default permits for jobs that have none yet.
@@ -154,15 +180,7 @@ export async function listPermittingJobs(organizationId: string) {
   return db.job.findMany({
     where: { organizationId, isTemplate: false, status: { in: ["PRE_SALE", "OPEN", "WARRANTY"] } },
     orderBy: [{ status: "asc" }, { name: "asc" }],
-    include: {
-      permits: {
-        orderBy: { trade: "asc" },
-        include: {
-          vendor: { select: { id: true, name: true, email: true } },
-          inspections: { orderBy: { sortOrder: "asc" } },
-        },
-      },
-    },
+    include: permittingJobInclude,
   });
 }
 

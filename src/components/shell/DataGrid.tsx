@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 
 import { sortRows } from "./data-grid-sort";
 import { CheckIcon, SortArrowsIcon } from "./icons";
@@ -45,6 +46,7 @@ export function DataGrid<T>({
   onSortChange,
   showTotals = false,
   rowActions,
+  rowHref,
   emptyMessage = "No results.",
   pageSize: initialPageSize = 50,
   viewKey,
@@ -60,6 +62,8 @@ export function DataGrid<T>({
   onSortChange?: (key: string) => void;
   showTotals?: boolean;
   rowActions?: (row: T) => ReactNode;
+  /** Makes the whole row open this href (clicks on links/buttons/inputs are ignored). */
+  rowHref?: (row: T) => string | null;
   emptyMessage?: string;
   pageSize?: number;
   /** Enables the Standard View column chooser, remembered per browser under this key. */
@@ -70,6 +74,7 @@ export function DataGrid<T>({
    */
   defaultHiddenKeys?: readonly string[];
 }) {
+  const router = useRouter();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<number>(initialPageSize);
 
@@ -264,8 +269,34 @@ export function DataGrid<T>({
             {pageRows.map((row) => {
               const key = rowKey(row);
               const isSelected = effectiveSelected.has(key);
+              const href = rowHref?.(row) ?? null;
+              const openRow = () => {
+                if (href) router.push(href);
+              };
+              const onRowClick = (event: MouseEvent<HTMLTableRowElement>) => {
+                if (!href) return;
+                const target = event.target as HTMLElement;
+                if (target.closest("a, button, input, select, textarea, label")) return;
+                openRow();
+              };
+              const onRowKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+                if (!href) return;
+                if (event.key !== "Enter" && event.key !== " ") return;
+                const target = event.target as HTMLElement;
+                if (target !== event.currentTarget) return;
+                event.preventDefault();
+                openRow();
+              };
               return (
-                <tr key={key} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                <tr
+                  key={key}
+                  className={`border-b last:border-0 ${href ? "cursor-pointer hover:bg-black/[0.03] dark:hover:bg-white/[0.04]" : ""}`}
+                  style={{ borderColor: "var(--bt-border)" }}
+                  onClick={onRowClick}
+                  onKeyDown={onRowKeyDown}
+                  tabIndex={href ? 0 : undefined}
+                  role={href ? "link" : undefined}
+                >
                   {selectable ? (
                     <td className="px-3 py-3">
                       <button type="button" onClick={() => toggleRow(key)} aria-label="Select row" aria-checked={isSelected} role="checkbox" className="flex h-4 w-4 items-center justify-center rounded border" style={{ borderColor: "var(--bt-border)", background: isSelected ? "var(--bt-primary)" : "transparent" }}>

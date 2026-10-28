@@ -32,12 +32,13 @@ export function AssignVendorForm({
           style={{ borderColor: "var(--bt-border)" }}
         >
           <option value="">None</option>
-          {vendors.map((vendor) => (
-            <option key={vendor.id} value={vendor.id}>
-              {vendor.name}
-              {vendor.email ? ` (${vendor.email})` : " (no email)"}
-            </option>
-          ))}
+          {vendors
+            .filter((vendor) => vendor.email || vendor.id === vendorId)
+            .map((vendor) => (
+              <option key={vendor.id} value={vendor.id}>
+                {vendor.email ? `${vendor.name} (${vendor.email})` : `${vendor.name} (no email — reminders disabled)`}
+              </option>
+            ))}
         </select>
       </label>
       <button

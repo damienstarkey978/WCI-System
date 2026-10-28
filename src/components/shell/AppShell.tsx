@@ -5,6 +5,7 @@ import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
 import { isAnthropicConfigured, isClerkConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
+import { ROLE_DESCRIPTIONS } from "@/lib/staff/role-descriptions";
 
 import { sidebarTemplateJobsForOrg } from "./data";
 import { JobSidebar, type SidebarJob } from "./JobSidebar";
@@ -53,6 +54,9 @@ export async function AppShell({
         activeJobId={activeJobId}
         clerkConfigured={isClerkConfigured()}
         isAdmin={user?.role === UserRole.ADMIN}
+        userName={user?.name ?? ""}
+        userEmail={user?.email ?? ""}
+        userRoleLabel={user ? ROLE_DESCRIPTIONS[user.role].label : ""}
         notifications={notifications}
         unreadCount={unreadCount}
         jobs={jobs}
