@@ -1,11 +1,10 @@
 /**
- * Staff account management. Nothing here sends an invitation email — WCI OS has no
- * outbound email integration anywhere in this codebase. "Inviting" a staff member
- * means pre-authorizing their email: create a User row with clerkUserId null, and
- * currentAppUser() (src/lib/auth.ts) links it to their real Clerk identity
- * automatically the first time they sign in with a matching email — the same
- * "wait for a matching email" mechanism every staff member in this app already
- * goes through, just now reachable without hand-editing the database.
+ * Staff account management. "Inviting" a staff member means pre-authorizing their
+ * email: create a User row with clerkUserId null, and currentAppUser()
+ * (src/lib/auth.ts) links it to their real Clerk identity the first time they
+ * sign in with a matching email. Outbound sign-in instructions live in
+ * src/lib/staff/invite-email.ts (Resend when EMAIL_* is configured) — callers
+ * send after create; this module stays persistence-only.
  */
 
 import { Prisma } from "@/generated/prisma/client";

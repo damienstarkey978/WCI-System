@@ -51,6 +51,7 @@ import {
   SelectionNotFoundError,
   SelectionOptionNotFoundError,
 } from "@/lib/selections/service";
+import { emailStaffSignInInstructions } from "@/lib/staff/invite-email";
 import {
   DuplicateStaffEmailError,
   inviteStaffMember,
@@ -224,7 +225,11 @@ async function executePendingAction(organizationId: string, toolName: string, in
     case "invite_staff_member": {
       const { email, name, title, role } = input as { email: string; name: string | null; title?: string | null; role: UserRole };
       const staff = await inviteStaffMember({ organizationId, email, name, title: title ?? null, role });
-      return `Pre-authorized ${staff.email} as ${staff.role}. They'll get access as soon as they sign in with that email — no invitation email was sent, since WCI OS doesn't send email yet.`;
+      const invite = await emailStaffSignInInstructions(organizationId, staff.id, await appBaseUrl());
+      if (invite.emailed) {
+        return `Pre-authorized ${staff.email} as ${staff.role} and emailed sign-in instructions. They get access when they sign in with that email (Clerk — no WCI OS password).`;
+      }
+      return `Pre-authorized ${staff.email} as ${staff.role}. Tell them to sign in at ${invite.signInUrl} with that email (Clerk — no WCI OS password)${invite.emailError ? ` — invite email didn't send: ${invite.emailError}` : ""}.`;
     }
     case "update_staff_role": {
       const { userId, role } = input as { userId: string; role: UserRole };
