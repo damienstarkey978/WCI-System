@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
@@ -9,7 +10,7 @@ import type { FunnelLine, FunnelSubtotal, FunnelTotals } from "@/lib/budget/funn
 import { BUDGET_COLUMN_LABELS } from "@/lib/budget/export";
 import { groupFunnelLines } from "@/lib/budget/grouping";
 import { BUDGET_VIEWS, budgetViewByKey, type BudgetColumnId } from "@/lib/contract-type";
-import { formatMoney, formatPercent } from "@/lib/format";
+import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 
 import { BudgetGrid, type GridCell } from "./budget-grid";
 import { BudgetViewSelect } from "./budget-view-select";
@@ -105,27 +106,27 @@ function SummaryStrip({ totals }: { totals: FunnelTotals }) {
   const losing = totals.projectedProfitCents < 0;
   return (
     <div
-      className="flex flex-wrap items-center gap-4 rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3 sm:gap-6"
+      className="flex flex-wrap items-center gap-3 rounded-lg border bg-[var(--bt-panel-bg)] px-3 py-3 sm:gap-6 sm:px-4"
       style={{ borderColor: "var(--bt-border)" }}
     >
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Total revised price</div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.revisedClientPriceCents)}</div>
+        <div className="mt-1 text-base font-semibold text-[var(--bt-text)] sm:text-lg">{formatMoney(totals.revisedClientPriceCents)}</div>
       </div>
       <div className="hidden h-10 w-px bg-[var(--bt-border)] sm:block" />
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Revised price</div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.revisedClientPriceCents)}</div>
+        <div className="mt-1 text-base font-semibold text-[var(--bt-text)] sm:text-lg">{formatMoney(totals.revisedClientPriceCents)}</div>
       </div>
       <span className="text-lg text-[var(--bt-muted)]">−</span>
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Projected cost</div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.projectedCostCents)}</div>
+        <div className="mt-1 text-base font-semibold text-[var(--bt-text)] sm:text-lg">{formatMoney(totals.projectedCostCents)}</div>
       </div>
       <span className="text-lg text-[var(--bt-muted)]">=</span>
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Projected profit</div>
-        <div className="mt-1 text-lg font-semibold" style={{ color: losing ? "var(--bt-danger)" : "var(--bt-text)" }}>
+        <div className="mt-1 text-base font-semibold sm:text-lg" style={{ color: losing ? "var(--bt-danger)" : "var(--bt-text)" }}>
           {formatMoney(totals.projectedProfitCents)}
         </div>
       </div>
@@ -192,13 +193,16 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
     })),
   }));
 
+  const hasBudgetLines = view.funnel.lines.some((line) => !line.isUnbudgeted);
+  const source = view.sourceEstimate;
+
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4 p-4 sm:p-6">
       <FinancialPageHeader
         jobName={view.job.name}
-        title="Job Costing Budget"
+        title="Budget"
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="text-xs text-[var(--bt-muted)]">
               {view.job.projectionReference === "GREATEST"
                 ? "Projected at worst of budget/committed/actual"
@@ -216,27 +220,42 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
         }
       />
 
+      {source ? (
+        <div
+          className="rounded-lg border px-3 py-2.5 text-sm text-[var(--bt-text)] sm:px-4"
+          style={{ borderColor: "var(--bt-border)", background: "color-mix(in srgb, var(--bt-primary) 6%, transparent)" }}
+        >
+          <span className="font-medium">From approved estimate</span>
+          <span className="text-[var(--bt-muted)]">
+            {" "}
+            — {source.title?.trim() || "Untitled"} ({source.lineItemCount} line
+            {source.lineItemCount === 1 ? "" : "s"}), sent to budget {formatDate(source.sentToBudgetAt)}.
+            Line items are rolled up by cost code into the commitment funnel below.
+          </span>
+        </div>
+      ) : null}
+
       <SummaryStrip totals={view.funnel.totals} />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <nav className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: "var(--bt-border)" }}>
           {[
             { key: "standard", label: "Cost categories" },
             { key: "job-costing", label: "Job costing" },
           ].map((tab) => {
             const isActive = selectedBudgetView.key === tab.key;
             return (
-              <a
+              <Link
                 key={tab.key}
                 href={`/jobs/${jobId}/budget?view=${tab.key}`}
-                className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+                className="-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition"
                 style={{
                   borderColor: isActive ? "var(--bt-primary)" : "transparent",
                   color: isActive ? "var(--bt-primary)" : "var(--bt-muted)",
                 }}
               >
                 {tab.label}
-              </a>
+              </Link>
             );
           })}
         </nav>
@@ -247,11 +266,17 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
         />
       </div>
 
-      {groups.length === 0 ? (
+      {!hasBudgetLines && groups.length === 0 ? (
         <EmptyState
           icon={<ChartIcon className="h-10 w-10" />}
           title="No budget lines yet"
-          description="Send an estimate to budget to populate cost codes and the commitment funnel for this job."
+          description="Budget lines appear after an accepted proposal or Send to Budget from a locked estimate. Draft estimates with Jarvis under Leads → Proposals — not on this page."
+        />
+      ) : groups.length === 0 ? (
+        <EmptyState
+          icon={<ChartIcon className="h-10 w-10" />}
+          title="No budget lines yet"
+          description="Send an accepted proposal or locked estimate to budget to populate cost codes and the commitment funnel for this job."
         />
       ) : (
         <BudgetGrid

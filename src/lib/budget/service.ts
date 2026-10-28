@@ -18,6 +18,14 @@ export class JobNotFoundError extends Error {
   }
 }
 
+export interface JobBudgetSourceEstimate {
+  readonly id: string;
+  readonly title: string | null;
+  readonly status: string;
+  readonly sentToBudgetAt: Date;
+  readonly lineItemCount: number;
+}
+
 export interface JobBudgetView {
   readonly job: {
     readonly id: string;
@@ -35,6 +43,12 @@ export interface JobBudgetView {
   readonly costCodes: Readonly<Record<string, CostCodeLookupEntry>>;
   /** Which columns this job's contract type renders (CLAUDE.md 2.3). */
   readonly columns: readonly string[];
+  /**
+   * The most recent estimate that was explicitly sent to budget (Send to Budget /
+   * accepted proposal). Null when no conversion has happened yet — the grid may
+   * still show unbudgeted spend from POs/bills.
+   */
+  readonly sourceEstimate: JobBudgetSourceEstimate | null;
 }
 
 /**
@@ -128,6 +142,20 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     }
   }
 
+  // Prefer the latest successful Send-to-Budget conversion as the "approved
+  // proposal / locked estimate" provenance banner on the Financials Budget page.
+  const sourceEstimateRow = await db.estimate.findFirst({
+    where: { jobId, organizationId, sentToBudgetAt: { not: null } },
+    orderBy: { sentToBudgetAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      sentToBudgetAt: true,
+      _count: { select: { lineItems: true } },
+    },
+  });
+
   return {
     job: {
       id: job.id,
@@ -140,5 +168,14 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     funnel,
     costCodes,
     columns: contractTypePolicy(job.contractType).budgetColumns(),
+    sourceEstimate: sourceEstimateRow?.sentToBudgetAt
+      ? {
+          id: sourceEstimateRow.id,
+          title: sourceEstimateRow.title,
+          status: sourceEstimateRow.status,
+          sentToBudgetAt: sourceEstimateRow.sentToBudgetAt,
+          lineItemCount: sourceEstimateRow._count.lineItems,
+        }
+      : null,
   };
 }

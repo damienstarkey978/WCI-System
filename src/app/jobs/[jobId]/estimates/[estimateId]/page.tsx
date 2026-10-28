@@ -75,12 +75,12 @@ export default async function EstimateWorksheetPage({ params }: PageProps<"/jobs
   const canUnlock = canManage && estimate.status === "LOCKED";
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <PageHeader
         jobName={job.name}
         title={estimate.title}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {canUnlock ? <UnlockButton jobId={job.id} estimateId={estimate.id} /> : null}
             {canSend ? <SendToBudgetButton jobId={job.id} estimateId={estimate.id} resend={estimate.sentToBudgetAt !== null} /> : null}
             {locked ? null : (
@@ -92,10 +92,15 @@ export default async function EstimateWorksheetPage({ params }: PageProps<"/jobs
         }
       />
 
-      <div className="flex items-center justify-between">
-        <Link href={`/jobs/${job.id}/estimates`} className="text-sm font-medium text-[var(--bt-primary)] hover:underline">
-          ← All estimates
-        </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
+          <Link href={`/jobs/${job.id}/estimates`} className="text-[var(--bt-primary)] hover:underline">
+            ← Worksheets
+          </Link>
+          <Link href={`/jobs/${job.id}/budget`} className="text-[var(--bt-primary)] hover:underline">
+            Job Budget
+          </Link>
+        </div>
         <span className="text-xs text-[var(--bt-muted)]">
           {estimate.status}, revision {estimate.version}
           {estimate.lockedAt ? `, locked ${formatDate(estimate.lockedAt)}` : ""}

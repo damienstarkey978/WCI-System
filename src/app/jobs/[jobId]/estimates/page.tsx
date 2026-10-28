@@ -1,17 +1,13 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { ChartIcon } from "@/components/shell/icons";
-import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
-import { JarvisSetupNotice } from "@/components/jarvis/JarvisSetupNotice";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
-import { isAnthropicConfigured } from "@/lib/env";
-import { isJarvisUiEnabled } from "@/lib/feature-flags";
-import { JARVIS_JOB_ESTIMATE_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 import { listEstimateTemplates } from "@/lib/estimates/templates";
 import { listMaterialCatalogItems } from "@/lib/materials/service";
 
@@ -23,6 +19,12 @@ import { UseTemplateForm } from "./use-template-form";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Job-scoped estimate worksheets (Send to Budget, CSV/template entry).
+ *
+ * Not in Financial nav — Financial → Budget shows the commitment funnel from
+ * the approved/locked estimate. Jarvis drafting lives under Leads/Proposals only.
+ */
 export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]/estimates">) {
   const { jobId } = await params;
 
@@ -67,51 +69,60 @@ export default async function EstimatesPage({ params }: PageProps<"/jobs/[jobId]
   }));
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <FinancialPageHeader
         jobName={job.name}
-        title="Estimate"
+        title="Estimate worksheets"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/jobs/${job.id}/budget`}
+              className="rounded border px-3 py-2 text-sm font-medium text-[var(--bt-text)]"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
+              View Budget
+            </Link>
             <CreateModal triggerLabel="Import CSV" title="Import estimate from CSV" variant="secondary">
               <CsvImportForm jobId={job.id} />
             </CreateModal>
             <CreateModal triggerLabel="Use template" title="New estimate from template" variant="secondary">
               <UseTemplateForm jobId={job.id} templates={templates.map((t) => ({ id: t.id, name: t.name, lineItemCount: t.lineItems.length }))} />
             </CreateModal>
-            <CreateModal triggerLabel="+ Estimate" title="New estimate">
+            <CreateModal triggerLabel="+ Worksheet" title="New estimate worksheet">
               <CreateEstimateForm jobId={job.id} costCodes={costCodes} materials={materials} />
             </CreateModal>
           </div>
         }
       />
 
-      {isJarvisUiEnabled() && isAnthropicConfigured() ? (
-        <JarvisChatPanel
-          context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "estimates" }}
-          storageKey={`job-estimates:${job.id}`}
-          suggestions={[...JARVIS_JOB_ESTIMATE_SUGGESTIONS]}
-          emptyStateHint="Describe the scope of work — measurements, materials, anything relevant — and Jarvis drafts a full cost-coded estimate plus the matching client-facing proposal, when a client is linked to this job. Attach photos and it'll factor those in too."
-          heightClassName="h-[28rem] min-h-[20rem] sm:h-[32rem]"
-        />
-      ) : (
-        <JarvisSetupNotice
-          uiEnabled={isJarvisUiEnabled()}
-          anthropicConfigured={isAnthropicConfigured()}
-          title="Draft estimate with Jarvis"
-          hint="Describe scope notes and attach photos to draft a cost-coded estimate (and a proposal when a client is linked). Everything stays DRAFT until you review."
-        />
-      )}
+      <div
+        className="rounded-lg border px-3 py-2.5 text-sm text-[var(--bt-muted)] sm:px-4"
+        style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg)" }}
+      >
+        Job Financials → <Link href={`/jobs/${job.id}/budget`} className="font-medium text-[var(--bt-primary)] hover:underline">Budget</Link>{" "}
+        shows the commitment-funnel breakdown from the approved proposal / Send to Budget.
+        Draft with Jarvis under <Link href="/leads" className="font-medium text-[var(--bt-primary)] hover:underline">Leads → Proposals</Link>
+        — not here.
+      </div>
 
       {rows.length === 0 ? (
         <EmptyState
           icon={<ChartIcon className="h-10 w-10" />}
-          title="Build your estimate"
-          description="Create an estimate worksheet with cost codes, markup, and client pricing. Import CSV or start from a template."
+          title="No estimate worksheets on this job"
+          description="Worksheets are for Send to Budget and PO sourcing. For Jarvis-assisted drafting, use Leads → Proposals. The job Budget view is under Financial → Budget."
           action={
-            <CreateModal triggerLabel="+ Estimate" title="New estimate">
-              <CreateEstimateForm jobId={job.id} costCodes={costCodes} materials={materials} />
-            </CreateModal>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Link
+                href={`/jobs/${job.id}/budget`}
+                className="rounded border px-3 py-2 text-sm font-medium text-[var(--bt-text)]"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                View Budget
+              </Link>
+              <CreateModal triggerLabel="+ Worksheet" title="New estimate worksheet">
+                <CreateEstimateForm jobId={job.id} costCodes={costCodes} materials={materials} />
+              </CreateModal>
+            </div>
           }
         />
       ) : (

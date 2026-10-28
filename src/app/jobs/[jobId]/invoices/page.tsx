@@ -247,7 +247,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
   ).sort((a, b) => b.payment.receivedAt.getTime() - a.payment.receivedAt.getTime());
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <FinancialPageHeader
         jobName={job.name}
         title="Invoices"

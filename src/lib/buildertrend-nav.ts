@@ -118,10 +118,12 @@ export const MESSAGING_NAV: readonly JobsMenuItem[] = [
 /** The "Financial" dropdown — every one of these is scoped to whichever job is selected. */
 export const FINANCIAL_NAV: readonly JobNavLink[] = [
   { label: "Bids", path: "/bids" },
-  { label: "Estimate", path: "/estimates" },
+  // "Budget" is the commitment-funnel / approved-proposal line breakdown at
+  // /budget — not the estimate builder. Jarvis estimate drafting lives under
+  // Leads/Proposals only (see docs/financials-budget-vs-estimate.md).
+  { label: "Budget", path: "/budget" },
   { label: "Purchase Orders", path: "/purchase-orders" },
   { label: "Bills", path: "/bills" },
-  { label: "Job Costing Budget", path: "/budget" },
   { label: "Cost Inbox", path: "/cost-inbox" },
   { label: "Invoices", path: "/invoices" },
   { label: "Online Payment Report", path: "/online-payment-report" },

@@ -134,7 +134,7 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
   );
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <FinancialPageHeader jobName={job.name} title="Bills" action={createAction} />
 
       <PurchaseOrdersBillsTabs jobId={job.id} active="bills" />
