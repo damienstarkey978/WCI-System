@@ -366,10 +366,19 @@ def map_bill_status_flexible(row, label):
 
 def build_bills(rows, prefix, cost_code_ids, po_number_map, po_id_by_number):
     payloads = []
+    missing_cost_code_count = 0
     for row in rows:
         bill_raw = cell(row, "Bill #", "Bill#")
         label = f"Bill #{bill_raw}"
-        cc_id = resolve_cost_codes(cell(row, "Cost codes", "Cost Codes", "Cost Code"), cost_code_ids, label, "bills")
+        # Buildertrend's cross-job Bills UI CSV often omits Cost Codes entirely
+        # (see docs/bt-exports README). Historical grid/CSV exports use
+        # "Buildertrend Flat Rate" as the catch-all — fall back to that so we
+        # still import the dollars instead of silently dropping every bill.
+        raw_codes = cell(row, "Cost codes", "Cost Codes", "Cost Code")
+        if not str(raw_codes or "").strip():
+            raw_codes = FLAT_RATE_CODE
+            missing_cost_code_count += 1
+        cc_id = resolve_cost_codes(raw_codes, cost_code_ids, label, "bills")
         if not cc_id:
             continue
         related_po_raw = str(cell(row, "Related POs", "Related PO") or "").strip()
