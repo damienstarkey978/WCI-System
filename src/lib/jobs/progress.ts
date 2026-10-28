@@ -4,7 +4,6 @@
  */
 
 import { db } from "@/lib/db";
-import { ensureDefaultPermits } from "@/lib/permitting/service";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -42,7 +41,8 @@ export async function getJobProgress(organizationId: string, jobId: string): Pro
   });
   if (!job) throw new JobNotFoundError(jobId);
 
-  await ensureDefaultPermits(organizationId, jobId);
+  // Read-only: do not seed permit shells here. Callers that need defaults use
+  // POST /jobs/{jobId}/permits/ensure-defaults (permits:write).
 
   const [scheduleItems, todos, permits] = await Promise.all([
     db.scheduleItem.findMany({

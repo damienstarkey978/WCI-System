@@ -180,15 +180,47 @@ describe("agent default scopes", () => {
     expect(grantsScope(jarvis, "purchase-orders:write")).toBe(false);
   });
 
-  it("scopes Heather as office manager — ops, permits, clients/subs, not AP writes", () => {
+  it("scopes Heather as office manager — all reads + staff-bot writes, not unbounded admin", () => {
     const heather = AGENT_DEFAULT_SCOPES.heather;
+    // Reads that the 2026-10-28 test report flagged as 403 on her key
+    expect(grantsScope(heather, "leads:read")).toBe(true);
+    expect(grantsScope(heather, "proposals:read")).toBe(true);
+    expect(grantsScope(heather, "estimates:read")).toBe(true);
+    expect(grantsScope(heather, "purchase-orders:read")).toBe(true);
+    expect(grantsScope(heather, "bills:read")).toBe(true);
+    expect(grantsScope(heather, "invoices:read")).toBe(true);
+    expect(grantsScope(heather, "selections:read")).toBe(true);
+    expect(grantsScope(heather, "time-clock:read")).toBe(true);
+    expect(grantsScope(heather, "cost-codes:read")).toBe(true);
+    expect(grantsScope(heather, "bids:read")).toBe(true);
+    expect(grantsScope(heather, "warranty:read")).toBe(true);
+    expect(grantsScope(heather, "specifications:read")).toBe(true);
+    expect(grantsScope(heather, "submittals:read")).toBe(true);
+    expect(grantsScope(heather, "surveys:read")).toBe(true);
+    expect(grantsScope(heather, "weekly-summaries:read")).toBe(true);
+    expect(grantsScope(heather, "takeoffs:read")).toBe(true);
+    expect(grantsScope(heather, "webhooks:read")).toBe(true);
+    // Ops + financial/CRM writes she needs to replace Buildertrend work
     expect(grantsScope(heather, "daily-logs:write")).toBe(true);
     expect(grantsScope(heather, "files:write")).toBe(true);
     expect(grantsScope(heather, "permits:write")).toBe(true);
     expect(grantsScope(heather, "clients:write")).toBe(true);
     expect(grantsScope(heather, "vendors:write")).toBe(true);
     expect(grantsScope(heather, "notifications:write")).toBe(true);
-    expect(grantsScope(heather, "bills:write")).toBe(false);
+    expect(grantsScope(heather, "bills:write")).toBe(true);
+    expect(grantsScope(heather, "purchase-orders:write")).toBe(true);
+    expect(grantsScope(heather, "invoices:write")).toBe(true);
+    expect(grantsScope(heather, "change-orders:write")).toBe(true);
+    expect(grantsScope(heather, "selections:write")).toBe(true);
+    expect(grantsScope(heather, "leads:write")).toBe(true);
+    expect(grantsScope(heather, "proposals:write")).toBe(true);
+    expect(grantsScope(heather, "takeoffs:write")).toBe(true);
+    expect(grantsScope(heather, "rfis:write")).toBe(true);
+    // Still not dangerous unbounded admin
+    expect((heather as readonly string[]).includes("*")).toBe(false);
+    expect(grantsScope(heather, "migration:write")).toBe(false);
+    expect(grantsScope(heather, "cost-codes:write")).toBe(false);
+    expect(grantsScope(heather, "webhooks:write")).toBe(false);
   });
 
   it("gives Atlas cross-module read plus targeted accountability writes", () => {

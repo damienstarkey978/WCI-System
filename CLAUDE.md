@@ -396,7 +396,7 @@ build Phase 4 on an unvalidated Phase 1.
 | Key name | Agent | Scope |
 |---|---|---|
 | jarvis | Orchestrator | Read-heavy, cross-module, all webhook subscriptions |
-| heather | Office manager | Daily logs, files, permits, schedule/todos, notifications, clients/subs, events (broad ops) |
+| heather | Office manager | All module reads + staff-bot writes (logs/files/permits/schedule/todos/comments/notifications/clients/vendors/RFIs/COs/selections/leads/proposals/bills/POs/invoices/takeoffs/events) — not `*` / migration / cost-codes:write |
 | atlas | Marks (progress/accountability) | All reads + targeted writes (schedule, todos, comments, notifications, daily logs, permits, events) |
 | roy | Garry (financials) | Budgets/reports read, POs/bills/invoices R/W, vendors, files, events |
 | duke | Purchasing | Purchase Orders, Bills, unmatched-transaction webhook (Phase 1) |
@@ -704,8 +704,11 @@ Record every architectural decision that departs from the above, with the reason
   the source of truth with scoped `ApiKey`s; `/api/mcp` authenticates with the same
   keys and exposes `api_v1_request` plus convenience tools that call the same services
   the routes use — no parallel authorization or write path. Agent kinds `ATLAS` and
-  `ROY` join the enum; Heather's default scopes expand to office-manager breadth.
+  `ROY` join the enum; Heather's default scopes are all module reads plus staff-bot
+  writes (financials/CRM/PM/portal) without `*` / migration:write / cost-codes:write.
   Decision brief: project store `docs/agent-access-atlas-roy-heather.md`.
+  `GET /api/v1/me` returns the key's scopes; permit shell seeding is
+  `POST /jobs/{id}/permits/ensure-defaults` (never a side effect of list/read).
 - **AI takeoffs + job Purchasing page (purchasing handoff):** `Takeoff` /
   `TakeoffLine` / `PurchasingIntent` models plus `FinancialSourceType.TAKEOFF`.
   AI drafts from plan/measurement notes are always DRAFT (`aiGenerated: true`) —
