@@ -158,11 +158,25 @@ async function executePendingAction(organizationId: string, toolName: string, in
       return "Approved the selection and posted the price difference to the budget.";
     }
     case "advance_bill_status": {
-      const { billId, targetStatus } = input as { billId: string; targetStatus: BillApprovalStatus };
-      const result = await updateBillStatus(organizationId, billId, targetStatus);
+      const { billId, targetStatus, sendToQuickBooks, quickBooksSkipReason } = input as {
+        billId: string;
+        targetStatus: BillApprovalStatus;
+        sendToQuickBooks?: boolean;
+        quickBooksSkipReason?: string;
+      };
+      const result = await updateBillStatus(organizationId, billId, targetStatus, {
+        sendToQuickBooks,
+        quickBooksSkipReason,
+      });
       if (result.unchanged) return `The bill was already ${targetStatus}.`;
       const totalCents = result.lineItems.reduce((total, item) => total + item.amountCents, 0);
-      return `Moved the bill (${formatMoney(totalCents)}) to ${targetStatus}.`;
+      const qbNote =
+        targetStatus === BillApprovalStatus.READY_FOR_PAYMENT
+          ? result.sendToQuickBooks
+            ? " (QuickBooks: send)"
+            : " (QuickBooks: skipped)"
+          : "";
+      return `Moved the bill (${formatMoney(totalCents)}) to ${targetStatus}${qbNote}.`;
     }
     case "invite_vendor_to_bid": {
       const { bidPackageId, vendorId } = input as { bidPackageId: string; vendorId: string };

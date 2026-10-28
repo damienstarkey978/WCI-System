@@ -1318,6 +1318,13 @@ model Bill {
   /// accepts, or it rejects the request as a stale-data conflict. Refreshed on every sync.
   qboSyncToken String?
 
+  /// Explicit staff/agent choice at READY_FOR_PAYMENT: push this bill to QuickBooks
+  /// (labor/unpaid services) or keep it WCI-only (materials). Null until that hop —
+  /// never silently sync on status alone. See src/lib/bills/quickbooks-intent.ts.
+  sendToQuickBooks     Boolean?
+  /// Why QuickBooks was skipped when sendToQuickBooks is false (e.g. materials).
+  quickBooksSkipReason String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

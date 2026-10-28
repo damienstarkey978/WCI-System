@@ -4,7 +4,12 @@
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { formatZodIssues, updateBillStatusSchema } from "@/lib/api-schemas";
-import { BillNotFoundError, IllegalBillTransitionError, updateBillStatus } from "@/lib/bills/service";
+import {
+  BillNotFoundError,
+  BillQuickBooksIntentRequiredError,
+  IllegalBillTransitionError,
+  updateBillStatus,
+} from "@/lib/bills/service";
 
 type Context = { params: Promise<{ billId: string }> };
 
@@ -24,11 +29,17 @@ export const POST = withApiAuth<Context>(["bills:write"], async (request, auth, 
   }
 
   try {
-    const result = await updateBillStatus(auth.organizationId, billId, parsed.data.approvalStatus);
+    const result = await updateBillStatus(auth.organizationId, billId, parsed.data.approvalStatus, {
+      sendToQuickBooks: parsed.data.sendToQuickBooks,
+      quickBooksSkipReason: parsed.data.quickBooksSkipReason,
+    });
     const { unchanged, ...bill } = result;
     return Response.json({ data: bill, ...(unchanged ? { meta: { unchanged: true } } : {}) });
   } catch (error) {
     if (error instanceof BillNotFoundError) return apiError(404, "not_found", error.message);
+    if (error instanceof BillQuickBooksIntentRequiredError) {
+      return apiError(422, "qb_intent_required", error.message);
+    }
     if (error instanceof IllegalBillTransitionError) {
       return apiError(409, "illegal_transition", error.message, { currentStatus: error.currentStatus, allowed: error.allowed });
     }

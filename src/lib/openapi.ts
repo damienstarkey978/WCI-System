@@ -485,7 +485,10 @@ const ENDPOINTS: readonly EndpointDef[] = [
     method: "post",
     path: "/bills/{billId}/status",
     summary: "Move a bill through AP approval routing",
-    description: "IN_REVIEW -> APPROVED -> READY_FOR_PAYMENT -> PAID, with VOID reachable from any unpaid state.",
+    description:
+      "IN_REVIEW -> APPROVED -> READY_FOR_PAYMENT -> PAID, with VOID reachable from any unpaid state. " +
+      "When moving to READY_FOR_PAYMENT, sendToQuickBooks is required: true pushes labor/unpaid-services " +
+      "bills to QuickBooks; false keeps materials (and other skipped bills) READY_FOR_PAYMENT in WCI only.",
     tags: ["Bills"],
     scopes: ["bills:write"],
     pathParams: ["billId"],

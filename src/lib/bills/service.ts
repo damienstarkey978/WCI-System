@@ -190,6 +190,26 @@ export class IllegalBillTransitionError extends Error {
 }
 
 /**
+ * READY_FOR_PAYMENT must record whether the bill should post to QuickBooks.
+ * Materials stay WCI-only; labor/unpaid services may send — never inferred silently.
+ */
+export class BillQuickBooksIntentRequiredError extends Error {
+  constructor() {
+    super(
+      "sendToQuickBooks is required when marking a bill READY_FOR_PAYMENT (true = push to QuickBooks, false = keep in WCI only).",
+    );
+    this.name = "BillQuickBooksIntentRequiredError";
+  }
+}
+
+export interface UpdateBillStatusOptions {
+  /** Required when approvalStatus is READY_FOR_PAYMENT. */
+  readonly sendToQuickBooks?: boolean;
+  /** Stored when sendToQuickBooks is false. */
+  readonly quickBooksSkipReason?: string | null;
+}
+
+/**
  * INBOX → IN_REVIEW → APPROVED → READY_FOR_PAYMENT → PAID, with VOID reachable from
  * any unpaid state. The transitions are guarded because each one moves money in the
  * funnel: reaching PAID is what makes a bill count as actual cost under cash basis.
@@ -217,7 +237,12 @@ const ALLOWED_BILL_TRANSITIONS: Readonly<Record<BillApprovalStatus, readonly Bil
   [BillApprovalStatus.VOID]: [],
 };
 
-export async function updateBillStatus(organizationId: string, billId: string, approvalStatus: BillApprovalStatus) {
+export async function updateBillStatus(
+  organizationId: string,
+  billId: string,
+  approvalStatus: BillApprovalStatus,
+  options: UpdateBillStatusOptions = {},
+) {
   const bill = await db.bill.findFirst({ where: { id: billId, organizationId }, include: { lineItems: true } });
   if (!bill) throw new BillNotFoundError(billId);
 
@@ -233,8 +258,28 @@ export async function updateBillStatus(organizationId: string, billId: string, a
   // dynamically because intake.ts imports BillNotFoundError from this file, and a
   // static import both ways is a cycle.
   if (approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT) {
+    if (typeof options.sendToQuickBooks !== "boolean") {
+      throw new BillQuickBooksIntentRequiredError();
+    }
     const { requireApprovalsComplete } = await import("@/lib/bills/intake");
     await requireApprovalsComplete(organizationId, bill.id);
+  }
+
+  const sendToQuickBooks =
+    approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT ? options.sendToQuickBooks! : undefined;
+
+  let quickBooksSkipReason: string | null | undefined;
+  if (approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT) {
+    if (sendToQuickBooks) {
+      quickBooksSkipReason = null;
+    } else {
+      const trimmed = options.quickBooksSkipReason?.trim() || null;
+      const { DEFAULT_MATERIALS_SKIP_REASON, defaultSkipReasonForSuggestion, suggestSendToQuickBooks } = await import(
+        "@/lib/bills/quickbooks-intent"
+      );
+      const suggestion = suggestSendToQuickBooks(bill.lineItems);
+      quickBooksSkipReason = trimmed ?? defaultSkipReasonForSuggestion(suggestion) ?? DEFAULT_MATERIALS_SKIP_REASON;
+    }
   }
 
   const updated = await db.bill.update({
@@ -242,6 +287,9 @@ export async function updateBillStatus(organizationId: string, billId: string, a
     data: {
       approvalStatus,
       paidAt: approvalStatus === BillApprovalStatus.PAID ? (bill.paidAt ?? new Date()) : bill.paidAt,
+      ...(approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT
+        ? { sendToQuickBooks, quickBooksSkipReason }
+        : {}),
     },
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
@@ -254,13 +302,31 @@ export async function updateBillStatus(organizationId: string, billId: string, a
     vendorName: updated.vendorName,
     approvalStatus: updated.approvalStatus,
     totalCents,
+    sendToQuickBooks: updated.sendToQuickBooks,
+    quickBooksSkipReason: updated.quickBooksSkipReason,
   };
 
   if (approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT) {
     await emitEvent(organizationId, "bill.ready_for_payment", eventPayload);
+    // Opt-in push only. Soft-fail when QB isn't configured/connected or the API
+    // errors — the bill stays READY_FOR_PAYMENT with sendToQuickBooks=true so a
+    // later Sync (or reconnect) can finish the create without redoing AP.
+    if (sendToQuickBooks) {
+      await trySyncBillToQuickBooksAfterReady(organizationId, updated.id);
+    }
   } else if (approvalStatus === BillApprovalStatus.PAID) {
     await emitEvent(organizationId, "bill.paid", eventPayload);
   }
 
   return { ...updated, totalCents, unchanged: false as const };
+}
+
+/** Best-effort QB create after READY_FOR_PAYMENT opt-in. Never rolls back status. */
+async function trySyncBillToQuickBooksAfterReady(organizationId: string, billId: string): Promise<void> {
+  try {
+    const { syncBillToQuickBooks } = await import("@/lib/quickbooks/sync/bills");
+    await syncBillToQuickBooks(organizationId, billId);
+  } catch {
+    // syncBillToQuickBooks already writes the sync-log failure row when it got that far.
+  }
 }
