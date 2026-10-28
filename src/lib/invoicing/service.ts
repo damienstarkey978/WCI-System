@@ -122,7 +122,9 @@ export async function createInvoice(input: CreateInvoiceInput) {
   }
 
   const taxRateBasisPoints = input.taxRateBasisPoints ?? 0;
-  const paymentTerms = input.paymentTerms ?? PaymentTerms.NET_30;
+  // WCI never uses Net 30. CUSTOM leaves dueOn alone unless the office set one —
+  // matches Buildertrend invoices that ship with no payment-terms label.
+  const paymentTerms = input.paymentTerms ?? PaymentTerms.CUSTOM;
 
   // A FLAT invoice is a single agreed number with no lines to apportion tax across,
   // so it is taken as the whole amount and taxed at nothing. Charging tax on a flat

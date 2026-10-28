@@ -50,7 +50,10 @@ import type {
   PaymentMethod,
   PurchaseOrderStatus,
 } from "@/generated/prisma/enums";
+import { EstimateStatus, ProposalStatus, RateMode } from "@/generated/prisma/enums";
+import { sendEstimateToBudget } from "@/lib/budget/send-to-budget";
 import { db } from "@/lib/db";
+import type { BasisPoints, Cents } from "@/lib/money";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -77,6 +80,13 @@ export class UnknownVendorError extends Error {
   constructor(vendorId: string) {
     super(`No vendor ${vendorId} in this organization.`);
     this.name = "UnknownVendorError";
+  }
+}
+
+export class UnknownClientError extends Error {
+  constructor(clientId: string) {
+    super(`No client ${clientId} in this organization.`);
+    this.name = "UnknownClientError";
   }
 }
 
@@ -448,6 +458,8 @@ export interface ImportInvoiceInput {
   readonly type: InvoiceType;
   readonly invoiceNumber: string;
   readonly status: InvoiceStatus;
+  /** Freeform title from Buildertrend (e.g. "Draw 1 - Upon Execution (20%)"). */
+  readonly title?: string | null;
   readonly amountCents?: number;
   readonly lineItems?: readonly ImportInvoiceLineItemInput[];
   readonly issuedOn?: Date | null;
@@ -460,6 +472,117 @@ export interface ImportInvoiceInput {
   readonly attachments?: readonly MigrationAttachmentInput[];
 }
 
+/**
+ * PAID requires Payment rows that cover the invoice. BT "Paid" with no payment
+ * payload becomes SENT so the UI never shows PAID / $0.00 (Candlebark 932-1).
+ */
+export function invoiceStatusForImport(
+  requested: InvoiceStatus,
+  amountCents: number,
+  payments: readonly ImportInvoicePaymentInput[],
+): { status: InvoiceStatus; paidAt: Date | null } {
+  if (requested === "VOID" || requested === "DRAFT") {
+    return { status: requested, paidAt: null };
+  }
+  const paidCents = payments.reduce((total, payment) => total + payment.amountCents, 0);
+  if (amountCents >= 0) {
+    if (paidCents <= 0) return { status: "SENT", paidAt: null };
+    if (paidCents >= amountCents) {
+      const last = payments.reduce<Date | null>((latest, payment) => {
+        if (!latest || payment.receivedAt > latest) return payment.receivedAt;
+        return latest;
+      }, null);
+      return { status: "PAID", paidAt: last };
+    }
+    return { status: "PARTIALLY_PAID", paidAt: null };
+  }
+  if (paidCents >= 0) return { status: "SENT", paidAt: null };
+  if (paidCents <= amountCents) {
+    const last = payments.reduce<Date | null>((latest, payment) => {
+      if (!latest || payment.receivedAt > latest) return payment.receivedAt;
+      return latest;
+    }, null);
+    return { status: "PAID", paidAt: last };
+  }
+  return { status: "PARTIALLY_PAID", paidAt: null };
+}
+
+function assertPaymentsFitInvoice(amountCents: number, payments: readonly ImportInvoicePaymentInput[]) {
+  const paymentsTotalCents = payments.reduce((total, payment) => total + payment.amountCents, 0);
+  // The overpayment guard has to follow the invoice's sign. A negative invoice is a
+  // refund or credit — money flowing back to the client — and against one of those a
+  // plain `paymentsTotal > amountCents` is true even with no payments at all
+  // (0 > -5000), so every refund in a historical import was rejected as overpaid.
+  const overpaid = amountCents >= 0 ? paymentsTotalCents > amountCents : paymentsTotalCents < amountCents;
+  if (overpaid) {
+    throw new OverpaidInvoiceError(amountCents, paymentsTotalCents);
+  }
+}
+
+/**
+ * When an invoice was imported without its payments (or an earlier run hit
+ * already_exists before payments were in the payload), a re-run must be able to
+ * attach them. Only fills an empty payment set — never overwrites or doubles
+ * existing Payment rows (amounts stay frozen once recorded).
+ */
+async function backfillInvoicePaymentsIfEmpty(
+  existing: {
+    id: string;
+    amountCents: number;
+    title: string | null;
+    payments: readonly { id: string }[];
+    lineItems: unknown;
+    files: unknown;
+  },
+  organizationId: string,
+  payments: readonly ImportInvoicePaymentInput[],
+  title?: string | null,
+) {
+  const needsPayments = existing.payments.length === 0 && payments.length > 0;
+  const needsTitle = Boolean(title && !existing.title);
+  if (!needsPayments && !needsTitle) {
+    return { record: existing, created: false as const, paymentsBackfilled: false as const };
+  }
+  if (needsPayments) {
+    assertPaymentsFitInvoice(existing.amountCents, payments);
+    await db.payment.createMany({
+      data: payments.map((payment) => ({
+        organizationId,
+        invoiceId: existing.id,
+        method: payment.method,
+        amountCents: payment.amountCents,
+        reference: payment.reference ?? null,
+        receivedAt: payment.receivedAt,
+        createdAt: payment.receivedAt,
+      })),
+    });
+  }
+  const statusUpdate = needsPayments
+    ? invoiceStatusForImport("PAID", existing.amountCents, payments)
+    : null;
+  await db.invoice.update({
+    where: { id: existing.id },
+    data: {
+      ...(needsTitle ? { title } : {}),
+      ...(statusUpdate
+        ? {
+            status: statusUpdate.status,
+            paidAt: statusUpdate.paidAt,
+            // Migrated BT invoices have no Net 30 — clear the schema default.
+            paymentTerms: "CUSTOM",
+          }
+        : needsTitle
+          ? { paymentTerms: "CUSTOM" }
+          : {}),
+    },
+  });
+  const refreshed = await db.invoice.findFirstOrThrow({
+    where: { id: existing.id },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true, files: true },
+  });
+  return { record: refreshed, created: false as const, paymentsBackfilled: needsPayments };
+}
+
 export async function importInvoice(input: ImportInvoiceInput) {
   await assertJob(input.organizationId, input.jobId);
   await assertUser(input.organizationId, input.uploadedByUserId);
@@ -468,7 +591,14 @@ export async function importInvoice(input: ImportInvoiceInput) {
     where: { organizationId: input.organizationId, invoiceNumber: input.invoiceNumber },
     include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true, files: true },
   });
-  if (existing) return { record: existing, created: false };
+  if (existing) {
+    return backfillInvoicePaymentsIfEmpty(
+      existing,
+      input.organizationId,
+      input.payments ?? [],
+      input.title,
+    );
+  }
 
   const usesLineItems = input.lineItems !== undefined && input.lineItems.length > 0;
   if (!usesLineItems && input.amountCents === undefined) {
@@ -478,15 +608,9 @@ export async function importInvoice(input: ImportInvoiceInput) {
     ? input.lineItems!.reduce((total, line) => total + line.amountCents, 0)
     : input.amountCents!;
 
-  const paymentsTotalCents = (input.payments ?? []).reduce((total, payment) => total + payment.amountCents, 0);
-  // The overpayment guard has to follow the invoice's sign. A negative invoice is a
-  // refund or credit — money flowing back to the client — and against one of those a
-  // plain `paymentsTotal > amountCents` is true even with no payments at all
-  // (0 > -5000), so every refund in a historical import was rejected as overpaid.
-  const overpaid = amountCents >= 0 ? paymentsTotalCents > amountCents : paymentsTotalCents < amountCents;
-  if (overpaid) {
-    throw new OverpaidInvoiceError(amountCents, paymentsTotalCents);
-  }
+  const payments = input.payments ?? [];
+  assertPaymentsFitInvoice(amountCents, payments);
+  const { status, paidAt } = invoiceStatusForImport(input.status, amountCents, payments);
 
   const invoice = await db.invoice.create({
     data: {
@@ -494,11 +618,14 @@ export async function importInvoice(input: ImportInvoiceInput) {
       jobId: input.jobId,
       type: input.type,
       invoiceNumber: input.invoiceNumber,
-      status: input.status,
+      title: input.title ?? null,
+      status,
+      // BT exports have no payment-terms column; never invent Net 30.
+      paymentTerms: "CUSTOM",
       amountCents,
       issuedOn: input.issuedOn ?? null,
       dueOn: input.dueOn ?? null,
-      paidAt: input.paidAt ?? null,
+      paidAt: paidAt ?? input.paidAt ?? null,
       voidedAt: input.voidedAt ?? null,
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
@@ -506,7 +633,7 @@ export async function importInvoice(input: ImportInvoiceInput) {
         ? { lineItems: { create: input.lineItems!.map((line, index) => ({ ...line, sortOrder: index })) } }
         : {}),
       payments: {
-        create: (input.payments ?? []).map((payment) => ({
+        create: payments.map((payment) => ({
           organizationId: input.organizationId,
           method: payment.method,
           amountCents: payment.amountCents,
@@ -527,7 +654,7 @@ export async function importInvoice(input: ImportInvoiceInput) {
     include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true, files: true },
   });
 
-  return { record: invoice, created: true };
+  return { record: invoice, created: true, paymentsBackfilled: false as const };
 }
 
 // ---------------------------------------------------------------------------
@@ -601,4 +728,175 @@ export async function importScheduleItem(input: ImportScheduleItemInput) {
     },
   });
   return { record, created: true };
+}
+
+// ---------------------------------------------------------------------------
+// Approved proposals (Buildertrend Estimate/Proposals → Estimate + Proposal + budget)
+// ---------------------------------------------------------------------------
+
+export interface ImportApprovedProposalLineInput {
+  readonly costCodeId: string;
+  readonly title: string;
+  readonly description?: string | null;
+  readonly groupLabel?: string | null;
+  readonly costType?: CostType;
+  /** Quantity × 1000 (same as live EstimateLineItem). */
+  readonly quantityMilli: number;
+  readonly unit?: string | null;
+  /** Builder unit cost in cents. */
+  readonly unitCostCents: Cents;
+  /** Markup basis points (21% → 2100). */
+  readonly markupBasisPoints: BasisPoints;
+  readonly internalNote?: string | null;
+}
+
+export interface ImportApprovedProposalInput {
+  readonly organizationId: string;
+  readonly jobId: string;
+  readonly clientId: string;
+  readonly title: string;
+  /**
+   * Natural key for idempotency — typically the Buildertrend proposal/print id
+   * or a stable "BT:{jobPrefix}:{proposalTitle}" string. Stored on the Estimate
+   * as `aiPromptNotes` when created so re-runs can find it without a new column.
+   */
+  readonly externalKey: string;
+  readonly lineItems: readonly ImportApprovedProposalLineInput[];
+  readonly clientSignatureName?: string | null;
+  readonly clientSignedAt?: Date | null;
+  readonly coverMessage?: string | null;
+  /** When true (default), call sendEstimateToBudget after creating the estimate. */
+  readonly sendToBudget?: boolean;
+}
+
+export interface ImportApprovedProposalResult {
+  readonly estimateId: string;
+  readonly proposalId: string;
+  readonly created: boolean;
+  readonly budgetLinesWritten: number;
+}
+
+/**
+ * Import a Buildertrend-approved proposal as a locked Estimate + ACCEPTED Proposal
+ * and (by default) send the estimate to the job budget. Does NOT run acceptProposal()
+ * — that would try PRE_SALE→OPEN and e-sign flows that don't apply to an already-OPEN
+ * migrated job. Idempotent on Estimate.aiPromptNotes === `bt-proposal:{externalKey}`.
+ */
+export async function importApprovedProposal(
+  input: ImportApprovedProposalInput,
+): Promise<ImportApprovedProposalResult> {
+  await assertJob(input.organizationId, input.jobId);
+  const client = await db.client.findFirst({
+    where: { id: input.clientId, organizationId: input.organizationId },
+    select: { id: true },
+  });
+  if (!client) throw new UnknownClientError(input.clientId);
+
+  const marker = `bt-proposal:${input.externalKey}`;
+  const existingEstimate = await db.estimate.findFirst({
+    where: { organizationId: input.organizationId, jobId: input.jobId, aiPromptNotes: marker },
+    include: { lineItems: true },
+  });
+  if (existingEstimate) {
+    const existingProposal = await db.proposal.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        jobId: input.jobId,
+        options: { some: { estimateId: existingEstimate.id } },
+      },
+    });
+    return {
+      estimateId: existingEstimate.id,
+      proposalId: existingProposal?.id ?? "",
+      created: false,
+      budgetLinesWritten: 0,
+    };
+  }
+
+  if (input.lineItems.length === 0) {
+    throw new Error("importApprovedProposal requires at least one line item from Buildertrend.");
+  }
+
+  const costCodeIds = [...new Set(input.lineItems.map((line) => line.costCodeId))];
+  const known = await db.costCode.findMany({
+    where: { id: { in: costCodeIds }, organizationId: input.organizationId },
+    select: { id: true, defaultCostType: true },
+  });
+  if (known.length !== costCodeIds.length) {
+    const knownIds = new Set(known.map((code) => code.id));
+    throw new UnknownCostCodeError(costCodeIds.filter((id) => !knownIds.has(id)));
+  }
+  const defaultCostTypeById = new Map(known.map((code) => [code.id, code.defaultCostType]));
+
+  const estimate = await db.estimate.create({
+    data: {
+      organizationId: input.organizationId,
+      jobId: input.jobId,
+      title: input.title,
+      status: EstimateStatus.DRAFT,
+      rateMode: RateMode.MARKUP,
+      defaultRateBasisPoints: 0,
+      aiGenerated: false,
+      aiPromptNotes: marker,
+      lineItems: {
+        create: input.lineItems.map((line, index) => ({
+          costCodeId: line.costCodeId,
+          costType: line.costType ?? defaultCostTypeById.get(line.costCodeId) ?? "NONE",
+          title: line.title,
+          description: line.description ?? null,
+          quantityMilli: line.quantityMilli,
+          unit: line.unit?.trim() || null,
+          unitCostCents: line.unitCostCents,
+          rateMode: RateMode.MARKUP,
+          rateBasisPoints: line.markupBasisPoints,
+          taxable: false,
+          internalNote: line.internalNote ?? null,
+          groupLabel: line.groupLabel ?? null,
+          sortOrder: index,
+        })),
+      },
+    },
+  });
+
+  let budgetLinesWritten = 0;
+  if (input.sendToBudget !== false) {
+    const budget = await sendEstimateToBudget({
+      estimateId: estimate.id,
+      organizationId: input.organizationId,
+    });
+    budgetLinesWritten = budget.budgetLinesWritten;
+  }
+
+  const proposal = await db.proposal.create({
+    data: {
+      organizationId: input.organizationId,
+      jobId: input.jobId,
+      clientId: input.clientId,
+      title: input.title,
+      coverMessage: input.coverMessage ?? null,
+      status: ProposalStatus.ACCEPTED,
+      clientSignatureName: input.clientSignatureName ?? null,
+      clientSignedAt: input.clientSignedAt ?? null,
+      sentAt: input.clientSignedAt ?? new Date(),
+      options: {
+        create: [{ estimateId: estimate.id, label: "Accepted", sortOrder: 0 }],
+      },
+    },
+    include: { options: true },
+  });
+
+  const selectedOptionId = proposal.options[0]?.id;
+  if (selectedOptionId) {
+    await db.proposal.update({
+      where: { id: proposal.id },
+      data: { selectedOptionId },
+    });
+  }
+
+  return {
+    estimateId: estimate.id,
+    proposalId: proposal.id,
+    created: true,
+    budgetLinesWritten,
+  };
 }

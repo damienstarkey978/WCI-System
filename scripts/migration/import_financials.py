@@ -455,13 +455,29 @@ def build_invoices(rows, prefix, payments_by_invoice):
             continue
         # Payments keyed by invoice # within a job; multi-job mode prefixes the key.
         payments = payments_by_invoice.get(original_id, [])
+        # PAID without Payment rows is a known gap (Heather #15 / Candlebark 932-1).
+        # Keep the BT status string for logging, but only send PAID when payments cover.
+        payments_total = sum(p["amountCents"] for p in payments)
+        amount_cents = round(total * 100)
+        if status == "PAID" and payments_total < amount_cents:
+            if payments_total > 0:
+                status = "PARTIALLY_PAID"
+            else:
+                status = "SENT"
+                warn(
+                    "invoices",
+                    label,
+                    "BT status Paid but no InvoicePayments rows — importing as SENT until payments backfill.",
+                )
+        title = (cell(row, "Title") or "").strip() or None
         payloads.append({
             "type": "FLAT",
             "invoiceNumber": f"{prefix}-{original_id}",
+            "title": title,
             "status": status,
-            "amountCents": round(total * 100),
+            "amountCents": amount_cents,
             "dueOn": xl_to_iso(cell(row, "Deadline", "Due Date")),
-            "paidAt": xl_to_iso(cell(row, "Date Paid")),
+            "paidAt": xl_to_iso(cell(row, "Date Paid")) if status == "PAID" else None,
             "createdAt": created_at,
             "payments": payments,
         })
