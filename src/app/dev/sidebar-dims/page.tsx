@@ -65,7 +65,8 @@ export default function SidebarDimsPreviewPage() {
             <code>wci-job-sidebar-width</code>.
           </p>
           <p className="text-[var(--bt-muted)]">
-            Tokens: <code>--bt-job-sidebar-width</code> (default), <code>--bt-job-sidebar-row-py</code>
+            Tokens: <code>--bt-job-sidebar-width</code> (default), <code>--bt-job-sidebar-row-py</code>,{" "}
+            <code>--bt-job-chrome-*</code> (tabs / Search / + Job / icon hit sizes)
           </p>
         </main>
       </div>

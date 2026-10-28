@@ -52,6 +52,21 @@
   --bt-job-sidebar-font-weight: 400;
   --bt-job-sidebar-letter-spacing: normal;
   --bt-job-sidebar-color: #202227;
+  /* Jobs rail CONTROL CHROME — measured 2026-10-28 from BT parity-shot-2
+     (3376×1746 @2× → CSS) vs WCI prod sidebar (203×1×). Heights/radii/gaps
+     match BT; + Job fill stays --bt-primary (WCI teal), not BT action blue
+     #1F4ECD. Consumed by JobSidebar.tsx tabs / Search / + Job / filter+sort. */
+  --bt-job-chrome-control-h: 36px;
+  --bt-job-chrome-btn-h: 34px;
+  --bt-job-chrome-btn-px: 14px;
+  --bt-job-chrome-btn-radius: 5px;
+  --bt-job-chrome-input-radius: 6px;
+  --bt-job-chrome-input-border: #d1d5db;
+  --bt-job-chrome-icon-hit: 36px;
+  --bt-job-chrome-row-gap: 16px;
+  --bt-job-chrome-list-gap: 24px;
+  --bt-job-chrome-pill-radius: 8px;
+  --bt-job-chrome-pill-track: #f8f9fc;
   --bt-border: #e5e7eb;
   --bt-muted: #6b7280;
   --bt-text: #111827;
@@ -110,6 +125,8 @@
   --bt-muted: #8a9098;
   --bt-text: #edeef0;
   --bt-job-sidebar-color: #edeef0;
+  --bt-job-chrome-pill-track: #1b1f24;
+  --bt-job-chrome-input-border: #24282e;
   /* Reused across the app for "good/approved/awarded/accepted" pills (see every
      ..._STATUS_STYLES map keyed off these two tokens) — mint in the new palette,
      matching the redesign's own on-track status-pill treatment. */

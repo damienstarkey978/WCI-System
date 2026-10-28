@@ -358,111 +358,176 @@ export function JobSidebar({
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between gap-2 border-b px-2.5 py-1.5" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="flex min-w-0 flex-1 overflow-hidden rounded border text-[11px] font-semibold" style={{ borderColor: "var(--bt-border)" }}>
-          <button
-            type="button"
-            onClick={() => setTab("jobs")}
-            className="flex-1 px-2 py-1"
-            style={
-              tab === "jobs"
-                ? { background: "var(--bt-panel-bg)", color: "var(--bt-text)", boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--bt-border) 80%, transparent)" }
-                : { background: "transparent", color: "var(--bt-muted)" }
-            }
+      {/* Control chrome — heights/radii/gaps match BT (see docs/jobs-sidebar-controls-parity.md).
+          + Job fill uses WCI --bt-primary teal (not BT #1F4ECD). Resize handle stays above. */}
+      <div
+        data-testid="job-sidebar-controls"
+        className="flex flex-col border-b px-2.5 py-2"
+        style={{ borderColor: "var(--bt-border)", gap: "var(--bt-job-chrome-row-gap)" }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div
+            role="tablist"
+            aria-label="Jobs or templates"
+            className="flex min-w-0 flex-1 items-stretch p-0.5"
+            style={{
+              height: "var(--bt-job-chrome-control-h)",
+              borderRadius: "var(--bt-job-chrome-pill-radius)",
+              background: "var(--bt-job-chrome-pill-track)",
+            }}
           >
-            Jobs
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("templates")}
-            className="flex-1 px-2 py-1"
-            style={
-              tab === "templates"
-                ? { background: "var(--bt-panel-bg)", color: "var(--bt-text)", boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--bt-border) 80%, transparent)" }
-                : { background: "transparent", color: "var(--bt-muted)" }
-            }
-          >
-            Templates
-          </button>
-        </div>
-        <Link
-          href="/jobs/new"
-          className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-[var(--bt-on-primary)]"
-          style={{ background: "var(--bt-primary)" }}
-        >
-          + Job
-        </Link>
-      </div>
-
-      <div className="flex items-center gap-1 border-b px-2.5 py-2" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="relative min-w-0 flex-1">
-          <SearchIcon className="pointer-events-none absolute left-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--bt-muted)]" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
-            className="w-full rounded border py-1 pl-6 pr-2 text-xs outline-none focus:border-[var(--bt-primary)]"
-            style={{ borderColor: "var(--bt-border)" }}
-          />
-        </div>
-        {tab === "jobs" ? (
-          <div className="relative shrink-0">
             <button
               type="button"
-              onClick={() => setFilterOpen((open) => !open)}
-              onBlur={() => setTimeout(() => setFilterOpen(false), 150)}
-              aria-label="Filter jobs"
-              aria-expanded={filterOpen}
-              title={`Filter: ${STATUS_FILTER_LABEL[statusFilter]}`}
-              className="relative rounded border p-1 text-[var(--bt-muted)] hover:bg-black/5"
-              style={{ borderColor: "var(--bt-border)" }}
+              role="tab"
+              aria-selected={tab === "jobs"}
+              onClick={() => setTab("jobs")}
+              className="min-w-0 flex-1 rounded-[6px] px-2 text-[13px] font-semibold transition"
+              style={
+                tab === "jobs"
+                  ? {
+                      background: "var(--bt-panel-bg)",
+                      color: "var(--bt-job-sidebar-color)",
+                      boxShadow: "0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px rgba(16, 24, 40, 0.04)",
+                    }
+                  : { background: "transparent", color: "var(--bt-muted)", fontWeight: 500 }
+              }
             >
-              <FunnelIcon className="h-3.5 w-3.5" />
-              {statusFilter !== "ALL" ? (
-                <span className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[var(--bt-primary)] px-0.5 text-[9px] font-bold text-[var(--bt-on-primary)]">
-                  1
-                </span>
-              ) : null}
+              Jobs
             </button>
-            {filterOpen ? (
-              <div
-                role="menu"
-                className="absolute right-0 top-full z-20 mt-1 w-40 rounded border bg-[var(--bt-panel-bg)] py-1 text-xs shadow-lg"
-                style={{ borderColor: "var(--bt-border)" }}
-              >
-                {STATUS_FILTERS.map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    role="menuitem"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      setStatusFilter(status);
-                      setFilterOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-black/5"
-                    style={statusFilter === status ? { color: "var(--bt-primary)", fontWeight: 600 } : { color: "var(--bt-text)" }}
-                  >
-                    {STATUS_FILTER_LABEL[status]} jobs
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "templates"}
+              onClick={() => setTab("templates")}
+              className="min-w-0 flex-1 rounded-[6px] px-2 text-[13px] font-semibold transition"
+              style={
+                tab === "templates"
+                  ? {
+                      background: "var(--bt-panel-bg)",
+                      color: "var(--bt-job-sidebar-color)",
+                      boxShadow: "0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px rgba(16, 24, 40, 0.04)",
+                    }
+                  : { background: "transparent", color: "var(--bt-muted)", fontWeight: 500 }
+              }
+            >
+              Templates
+            </button>
           </div>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setSortMode((mode) => (mode === "recent" ? "name" : "recent"))}
-          aria-label="Sort"
-          title={sortMode === "recent" ? "Sorted by most recent — click to sort by name" : "Sorted by name — click to sort by most recent"}
-          className="shrink-0 rounded border p-1 text-[var(--bt-muted)] hover:bg-black/5"
-          style={{ borderColor: "var(--bt-border)" }}
-        >
-          <SortIcon className="h-3.5 w-3.5" />
-        </button>
+          <Link
+            href="/jobs/new"
+            data-testid="job-sidebar-new-job"
+            className="inline-flex shrink-0 items-center justify-center text-[14px] font-semibold text-[var(--bt-on-primary)]"
+            style={{
+              height: "var(--bt-job-chrome-btn-h)",
+              paddingLeft: "var(--bt-job-chrome-btn-px)",
+              paddingRight: "var(--bt-job-chrome-btn-px)",
+              borderRadius: "var(--bt-job-chrome-btn-radius)",
+              background: "var(--bt-primary)",
+            }}
+          >
+            + Job
+          </Link>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <div className="relative min-w-0 flex-1">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search"
+              aria-label="Search jobs"
+              data-testid="job-sidebar-search"
+              className="w-full outline-none focus:border-[var(--bt-primary)]"
+              style={{
+                height: "var(--bt-job-chrome-control-h)",
+                borderRadius: "var(--bt-job-chrome-input-radius)",
+                borderWidth: 1,
+                borderStyle: "solid",
+                borderColor: "var(--bt-job-chrome-input-border)",
+                paddingLeft: 12,
+                paddingRight: 36,
+                fontFamily: "var(--bt-font-sans)",
+                fontSize: "var(--bt-job-sidebar-font-size)",
+                lineHeight: "var(--bt-job-sidebar-line-height)",
+                color: "var(--bt-job-sidebar-color)",
+                background: "var(--bt-panel-bg)",
+              }}
+            />
+            {/* BT places the magnifier on the RIGHT of the Search field. */}
+            <SearchIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--bt-muted)]" />
+          </div>
+          {tab === "jobs" ? (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setFilterOpen((open) => !open)}
+                onBlur={() => setTimeout(() => setFilterOpen(false), 150)}
+                aria-label="Filter jobs"
+                aria-expanded={filterOpen}
+                title={`Filter: ${STATUS_FILTER_LABEL[statusFilter]}`}
+                data-testid="job-sidebar-filter"
+                className="relative inline-flex items-center justify-center text-[var(--bt-muted)] hover:bg-black/5"
+                style={{
+                  width: "var(--bt-job-chrome-icon-hit)",
+                  height: "var(--bt-job-chrome-icon-hit)",
+                  borderRadius: 6,
+                }}
+              >
+                <FunnelIcon className="h-[18px] w-[18px]" />
+                {statusFilter !== "ALL" ? (
+                  <span className="absolute right-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[var(--bt-primary)] px-0.5 text-[9px] font-bold text-[var(--bt-on-primary)]">
+                    1
+                  </span>
+                ) : null}
+              </button>
+              {filterOpen ? (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-20 mt-1 w-40 rounded border bg-[var(--bt-panel-bg)] py-1 text-xs shadow-lg"
+                  style={{ borderColor: "var(--bt-border)" }}
+                >
+                  {STATUS_FILTERS.map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      role="menuitem"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setStatusFilter(status);
+                        setFilterOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-black/5"
+                      style={statusFilter === status ? { color: "var(--bt-primary)", fontWeight: 600 } : { color: "var(--bt-text)" }}
+                    >
+                      {STATUS_FILTER_LABEL[status]} jobs
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setSortMode((mode) => (mode === "recent" ? "name" : "recent"))}
+            aria-label="Sort"
+            title={sortMode === "recent" ? "Sorted by most recent — click to sort by name" : "Sorted by name — click to sort by most recent"}
+            data-testid="job-sidebar-sort"
+            className="inline-flex shrink-0 items-center justify-center text-[var(--bt-muted)] hover:bg-black/5"
+            style={{
+              width: "var(--bt-job-chrome-icon-hit)",
+              height: "var(--bt-job-chrome-icon-hit)",
+              borderRadius: 6,
+            }}
+          >
+            <SortIcon className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+      <div
+        className="px-2.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
+        style={{ paddingTop: "var(--bt-job-chrome-list-gap)", paddingBottom: 4 }}
+      >
         ALL {filteredJobs.length} {tab === "templates" ? "TEMPLATE" : statusFilter === "ALL" ? "" : STATUS_FILTER_LABEL[statusFilter].toUpperCase()} JOB
         {filteredJobs.length === 1 ? "" : "S"}
       </div>
