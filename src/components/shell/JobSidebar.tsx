@@ -61,9 +61,10 @@ const JOB_STATUS_LABEL: Record<string, string> = {
  * job list — everything else about which jobs to show still comes from the server
  * (sidebarJobsForOrg already scopes it to what this user can open).
  *
- * Hidden entirely below `md` (Buildertrend's ~203px desktop rail — or the collapsed
- * 48px strip — has no reasonable place on a phone-width screen): TopNav's
- * hamburger opens MobileMenuDrawer instead, which has its own simpler job jump-list.
+ * Hidden entirely below `md` (Buildertrend's 203px desktop rail / ~26px job rows —
+ * or the collapsed 48px strip — has no reasonable place on a phone-width screen):
+ * TopNav's hamburger opens MobileMenuDrawer instead, which has its own simpler
+ * job jump-list.
  */
 export function JobSidebar({
   jobs,
