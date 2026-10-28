@@ -58,11 +58,20 @@ EXCEL_EPOCH = datetime(1899, 12, 30)
 
 def xl_to_iso(value):
     """Buildertrend's exports store every date as an Excel serial float. None/blank
-    cells come through as '' from xlrd, not 0 — never treat '' as day zero."""
+    cells come through as '' from xlrd, not 0 — never treat '' as day zero.
+    UI CSVs also use placeholders like '-' / 'N/A' for unpaid/missing dates."""
     if value in ("", None):
         return None
     if isinstance(value, str):
-        return value
+        text = value.strip()
+        if not text or text in {"-", "--", "—", "N/A", "n/a", "NA", "null"}:
+            return None
+        # Normalize "YYYY-MM-DD HH:MM:SS" UI CSV datetimes to ISO-8601.
+        if len(text) >= 19 and text[10] == " " and text[4] == "-" and text[7] == "-":
+            return text[:10] + "T" + text[11:19] + "Z"
+        if len(text) == 10 and text[4] == "-" and text[7] == "-":
+            return text + "T00:00:00Z"
+        return text
     return (EXCEL_EPOCH + timedelta(days=value)).isoformat() + "Z"
 
 
@@ -184,7 +193,11 @@ def map_bill_status(raw, row_label):
         "Paid": "PAID",
         "Approved": "APPROVED",
         "Ready for Payment": "READY_FOR_PAYMENT",
+        "Ready For Payment": "READY_FOR_PAYMENT",  # UI CSV capitalization
+        "Ready For Payment - Requested": "READY_FOR_PAYMENT",
         "Pending Approval": "IN_REVIEW",
+        "Open": "IN_REVIEW",
+        "Open - Requested": "IN_REVIEW",
         "Void": "VOID",
         "Voided": "VOID",
     }
@@ -411,6 +424,12 @@ def build_bills(rows, prefix, cost_code_ids, po_number_map, po_id_by_number):
                 "amountCents": round(float(amount or 0) * 100),
             }],
         })
+    if missing_cost_code_count:
+        warn(
+            "bills",
+            f"{missing_cost_code_count} row(s)",
+            f'No Cost Codes in export — booked to "{FLAT_RATE_CODE}".',
+        )
     return payloads
 
 
