@@ -19,6 +19,15 @@
  * photos and documents already have durable CDN URLs, so nothing needs re-uploading
  * through Storage.
  *
+ * Idempotent on natural keys so a cutover re-run is safe:
+ *   - PurchaseOrder: (organizationId, poNumber)
+ *   - Invoice: (organizationId, invoiceNumber)
+ *   - Bill: (organizationId, jobId, billNumber) when billNumber is present
+ *   - DailyLog: (jobId, createdAt, note)
+ *   - ScheduleItem: (jobId, title, manualStartDate)
+ * An existing match returns `{ created: false }` and does not invent or overwrite
+ * financial amounts.
+ *
  * Deliberately does not call emitEvent: webhook subscribers (Duke, Jarvis) react to
  * these event types as live signals ("a bill was just paid, act on it"), and a
  * multi-year backlog of migrated history firing through that pipeline in one batch
@@ -90,6 +99,12 @@ export class OverpaidInvoiceError extends Error {
     super(`Payments total ${paymentsTotalCents}c, which is more than the invoice's ${amountCents}c.`);
     this.name = "OverpaidInvoiceError";
   }
+}
+
+/** Every import* returns this so callers can tell create vs. re-run no-op apart. */
+export interface MigrationImportResult<T> {
+  readonly record: T;
+  readonly created: boolean;
 }
 
 export interface MigrationAttachmentInput {
@@ -171,7 +186,18 @@ export async function importDailyLog(input: ImportDailyLogInput) {
   await assertJob(input.organizationId, input.jobId);
   await assertUser(input.organizationId, input.authorUserId);
 
-  return db.dailyLog.create({
+  const existing = await db.dailyLog.findFirst({
+    where: {
+      jobId: input.jobId,
+      organizationId: input.organizationId,
+      createdAt: input.createdAt,
+      note: input.note,
+    },
+    include: { files: true },
+  });
+  if (existing) return { record: existing, created: false };
+
+  const record = await db.dailyLog.create({
     data: {
       organizationId: input.organizationId,
       jobId: input.jobId,
@@ -192,6 +218,7 @@ export async function importDailyLog(input: ImportDailyLogInput) {
     },
     include: { files: true },
   });
+  return { record, created: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -223,10 +250,31 @@ export interface ImportPurchaseOrderInput {
   readonly attachments?: readonly MigrationAttachmentInput[];
 }
 
+function purchaseOrderTotalCents(
+  lineItems: ReadonlyArray<{ quantityMilli: number; unitCostCents: number }>,
+): number {
+  return lineItems.reduce(
+    (total, item) => total + Math.round((item.quantityMilli * item.unitCostCents) / 1_000),
+    0,
+  );
+}
+
 export async function importPurchaseOrder(input: ImportPurchaseOrderInput) {
   await assertJob(input.organizationId, input.jobId);
   await assertUser(input.organizationId, input.uploadedByUserId);
   await assertVendor(input.organizationId, input.vendorId);
+
+  const existing = await db.purchaseOrder.findFirst({
+    where: { organizationId: input.organizationId, poNumber: input.poNumber },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } }, files: true },
+  });
+  if (existing) {
+    return {
+      record: { ...existing, totalCents: purchaseOrderTotalCents(existing.lineItems) },
+      created: false,
+    };
+  }
+
   const defaultCostTypeById = await costTypeByCostCodeId(
     input.organizationId,
     input.lineItems.map((item) => item.costCodeId),
@@ -267,12 +315,10 @@ export async function importPurchaseOrder(input: ImportPurchaseOrderInput) {
     include: { lineItems: { orderBy: { sortOrder: "asc" } }, files: true },
   });
 
-  const totalCents = purchaseOrder.lineItems.reduce(
-    (total, item) => total + Math.round((item.quantityMilli * item.unitCostCents) / 1_000),
-    0,
-  );
-
-  return { ...purchaseOrder, totalCents };
+  return {
+    record: { ...purchaseOrder, totalCents: purchaseOrderTotalCents(purchaseOrder.lineItems) },
+    created: true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +364,21 @@ export async function importBill(input: ImportBillInput) {
     if (po.jobId !== input.jobId) throw new PurchaseOrderJobMismatchError();
   }
 
+  if (input.billNumber) {
+    const existing = await db.bill.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        jobId: input.jobId,
+        billNumber: input.billNumber,
+      },
+      include: { lineItems: { orderBy: { sortOrder: "asc" } }, files: true },
+    });
+    if (existing) {
+      const totalCents = existing.lineItems.reduce((total, item) => total + item.amountCents, 0);
+      return { record: { ...existing, totalCents }, created: false };
+    }
+  }
+
   const defaultCostTypeById = await costTypeByCostCodeId(
     input.organizationId,
     input.lineItems.map((item) => item.costCodeId),
@@ -360,7 +421,7 @@ export async function importBill(input: ImportBillInput) {
 
   const totalCents = bill.lineItems.reduce((total, item) => total + item.amountCents, 0);
 
-  return { ...bill, totalCents };
+  return { record: { ...bill, totalCents }, created: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -402,6 +463,12 @@ export interface ImportInvoiceInput {
 export async function importInvoice(input: ImportInvoiceInput) {
   await assertJob(input.organizationId, input.jobId);
   await assertUser(input.organizationId, input.uploadedByUserId);
+
+  const existing = await db.invoice.findFirst({
+    where: { organizationId: input.organizationId, invoiceNumber: input.invoiceNumber },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true, files: true },
+  });
+  if (existing) return { record: existing, created: false };
 
   const usesLineItems = input.lineItems !== undefined && input.lineItems.length > 0;
   if (!usesLineItems && input.amountCents === undefined) {
@@ -460,5 +527,78 @@ export async function importInvoice(input: ImportInvoiceInput) {
     include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true, files: true },
   });
 
-  return invoice;
+  return { record: invoice, created: true };
+}
+
+// ---------------------------------------------------------------------------
+// Schedule items
+// ---------------------------------------------------------------------------
+
+export interface ImportScheduleItemInput {
+  readonly organizationId: string;
+  readonly jobId: string;
+  readonly title: string;
+  readonly durationDays: number;
+  readonly manualStartDate?: Date | null;
+  readonly percentCompleteBasisPoints?: number;
+  readonly clientVisible?: boolean;
+  readonly subVisible?: boolean;
+  readonly notesInternal?: string | null;
+  /** Optional Buildertrend external id for future correlation; stored in notes when set. */
+  readonly externalRef?: string | null;
+}
+
+/**
+ * Ensures the job has a Schedule row, then creates a ScheduleItem. Idempotent on
+ * (jobId, title, manualStartDate) — Buildertrend schedule exports have no stable
+ * GUID column in the CSV path, so title+start is the durable natural key.
+ */
+export async function importScheduleItem(input: ImportScheduleItemInput) {
+  await assertJob(input.organizationId, input.jobId);
+
+  let schedule = await db.schedule.findFirst({
+    where: { organizationId: input.organizationId, jobId: input.jobId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!schedule) {
+    schedule = await db.schedule.create({
+      data: {
+        organizationId: input.organizationId,
+        jobId: input.jobId,
+        name: "Schedule",
+      },
+    });
+  }
+
+  const existing = await db.scheduleItem.findFirst({
+    where: {
+      scheduleId: schedule.id,
+      title: input.title,
+      ...(input.manualStartDate
+        ? { manualStartDate: input.manualStartDate }
+        : { manualStartDate: null }),
+    },
+  });
+  if (existing) return { record: existing, created: false };
+
+  const count = await db.scheduleItem.count({ where: { scheduleId: schedule.id } });
+  const notesInternal =
+    input.externalRef != null && input.externalRef !== ""
+      ? [input.notesInternal, `[BT ref: ${input.externalRef}]`].filter(Boolean).join("\n")
+      : (input.notesInternal ?? null);
+
+  const record = await db.scheduleItem.create({
+    data: {
+      scheduleId: schedule.id,
+      title: input.title,
+      durationDays: input.durationDays,
+      manualStartDate: input.manualStartDate ?? null,
+      percentCompleteBasisPoints: input.percentCompleteBasisPoints ?? 0,
+      clientVisible: input.clientVisible ?? true,
+      subVisible: input.subVisible ?? true,
+      notesInternal,
+      sortOrder: count,
+    },
+  });
+  return { record, created: true };
 }

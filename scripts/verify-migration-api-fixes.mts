@@ -40,7 +40,7 @@ async function main() {
     status: "PAID",
     amountCents: -50_000,
   });
-  assert(refund.amountCents === -50_000, "a refund invoice with no payments now imports");
+  assert(refund.created && refund.record.amountCents === -50_000, "a refund invoice with no payments now imports");
 
   const refundPaid = await importInvoice({
     ...base,
@@ -49,7 +49,15 @@ async function main() {
     amountCents: -50_000,
     payments: [{ method: "MANUAL", amountCents: -50_000, receivedAt: new Date("2026-03-05T00:00:00Z") }],
   });
-  assert(refundPaid.payments.length === 1, "and so does one with the matching refund payment against it");
+  assert(refundPaid.created && refundPaid.record.payments.length === 1, "and so does one with the matching refund payment against it");
+
+  const refundAgain = await importInvoice({
+    ...base,
+    invoiceNumber: `REFUND-${stamp}`,
+    status: "PAID",
+    amountCents: -50_000,
+  });
+  assert(!refundAgain.created && refundAgain.record.id === refund.record.id, "re-importing the same invoice number is a no-op");
 
   let refusedRefund = false;
   try {
@@ -86,7 +94,7 @@ async function main() {
     amountCents: 50_000,
     payments: [{ method: "MANUAL", amountCents: 50_000, receivedAt: new Date("2026-03-05T00:00:00Z") }],
   });
-  assert(exact.payments.length === 1, "paying a normal invoice in full still works");
+  assert(exact.record.payments.length === 1, "paying a normal invoice in full still works");
 
   // ---- Bug 2: the query schemas now carry paging ---------------------------
   const defaulted = listBillsQuerySchema.parse({});
