@@ -2,6 +2,8 @@
  * POST /api/v1/migration/invoices — bulk-import historical client Invoices from
  * Buildertrend, already PAID/PARTIALLY_PAID, with the Payment rows that document
  * how they got there. See src/lib/migration/service.ts for the full rationale.
+ *
+ * Idempotent on (organizationId, invoiceNumber).
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
@@ -22,11 +24,22 @@ export const POST = withApiAuth(["migration:write"], async (request, auth) => {
   }
 
   // Sequential — see src/app/api/v1/migration/daily-logs/route.ts for why.
-  const results: Array<{ index: number; status: "success" | "error"; invoiceId?: string; amountCents?: number; error?: string }> = [];
+  const results: Array<{
+    index: number;
+    status: "success" | "already_exists" | "error";
+    invoiceId?: string;
+    amountCents?: number;
+    error?: string;
+  }> = [];
   for (const [index, input] of parsed.data.invoices.entries()) {
     try {
-      const invoice = await importInvoice({ organizationId: auth.organizationId, ...input });
-      results.push({ index, status: "success", invoiceId: invoice.id, amountCents: invoice.amountCents });
+      const { record, created } = await importInvoice({ organizationId: auth.organizationId, ...input });
+      results.push({
+        index,
+        status: created ? "success" : "already_exists",
+        invoiceId: record.id,
+        amountCents: record.amountCents,
+      });
     } catch (error) {
       results.push({ index, status: "error", error: error instanceof Error ? error.message : "Unknown error" });
     }

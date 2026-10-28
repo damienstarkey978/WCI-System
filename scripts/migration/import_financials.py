@@ -14,10 +14,11 @@ Requires: pip install xlrd requests   (xlrd 2.x reads legacy .xls/BIFF8 just fin
 Buildertrend's exports are NOT real .xlsx despite what a renamed extension might
 suggest; `file` reports them as "Composite Document File V2").
 
-Usage:
+Usage (single job):
   python3 import_financials.py \\
     --api-base http://localhost:3000/api/v1 \\
     --api-key wci_xxx \\
+    --uploaded-by-user-id user_xxx \\
     --job-query "7103 Holiday" \\
     --purchase-orders PurchaseOrders.xls \\
     --bills Bills.xls \\
@@ -25,9 +26,22 @@ Usage:
     --invoice-payments InvoicePayments.xls \\
     [--dry-run]
 
+Usage (all open jobs from Buildertrend CSV exports with a Job column):
+  python3 import_financials.py \\
+    --api-base https://app.worldconstructionjax.com/api/v1 \\
+    --api-key wci_xxx \\
+    --uploaded-by-user-id user_xxx \\
+    --all-jobs \\
+    --purchase-orders PurchaseOrders_all_open_jobs.csv \\
+    --bills Bills_all_open_jobs.csv \\
+    --invoices Invoices_all_open_jobs.csv \\
+    --invoice-payments InvoicePayments_all_open_jobs.csv \\
+    [--dry-run]
+
 Pass --job-id directly instead of --job-query once you know it, to skip the fuzzy
 match entirely. The script always prints which job it resolved to before writing
-anything — read that line before trusting a real (non-dry-run) run.
+anything — read that line before trusting a real (non-dry-run) run. Re-runs are
+safe: the migration API returns already_exists for natural-key matches.
 """
 
 import argparse
@@ -53,10 +67,26 @@ def xl_to_iso(value):
 
 
 def read_rows(path):
-    """Every Buildertrend export shares the same shape: row 0 is a title, row 1 is
-    blank, row 2 is the real header, and the last row is a spreadsheet-style totals
-    row with a blank Job/ID column — skip both ends, not just the top."""
-    wb = xlrd.open_workbook(path)
+    """Buildertrend .xls exports: row 0 title, row 1 blank, row 2 header, trailing
+    totals row with a blank first column. CSV exports from the all-open-jobs path
+    are plain header-on-row-0 files (see claude/buildertrend-export-shapes-and-
+    costcodes.md) — detect by extension and parse accordingly."""
+    path = Path(path)
+    if path.suffix.lower() == ".csv":
+        import csv
+
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            reader = csv.DictReader(handle)
+            rows = []
+            for row in reader:
+                # Skip blank / totals-ish rows.
+                first = next(iter(row.values()), "") if row else ""
+                if not str(first or "").strip():
+                    continue
+                rows.append({k: (v if v is not None else "") for k, v in row.items()})
+            return rows
+
+    wb = xlrd.open_workbook(str(path))
     sheet = wb.sheet_by_index(0)
     headers = [sheet.cell_value(2, c) for c in range(sheet.ncols)]
     rows = []
@@ -67,6 +97,23 @@ def read_rows(path):
             continue  # the trailing totals row
         rows.append(row)
     return rows
+
+
+def cell(row, *keys):
+    """Return the first non-empty value among alternate Buildertrend column names
+    (.xls vs all-open-jobs CSV use slightly different headers)."""
+    for key in keys:
+        if key in row and row[key] not in ("", None):
+            return row[key]
+    for key in keys:
+        if key in row:
+            return row[key]
+    return ""
+
+
+def normalize_job_name(name):
+    """BT job-name cells often carry trailing whitespace; match trimmed+casefold."""
+    return " ".join(str(name or "").split()).casefold()
 
 
 class ImportWarning:
@@ -102,7 +149,14 @@ def map_po_status(raw, row_label):
         return "DRAFT", None
     if raw == "Sent":
         return "PENDING_APPROVAL", None
-    if raw.startswith("Sub/Vendor Approved") or raw.startswith("Client Approved"):
+    # Buildertrend's real export uses both "Internally Approved" (staff) and
+    # "Sub/Vendor Approved" / "Client Approved" — all three are APPROVED in WCI.
+    if (
+        raw.startswith("Sub/Vendor Approved")
+        or raw.startswith("Client Approved")
+        or raw.startswith("Internally Approved")
+        or raw == "Approved"
+    ):
         # "Sub/Vendor Approved - 8-13-26" — the date after the dash, if present.
         parts = raw.split(" - ", 1)
         approved_at = None
@@ -182,11 +236,13 @@ FLAT_RATE_CODE = "Buildertrend Flat Rate"
 
 
 def resolve_cost_codes(raw, cost_code_ids, row_label, source):
-    """Buildertrend joins multiple cost codes on one row with \\r\\n. The generic
-    'Buildertrend Flat Rate' bucket rides along on almost every receipt-style bill
-    with no dollar amount of its own — it's Buildertrend's own default tag, not a
-    real second cost split, so it's dropped whenever a real code is also present."""
-    names = [n.strip() for n in (raw or "").replace("\r\n", "\n").split("\n") if n.strip()]
+    """Buildertrend joins multiple cost codes on one row with \\r\\n or commas.
+    The generic 'Buildertrend Flat Rate' bucket rides along on almost every
+    receipt-style bill with no dollar amount of its own — it's Buildertrend's own
+    default tag, not a real second cost split, so it's dropped whenever a real
+    code is also present."""
+    text = str(raw or "").replace("\r\n", "\n").replace(";", "\n").replace(",", "\n")
+    names = [n.strip() for n in text.split("\n") if n.strip()]
     real = [n for n in names if n != FLAT_RATE_CODE] or names
     if len(real) > 1:
         warn(source, row_label, f"Multiple cost codes ({', '.join(real)}) with no per-code dollar split in this export — full amount booked to \"{real[0]}\".")
@@ -270,41 +326,53 @@ def resolve_job(client, job_id, job_query):
 # Row -> payload builders
 # ---------------------------------------------------------------------------
 
-def build_purchase_orders(rows, prefix, cost_code_ids, uploaded_by_user_id):
+def build_purchase_orders(rows, prefix, cost_code_ids):
     payloads, po_number_map = [], {}
     for row in rows:
-        label = f'PO #{row["PO #"]}'
-        cc_id = resolve_cost_codes(row.get("Cost Code"), cost_code_ids, label, "purchase-orders")
+        po_raw = cell(row, "PO #", "PO#")
+        label = f"PO #{po_raw}"
+        cc_id = resolve_cost_codes(cell(row, "Cost Code", "Cost Codes"), cost_code_ids, label, "purchase-orders")
         if not cc_id:
             continue
-        status, approved_at = map_po_status(row.get("PO Status"), label)
-        created_at = xl_to_iso(row.get("Created Date"))
-        po_number = f'{prefix}-{row["PO #"]}'
+        status, approved_at = map_po_status(cell(row, "PO Status"), label)
+        created_at = xl_to_iso(cell(row, "Created Date"))
+        if created_at is None:
+            warn("purchase-orders", label, "Missing Created Date — row skipped.")
+            continue
+        po_number = f"{prefix}-{str(po_raw).strip()}"
+        cost = cell(row, "Cost", "Cost Amount") or 0
         payloads.append({
             "poNumber": po_number,
-            "vendorName": clean_vendor_name(row.get("Performed By")),
+            "vendorName": clean_vendor_name(cell(row, "Performed By", "Vendor")),
             "status": status,
             "approvedAt": approved_at or (created_at if status == "APPROVED" else None),
             "createdAt": created_at,
             "lineItems": [{
                 "costCodeId": cc_id,
-                "title": row.get("Title") or "Migrated from Buildertrend",
+                "title": cell(row, "Title") or "Migrated from Buildertrend",
                 "quantityMilli": 1000,
-                "unitCostCents": round(float(row.get("Cost") or 0) * 100),
+                "unitCostCents": round(float(cost or 0) * 100),
             }],
         })
-        po_number_map[str(row["PO #"]).strip()] = po_number
+        po_number_map[str(po_raw).strip()] = po_number
     return payloads, po_number_map
+
+
+def map_bill_status_flexible(row, label):
+    """Prefer explicit Bill status; fall back to Paid Status from all-open-jobs CSV."""
+    raw = cell(row, "Bill status", "Bill Status", "Paid Status")
+    return map_bill_status(raw, label)
 
 
 def build_bills(rows, prefix, cost_code_ids, po_number_map, po_id_by_number):
     payloads = []
     for row in rows:
-        label = f'Bill #{row["Bill #"]}'
-        cc_id = resolve_cost_codes(row.get("Cost codes"), cost_code_ids, label, "bills")
+        bill_raw = cell(row, "Bill #", "Bill#")
+        label = f"Bill #{bill_raw}"
+        cc_id = resolve_cost_codes(cell(row, "Cost codes", "Cost Codes", "Cost Code"), cost_code_ids, label, "bills")
         if not cc_id:
             continue
-        related_po_raw = str(row.get("Related POs") or "").strip()
+        related_po_raw = str(cell(row, "Related POs", "Related PO") or "").strip()
         purchase_order_id = None
         if related_po_raw:
             po_number_original = related_po_raw.split("-", 1)[0].strip()
@@ -312,19 +380,26 @@ def build_bills(rows, prefix, cost_code_ids, po_number_map, po_id_by_number):
             purchase_order_id = po_id_by_number.get(po_number) if po_number else None
             if related_po_raw and not purchase_order_id:
                 warn("bills", label, f'Related PO "{related_po_raw}" was not resolved to an imported PO — left unlinked.')
+        created_at = xl_to_iso(cell(row, "Created date", "Created Date"))
+        if created_at is None:
+            created_at = xl_to_iso(cell(row, "Invoice date", "Invoice Date", "Date paid", "Date Paid"))
+        if created_at is None:
+            warn("bills", label, "Missing dates — row skipped.")
+            continue
+        amount = cell(row, "Bill amount", "Bill Amount") or 0
         payloads.append({
             "purchaseOrderId": purchase_order_id,
-            "vendorName": clean_vendor_name(row.get("Pay to")),
-            "billNumber": f'{prefix}-{row["Bill #"]}',
-            "approvalStatus": map_bill_status(row.get("Bill status"), label),
-            "issuedOn": xl_to_iso(row.get("Invoice date")),
-            "dueOn": xl_to_iso(row.get("Due date")),
-            "paidAt": xl_to_iso(row.get("Date paid")),
-            "createdAt": xl_to_iso(row.get("Created date")),
+            "vendorName": clean_vendor_name(cell(row, "Pay to", "Pay To")),
+            "billNumber": f"{prefix}-{str(bill_raw).strip()}",
+            "approvalStatus": map_bill_status_flexible(row, label),
+            "issuedOn": xl_to_iso(cell(row, "Invoice date", "Invoice Date")),
+            "dueOn": xl_to_iso(cell(row, "Due date", "Due Date")),
+            "paidAt": xl_to_iso(cell(row, "Date paid", "Date Paid")),
+            "createdAt": created_at,
             "lineItems": [{
                 "costCodeId": cc_id,
-                "title": row.get("Bill title") or "Migrated from Buildertrend",
-                "amountCents": round(float(row.get("Bill amount") or 0) * 100),
+                "title": cell(row, "Bill title", "Title") or "Migrated from Buildertrend",
+                "amountCents": round(float(amount or 0) * 100),
             }],
         })
     return payloads
@@ -333,20 +408,32 @@ def build_bills(rows, prefix, cost_code_ids, po_number_map, po_id_by_number):
 def build_invoices(rows, prefix, payments_by_invoice):
     payloads = []
     for row in rows:
-        original_id = str(row.get("ID#") or "").strip()
+        original_id = str(cell(row, "ID#", "Invoice #", "Invoice#") or "").strip()
         label = f"Invoice #{original_id}"
-        total = float(row.get("Total Price") or 0)
-        amount_paid = float(row.get("Amount Paid") or 0)
-        status = map_invoice_status(row.get("Status"), amount_paid, total, label)
-        created_at = xl_to_iso(row.get("Date Paid")) or xl_to_iso(row.get("Deadline"))
+        total = float(cell(row, "Total Price", "Invoice Amount") or 0)
+        amount_paid = float(cell(row, "Amount Paid") or 0)
+        status = map_invoice_status(
+            cell(row, "Status", "Paid Status"),
+            amount_paid,
+            total,
+            label,
+        )
+        created_at = (
+            xl_to_iso(cell(row, "Date Paid", "Date Released", "Created Date"))
+            or xl_to_iso(cell(row, "Deadline", "Due Date"))
+        )
+        if created_at is None:
+            warn("invoices", label, "Missing dates — row skipped.")
+            continue
+        # Payments keyed by invoice # within a job; multi-job mode prefixes the key.
         payments = payments_by_invoice.get(original_id, [])
         payloads.append({
             "type": "FLAT",
             "invoiceNumber": f"{prefix}-{original_id}",
             "status": status,
             "amountCents": round(total * 100),
-            "dueOn": xl_to_iso(row.get("Deadline")),
-            "paidAt": xl_to_iso(row.get("Date Paid")),
+            "dueOn": xl_to_iso(cell(row, "Deadline", "Due Date")),
+            "paidAt": xl_to_iso(cell(row, "Date Paid")),
             "createdAt": created_at,
             "payments": payments,
         })
@@ -356,21 +443,92 @@ def build_invoices(rows, prefix, payments_by_invoice):
 def build_payments_by_invoice(rows):
     by_invoice = {}
     for row in rows:
-        invoice_id = str(row.get("Invoice") or "").strip()
+        invoice_id = str(cell(row, "Invoice", "Invoice #", "Invoice#") or "").strip()
         if not invoice_id:
             continue
         label = f"Payment on invoice #{invoice_id}"
         by_invoice.setdefault(invoice_id, []).append({
-            "method": map_payment_method(row.get("Payment method"), label),
-            "amountCents": round(float(row.get("Payment amount") or 0) * 100),
-            "receivedAt": xl_to_iso(row.get("Date paid")),
+            "method": map_payment_method(cell(row, "Payment method", "Payment Method"), label),
+            "amountCents": round(float(cell(row, "Payment amount", "Payment Amount") or 0) * 100),
+            "receivedAt": xl_to_iso(cell(row, "Date paid", "Date Paid")),
         })
     return by_invoice
+
+
+def group_rows_by_job(rows):
+    """Split an all-open-jobs export (has a Job column) into {normalizedName: rows}.
+    Single-job exports without a Job column return {None: rows}."""
+    if not rows or "Job" not in rows[0]:
+        return {None: rows}
+    grouped = {}
+    for row in rows:
+        key = normalize_job_name(row.get("Job"))
+        grouped.setdefault(key, []).append(row)
+    return grouped
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+def import_for_job(client, job, cost_code_ids, uploaded_by_user_id, po_rows, bill_rows, invoice_rows, payment_rows, dry_run):
+    prefix = job.get("prefix") or job["id"][:8].upper()
+    print(f'\nResolved job: {job["name"]}  (id={job["id"]}, status={job["status"]}, prefix="{prefix}")')
+    if not job.get("prefix"):
+        print(f'  NOTE: no Job.prefix — using "{prefix}" so PO/Invoice numbers stay unique across jobs.')
+
+    po_payloads, po_number_map = ([], {})
+    if po_rows:
+        po_payloads, po_number_map = build_purchase_orders(po_rows, prefix, cost_code_ids)
+
+    po_id_by_number = {}
+    if po_payloads:
+        print(f"  Purchase Orders: {len(po_payloads)}")
+        if dry_run:
+            print(json.dumps(po_payloads[:3], indent=2)[:1500])
+        else:
+            for i in range(0, len(po_payloads), 100):
+                batch = po_payloads[i:i + 100]
+                results = client.post("/migration/purchase-orders", {
+                    "purchaseOrders": [{**p, "uploadedByUserId": uploaded_by_user_id, "jobId": job["id"]} for p in batch],
+                })
+                for result, payload in zip(results, batch):
+                    status = result["status"]
+                    print(f'    {payload["poNumber"]}: {status}' + (f' ({result.get("error")})' if status == "error" else f' -> {result.get("purchaseOrderId")}'))
+                    if status in ("success", "already_exists"):
+                        po_id_by_number[payload["poNumber"]] = result["purchaseOrderId"]
+
+    if bill_rows:
+        bill_payloads = build_bills(bill_rows, prefix, cost_code_ids, po_number_map, po_id_by_number)
+        print(f"  Bills: {len(bill_payloads)}")
+        if dry_run:
+            print(json.dumps(bill_payloads[:3], indent=2)[:1500])
+        else:
+            for i in range(0, len(bill_payloads), 100):
+                batch = bill_payloads[i:i + 100]
+                results = client.post("/migration/bills", {
+                    "bills": [{**p, "uploadedByUserId": uploaded_by_user_id, "jobId": job["id"]} for p in batch],
+                })
+                for result, payload in zip(results, batch):
+                    status = result["status"]
+                    print(f'    {payload["billNumber"]}: {status}' + (f' ({result.get("error")})' if status == "error" else f' -> {result.get("billId")}'))
+
+    if invoice_rows:
+        payments_by_invoice = build_payments_by_invoice(payment_rows) if payment_rows else {}
+        invoice_payloads = build_invoices(invoice_rows, prefix, payments_by_invoice)
+        print(f"  Invoices: {len(invoice_payloads)}")
+        if dry_run:
+            print(json.dumps(invoice_payloads[:3], indent=2)[:1500])
+        else:
+            for i in range(0, len(invoice_payloads), 100):
+                batch = invoice_payloads[i:i + 100]
+                results = client.post("/migration/invoices", {
+                    "invoices": [{**p, "uploadedByUserId": uploaded_by_user_id, "jobId": job["id"]} for p in batch],
+                })
+                for result, payload in zip(results, batch):
+                    status = result["status"]
+                    print(f'    {payload["invoiceNumber"]}: {status}' + (f' ({result.get("error")})' if status == "error" else f' -> {result.get("invoiceId")}'))
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -378,6 +536,11 @@ def main():
     parser.add_argument("--api-key", required=True)
     parser.add_argument("--job-id")
     parser.add_argument("--job-query")
+    parser.add_argument(
+        "--all-jobs",
+        action="store_true",
+        help="Treat export files as multi-job (Job column) and import every matched WCI job.",
+    )
     parser.add_argument("--uploaded-by-user-id", required=True, help="A real User.id in this org — attributed as the importer.")
     parser.add_argument("--purchase-orders")
     parser.add_argument("--bills")
@@ -386,65 +549,72 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    if not args.job_id and not args.job_query:
-        parser.error("pass --job-id or --job-query")
+    if not args.all_jobs and not args.job_id and not args.job_query:
+        parser.error("pass --job-id, --job-query, or --all-jobs")
 
     client = WciClient(args.api_base, args.api_key)
-    job = resolve_job(client, args.job_id, args.job_query)
-    prefix = job.get("prefix") or job["id"][:8].upper()
-    print(f'Resolved job: {job["name"]}  (id={job["id"]}, status={job["status"]}, using number prefix "{prefix}")')
-    if not job.get("prefix"):
-        print(f'  NOTE: this job has no `prefix` set — using "{prefix}" (first 8 chars of its id) so PO/Invoice numbers stay unique. Set a real prefix in Job Settings first if you want a readable one instead.')
-
     cost_code_ids = client.cost_code_map()
 
-    po_payloads, po_number_map = ([], {})
-    if args.purchase_orders:
-        po_payloads, po_number_map = build_purchase_orders(read_rows(args.purchase_orders), prefix, cost_code_ids, args.uploaded_by_user_id)
+    po_all = read_rows(args.purchase_orders) if args.purchase_orders else []
+    bill_all = read_rows(args.bills) if args.bills else []
+    invoice_all = read_rows(args.invoices) if args.invoices else []
+    payment_all = read_rows(args.invoice_payments) if args.invoice_payments else []
 
-    po_id_by_number = {}
-    if po_payloads:
-        print(f"\n=== Purchase Orders: {len(po_payloads)} to import ===")
-        if args.dry_run:
-            print(json.dumps(po_payloads, indent=2)[:3000])
-        else:
-            for i in range(0, len(po_payloads), 100):
-                batch = po_payloads[i:i + 100]
-                results = client.post("/migration/purchase-orders", {"purchaseOrders": [{**p, "uploadedByUserId": args.uploaded_by_user_id, "jobId": job["id"]} for p in batch]})
-                for result, payload in zip(results, batch):
-                    status = result["status"]
-                    print(f'  {payload["poNumber"]}: {status}' + (f' ({result.get("error")})' if status == "error" else f' -> {result.get("purchaseOrderId")}'))
-                    if status == "success":
-                        po_id_by_number[payload["poNumber"]] = result["purchaseOrderId"]
+    if args.all_jobs:
+        jobs = client.all_jobs()
+        by_name = {normalize_job_name(j["name"]): j for j in jobs}
+        # Also index by trimmed address-ish prefixes for fuzzy recovery later.
+        po_groups = group_rows_by_job(po_all)
+        bill_groups = group_rows_by_job(bill_all)
+        invoice_groups = group_rows_by_job(invoice_all)
+        payment_groups = group_rows_by_job(payment_all)
+        job_keys = sorted(
+            (set(po_groups) | set(bill_groups) | set(invoice_groups) | set(payment_groups)) - {None}
+        )
+        print(f"Multi-job import: {len(job_keys)} distinct Job names in exports; {len(jobs)} WCI jobs loaded.")
+        unmatched = []
+        for key in job_keys:
+            job = by_name.get(key)
+            if not job:
+                unmatched.append(key)
+                warn("jobs", key, "No WCI Job.name match (after trim/casefold) — skipped.")
+                continue
+            import_for_job(
+                client,
+                job,
+                cost_code_ids,
+                args.uploaded_by_user_id,
+                po_groups.get(key, []),
+                bill_groups.get(key, []),
+                invoice_groups.get(key, []),
+                payment_groups.get(key, []),
+                args.dry_run,
+            )
+        if unmatched:
+            print(f"\n=== {len(unmatched)} BT job name(s) with no WCI match ===")
+            for name in unmatched[:50]:
+                print(f"  {name}")
+    else:
+        job = resolve_job(client, args.job_id, args.job_query)
+        # When a single-job export still has a Job column, keep only matching rows.
+        def filter_job(rows):
+            grouped = group_rows_by_job(rows)
+            if None in grouped:
+                return grouped[None]
+            key = normalize_job_name(job["name"])
+            return grouped.get(key, [])
 
-    bill_payloads = []
-    if args.bills:
-        bill_payloads = build_bills(read_rows(args.bills), prefix, cost_code_ids, po_number_map, po_id_by_number)
-    if bill_payloads:
-        print(f"\n=== Bills: {len(bill_payloads)} to import ===")
-        if args.dry_run:
-            print(json.dumps(bill_payloads, indent=2)[:3000])
-        else:
-            for i in range(0, len(bill_payloads), 100):
-                batch = bill_payloads[i:i + 100]
-                results = client.post("/migration/bills", {"bills": [{**p, "uploadedByUserId": args.uploaded_by_user_id, "jobId": job["id"]} for p in batch]})
-                for result, payload in zip(results, batch):
-                    status = result["status"]
-                    print(f'  {payload["billNumber"]}: {status}' + (f' ({result.get("error")})' if status == "error" else f' -> {result.get("billId")}'))
-
-    if args.invoices:
-        payments_by_invoice = build_payments_by_invoice(read_rows(args.invoice_payments)) if args.invoice_payments else {}
-        invoice_payloads = build_invoices(read_rows(args.invoices), prefix, payments_by_invoice)
-        print(f"\n=== Invoices: {len(invoice_payloads)} to import ===")
-        if args.dry_run:
-            print(json.dumps(invoice_payloads, indent=2)[:3000])
-        else:
-            for i in range(0, len(invoice_payloads), 100):
-                batch = invoice_payloads[i:i + 100]
-                results = client.post("/migration/invoices", {"invoices": [{**p, "uploadedByUserId": args.uploaded_by_user_id, "jobId": job["id"]} for p in batch]})
-                for result, payload in zip(results, batch):
-                    status = result["status"]
-                    print(f'  {payload["invoiceNumber"]}: {status}' + (f' ({result.get("error")})' if status == "error" else f' -> {result.get("invoiceId")}'))
+        import_for_job(
+            client,
+            job,
+            cost_code_ids,
+            args.uploaded_by_user_id,
+            filter_job(po_all),
+            filter_job(bill_all),
+            filter_job(invoice_all),
+            filter_job(payment_all),
+            args.dry_run,
+        )
 
     if WARNINGS:
         print(f"\n=== {len(WARNINGS)} warning(s) — review these, nothing here failed the import but some assumptions were made ===")

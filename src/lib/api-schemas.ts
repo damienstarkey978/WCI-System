@@ -975,6 +975,22 @@ export const importInvoicesSchema = z.object({
   invoices: z.array(importInvoiceSchema).min(1).max(100),
 });
 
+export const importScheduleItemSchema = z.object({
+  jobId: z.string().min(1).max(64),
+  title: z.string().trim().min(1).max(255),
+  durationDays: z.number().int().min(1).max(3_650),
+  manualStartDate: z.coerce.date().nullish(),
+  percentCompleteBasisPoints: z.number().int().min(0).max(10_000).optional(),
+  clientVisible: z.boolean().optional(),
+  subVisible: z.boolean().optional(),
+  notesInternal: z.string().trim().max(10_000).nullish(),
+  externalRef: z.string().trim().max(64).nullish(),
+});
+
+export const importScheduleItemsSchema = z.object({
+  scheduleItems: z.array(importScheduleItemSchema).min(1).max(100),
+});
+
 // ---------------------------------------------------------------------------
 // Permitting (Heather / Atlas / field ops)
 // ---------------------------------------------------------------------------

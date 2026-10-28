@@ -7,6 +7,8 @@
  * Per-item results (mirrors /api/staff/files/batch-import): a batch partially
  * succeeding is normal here — a bad cost code on item 40 of 100 shouldn't lose the
  * other 99, and the caller needs to know exactly which ones to retry.
+ *
+ * Idempotent on (jobId, createdAt, note).
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
@@ -30,11 +32,22 @@ export const POST = withApiAuth(["migration:write"], async (request, auth) => {
   // several queries — running them all concurrently would spike the connection pool
   // for no benefit, since this endpoint is a one-time backfill, not a latency-sensitive
   // live path.
-  const results: Array<{ index: number; status: "success" | "error"; dailyLogId?: string; fileCount?: number; error?: string }> = [];
+  const results: Array<{
+    index: number;
+    status: "success" | "already_exists" | "error";
+    dailyLogId?: string;
+    fileCount?: number;
+    error?: string;
+  }> = [];
   for (const [index, input] of parsed.data.dailyLogs.entries()) {
     try {
-      const dailyLog = await importDailyLog({ organizationId: auth.organizationId, ...input });
-      results.push({ index, status: "success", dailyLogId: dailyLog.id, fileCount: dailyLog.files.length });
+      const { record, created } = await importDailyLog({ organizationId: auth.organizationId, ...input });
+      results.push({
+        index,
+        status: created ? "success" : "already_exists",
+        dailyLogId: record.id,
+        fileCount: record.files.length,
+      });
     } catch (error) {
       results.push({ index, status: "error", error: error instanceof Error ? error.message : "Unknown error" });
     }

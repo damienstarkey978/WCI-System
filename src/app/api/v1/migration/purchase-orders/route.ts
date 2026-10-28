@@ -5,6 +5,8 @@
  * surface from POST /api/v1/purchase-orders (which forces every new PO to start
  * DRAFT on a job that still accepts commitments — neither is true of a PO
  * Buildertrend already closed out).
+ *
+ * Idempotent on (organizationId, poNumber): re-runs return status "already_exists".
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
@@ -25,11 +27,22 @@ export const POST = withApiAuth(["migration:write"], async (request, auth) => {
   }
 
   // Sequential — see src/app/api/v1/migration/daily-logs/route.ts for why.
-  const results: Array<{ index: number; status: "success" | "error"; purchaseOrderId?: string; totalCents?: number; error?: string }> = [];
+  const results: Array<{
+    index: number;
+    status: "success" | "already_exists" | "error";
+    purchaseOrderId?: string;
+    totalCents?: number;
+    error?: string;
+  }> = [];
   for (const [index, input] of parsed.data.purchaseOrders.entries()) {
     try {
-      const purchaseOrder = await importPurchaseOrder({ organizationId: auth.organizationId, ...input });
-      results.push({ index, status: "success", purchaseOrderId: purchaseOrder.id, totalCents: purchaseOrder.totalCents });
+      const { record, created } = await importPurchaseOrder({ organizationId: auth.organizationId, ...input });
+      results.push({
+        index,
+        status: created ? "success" : "already_exists",
+        purchaseOrderId: record.id,
+        totalCents: record.totalCents,
+      });
     } catch (error) {
       results.push({ index, status: "error", error: error instanceof Error ? error.message : "Unknown error" });
     }

@@ -62,6 +62,7 @@ import {
   importDailyLogsSchema,
   importInvoicesSchema,
   importPurchaseOrdersSchema,
+  importScheduleItemsSchema,
   inviteVendorToBidSchema,
   issueSubmittalReviewLinkSchema,
   issueSurveyResponseLinkSchema,
@@ -2037,7 +2038,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Migration"],
     scopes: ["migration:write"],
     requestSchema: importDailyLogsSchema,
-    successDescription: "One result per requested daily log, each either { status: \"success\", dailyLogId } or { status: \"error\", error }.",
+    successDescription:
+      "One result per requested daily log, each either { status: \"success\"|\"already_exists\", dailyLogId } or { status: \"error\", error }.",
   },
   {
     method: "post",
@@ -2050,7 +2052,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Migration"],
     scopes: ["migration:write"],
     requestSchema: importPurchaseOrdersSchema,
-    successDescription: "One result per requested PO, each either { status: \"success\", purchaseOrderId, totalCents } or { status: \"error\", error }.",
+    successDescription:
+      "One result per requested PO, each either { status: \"success\"|\"already_exists\", purchaseOrderId, totalCents } or { status: \"error\", error }.",
   },
   {
     method: "post",
@@ -2063,7 +2066,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Migration"],
     scopes: ["migration:write"],
     requestSchema: importBillsSchema,
-    successDescription: "One result per requested bill, each either { status: \"success\", billId, totalCents } or { status: \"error\", error }.",
+    successDescription:
+      "One result per requested bill, each either { status: \"success\"|\"already_exists\", billId, totalCents } or { status: \"error\", error }.",
   },
   {
     method: "post",
@@ -2075,7 +2079,21 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Migration"],
     scopes: ["migration:write"],
     requestSchema: importInvoicesSchema,
-    successDescription: "One result per requested invoice, each either { status: \"success\", invoiceId, amountCents } or { status: \"error\", error }.",
+    successDescription:
+      "One result per requested invoice, each either { status: \"success\"|\"already_exists\", invoiceId, amountCents } or { status: \"error\", error }.",
+  },
+  {
+    method: "post",
+    path: "/migration/schedule-items",
+    summary: "Bulk-import historical Schedule Items",
+    description:
+      "Ensures each job has a Schedule, then creates ScheduleItems with historical start/duration/progress. " +
+      "Idempotent on (job, title, manualStartDate). See src/lib/migration/service.ts.",
+    tags: ["Migration"],
+    scopes: ["migration:write"],
+    requestSchema: importScheduleItemsSchema,
+    successDescription:
+      "One result per requested item, each either { status: \"success\"|\"already_exists\", scheduleItemId } or { status: \"error\", error }.",
   },
 ];
 
