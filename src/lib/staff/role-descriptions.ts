@@ -20,16 +20,16 @@ export const ROLE_DESCRIPTIONS: Record<UserRole, RoleDescription> = {
   [UserRole.PM]: {
     label: "Project Manager",
     blurb:
-      "Runs assigned jobs end-to-end: budgets, schedule, change orders, daily logs, and client communication. Can't manage staff accounts or org-wide settings.",
+      "Full access to every job by role — budgets, schedule, change orders, daily logs, and client communication. Can't manage staff accounts or org-wide settings.",
   },
   [UserRole.OFFICE]: {
     label: "Office",
     blurb:
-      "Office-based support across jobs — proposals, invoicing, purchasing, and vendor coordination. Can't manage staff accounts.",
+      "Full access to every job by role — proposals, invoicing, purchasing, and vendor coordination. Can't manage staff accounts.",
   },
   [UserRole.FIELD]: {
     label: "Field Crew",
-    blurb: "Field access for assigned jobs — daily logs, time clock, schedule, and to-dos. No pricing or cost visibility.",
+    blurb: "Field access only for jobs with an explicit grant — daily logs, time clock, schedule, and to-dos. No pricing or cost visibility unless granted.",
   },
   [UserRole.AGENT]: {
     label: "Agent",

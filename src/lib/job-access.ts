@@ -13,6 +13,13 @@
 import { UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 
+/** Roles that see every job without a JobAccessGrant (CLAUDE.md 2.4 / Buildertrend Admin+office model). */
+export const ORG_WIDE_JOB_ACCESS_ROLES: readonly UserRole[] = [UserRole.ADMIN, UserRole.PM, UserRole.OFFICE];
+
+export function hasOrgWideJobAccess(role: UserRole): boolean {
+  return ORG_WIDE_JOB_ACCESS_ROLES.includes(role);
+}
+
 export interface JobAccessLevel {
   readonly allowed: boolean;
   readonly canViewPricing: boolean;
@@ -44,7 +51,7 @@ const NO_ACCESS: JobAccessLevel = {
 };
 
 export async function getJobAccessLevel(user: { readonly id: string; readonly role: UserRole }, jobId: string): Promise<JobAccessLevel> {
-  if (user.role === UserRole.ADMIN || user.role === UserRole.PM || user.role === UserRole.OFFICE) {
+  if (hasOrgWideJobAccess(user.role)) {
     return FULL_ACCESS;
   }
   // AGENT users authenticate via ApiKey (src/lib/api-auth.ts), never through this

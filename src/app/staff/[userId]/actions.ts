@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import { ScheduleScope, UserRole } from "@/generated/prisma/enums";
+import { appBaseUrl } from "@/lib/app-url";
 import { requireRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { hasOrgWideJobAccess } from "@/lib/job-access";
+import { emailStaffSignInInstructions, type StaffInviteEmailResult } from "@/lib/staff/invite-email";
 import { ASSIGNABLE_STAFF_ROLES } from "@/lib/staff/role-descriptions";
 import {
   grantStaffJobAccess,
@@ -19,6 +23,11 @@ import {
 export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
+}
+
+export interface EmailStaffSignInState {
+  readonly error?: string;
+  readonly invite?: StaffInviteEmailResult;
 }
 
 function isAssignableRole(value: string): value is (typeof ASSIGNABLE_STAFF_ROLES)[number] {
@@ -89,6 +98,17 @@ export async function grantJobAccessAction(_previous: ActionState, formData: For
   const jobId = String(formData.get("jobId") ?? "");
   if (!jobId) return { error: "Choose a job." };
 
+  const member = await db.user.findFirst({
+    where: { id: userId, organizationId: admin.organizationId },
+    select: { role: true },
+  });
+  if (!member) return { error: `Staff member ${userId} not found` };
+  if (hasOrgWideJobAccess(member.role)) {
+    return {
+      error: "Admin, Project Manager, and Office already have full access to every job by role — per-job grants aren't used.",
+    };
+  }
+
   const scheduleScope = String(formData.get("scheduleScope") ?? "ASSIGNED_ONLY") === "ALL_ITEMS" ? ScheduleScope.ALL_ITEMS : ScheduleScope.ASSIGNED_ONLY;
 
   try {
@@ -111,6 +131,23 @@ export async function grantJobAccessAction(_previous: ActionState, formData: For
 
   revalidatePath(`/staff/${userId}`);
   return { ok: true };
+}
+
+export async function emailStaffSignInAction(
+  _previous: EmailStaffSignInState,
+  formData: FormData,
+): Promise<EmailStaffSignInState> {
+  const admin = await requireRole(UserRole.ADMIN);
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return { error: "Missing staff member." };
+
+  try {
+    const invite = await emailStaffSignInInstructions(admin.organizationId, userId, await appBaseUrl());
+    return { invite };
+  } catch (error) {
+    if (error instanceof StaffMemberNotFoundError) return { error: error.message };
+    throw error;
+  }
 }
 
 export async function revokeJobAccessAction(formData: FormData): Promise<void> {

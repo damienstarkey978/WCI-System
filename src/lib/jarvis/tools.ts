@@ -2363,7 +2363,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const inviteStaffMemberTool = betaZodTool({
     name: "invite_staff_member",
     description:
-      "Queue pre-authorizing a new staff member's email with a role — they get real access to this organization's data as soon as they sign in with that email, so this queues for the user's explicit confirmation rather than executing immediately. Admin-only. No invitation email is sent (WCI OS has no outbound email integration) — someone needs to tell them to sign in.",
+      "Queue pre-authorizing a new staff member's email with a role — they get real access as soon as they sign in with that email (Clerk; no WCI OS password). Admin-only. On confirm, WCI OS emails sign-in instructions when EMAIL_* is configured; otherwise the admin must share the /sign-in link.",
     inputSchema: z.object({
       email: z.string().describe("Their email — must match what they sign in with"),
       name: z.string().optional(),

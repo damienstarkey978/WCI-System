@@ -55,11 +55,16 @@ export function InviteStaffForm() {
         </label>
       </div>
       <p className="mt-2 text-xs text-[var(--bt-muted)]">
-        This pre-authorizes the email — they get real access the moment they sign in with it. No invitation email is sent; tell them to sign in themselves.
+        Pre-authorizes this email for Clerk sign-in (no WCI OS password). When outbound email is configured, we also send sign-in instructions; otherwise copy the link from their profile.
       </p>
       {state.error ? (
         <p role="alert" className="mt-2 text-xs text-red-600">
           {state.error}
+        </p>
+      ) : null}
+      {state.ok && state.notice ? (
+        <p role="status" className="mt-2 text-xs text-green-700 dark:text-green-400">
+          {state.notice}
         </p>
       ) : null}
       <div className="mt-3">

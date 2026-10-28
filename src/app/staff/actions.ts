@@ -3,13 +3,20 @@
 import { revalidatePath } from "next/cache";
 
 import { UserRole } from "@/generated/prisma/enums";
+import { appBaseUrl } from "@/lib/app-url";
 import { requireRole } from "@/lib/auth";
+import { isTransactionalEmailConfigured } from "@/lib/env";
+import { emailStaffSignInInstructions } from "@/lib/staff/invite-email";
 import { ASSIGNABLE_STAFF_ROLES } from "@/lib/staff/role-descriptions";
 import { DuplicateStaffEmailError, inviteStaffMember } from "@/lib/staff/service";
 
 export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
+  /** Soft post-create message (invite emailed / hand the sign-in URL). Not a hard failure. */
+  readonly notice?: string;
+  readonly emailed?: boolean;
+  readonly signInUrl?: string;
 }
 
 function isAssignableRole(value: string): value is (typeof ASSIGNABLE_STAFF_ROLES)[number] {
@@ -34,8 +41,9 @@ export async function inviteStaffAction(_previous: ActionState, formData: FormDa
   if (!email) return { error: "Email is required." };
   if (!isAssignableRole(role)) return { error: "Choose a role." };
 
+  let member;
   try {
-    await inviteStaffMember({
+    member = await inviteStaffMember({
       organizationId: user.organizationId,
       email,
       name: name || null,
@@ -49,5 +57,20 @@ export async function inviteStaffAction(_previous: ActionState, formData: FormDa
   }
 
   revalidatePath("/staff");
-  return { ok: true };
+
+  // Best-effort invite email after the User row exists. Create still succeeds if
+  // Resend isn't configured or the send fails — admin can resend from the profile.
+  const invite = await emailStaffSignInInstructions(user.organizationId, member.id, await appBaseUrl());
+  const notice = invite.emailed
+    ? `User added. Sign-in instructions emailed to ${invite.email}.`
+    : isTransactionalEmailConfigured()
+      ? `User added, but the invite email didn't send${invite.emailError ? ` (${invite.emailError})` : ""}. Open their profile to resend or copy the sign-in link.`
+      : `User added. Email isn't configured — tell them to sign in at ${invite.signInUrl} with ${invite.email}.`;
+
+  return {
+    ok: true,
+    emailed: invite.emailed,
+    signInUrl: invite.signInUrl,
+    notice,
+  };
 }
