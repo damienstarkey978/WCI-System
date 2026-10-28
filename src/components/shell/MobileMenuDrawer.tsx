@@ -215,7 +215,7 @@ export function MobileMenuDrawer({
                           letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
                         }
                       : {
-                          color: "var(--bt-text)",
+                          color: "var(--bt-job-sidebar-color)",
                           fontFamily: "var(--bt-font-sans)",
                           fontSize: "var(--bt-job-sidebar-font-size)",
                           fontWeight: "var(--bt-job-sidebar-font-weight)",

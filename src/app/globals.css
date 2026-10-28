@@ -35,20 +35,23 @@
      203 CSS px (220−17 on the 1280 capture; scrollbar sits inside that width).
      Default only: JobSidebar drag-resizes (min 170 / max 440) and overrides via
      inline width + localStorage `wci-job-sidebar-width`; this token stays the
-     CSS fallback / first-paint default. Row pitch remasured on the same BT shots:
-     text-trough spacing ≈26px — with Blueprint body.M (14/20), py 3px → ~26px.
-     Consumed by JobSidebar.tsx (hidden below md); Sales hides the rail. */
+     CSS fallback / first-paint default. Row pitch ≈26px with live BT metrics
+     (14px / 22px lh + py 2px). Consumed by JobSidebar.tsx (hidden below md). */
   --bt-job-sidebar-width: 203px;
-  --bt-job-sidebar-row-py: 3px;
-  /* Blueprint Design System body.M (tokens/typography.json): Inter / 14 / 20 /
-     regular / letterSpacing.wide 2%. Live DevTools blocked by BT login; refine
-     if computed styles differ. JobSidebar + staff body use these — not
-     Space Grotesk / Fredoka / client proposal surfaces. */
-  --bt-font-sans: var(--font-inter), "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  --bt-job-sidebar-row-py: 2px;
+  /* Live BT Jobs sidebar (buildertrend.net/app/Landing, 2026-10-28, 100%-class
+     zoom): system UI stack, 14px / 400 / ~22px lh / letter-spacing normal /
+     color #202227. Blueprint DS tokens still list Inter body.M at 14/20 + 2%
+     tracking — live app chrome wins for visual parity. Closest licensed match
+     for the proprietary-looking face is this standard system stack (Segoe UI /
+     -apple-system / Roboto); Inter remains loaded for anything that opts in via
+     --font-inter. Do not override Space Grotesk / Fredoka / proposal surfaces. */
+  --bt-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   --bt-job-sidebar-font-size: 14px;
-  --bt-job-sidebar-line-height: 20px;
+  --bt-job-sidebar-line-height: 22px;
   --bt-job-sidebar-font-weight: 400;
-  --bt-job-sidebar-letter-spacing: 0.02em;
+  --bt-job-sidebar-letter-spacing: normal;
+  --bt-job-sidebar-color: #202227;
   --bt-border: #e5e7eb;
   --bt-muted: #6b7280;
   --bt-text: #111827;
@@ -106,6 +109,7 @@
   --bt-border: #24282e;
   --bt-muted: #8a9098;
   --bt-text: #edeef0;
+  --bt-job-sidebar-color: #edeef0;
   /* Reused across the app for "good/approved/awarded/accepted" pills (see every
      ..._STATUS_STYLES map keyed off these two tokens) — mint in the new palette,
      matching the redesign's own on-track status-pill treatment. */

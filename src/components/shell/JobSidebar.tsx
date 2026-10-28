@@ -281,12 +281,13 @@ export function JobSidebar({
             </div>
             <div className="flex min-w-0 items-center gap-1">
               <span
-                className="truncate font-semibold text-[var(--bt-text)]"
+                className="truncate font-semibold"
                 style={{
                   fontFamily: "var(--bt-font-sans)",
                   fontSize: "var(--bt-job-sidebar-font-size)",
                   lineHeight: "var(--bt-job-sidebar-line-height)",
                   letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+                  color: "var(--bt-job-sidebar-color)",
                 }}
               >
                 {activeJob.name}
@@ -304,12 +305,13 @@ export function JobSidebar({
           </Link>
         ) : (
           <span
-            className="font-semibold text-[var(--bt-text)]"
+            className="font-semibold"
             style={{
               fontFamily: "var(--bt-font-sans)",
               fontSize: "var(--bt-job-sidebar-font-size)",
               lineHeight: "var(--bt-job-sidebar-line-height)",
               letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+              color: "var(--bt-job-sidebar-color)",
             }}
           >
             Jobs
@@ -426,7 +428,7 @@ export function JobSidebar({
                           paddingBottom: "var(--bt-job-sidebar-row-py)",
                         }
                       : {
-                          color: "var(--bt-text)",
+                          color: "var(--bt-job-sidebar-color)",
                           fontFamily: "var(--bt-font-sans)",
                           fontSize: "var(--bt-job-sidebar-font-size)",
                           fontWeight: "var(--bt-job-sidebar-font-weight)",
