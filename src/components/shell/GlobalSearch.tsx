@@ -26,16 +26,27 @@ function ResultRow({ item, onClick }: { item: SearchResultItem; onClick: () => v
 }
 
 /**
- * The top nav's search box — jobs, clients, vendors, and leads (src/lib/search/service.ts),
- * scoped server-side to what the signed-in user can actually see. Debounced fetch to
- * /api/staff/search rather than a Server Action, since this needs to fire on every
- * keystroke without a full form submission.
+ * The top nav's search box — Buildertrend shows a persistent white pill field
+ * (magnifier + "Search") in the bar, not an icon that expands. Jobs, clients,
+ * vendors, and leads (src/lib/search/service.ts), scoped server-side to what the
+ * signed-in user can see. Debounced fetch to /api/staff/search.
+ *
+ * On narrow screens the pill collapses to an icon so the nav icon cluster still fits.
+ * Pass `variant="pill"` for the centered desktop field, `variant="compact"` for the
+ * mobile icon in the right cluster (TopNav mounts each once).
  */
-export function GlobalSearch() {
-  const [open, setOpen] = useState(false);
+export function GlobalSearch({
+  className,
+  variant = "pill",
+}: {
+  className?: string;
+  variant?: "pill" | "compact";
+}) {
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -60,68 +71,107 @@ export function GlobalSearch() {
     };
   }, [query]);
 
-  const hasResults = GROUPS.some((group) => results[group.key].length > 0);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const timer = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [mobileOpen]);
 
-  function close() {
-    setOpen(false);
+  const hasResults = GROUPS.some((group) => results[group.key].length > 0);
+  const showDropdown = focused && query.trim().length >= 2;
+
+  function reset() {
     setQuery("");
     setResults(EMPTY);
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(true);
-          setTimeout(() => inputRef.current?.focus(), 0);
-        }}
-        className="rounded p-2 transition hover:bg-white/10"
-        aria-label="Search"
-      >
-        <SearchIcon className="h-4.5 w-4.5" />
-      </button>
-    );
+  function closeMobile() {
+    setMobileOpen(false);
+    setFocused(false);
+    reset();
   }
 
-  return (
-    <div className="relative">
-      <div className="flex items-center gap-1.5 rounded bg-white/10 px-2 py-1.5">
-        <SearchIcon className="h-4 w-4 text-white/70" />
+  const dropdown = showDropdown ? (
+    <div
+      className={`absolute top-full z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-black/10 bg-[var(--bt-panel-bg)] text-sm text-[var(--bt-text)] shadow-lg ${
+        variant === "pill" ? "left-1/2 -translate-x-1/2" : "right-0"
+      }`}
+    >
+      {loading ? (
+        <p className="px-3 py-4 text-center text-xs text-[var(--bt-muted)]">Searching…</p>
+      ) : !hasResults ? (
+        <p className="px-3 py-4 text-center text-xs text-[var(--bt-muted)]">No matches for &quot;{query}&quot;.</p>
+      ) : (
+        <div className="max-h-96 overflow-y-auto py-1">
+          {GROUPS.map((group) =>
+            results[group.key].length === 0 ? null : (
+              <div key={group.key}>
+                <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{group.label}</div>
+                {results[group.key].map((item) => (
+                  <ResultRow
+                    key={item.id}
+                    item={item}
+                    onClick={() => {
+                      reset();
+                      setFocused(false);
+                      setMobileOpen(false);
+                    }}
+                  />
+                ))}
+              </div>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  ) : null;
+
+  const pill = (
+    <div className="relative w-full">
+      <div className="flex h-9 w-full items-center gap-2 rounded-full bg-white px-3 text-[var(--bt-text)] shadow-sm">
+        <SearchIcon className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
         <input
           ref={inputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() =>
+            setTimeout(() => {
+              setFocused(false);
+              if (variant === "compact" && mobileOpen) closeMobile();
+            }, 150)
+          }
           onKeyDown={(event) => {
-            if (event.key === "Escape") close();
+            if (event.key === "Escape") {
+              reset();
+              if (variant === "compact") closeMobile();
+              else (event.target as HTMLInputElement).blur();
+            }
           }}
-          onBlur={() => setTimeout(close, 150)}
-          placeholder="Search jobs, clients, vendors, leads…"
-          className="w-40 bg-transparent text-sm text-white placeholder-white/50 outline-none sm:w-64"
+          placeholder="Search"
+          className="min-w-0 flex-1 bg-transparent text-sm text-[var(--bt-text)] placeholder-[var(--bt-muted)] outline-none"
+          aria-label="Search"
         />
       </div>
-      {query.trim().length >= 2 ? (
-        <div className="absolute right-0 top-full z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-black/10 bg-[var(--bt-panel-bg)] text-sm text-[var(--bt-text)] shadow-lg">
-          {loading ? (
-            <p className="px-3 py-4 text-center text-xs text-[var(--bt-muted)]">Searching…</p>
-          ) : !hasResults ? (
-            <p className="px-3 py-4 text-center text-xs text-[var(--bt-muted)]">No matches for &quot;{query}&quot;.</p>
-          ) : (
-            <div className="max-h-96 overflow-y-auto py-1">
-              {GROUPS.map((group) =>
-                results[group.key].length === 0 ? null : (
-                  <div key={group.key}>
-                    <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{group.label}</div>
-                    {results[group.key].map((item) => (
-                      <ResultRow key={item.id} item={item} onClick={close} />
-                    ))}
-                  </div>
-                ),
-              )}
-            </div>
-          )}
-        </div>
-      ) : null}
+      {dropdown}
     </div>
   );
+
+  if (variant === "compact") {
+    if (!mobileOpen) {
+      return (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          className={className ?? "rounded p-2 transition hover:bg-white/10"}
+          aria-label="Search"
+        >
+          <SearchIcon className="h-4.5 w-4.5" />
+        </button>
+      );
+    }
+    return <div className={className ?? "w-[min(16rem,calc(100vw-7rem))]"}>{pill}</div>;
+  }
+
+  return <div className={className ?? "w-full max-w-md"}>{pill}</div>;
 }

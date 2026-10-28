@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { JarvisLauncher } from "@/components/jarvis/JarvisLauncher";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { isAnthropicConfigured, isClerkConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
@@ -45,7 +46,13 @@ export async function AppShell({
   // prop so the ~80 existing AppShell callers, which already fetch and pass `jobs`
   // themselves, don't all need updating just to add this one tab. Skip the fetch
   // entirely when the rail is hidden (Sales) so we don't pay for unused templates.
-  const templateJobs = showJobSidebar && user ? await sidebarTemplateJobsForOrg(user.organizationId) : [];
+  // Org name feeds the BT company strip above the Current Job card.
+  const [templateJobs, organization] = await Promise.all([
+    showJobSidebar && user ? sidebarTemplateJobsForOrg(user.organizationId) : Promise.resolve([]),
+    showJobSidebar && user
+      ? db.organization.findUnique({ where: { id: user.organizationId }, select: { name: true } })
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -58,7 +65,14 @@ export async function AppShell({
         jobs={jobs}
       />
       <div className="flex flex-1 overflow-hidden">
-        {showJobSidebar ? <JobSidebar jobs={jobs} templateJobs={templateJobs} activeJobId={activeJobId} /> : null}
+        {showJobSidebar ? (
+          <JobSidebar
+            jobs={jobs}
+            templateJobs={templateJobs}
+            activeJobId={activeJobId}
+            organizationName={organization?.name ?? "World Construction Inc."}
+          />
+        ) : null}
         <main className="flex-1 overflow-y-auto bg-[var(--bt-page-bg)]">{children}</main>
       </div>
       {isAnthropicConfigured() && isJarvisUiEnabled() ? <JarvisLauncher /> : null}
