@@ -60,10 +60,12 @@ export default function SidebarDimsPreviewPage() {
         <JobSidebar jobs={MOCK_JOBS} activeJobId="job_pine" />
         <main className="flex flex-1 flex-col gap-3 p-6 text-sm text-[var(--bt-text)]">
           <p id="measure-note">
-            Measure the left rail against Buildertrend (203px wide, ~26px job rows).
+            Measure the left rail against Buildertrend (default 203px wide, ~26px job rows). Drag the
+            right edge to resize; preference persists in <code>localStorage</code> key{" "}
+            <code>wci-job-sidebar-width</code>.
           </p>
           <p className="text-[var(--bt-muted)]">
-            Tokens: <code>--bt-job-sidebar-width</code>, <code>--bt-job-sidebar-row-py</code>
+            Tokens: <code>--bt-job-sidebar-width</code> (default), <code>--bt-job-sidebar-row-py</code>
           </p>
         </main>
       </div>

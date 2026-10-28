@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { shouldShowJobPrefix } from "@/lib/job-display";
 
@@ -34,6 +34,38 @@ function QbBadge() {
 }
 
 const COLLAPSE_STORAGE_KEY = "wci-job-sidebar-collapsed";
+/** Persists the user's dragged rail width (CSS px). Default matches BT's measured 203. */
+const WIDTH_STORAGE_KEY = "wci-job-sidebar-width";
+/** Buildertrend default Jobs left rail — see docs/jobs-sidebar-width-remeasure.md. */
+export const JOB_SIDEBAR_DEFAULT_WIDTH_PX = 203;
+/** Narrow enough for the collapse strip feel without crushing search/filter chrome. */
+export const JOB_SIDEBAR_MIN_WIDTH_PX = 170;
+/** Upper bound in the BT "dragged wider" comfort range — not a full second column. */
+export const JOB_SIDEBAR_MAX_WIDTH_PX = 440;
+
+export function clampJobSidebarWidth(px: number): number {
+  if (!Number.isFinite(px)) return JOB_SIDEBAR_DEFAULT_WIDTH_PX;
+  return Math.min(JOB_SIDEBAR_MAX_WIDTH_PX, Math.max(JOB_SIDEBAR_MIN_WIDTH_PX, Math.round(px)));
+}
+
+function readStoredSidebarWidth(): number {
+  if (typeof window === "undefined") return JOB_SIDEBAR_DEFAULT_WIDTH_PX;
+  try {
+    const raw = localStorage.getItem(WIDTH_STORAGE_KEY);
+    if (raw == null || raw === "") return JOB_SIDEBAR_DEFAULT_WIDTH_PX;
+    return clampJobSidebarWidth(Number(raw));
+  } catch {
+    return JOB_SIDEBAR_DEFAULT_WIDTH_PX;
+  }
+}
+
+function persistSidebarWidth(px: number) {
+  try {
+    localStorage.setItem(WIDTH_STORAGE_KEY, String(clampJobSidebarWidth(px)));
+  } catch {
+    // Best effort — width still applies for this session.
+  }
+}
 
 const STATUS_FILTERS = ["ALL", "PRE_SALE", "OPEN", "WARRANTY", "CLOSED"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
@@ -57,14 +89,15 @@ const JOB_STATUS_LABEL: Record<string, string> = {
  * Left panel used both on the /jobs index (no active job) and inside a job's own
  * layout (active job's mini-card pinned above the grouped job list) — the single
  * component the shared AppShell composes with TopNav, per CLAUDE.md's shell plan.
- * Client component for the collapse toggle and the search/status filter over the
- * job list — everything else about which jobs to show still comes from the server
- * (sidebarJobsForOrg already scopes it to what this user can open).
+ * Client component for the collapse toggle, drag-resize (BT parity), and the
+ * search/status filter over the job list — everything else about which jobs to
+ * show still comes from the server (sidebarJobsForOrg already scopes it to what
+ * this user can open). Width defaults to 203px and persists in localStorage.
  *
  * Hidden entirely below `md` (Buildertrend's 203px desktop rail / ~26px job rows —
  * or the collapsed 48px strip — has no reasonable place on a phone-width screen):
  * TopNav's hamburger opens MobileMenuDrawer instead, which has its own simpler
- * job jump-list.
+ * job jump-list. The resize handle is desktop-only for the same reason.
  */
 export function JobSidebar({
   jobs,
@@ -84,10 +117,31 @@ export function JobSidebar({
       return false;
     }
   });
+  // Default 203 matches --bt-job-sidebar-width. Hydrate the persisted preference
+  // after mount (SSR/hydration can't read localStorage without mismatching HTML).
+  const [widthPx, setWidthPx] = useState(JOB_SIDEBAR_DEFAULT_WIDTH_PX);
+  const [resizing, setResizing] = useState(false);
+  const dragStartXRef = useRef(0);
+  const dragStartWidthRef = useRef(JOB_SIDEBAR_DEFAULT_WIDTH_PX);
   const [tab, setTab] = useState<"jobs" | "templates">("jobs");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [sortMode, setSortMode] = useState<SortMode>("recent");
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- hydrate width from localStorage after mount (SSR-safe) */
+    setWidthPx(readStoredSidebarWidth());
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  // Clear body cursor / selection lock if we unmount mid-drag.
+  useEffect(() => {
+    if (!resizing) return;
+    return () => {
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [resizing]);
 
   function toggleCollapsed() {
     setCollapsed((value) => {
@@ -99,6 +153,35 @@ export function JobSidebar({
       }
       return next;
     });
+  }
+
+  function onResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    // Only primary button / touch — ignore right-click.
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStartXRef.current = event.clientX;
+    dragStartWidthRef.current = widthPx;
+    setResizing(true);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+  }
+
+  function onResizePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    const next = clampJobSidebarWidth(dragStartWidthRef.current + (event.clientX - dragStartXRef.current));
+    setWidthPx(next);
+  }
+
+  function endResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    const next = clampJobSidebarWidth(dragStartWidthRef.current + (event.clientX - dragStartXRef.current));
+    setWidthPx(next);
+    persistSidebarWidth(next);
+    setResizing(false);
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
   }
 
   const activeJob = activeJobId ? jobs.find((job) => job.id === activeJobId) : undefined;
@@ -163,14 +246,32 @@ export function JobSidebar({
   return (
     <aside
       data-testid="job-sidebar"
-      className="hidden shrink-0 flex-col border-r bg-[var(--bt-sidebar-bg)] md:flex"
+      className={`relative hidden shrink-0 flex-col border-r bg-[var(--bt-sidebar-bg)] md:flex${resizing ? " select-none" : ""}`}
       style={{
         borderColor: "var(--bt-border)",
-        width: "var(--bt-job-sidebar-width)",
-        minWidth: "var(--bt-job-sidebar-width)",
-        maxWidth: "var(--bt-job-sidebar-width)",
+        // Inline px so a dragged preference overrides --bt-job-sidebar-width (still the CSS default).
+        width: widthPx,
+        minWidth: widthPx,
+        maxWidth: widthPx,
       }}
     >
+      {/* Desktop-only grabber: aside is already `hidden md:flex`, so this never shows on mobile. */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize job list"
+        aria-valuenow={widthPx}
+        aria-valuemin={JOB_SIDEBAR_MIN_WIDTH_PX}
+        aria-valuemax={JOB_SIDEBAR_MAX_WIDTH_PX}
+        data-testid="job-sidebar-resize-handle"
+        onPointerDown={onResizePointerDown}
+        onPointerMove={onResizePointerMove}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+        className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none"
+        style={{ marginRight: -3, width: 6 }}
+        title="Drag to resize"
+      />
       <div className="flex items-start justify-between gap-1.5 border-b px-2.5 py-2" style={{ borderColor: "var(--bt-border)" }}>
         {activeJob ? (
           <Link href={`/jobs/${activeJob.id}`} className="flex min-w-0 flex-1 flex-col gap-0.5">

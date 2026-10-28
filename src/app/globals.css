@@ -33,10 +33,10 @@
   /* Jobs left rail — verified 2026-10-28 against clean Buildertrend Jobs list
      screenshots (no PO modal) + production CSS: content left→rail border =
      203 CSS px (220−17 on the 1280 capture; scrollbar sits inside that width).
-     Prod Netlify bundle serves --bt-job-sidebar-width:203px (hard-refresh if stale).
-     Row pitch remasured on the same BT shots: text-trough spacing ≈26px, so
-     py 0.25rem → ~26px rows (13px/snug + 4+4). The 0.5rem/~34px from #21/#30 was
-     a false "32–36px" read and made WCI feel chunkier than BT at the same width.
+     Default only: JobSidebar drag-resizes (min 170 / max 440) and overrides via
+     inline width + localStorage `wci-job-sidebar-width`; this token stays the
+     CSS fallback / first-paint default. Row pitch remasured on the same BT shots:
+     text-trough spacing ≈26px, so py 0.25rem → ~26px rows (13px/snug + 4+4).
      Consumed by JobSidebar.tsx (hidden below md); Sales hides the rail. */
   --bt-job-sidebar-width: 203px;
   --bt-job-sidebar-row-py: 0.25rem;
