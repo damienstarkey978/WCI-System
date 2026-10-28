@@ -18,6 +18,7 @@ import {
 } from "@/lib/buildertrend-nav";
 
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
+import { shouldShowJobPrefix } from "@/lib/job-display";
 
 import type { SidebarJob } from "./JobSidebar";
 import { CloseIcon, SparkleIcon } from "./icons";
@@ -208,7 +209,9 @@ export function MobileMenuDrawer({
                       : { color: "var(--bt-text)" }
                   }
                 >
-                  {job.prefix ? <span className="mr-1.5 font-mono text-xs text-[var(--bt-muted)]">{job.prefix}</span> : null}
+                  {shouldShowJobPrefix(job.name, job.prefix) ? (
+                    <span className="mr-1.5 font-mono text-xs text-[var(--bt-muted)]">{job.prefix}</span>
+                  ) : null}
                   {job.name}
                 </Link>
               ))}

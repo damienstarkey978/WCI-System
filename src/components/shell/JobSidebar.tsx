@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { shouldShowJobPrefix } from "@/lib/job-display";
+
 import { ChevronDownIcon, FunnelIcon, HomeIcon, SortIcon } from "./icons";
 
 export interface SidebarJob {
@@ -303,7 +305,9 @@ export function JobSidebar({
                   }
                 >
                   <span className="truncate">
-                    {job.prefix ? <span className="mr-1 font-mono text-[11px] text-[var(--bt-muted)]">{job.prefix}</span> : null}
+                    {shouldShowJobPrefix(job.name, job.prefix) ? (
+                      <span className="mr-1 font-mono text-[11px] text-[var(--bt-muted)]">{job.prefix}</span>
+                    ) : null}
                     {job.name}
                   </span>
                   {job.qboLinked ? <QbBadge /> : null}
