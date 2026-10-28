@@ -9,6 +9,8 @@ const {
   billCreate,
   invoiceFindFirst,
   invoiceCreate,
+  invoiceFindFirstOrThrow,
+  paymentCreateMany,
   scheduleFindFirst,
   scheduleCreate,
   scheduleItemFindFirst,
@@ -27,6 +29,8 @@ const {
   billCreate: vi.fn(),
   invoiceFindFirst: vi.fn(),
   invoiceCreate: vi.fn(),
+  invoiceFindFirstOrThrow: vi.fn(),
+  paymentCreateMany: vi.fn(),
   scheduleFindFirst: vi.fn(),
   scheduleCreate: vi.fn(),
   scheduleItemFindFirst: vi.fn(),
@@ -47,7 +51,8 @@ vi.mock("@/lib/db", () => ({
     dailyLog: { findFirst: dailyLogFindFirst, create: dailyLogCreate },
     purchaseOrder: { findFirst: purchaseOrderFindFirst, create: purchaseOrderCreate },
     bill: { findFirst: billFindFirst, create: billCreate },
-    invoice: { findFirst: invoiceFindFirst, create: invoiceCreate },
+    invoice: { findFirst: invoiceFindFirst, create: invoiceCreate, findFirstOrThrow: invoiceFindFirstOrThrow },
+    payment: { createMany: paymentCreateMany },
     schedule: { findFirst: scheduleFindFirst, create: scheduleCreate },
     scheduleItem: {
       findFirst: scheduleItemFindFirst,
@@ -133,6 +138,77 @@ describe("migration import idempotency", () => {
 
     expect(result.created).toBe(false);
     expect(invoiceCreate).not.toHaveBeenCalled();
+    expect(paymentCreateMany).not.toHaveBeenCalled();
+  });
+
+  it("backfills payments onto an existing invoice that has none", async () => {
+    const existing = { id: "inv_1", invoiceNumber: "ABC-0001", amountCents: 1000, payments: [], lineItems: [], files: [] };
+    const refreshed = {
+      ...existing,
+      payments: [{ id: "pay_1", amountCents: 1000 }],
+    };
+    invoiceFindFirst.mockResolvedValue(existing);
+    invoiceFindFirstOrThrow.mockResolvedValue(refreshed);
+    paymentCreateMany.mockResolvedValue({ count: 1 });
+
+    const receivedAt = new Date("2026-01-03T12:00:00Z");
+    const result = await importInvoice({
+      organizationId: "org_1",
+      jobId: "job_1",
+      uploadedByUserId: "user_1",
+      type: "FLAT",
+      invoiceNumber: "ABC-0001",
+      status: "PAID",
+      amountCents: 1000,
+      createdAt: new Date("2026-01-02T12:00:00Z"),
+      payments: [{ method: "MANUAL", amountCents: 1000, receivedAt }],
+    });
+
+    expect(result.created).toBe(false);
+    expect(result.paymentsBackfilled).toBe(true);
+    expect(invoiceCreate).not.toHaveBeenCalled();
+    expect(paymentCreateMany).toHaveBeenCalledWith({
+      data: [
+        {
+          organizationId: "org_1",
+          invoiceId: "inv_1",
+          method: "MANUAL",
+          amountCents: 1000,
+          reference: null,
+          receivedAt,
+          createdAt: receivedAt,
+        },
+      ],
+    });
+    expect(result.record).toBe(refreshed);
+  });
+
+  it("does not double-create payments when the existing invoice already has some", async () => {
+    const existing = {
+      id: "inv_1",
+      invoiceNumber: "ABC-0001",
+      amountCents: 1000,
+      payments: [{ id: "pay_1" }],
+      lineItems: [],
+      files: [],
+    };
+    invoiceFindFirst.mockResolvedValue(existing);
+
+    const result = await importInvoice({
+      organizationId: "org_1",
+      jobId: "job_1",
+      uploadedByUserId: "user_1",
+      type: "FLAT",
+      invoiceNumber: "ABC-0001",
+      status: "PAID",
+      amountCents: 1000,
+      createdAt: new Date("2026-01-02T12:00:00Z"),
+      payments: [{ method: "MANUAL", amountCents: 1000, receivedAt: new Date("2026-01-03T12:00:00Z") }],
+    });
+
+    expect(result.created).toBe(false);
+    expect(result.paymentsBackfilled).toBe(false);
+    expect(paymentCreateMany).not.toHaveBeenCalled();
   });
 
   it("creates a schedule when missing, then skips duplicate title+start", async () => {
