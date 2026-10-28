@@ -401,10 +401,11 @@ export function TopNav({
 
   return (
     <header
-      className="flex h-14 items-center justify-between gap-4 px-4 text-white"
+      className="flex h-14 items-center gap-2 px-3 text-white sm:gap-3 sm:px-4"
       style={{ background: "var(--bt-nav)" }}
     >
-      <div className="flex items-center gap-6">
+      {/* Left: brand + primary nav (BT order) */}
+      <div className="flex min-w-0 shrink-0 items-center gap-3 lg:gap-5">
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
@@ -419,7 +420,7 @@ export function TopNav({
           <BrandMark className="h-8 w-auto" />
         </Link>
 
-        <nav className="hidden items-center gap-1 text-sm font-medium lg:flex">
+        <nav className="hidden items-center gap-0.5 text-sm font-medium xl:flex">
           <FlatNavDropdown label="Sales" items={SALES_NAV} />
           <MixedNavDropdown label="Jobs" items={JOBS_NAV} activeJobId={activeJobId} />
 
@@ -439,8 +440,16 @@ export function TopNav({
         </nav>
       </div>
 
-      <div className="flex items-center gap-1">
-        <GlobalSearch />
+      {/* Center: BT white Search pill (hidden below md — compact icon lives in the right cluster) */}
+      <div className="hidden min-w-0 flex-1 justify-center px-2 md:flex">
+        <GlobalSearch variant="pill" className="w-full max-w-sm lg:max-w-md" />
+      </div>
+
+      {/* Right: + · bell · chat · people · help · avatar (BT). Jarvis is WCI-only, kept after chat. */}
+      <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
+        <div className="md:hidden">
+          <GlobalSearch variant="compact" />
+        </div>
         <QuickAddMenu activeJobId={activeJobId} />
         <NotificationBell notifications={notifications} unreadCount={unreadCount} />
         {activeJobId ? (
@@ -472,7 +481,7 @@ export function TopNav({
         <PeopleDropdown pathname={pathname} />
         <HelpMenu />
         {clerkConfigured ? (
-          <div className="ml-2">
+          <div className="ml-1 sm:ml-2">
             <UserButton>
               <UserButton.MenuItems>
                 <UserButton.Link label="Settings" href="/settings" labelIcon={<GearIcon className="h-4 w-4" />} />
