@@ -56,9 +56,17 @@ def parse_duration(raw) -> int:
 def parse_percent_bps(raw) -> int:
     if raw in ("", None):
         return 0
+    if isinstance(raw, bool):
+        return 10_000 if raw else 0
     if isinstance(raw, float) and 0 <= raw <= 1:
         return int(round(raw * 10_000))
     text = str(raw).strip().replace("%", "")
+    # Grid CSV exports a Completed True/False column instead of % Complete.
+    lowered = text.casefold()
+    if lowered in ("true", "yes", "y", "complete", "completed"):
+        return 10_000
+    if lowered in ("false", "no", "n", "incomplete"):
+        return 0
     try:
         value = float(text)
     except ValueError:
@@ -75,15 +83,27 @@ def build_items(rows):
         if not title:
             continue
         start = xl_to_iso(cell(row, "Start Date", "Start", "StartDate"))
+        if isinstance(start, str) and start and not start.endswith("Z") and "T" in start:
+            # Grid ISO datetimes without Z still coerce; normalize for consistency.
+            start = start + "Z" if "+" not in start[-6:] else start
         duration = parse_duration(cell(row, "Duration", "Work Days", "WorkDays", "Days"))
+        percent_raw = cell(
+            row,
+            "% Complete",
+            "Percent Complete",
+            "Progress",
+            "Completed",
+            "Complete",
+        )
         payloads.append({
             "title": title,
             "durationDays": duration,
             "manualStartDate": start,
-            "percentCompleteBasisPoints": parse_percent_bps(
-                cell(row, "% Complete", "Complete", "Percent Complete", "Progress")
-            ),
-            "externalRef": str(cell(row, "ID #", "ID#", "Id") or "").strip() or None,
+            "percentCompleteBasisPoints": parse_percent_bps(percent_raw),
+            "externalRef": str(
+                cell(row, "ScheduleItemId", "ID #", "ID#", "Id") or ""
+            ).strip()
+            or None,
         })
     return payloads
 
