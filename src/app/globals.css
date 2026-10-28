@@ -30,15 +30,16 @@
   --bt-panel-bg: #ffffff;
   --bt-panel-bg-muted: #f3f4f6;
   --bt-sidebar-bg: #ffffff;
-  /* Jobs left rail — remeasured from clean Buildertrend Jobs list screenshots
-     (no PO modal): artifacts/screenshots/bt-logged-in-jobs.png + bt-job-summary.png.
-     Content left→rail border ≈203 CSS px (220−17 on the 1280 desktop capture).
-     The earlier 11rem/176px came from a PO-modal left edge and read too narrow vs
-     live BT (Damien, 2026-10-28). 15rem/240px (#8) was still not a BT match.
-     Row py 0.5rem → ~34px row height (13px/snug + 8+8), matching BT's ~32–36px
-     job-list pitch. Consumed by JobSidebar.tsx (hidden below md); Sales hides the rail. */
+  /* Jobs left rail — verified 2026-10-28 against clean Buildertrend Jobs list
+     screenshots (no PO modal) + production CSS: content left→rail border =
+     203 CSS px (220−17 on the 1280 capture; scrollbar sits inside that width).
+     Prod Netlify bundle serves --bt-job-sidebar-width:203px (hard-refresh if stale).
+     Row pitch remasured on the same BT shots: text-trough spacing ≈26px, so
+     py 0.25rem → ~26px rows (13px/snug + 4+4). The 0.5rem/~34px from #21/#30 was
+     a false "32–36px" read and made WCI feel chunkier than BT at the same width.
+     Consumed by JobSidebar.tsx (hidden below md); Sales hides the rail. */
   --bt-job-sidebar-width: 203px;
-  --bt-job-sidebar-row-py: 0.5rem;
+  --bt-job-sidebar-row-py: 0.25rem;
   --bt-border: #e5e7eb;
   --bt-muted: #6b7280;
   --bt-text: #111827;
