@@ -280,7 +280,18 @@ export function JobSidebar({
               Current job
             </div>
             <div className="flex min-w-0 items-center gap-1">
-              <span className="truncate text-[13px] font-semibold leading-snug text-[var(--bt-text)]">{activeJob.name}</span>
+              <span
+                className="truncate font-semibold"
+                style={{
+                  fontFamily: "var(--bt-font-sans)",
+                  fontSize: "var(--bt-job-sidebar-font-size)",
+                  lineHeight: "var(--bt-job-sidebar-line-height)",
+                  letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+                  color: "var(--bt-job-sidebar-color)",
+                }}
+              >
+                {activeJob.name}
+              </span>
               {activeJob.qboLinked ? <QbBadge /> : null}
             </div>
             {activeJob.clientName ? <div className="truncate text-[11px] leading-snug text-[var(--bt-muted)]">{activeJob.clientName}</div> : null}
@@ -293,7 +304,18 @@ export function JobSidebar({
             </span>
           </Link>
         ) : (
-          <span className="text-[13px] font-semibold text-[var(--bt-text)]">Jobs</span>
+          <span
+            className="font-semibold"
+            style={{
+              fontFamily: "var(--bt-font-sans)",
+              fontSize: "var(--bt-job-sidebar-font-size)",
+              lineHeight: "var(--bt-job-sidebar-line-height)",
+              letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+              color: "var(--bt-job-sidebar-color)",
+            }}
+          >
+            Jobs
+          </span>
         )}
         <button
           type="button"
@@ -390,17 +412,28 @@ export function JobSidebar({
                 <Link
                   key={job.id}
                   href={jobHref(job.id)}
-                  className={`flex items-center gap-1 truncate px-2.5 text-[13px] leading-snug transition ${isActive ? "" : "hover:bg-black/5"}`}
+                  data-testid="job-sidebar-row"
+                  className={`flex items-center gap-1 truncate px-2.5 transition ${isActive ? "" : "hover:bg-black/5"}`}
                   style={
                     isActive
                       ? {
                           background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)",
                           color: "var(--bt-primary)",
+                          fontFamily: "var(--bt-font-sans)",
+                          fontSize: "var(--bt-job-sidebar-font-size)",
+                          fontWeight: "var(--bt-job-sidebar-font-weight)",
+                          lineHeight: "var(--bt-job-sidebar-line-height)",
+                          letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
                           paddingTop: "var(--bt-job-sidebar-row-py)",
                           paddingBottom: "var(--bt-job-sidebar-row-py)",
                         }
                       : {
-                          color: "var(--bt-text)",
+                          color: "var(--bt-job-sidebar-color)",
+                          fontFamily: "var(--bt-font-sans)",
+                          fontSize: "var(--bt-job-sidebar-font-size)",
+                          fontWeight: "var(--bt-job-sidebar-font-weight)",
+                          lineHeight: "var(--bt-job-sidebar-line-height)",
+                          letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
                           paddingTop: "var(--bt-job-sidebar-row-py)",
                           paddingBottom: "var(--bt-job-sidebar-row-py)",
                         }

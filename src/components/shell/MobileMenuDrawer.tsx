@@ -202,11 +202,26 @@ export function MobileMenuDrawer({
                   key={job.id}
                   href={activeSection ? `/jobs/${job.id}${activeSection}` : `/jobs/${job.id}`}
                   onClick={onClose}
-                  className="truncate rounded px-2 py-1.5 text-sm hover:bg-black/5"
+                  className="truncate rounded px-2 py-1.5 hover:bg-black/5"
                   style={
                     job.id === activeJobId
-                      ? { background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)", color: "var(--bt-primary)" }
-                      : { color: "var(--bt-text)" }
+                      ? {
+                          background: "color-mix(in srgb, var(--bt-primary) 18%, transparent)",
+                          color: "var(--bt-primary)",
+                          fontFamily: "var(--bt-font-sans)",
+                          fontSize: "var(--bt-job-sidebar-font-size)",
+                          fontWeight: "var(--bt-job-sidebar-font-weight)",
+                          lineHeight: "var(--bt-job-sidebar-line-height)",
+                          letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+                        }
+                      : {
+                          color: "var(--bt-job-sidebar-color)",
+                          fontFamily: "var(--bt-font-sans)",
+                          fontSize: "var(--bt-job-sidebar-font-size)",
+                          fontWeight: "var(--bt-job-sidebar-font-weight)",
+                          lineHeight: "var(--bt-job-sidebar-line-height)",
+                          letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+                        }
                   }
                 >
                   {shouldShowJobPrefix(job.name, job.prefix) ? (
