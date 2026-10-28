@@ -112,6 +112,7 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
     dateLabel: (bill.issuedOn ?? bill.createdAt).toISOString(),
     totalCents: bill.lineItems.reduce((total, item) => total + item.amountCents, 0),
     qboBillId: bill.qboBillId,
+    sendToQuickBooks: bill.sendToQuickBooks,
   }));
 
   const createBill = (

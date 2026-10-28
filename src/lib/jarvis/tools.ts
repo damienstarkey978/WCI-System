@@ -2160,10 +2160,20 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const advanceBillStatusTool = betaZodTool({
     name: "advance_bill_status",
     description:
-      "Queue moving a bill to a new approval status (APPROVED, READY_FOR_PAYMENT, PAID, or back to IN_REVIEW, or VOID). This does NOT execute immediately — every one of these moves money in the funnel, so it queues for the user's explicit confirmation. Pass the bill's id from list_bills_for_job.",
+      "Queue moving a bill to a new approval status (APPROVED, READY_FOR_PAYMENT, PAID, or back to IN_REVIEW, or VOID). This does NOT execute immediately — every one of these moves money in the funnel, so it queues for the user's explicit confirmation. Pass the bill's id from list_bills_for_job. For READY_FOR_PAYMENT you must also pass sendToQuickBooks: materials = false (WCI only); labor/unpaid services = true.",
     inputSchema: z.object({
       billId: z.string().describe("The bill's id, from list_bills_for_job"),
       targetStatus: z.enum(["IN_REVIEW", "APPROVED", "READY_FOR_PAYMENT", "PAID", "VOID"]),
+      sendToQuickBooks: z
+        .boolean()
+        .optional()
+        .describe(
+          "Required when targetStatus is READY_FOR_PAYMENT. true = push to QuickBooks (labor/services); false = materials stay in WCI only.",
+        ),
+      quickBooksSkipReason: z
+        .string()
+        .optional()
+        .describe("Optional note when sendToQuickBooks is false (e.g. Materials — not sent to QuickBooks)."),
     }),
     run: async (input) => {
       const bill = await db.bill.findFirst({
@@ -2171,12 +2181,27 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         select: { billNumber: true, vendorName: true, approvalStatus: true, job: { select: { name: true } } },
       });
       if (!bill) return `No bill ${input.billId} found in this organization.`;
+      if (input.targetStatus === "READY_FOR_PAYMENT" && typeof input.sendToQuickBooks !== "boolean") {
+        return "sendToQuickBooks is required for READY_FOR_PAYMENT (true = labor/services to QuickBooks, false = materials stay in WCI).";
+      }
+
+      const qbNote =
+        input.targetStatus === "READY_FOR_PAYMENT"
+          ? input.sendToQuickBooks
+            ? " and send to QuickBooks"
+            : " without QuickBooks"
+          : "";
 
       await createPendingAction({
         conversationId: ctx.conversationId,
         toolName: "advance_bill_status",
-        input: { billId: input.billId, targetStatus: input.targetStatus },
-        summary: `Move bill ${bill.billNumber ?? bill.vendorName} on ${bill.job.name} from ${bill.approvalStatus} to ${input.targetStatus}`,
+        input: {
+          billId: input.billId,
+          targetStatus: input.targetStatus,
+          ...(typeof input.sendToQuickBooks === "boolean" ? { sendToQuickBooks: input.sendToQuickBooks } : {}),
+          ...(input.quickBooksSkipReason ? { quickBooksSkipReason: input.quickBooksSkipReason } : {}),
+        },
+        summary: `Move bill ${bill.billNumber ?? bill.vendorName} on ${bill.job.name} from ${bill.approvalStatus} to ${input.targetStatus}${qbNote}`,
       });
       return `Queued moving the bill to ${input.targetStatus} for the user's confirmation. It has NOT changed yet — tell the user to confirm it in the chat.`;
     },

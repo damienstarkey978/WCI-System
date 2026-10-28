@@ -23,7 +23,12 @@ import {
   addBillToInvoice,
 } from "@/lib/bills/to-invoice";
 import { parsePercentToBasisPoints } from "@/lib/money";
-import { BillNotFoundError, IllegalBillTransitionError, updateBillStatus } from "@/lib/bills/service";
+import {
+  BillNotFoundError,
+  BillQuickBooksIntentRequiredError,
+  IllegalBillTransitionError,
+  updateBillStatus,
+} from "@/lib/bills/service";
 
 export interface BillActionState {
   readonly error?: string;
@@ -48,6 +53,7 @@ async function run(
     if (
       error instanceof BillNotFoundError ||
       error instanceof IllegalBillTransitionError ||
+      error instanceof BillQuickBooksIntentRequiredError ||
       error instanceof ApprovalsIncompleteError ||
       error instanceof ApproverNotAssignedError ||
       error instanceof LienWaiverAlreadyReleasedError ||
@@ -71,7 +77,18 @@ export async function setBillStatusAction(_previous: BillActionState, formData: 
   const jobId = String(formData.get("jobId") ?? "");
   const billId = String(formData.get("billId") ?? "");
   const status = String(formData.get("status") ?? "") as BillApprovalStatus;
-  return run(jobId, billId, (organizationId) => updateBillStatus(organizationId, billId, status));
+  const sendRaw = String(formData.get("sendToQuickBooks") ?? "").trim();
+  const skipReason = String(formData.get("quickBooksSkipReason") ?? "").trim() || null;
+
+  const options =
+    status === "READY_FOR_PAYMENT"
+      ? {
+          sendToQuickBooks: sendRaw === "true" ? true : sendRaw === "false" ? false : undefined,
+          quickBooksSkipReason: skipReason,
+        }
+      : {};
+
+  return run(jobId, billId, (organizationId) => updateBillStatus(organizationId, billId, status, options));
 }
 
 export async function claimFromInboxAction(_previous: BillActionState, formData: FormData): Promise<BillActionState> {

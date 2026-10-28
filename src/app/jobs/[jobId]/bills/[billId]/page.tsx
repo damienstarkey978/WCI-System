@@ -251,7 +251,16 @@ export default async function BillDetailPage({ params }: PageProps<"/jobs/[jobId
 
         <div className="flex flex-col gap-4">
           <Panel title="Actions">
-            <StatusActions jobId={jobId} billId={bill.id} status={bill.approvalStatus} />
+            <StatusActions
+              jobId={jobId}
+              billId={bill.id}
+              status={bill.approvalStatus}
+              isQboConnected={isQboConnected}
+              lineItems={bill.lineItems.map((item) => ({
+                costType: item.costType,
+                amountCents: item.amountCents,
+              }))}
+            />
           </Panel>
 
           <Panel title="Bill to client">
@@ -291,17 +300,35 @@ export default async function BillDetailPage({ params }: PageProps<"/jobs/[jobId
           </Panel>
 
           <Panel title="QuickBooks">
-            {!isQboConnected ? (
-              <p className="text-xs text-[var(--bt-muted)]">
-                QuickBooks isn&apos;t connected for this organization.
-              </p>
+            {bill.sendToQuickBooks === false ? (
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-[var(--bt-text)]">Not sent to QuickBooks</span>
+                <span className="text-xs text-[var(--bt-muted)]">
+                  {bill.quickBooksSkipReason ?? "Skipped at ready for payment."}
+                </span>
+              </div>
             ) : bill.qboBillId ? (
               <div className="flex flex-col gap-1 text-sm">
                 <span style={{ color: "var(--bt-success)" }}>Synced</span>
                 <span className="text-xs text-[var(--bt-muted)]">Bill ID {bill.qboBillId}</span>
               </div>
+            ) : bill.sendToQuickBooks === true ? (
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-[var(--bt-text)]">Marked to send</span>
+                <span className="text-xs text-[var(--bt-muted)]">
+                  {isQboConnected
+                    ? "Not yet in QuickBooks — use Sync on the bills list if the push did not finish."
+                    : "QuickBooks isn't connected; sync when connected."}
+                </span>
+              </div>
+            ) : !isQboConnected ? (
+              <p className="text-xs text-[var(--bt-muted)]">
+                QuickBooks isn&apos;t connected for this organization.
+              </p>
             ) : (
-              <p className="text-xs text-[var(--bt-muted)]">Not yet pushed to QuickBooks.</p>
+              <p className="text-xs text-[var(--bt-muted)]">
+                Not yet pushed. Choose send vs skip when marking ready for payment.
+              </p>
             )}
           </Panel>
         </div>

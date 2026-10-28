@@ -32,6 +32,7 @@ export interface BillRow {
   readonly dateLabel: string;
   readonly totalCents: number;
   readonly qboBillId: string | null;
+  readonly sendToQuickBooks: boolean | null;
 }
 
 /** Buildertrend's Bills Standard View: Job, Created by, Bill #, Bill title. */
@@ -111,8 +112,13 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
             key: "qbo",
             header: "QuickBooks",
             align: "right" as const,
-            render: (row: BillRow) =>
-              row.qboBillId ? <span className="text-xs text-[var(--bt-muted)]">Synced</span> : <SyncToQuickBooksButton jobId={row.jobId} billId={row.id} label="Sync" />,
+            render: (row: BillRow) => {
+              if (row.qboBillId) return <span className="text-xs text-[var(--bt-muted)]">Synced</span>;
+              if (row.sendToQuickBooks === false) {
+                return <span className="text-xs text-[var(--bt-muted)]">Skipped</span>;
+              }
+              return <SyncToQuickBooksButton jobId={row.jobId} billId={row.id} label="Sync" />;
+            },
           },
         ]
       : []),

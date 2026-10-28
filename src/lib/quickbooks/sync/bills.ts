@@ -12,6 +12,7 @@
  * against an unlinked vendor name stay QuickBooks-only until a Vendor record exists.
  */
 
+import { isBillQuickBooksSyncBlocked } from "@/lib/bills/quickbooks-intent";
 import { db } from "@/lib/db";
 import { accountingRequest } from "@/lib/quickbooks/client";
 import { getValidAccessToken, type ValidQuickBooksAccess } from "@/lib/quickbooks/connection-service";
@@ -32,6 +33,18 @@ export class BillHasNoVendorError extends Error {
   constructor(billId: string) {
     super(`Bill ${billId} has no linked Vendor record — QuickBooks needs a real vendor to bill against, not just a vendor name.`);
     this.name = "BillHasNoVendorError";
+  }
+}
+
+/** Staff/agent explicitly skipped QuickBooks at READY_FOR_PAYMENT — do not create a QBO Bill. */
+export class BillQuickBooksSyncDeclinedError extends Error {
+  constructor(billId: string, skipReason: string | null) {
+    super(
+      skipReason?.trim()
+        ? `Bill ${billId} was marked ready for payment without QuickBooks (${skipReason}).`
+        : `Bill ${billId} was marked ready for payment without QuickBooks — materials and other skipped bills stay in WCI only.`,
+    );
+    this.name = "BillQuickBooksSyncDeclinedError";
   }
 }
 
@@ -58,6 +71,9 @@ export async function syncBillToQuickBooks(organizationId: string, billId: strin
     include: { lineItems: { include: { costCode: true }, orderBy: { sortOrder: "asc" } }, job: true, vendor: true },
   });
   if (!bill) throw new BillNotFoundError(billId);
+  if (isBillQuickBooksSyncBlocked(bill.sendToQuickBooks)) {
+    throw new BillQuickBooksSyncDeclinedError(billId, bill.quickBooksSkipReason);
+  }
   if (!bill.vendorId || !bill.vendor) throw new BillHasNoVendorError(billId);
 
   try {

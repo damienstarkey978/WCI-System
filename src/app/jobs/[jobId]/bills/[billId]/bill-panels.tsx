@@ -1,6 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+
+import {
+  defaultSkipReasonForSuggestion,
+  suggestSendToQuickBooks,
+  type BillLineCostTypeInput,
+} from "@/lib/bills/quickbooks-intent";
 
 import {
   addToInvoiceAction,
@@ -32,22 +38,32 @@ function Err({ state }: { state: BillActionState }) {
  * src/lib/bills/service.ts; the server re-checks regardless, and will also refuse
  * READY_FOR_PAYMENT while approvals are outstanding — that refusal surfaces here as
  * the action's error rather than being pre-empted, so the office sees *why*.
+ *
+ * Marking READY_FOR_PAYMENT requires an explicit QuickBooks send vs skip choice
+ * (materials stay WCI-only; labor/unpaid services may send).
  */
 export function StatusActions({
   jobId,
   billId,
   status,
+  lineItems,
+  isQboConnected,
 }: {
   jobId: string;
   billId: string;
   status: string;
+  lineItems: readonly BillLineCostTypeInput[];
+  isQboConnected: boolean;
 }) {
   const [claimState, claimAction, claiming] = useActionState(claimFromInboxAction, INITIAL);
   const [statusState, statusAction, changing] = useActionState(setBillStatusAction, INITIAL);
 
+  const suggestion = suggestSendToQuickBooks(lineItems);
+  const [sendToQuickBooks, setSendToQuickBooks] = useState(suggestion.suggestedSend);
+  const [skipReason, setSkipReason] = useState(defaultSkipReasonForSuggestion(suggestion));
+
   const next: { label: string; value: string; primary?: boolean }[] = [];
   if (status === "IN_REVIEW") next.push({ label: "Approve", value: "APPROVED", primary: true });
-  if (status === "APPROVED") next.push({ label: "Mark ready for payment", value: "READY_FOR_PAYMENT", primary: true });
   if (status === "READY_FOR_PAYMENT") next.push({ label: "Mark paid", value: "PAID", primary: true });
   if (status !== "PAID" && status !== "VOID") next.push({ label: "Void", value: "VOID" });
 
@@ -61,6 +77,76 @@ export function StatusActions({
             {claiming ? "Opening…" : "Start review"}
           </button>
           <Err state={claimState} />
+        </form>
+      ) : null}
+
+      {status === "APPROVED" ? (
+        <form action={statusAction} className="flex flex-col gap-3 rounded border p-3" style={{ borderColor: "var(--bt-border)" }}>
+          <input type="hidden" name="jobId" value={jobId} />
+          <input type="hidden" name="billId" value={billId} />
+          <input type="hidden" name="status" value="READY_FOR_PAYMENT" />
+          <input type="hidden" name="sendToQuickBooks" value={sendToQuickBooks ? "true" : "false"} />
+
+          <div>
+            <div className="text-xs font-semibold text-[var(--bt-text)]">Ready for payment — QuickBooks</div>
+            <p className="mt-1 text-[11px] leading-snug text-[var(--bt-muted)]">{suggestion.reason}</p>
+            {!isQboConnected ? (
+              <p className="mt-1 text-[11px] leading-snug text-[var(--bt-muted)]">
+                QuickBooks isn&apos;t connected yet. Your choice is still saved; a send will wait until QB is connected.
+              </p>
+            ) : null}
+          </div>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="sr-only">Send to QuickBooks</legend>
+            <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--bt-text)]">
+              <input
+                type="radio"
+                name="qbIntent"
+                className="mt-0.5"
+                checked={sendToQuickBooks}
+                onChange={() => setSendToQuickBooks(true)}
+              />
+              <span>
+                <span className="font-semibold">Send to QuickBooks</span>
+                <span className="mt-0.5 block text-[11px] text-[var(--bt-muted)]">
+                  Labor / unpaid services — creates a QuickBooks bill when connected.
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--bt-text)]">
+              <input
+                type="radio"
+                name="qbIntent"
+                className="mt-0.5"
+                checked={!sendToQuickBooks}
+                onChange={() => setSendToQuickBooks(false)}
+              />
+              <span>
+                <span className="font-semibold">Don&apos;t send to QuickBooks</span>
+                <span className="mt-0.5 block text-[11px] text-[var(--bt-muted)]">
+                  Materials stay in WCI only — still ready for payment here.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
+          {!sendToQuickBooks ? (
+            <label className="flex flex-col gap-1 text-xs text-[var(--bt-muted)]">
+              Skip reason
+              <input
+                name="quickBooksSkipReason"
+                value={skipReason}
+                onChange={(event) => setSkipReason(event.target.value)}
+                className="rounded border px-2 py-1.5 text-xs outline-none focus:border-[var(--bt-primary)]"
+                style={{ borderColor: "var(--bt-border)", color: "var(--bt-text)" }}
+              />
+            </label>
+          ) : null}
+
+          <button type="submit" disabled={changing} className={PRIMARY} style={{ background: "var(--bt-primary)" }}>
+            {changing ? "Working…" : "Mark ready for payment"}
+          </button>
         </form>
       ) : null}
 

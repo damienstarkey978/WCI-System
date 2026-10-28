@@ -188,9 +188,27 @@ export const createBillSchema = z.object({
     .max(500),
 });
 
-export const updateBillStatusSchema = z.object({
-  approvalStatus: z.enum(BillApprovalStatus),
-});
+export const updateBillStatusSchema = z
+  .object({
+    approvalStatus: z.enum(BillApprovalStatus),
+    /**
+     * Required when approvalStatus is READY_FOR_PAYMENT. true = push to QuickBooks
+     * (labor/unpaid services); false = keep READY_FOR_PAYMENT in WCI only (materials).
+     */
+    sendToQuickBooks: z.boolean().optional(),
+    /** Optional note when sendToQuickBooks is false. */
+    quickBooksSkipReason: z.string().trim().max(500).nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT && typeof value.sendToQuickBooks !== "boolean") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sendToQuickBooks"],
+        message:
+          "sendToQuickBooks is required when marking a bill READY_FOR_PAYMENT (true = push to QuickBooks, false = keep in WCI only).",
+      });
+    }
+  });
 
 export const matchByRoadNameSchema = z.object({
   query: z.string().trim().min(1).max(500),

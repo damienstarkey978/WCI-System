@@ -17,7 +17,11 @@ import { extendedCostCents } from "@/lib/budget/funnel";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
 import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
 import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
-import { BillHasNoVendorError, syncBillToQuickBooks } from "@/lib/quickbooks/sync/bills";
+import {
+  BillHasNoVendorError,
+  BillQuickBooksSyncDeclinedError,
+  syncBillToQuickBooks,
+} from "@/lib/quickbooks/sync/bills";
 
 export interface ActionState {
   readonly error?: string;
@@ -108,6 +112,7 @@ export async function syncBillToQuickBooksAction(_previous: ActionState, formDat
       error instanceof QuickBooksNotConfiguredError ||
       error instanceof QuickBooksNotConnectedError ||
       error instanceof BillHasNoVendorError ||
+      error instanceof BillQuickBooksSyncDeclinedError ||
       error instanceof QuickBooksApiError
     ) {
       return { error: error.message };
