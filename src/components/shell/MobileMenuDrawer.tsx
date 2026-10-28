@@ -193,8 +193,13 @@ export function MobileMenuDrawer({
               value={jobQuery}
               onChange={(event) => setJobQuery(event.target.value)}
               placeholder="Search jobs…"
-              className="mb-2 w-full rounded border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--bt-primary)]"
-              style={{ borderColor: "var(--bt-border)" }}
+              aria-label="Search jobs"
+              className="mb-2 w-full rounded border px-2.5 text-sm outline-none focus:border-[var(--bt-primary)]"
+              style={{
+                borderColor: "var(--bt-job-chrome-input-border, var(--bt-border))",
+                borderRadius: "var(--bt-job-chrome-input-radius, 6px)",
+                height: "var(--bt-job-chrome-control-h, 36px)",
+              }}
             />
             <div className="flex flex-col">
               {filteredJobs.slice(0, 50).map((job) => (
