@@ -36,10 +36,19 @@
      Default only: JobSidebar drag-resizes (min 170 / max 440) and overrides via
      inline width + localStorage `wci-job-sidebar-width`; this token stays the
      CSS fallback / first-paint default. Row pitch remasured on the same BT shots:
-     text-trough spacing ≈26px, so py 0.25rem → ~26px rows (13px/snug + 4+4).
+     text-trough spacing ≈26px — with Blueprint body.M (14/20), py 3px → ~26px.
      Consumed by JobSidebar.tsx (hidden below md); Sales hides the rail. */
   --bt-job-sidebar-width: 203px;
-  --bt-job-sidebar-row-py: 0.25rem;
+  --bt-job-sidebar-row-py: 3px;
+  /* Blueprint Design System body.M (tokens/typography.json): Inter / 14 / 20 /
+     regular / letterSpacing.wide 2%. Live DevTools blocked by BT login; refine
+     if computed styles differ. JobSidebar + staff body use these — not
+     Space Grotesk / Fredoka / client proposal surfaces. */
+  --bt-font-sans: var(--font-inter), "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  --bt-job-sidebar-font-size: 14px;
+  --bt-job-sidebar-line-height: 20px;
+  --bt-job-sidebar-font-weight: 400;
+  --bt-job-sidebar-letter-spacing: 0.02em;
   --bt-border: #e5e7eb;
   --bt-muted: #6b7280;
   --bt-text: #111827;
@@ -66,7 +75,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
+  /* Staff UI sans = Blueprint Inter body stack (system fallbacks). Headings still
+     use Space Grotesk via the h1–h3 / .display rules below — not this token. */
+  --font-sans: var(--bt-font-sans);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -111,7 +122,9 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+  /* Blueprint body face (Inter) + UI system fallbacks. Do not point this at
+     Space Grotesk / Fredoka — those stay on headings / fun-UI / proposals. */
+  font-family: var(--bt-font-sans);
 }
 
 h1,
