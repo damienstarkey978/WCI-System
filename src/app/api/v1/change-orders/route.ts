@@ -1,14 +1,17 @@
 /** /api/v1/change-orders — create/list change orders. */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { createChangeOrderSchema, formatZodIssues } from "@/lib/api-schemas";
+import { createChangeOrderSchema, formatZodIssues, listChangeOrdersQuerySchema } from "@/lib/api-schemas";
+import { toCursorPage } from "@/lib/api-pagination";
 import { createChangeOrder, JobNotFoundError, JobNotOpenError } from "@/lib/change-orders/service";
 import { db } from "@/lib/db";
 
 export const GET = withApiAuth(["change-orders:read"], async (request, auth) => {
-  const params = new URL(request.url).searchParams;
-  const jobId = params.get("jobId");
-  const status = params.get("status");
+  const parsed = listChangeOrdersQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+  if (!parsed.success) {
+    return apiError(400, "invalid_query", "Invalid query parameters.", formatZodIssues(parsed.error));
+  }
+  const { jobId, status, limit, cursor } = parsed.data;
 
   const changeOrders = await db.changeOrder.findMany({
     where: {
@@ -17,11 +20,12 @@ export const GET = withApiAuth(["change-orders:read"], async (request, auth) => 
       ...(status ? { status: status as never } : {}),
     },
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
 
-  return Response.json({ data: changeOrders });
+  return Response.json(toCursorPage(changeOrders, limit));
 });
 
 export const POST = withApiAuth(["change-orders:write"], async (request, auth) => {

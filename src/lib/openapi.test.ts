@@ -18,8 +18,13 @@ describe("buildOpenApiDocument", () => {
     // written — if a new route is added without updating src/lib/openapi.ts, this
     // count catches the drift.
     const paths = Object.keys(doc.paths);
+    expect(paths).toContain("/me");
     expect(paths).toContain("/jobs");
     expect(paths).toContain("/jobs/{jobId}/budget");
+    expect(paths).toContain("/jobs/{jobId}/bills");
+    expect(paths).toContain("/jobs/{jobId}/purchase-orders");
+    expect(paths).toContain("/jobs/{jobId}/change-orders");
+    expect(paths).toContain("/jobs/{jobId}/files");
     expect(paths).toContain("/estimates/{estimateId}/send-to-budget");
     expect(paths).toContain("/estimates/ai-draft");
     expect(paths).toContain("/purchase-orders/match-by-road-name");
@@ -28,8 +33,27 @@ describe("buildOpenApiDocument", () => {
     expect(paths).toContain("/time-clock/bulk-clock-in");
     expect(paths).toContain("/time-clock/overtime-summary");
     expect(paths).toContain("/reports/cash-flow");
+    expect(paths).toContain("/files/{fileId}");
+    expect(paths).toContain("/folders");
+    expect(paths).toContain("/takeoffs");
+    expect(paths).toContain("/clients/{clientId}");
     // Not documented as a normal endpoint — it IS the document.
     expect(paths).not.toContain("/openapi.json");
+  });
+
+  it("marks required query params on comments and notifications", () => {
+    const comments = doc.paths["/comments"].get as unknown as {
+      parameters: { name: string; required: boolean }[];
+    };
+    const featureType = comments.parameters.find((p) => p.name === "featureType");
+    const featureId = comments.parameters.find((p) => p.name === "featureId");
+    expect(featureType?.required).toBe(true);
+    expect(featureId?.required).toBe(true);
+
+    const notifications = doc.paths["/notifications"].get as unknown as {
+      parameters: { name: string; required: boolean }[];
+    };
+    expect(notifications.parameters.find((p) => p.name === "userId")?.required).toBe(true);
   });
 
   it("has both GET and POST where a route file exports both", () => {

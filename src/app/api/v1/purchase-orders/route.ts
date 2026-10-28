@@ -4,6 +4,7 @@
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createPurchaseOrderSchema, formatZodIssues, listPurchaseOrdersQuerySchema } from "@/lib/api-schemas";
+import { toCursorPage } from "@/lib/api-pagination";
 import { db } from "@/lib/db";
 import {
   createPurchaseOrder,
@@ -35,13 +36,7 @@ export const GET = withApiAuth(["purchase-orders:read"], async (request, auth) =
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
 
-  const hasMore = purchaseOrders.length > limit;
-  const page = hasMore ? purchaseOrders.slice(0, limit) : purchaseOrders;
-
-  return Response.json({
-    data: page,
-    pagination: { nextCursor: hasMore ? page[page.length - 1].id : null, hasMore },
-  });
+  return Response.json(toCursorPage(purchaseOrders, limit));
 });
 
 export const POST = withApiAuth(["purchase-orders:write"], async (request, auth) => {

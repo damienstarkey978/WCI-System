@@ -464,13 +464,11 @@ Record every architectural decision that departs from the above, with the reason
   same invite link again — staff/an agent must issue a fresh one. A real "log in
   again with your email" flow needs the email provider from the point above; this
   keeps the mechanism correct without inventing a password system to work around it.
-- **The OpenAPI spec has a Phase 2 gap (found while adding Phase 3's entries):**
-  `src/lib/openapi.ts`'s `ENDPOINTS` array is hand-transcribed per route, and Phase 2
-  (scheduling, daily logs, todos, RFIs, files, comments, notifications, change orders)
-  was never added to it — only Phase 0/1 and, as of this entry, Phase 3 are documented.
-  The routes themselves are unaffected (this file only feeds `GET /api/v1/openapi.json`);
-  backfilling Phase 2's ~20 entries is a clearly-scoped follow-up, deliberately not
-  done in the same change as Phase 3 to keep that diff reviewable.
+- **OpenAPI ENDPOINTS backfill (Heather API-surface pass):** Phase 2+ routes are now
+  documented in `src/lib/openapi.ts` (kept in sync with `src/lib/api-v1-route-table.ts`
+  for JSON 404/405 in `src/proxy.ts`). Compact index: `GET /openapi.json?format=paths`
+  for MCP clients that truncate the full ~270KB document. See
+  `docs/api-surface-heather-gaps.md` in the project store for fixed vs deferred items.
 - **Stripe integration is minimal by design (Phase 3):** `src/lib/payments/stripe.ts`
   talks to Stripe's REST API directly via `fetch` (no SDK dependency) for exactly two
   calls — create a PaymentIntent, verify a webhook signature. The webhook receiver

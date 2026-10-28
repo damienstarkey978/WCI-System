@@ -8,7 +8,12 @@ export const GET = withApiAuth(["comments:read"], async (request, auth) => {
   const url = new URL(request.url);
   const parsed = listCommentsQuerySchema.safeParse(Object.fromEntries(url.searchParams));
   if (!parsed.success) {
-    return apiError(400, "invalid_query", "Invalid query parameters.", formatZodIssues(parsed.error));
+    return apiError(
+      400,
+      "invalid_query",
+      "featureType and featureId are required query parameters.",
+      formatZodIssues(parsed.error),
+    );
   }
 
   const comments = await listComments({ organizationId: auth.organizationId, ...parsed.data });
