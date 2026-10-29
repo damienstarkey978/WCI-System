@@ -62,6 +62,7 @@ import {
   importDailyLogsSchema,
   importInvoicesSchema,
   importPurchaseOrdersSchema,
+  importScheduleFlagsSchema,
   importScheduleItemsSchema,
   inviteVendorToBidSchema,
   issueSubmittalReviewLinkSchema,
@@ -2293,13 +2294,30 @@ const ENDPOINTS: readonly EndpointDef[] = [
     path: "/migration/schedule-items",
     summary: "Bulk-import historical Schedule Items",
     description:
-      "Ensures each job has a Schedule, then creates ScheduleItems with historical start/duration/progress. " +
-      "Idempotent on (job, title, manualStartDate). See src/lib/migration/service.ts.",
+      "Ensures each job has a Schedule, then creates or repairs ScheduleItems with historical " +
+      "start/duration/progress. Idempotent on (job, title, manualStartDate); re-runs may update " +
+      "duration / % complete / visibility / Schedule.isOnline from BT. See src/lib/migration/service.ts.",
     tags: ["Migration"],
     scopes: ["migration:write"],
     requestSchema: importScheduleItemsSchema,
     successDescription:
-      "One result per requested item, each either { status: \"success\"|\"already_exists\", scheduleItemId } or { status: \"error\", error }.",
+      "One result per requested item, each either { status: \"success\"|\"already_exists\"|\"updated\", scheduleItemId } or { status: \"error\", error }.",
+  },
+  {
+    method: "post",
+    path: "/migration/schedule-flags",
+    summary: "Set Schedule Online/Offline (and draft) from BT",
+    description:
+      "Creates or updates a job Schedule's isOnline / isDraft from Buildertrend calendarOffline " +
+      "without requiring schedule items (empty offline calendars still need the Online toggle). " +
+      "See src/lib/migration/service.ts.",
+    tags: ["Migration"],
+    scopes: ["migration:write"],
+    requestSchema: z.object({
+      schedules: z.array(importScheduleFlagsSchema).min(1).max(100),
+    }),
+    successDescription:
+      "One result per requested schedule, each either { status: \"success\"|\"already_exists\"|\"updated\", scheduleId } or { status: \"error\", error }.",
   },
 ];
 
