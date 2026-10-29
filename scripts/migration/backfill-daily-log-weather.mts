@@ -10,7 +10,7 @@ import fs from "node:fs";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient } from "../../src/generated/prisma/client";
+import { Prisma, PrismaClient } from "../../src/generated/prisma/client";
 
 const db = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
@@ -74,7 +74,10 @@ async function main() {
       skippedHasWeather += 1;
       continue;
     }
-    await db.dailyLog.update({ where: { id: row.id }, data: { weather: w } });
+    await db.dailyLog.update({
+      where: { id: row.id },
+      data: { weather: w as Prisma.InputJsonValue },
+    });
     updated += 1;
   }
 
