@@ -7,6 +7,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   catalogInspectionNamesForTrade,
+  ensureDefaultPermits,
   listPermittingJobs,
   tradeLabel,
 } from "@/lib/permitting/service";
@@ -38,6 +39,10 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
 
   const currentJob = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!currentJob) notFound();
+
+  // Explicit staff-session write for the job being viewed — not a side effect of
+  // the org-wide list read (API/MCP list paths never seed).
+  await ensureDefaultPermits(user.organizationId, currentJob.id);
 
   const [jobs, vendors] = await Promise.all([
     listPermittingJobs(user.organizationId),

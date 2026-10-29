@@ -151,6 +151,17 @@ interface EndpointDef {
 
 // Transcribed 1:1 from `withApiAuth([...])` in each route.ts — see the file comment.
 const ENDPOINTS: readonly EndpointDef[] = [
+  // --- Auth introspect ----------------------------------------------------
+  {
+    method: "get",
+    path: "/me",
+    summary: "Inspect the authenticated API key",
+    description:
+      "Returns the key's name, agentKind, organizationId, and granted scopes. " +
+      "Requires a valid API key only (no module scope) so every consumer can verify what it was issued.",
+    tags: ["Auth"],
+    scopes: [],
+  },
   // --- Jobs ---------------------------------------------------------------
   {
     method: "get",
@@ -211,9 +222,22 @@ const ENDPOINTS: readonly EndpointDef[] = [
     method: "get",
     path: "/jobs/{jobId}/permits",
     summary: "List permits for a job",
-    description: "Lazily seeds Building + MEP permit rows when a job has none yet.",
+    description:
+      "Read-only list of Building + MEP permits and inspections. Does not create rows — " +
+      "call POST /jobs/{jobId}/permits/ensure-defaults when shells are missing.",
     tags: ["Permitting"],
     scopes: ["permits:read"],
+    pathParams: ["jobId"],
+  },
+  {
+    method: "post",
+    path: "/jobs/{jobId}/permits/ensure-defaults",
+    summary: "Ensure Building + MEP permit shells exist",
+    description:
+      "Explicit write that creates Building and MEP JobPermit rows when missing. " +
+      "GET /permits and MCP list_job_permits never seed on read.",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
     pathParams: ["jobId"],
   },
   {

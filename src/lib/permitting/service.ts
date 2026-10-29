@@ -130,27 +130,8 @@ export function catalogInspectionNamesForTrade(trade: PermitTrade): readonly str
 }
 
 export async function listPermittingJobs(organizationId: string) {
-  const jobs = await db.job.findMany({
-    where: { organizationId, isTemplate: false, status: { in: ["PRE_SALE", "OPEN", "WARRANTY"] } },
-    orderBy: [{ status: "asc" }, { name: "asc" }],
-    include: {
-      permits: {
-        orderBy: { trade: "asc" },
-        include: {
-          vendor: { select: { id: true, name: true, email: true } },
-          inspections: { orderBy: { sortOrder: "asc" } },
-        },
-      },
-    },
-  });
-
-  // Lazily seed default permits for jobs that have none yet.
-  for (const job of jobs) {
-    if (job.permits.length === 0) {
-      await ensureDefaultPermits(organizationId, job.id);
-    }
-  }
-
+  // Read-only — never seeds Building/MEP shells. Staff UI / agents that need
+  // defaults call ensureDefaultPermits (or POST .../permits/ensure-defaults).
   return db.job.findMany({
     where: { organizationId, isTemplate: false, status: { in: ["PRE_SALE", "OPEN", "WARRANTY"] } },
     orderBy: [{ status: "asc" }, { name: "asc" }],

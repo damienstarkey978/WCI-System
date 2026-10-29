@@ -48,7 +48,6 @@ import {
 import {
   getBillableMilestones,
   getCostInboxItems,
-  getDailyBrief,
   getJobsOverBudget,
   getOverdueInvoices,
   getProposalsNeedingFollowUp,
@@ -230,7 +229,54 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     "permits:read",
     "list_job_permits",
     {
-      description: "List Building + MEP permits and inspections for a job (seeds defaults if missing).",
+      description:
+        "List Building + MEP permits and inspections for a job (read-only; does not create rows). " +
+        "If none exist yet, call ensure_job_permit_defaults first.",
+      inputSchema: { jobId: z.string().describe("The job's id") },
+    },
+    async (input) => {
+      const jobId = (input as { jobId: string }).jobId;
+      const job = await db.job.findFirst({
+        where: { id: jobId, organizationId },
+        select: { id: true },
+      });
+      if (!job) return refusal(`Job ${jobId} not found`);
+      const permits = await db.jobPermit.findMany({
+        where: { jobId, organizationId },
+        orderBy: { trade: "asc" },
+        include: {
+          vendor: { select: { name: true, email: true } },
+          inspections: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, completedAt: true } },
+        },
+      });
+      if (permits.length === 0) {
+        return text(
+          "No permits on this job. Call ensure_job_permit_defaults (permits:write) to create Building + MEP shells.",
+        );
+      }
+      return text(
+        permits
+          .map((permit) => {
+            const vendor = permit.vendor ? ` vendor=${permit.vendor.name}` : "";
+            const inspections = permit.inspections
+              .map((inspection) => `  ${inspection.id} | ${inspection.name} | ${inspection.completedAt ? "DONE" : "open"}`)
+              .join("\n");
+            return `${permit.id} | ${permit.trade} | ${permit.pulled ? "PULLED" : "not pulled"}${vendor}\n${inspections}`;
+          })
+          .join("\n"),
+      );
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "permits:write",
+    "ensure_job_permit_defaults",
+    {
+      description:
+        "Explicit write: create Building + MEP permit shells for a job when missing. " +
+        "Use before list_job_permits when a job has never been set up for permitting.",
       inputSchema: { jobId: z.string().describe("The job's id") },
     },
     async (input) => {
@@ -244,22 +290,10 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
       const permits = await db.jobPermit.findMany({
         where: { jobId, organizationId },
         orderBy: { trade: "asc" },
-        include: {
-          vendor: { select: { name: true, email: true } },
-          inspections: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, completedAt: true } },
-        },
+        select: { id: true, trade: true, pulled: true },
       });
-      if (permits.length === 0) return text("No permits on this job.");
       return text(
-        permits
-          .map((permit) => {
-            const vendor = permit.vendor ? ` vendor=${permit.vendor.name}` : "";
-            const inspections = permit.inspections
-              .map((inspection) => `  ${inspection.id} | ${inspection.name} | ${inspection.completedAt ? "DONE" : "open"}`)
-              .join("\n");
-            return `${permit.id} | ${permit.trade} | ${permit.pulled ? "PULLED" : "not pulled"}${vendor}\n${inspections}`;
-          })
-          .join("\n"),
+        permits.map((permit) => `${permit.id} | ${permit.trade} | ${permit.pulled ? "PULLED" : "not pulled"}`).join("\n"),
       );
     },
   );
@@ -574,9 +608,12 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
   registerScoped(
     server,
     auth,
-    "reports:read",
+    "invoices:read",
     "get_overdue_invoices",
-    { description: "List every invoice past its due date and not yet fully paid, across the whole organization." },
+    {
+      description:
+        "List every invoice past its due date and not yet fully paid, across the whole organization. Requires invoices:read (not only reports:read).",
+    },
     async () => {
       const invoices = await getOverdueInvoices(organizationId);
       if (invoices.length === 0) return text("No overdue invoices.");
@@ -648,24 +685,51 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     "get_daily_brief",
     {
       description:
-        "Get the full 'what needs attention today' digest across the whole organization: overdue invoices, jobs over budget, unapproved timesheets, change orders pending approval, proposals needing follow-up, billable milestones, and the cost inbox.",
+        "Get the full 'what needs attention today' digest across the whole organization: overdue invoices, jobs over budget, unapproved timesheets, change orders pending approval, proposals needing follow-up, billable milestones, and the cost inbox. Invoice numbers/amounts and billable milestones require invoices:read; cost-inbox amounts require bills:read; proposal titles require proposals:read — without those scopes the matching lines are redacted.",
     },
     async () => {
-      const brief = await getDailyBrief(organizationId);
+      // Scope-gated fetches: never load invoice/bill/proposal rows without the
+      // matching :read scope (A10 — reports:read alone must not leak amounts).
+      const canInvoices = grantsScope(auth.scopes, "invoices:read");
+      const canBills = grantsScope(auth.scopes, "bills:read");
+      const canProposals = grantsScope(auth.scopes, "proposals:read");
+
+      const [overdueInvoices, jobsOverBudget, unapprovedShiftCount, pendingChangeOrderCount, proposalsNeedingFollowUp, billableMilestones, costInboxItems] =
+        await Promise.all([
+          canInvoices ? getOverdueInvoices(organizationId) : Promise.resolve([] as const),
+          getJobsOverBudget(organizationId),
+          db.timeClockEntry.count({ where: { organizationId, approvalStatus: "PENDING" } }),
+          db.changeOrder.count({ where: { organizationId, status: "PENDING_APPROVAL" } }),
+          canProposals ? getProposalsNeedingFollowUp(organizationId) : Promise.resolve([] as const),
+          canInvoices ? getBillableMilestones(organizationId) : Promise.resolve([] as const),
+          canBills ? getCostInboxItems(organizationId) : Promise.resolve([] as const),
+        ]);
+
+      const overdueTotalCents = overdueInvoices.reduce((total, invoice) => total + invoice.amountCents, 0);
       const lines: string[] = [
-        brief.overdueInvoices.length === 0
-          ? "Overdue invoices: none"
-          : `Overdue invoices: ${brief.overdueInvoices.length} totaling ${formatMoney(brief.overdueInvoiceTotalCents)}`,
-        brief.jobsOverBudget.length === 0 ? "Jobs over budget: none" : `Jobs over budget: ${brief.jobsOverBudget.map((job) => job.jobName).join(", ")}`,
-        brief.unapprovedShiftCount === 0 ? "Unapproved timesheets: none" : `Unapproved timesheets: ${brief.unapprovedShiftCount}`,
-        brief.pendingChangeOrderCount === 0 ? "Change orders pending approval: none" : `Change orders pending approval: ${brief.pendingChangeOrderCount}`,
-        brief.proposalsNeedingFollowUp.length === 0
-          ? "Proposals needing follow-up: none"
-          : `Proposals needing follow-up: ${brief.proposalsNeedingFollowUp.map((proposal) => proposal.title).join(", ")}`,
-        brief.billableMilestones.length === 0
-          ? "Billable milestones ready: none"
-          : `Billable milestones ready: ${brief.billableMilestones.map((milestone) => milestone.title).join(", ")}`,
-        brief.costInboxItems.length === 0 ? "Cost inbox: empty" : `Cost inbox: ${brief.costInboxItems.length} bill(s) awaiting review`,
+        !canInvoices
+          ? "Overdue invoices: (redacted — needs invoices:read)"
+          : overdueInvoices.length === 0
+            ? "Overdue invoices: none"
+            : `Overdue invoices: ${overdueInvoices.length} totaling ${formatMoney(overdueTotalCents)}`,
+        jobsOverBudget.length === 0 ? "Jobs over budget: none" : `Jobs over budget: ${jobsOverBudget.map((job) => job.jobName).join(", ")}`,
+        unapprovedShiftCount === 0 ? "Unapproved timesheets: none" : `Unapproved timesheets: ${unapprovedShiftCount}`,
+        pendingChangeOrderCount === 0 ? "Change orders pending approval: none" : `Change orders pending approval: ${pendingChangeOrderCount}`,
+        !canProposals
+          ? "Proposals needing follow-up: (redacted — needs proposals:read)"
+          : proposalsNeedingFollowUp.length === 0
+            ? "Proposals needing follow-up: none"
+            : `Proposals needing follow-up: ${proposalsNeedingFollowUp.map((proposal) => proposal.title).join(", ")}`,
+        !canInvoices
+          ? "Billable milestones ready: (redacted — needs invoices:read)"
+          : billableMilestones.length === 0
+            ? "Billable milestones ready: none"
+            : `Billable milestones ready: ${billableMilestones.map((milestone) => milestone.title).join(", ")}`,
+        !canBills
+          ? "Cost inbox: (redacted — needs bills:read)"
+          : costInboxItems.length === 0
+            ? "Cost inbox: empty"
+            : `Cost inbox: ${costInboxItems.length} bill(s) awaiting review`,
       ];
       return text(lines.join("\n"));
     },
