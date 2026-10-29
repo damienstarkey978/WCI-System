@@ -11,6 +11,7 @@
  * Idempotent on (jobId, createdAt, note).
  */
 
+import type { Prisma } from "@/generated/prisma/client";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { formatZodIssues, importDailyLogsSchema } from "@/lib/api-schemas";
 import { importDailyLog } from "@/lib/migration/service";
@@ -41,7 +42,17 @@ export const POST = withApiAuth(["migration:write"], async (request, auth) => {
   }> = [];
   for (const [index, input] of parsed.data.dailyLogs.entries()) {
     try {
-      const { record, created } = await importDailyLog({ organizationId: auth.organizationId, ...input });
+      // Zod's Record<string, unknown> is wider than Prisma.InputJsonValue — cast the
+      // BT weather blob at the boundary (same pattern as live daily-logs/service).
+      const { weather, ...rest } = input;
+      const { record, created } = await importDailyLog({
+        organizationId: auth.organizationId,
+        ...rest,
+        weather:
+          weather === undefined || weather === null
+            ? weather
+            : (weather as Prisma.InputJsonValue),
+      });
       results.push({
         index,
         status: created ? "success" : "already_exists",

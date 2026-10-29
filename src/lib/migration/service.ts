@@ -41,6 +41,7 @@
  * in code.
  */
 
+import { Prisma } from "@/generated/prisma/client";
 import type {
   BillApprovalStatus,
   CostType,
@@ -189,6 +190,12 @@ export interface ImportDailyLogInput {
   readonly subVisible?: boolean;
   /** The date this log actually documents in Buildertrend — becomes createdAt/updatedAt. */
   readonly createdAt: Date;
+  /**
+   * Buildertrend's weatherInformation blob when present. Pass through as-is —
+   * never fabricate. Null/omitted leaves DailyLog.weather unset (same as live
+   * creates without WEATHER_API_KEY). Explicit `null` writes SQL NULL via DbNull.
+   */
+  readonly weather?: Prisma.InputJsonValue | null;
   readonly attachments?: readonly MigrationAttachmentInput[];
 }
 
@@ -207,6 +214,14 @@ export async function importDailyLog(input: ImportDailyLogInput) {
   });
   if (existing) return { record: existing, created: false };
 
+  // Prisma Json fields reject bare `null` — use DbNull for SQL NULL, omit when unset.
+  const weatherData =
+    input.weather === undefined
+      ? undefined
+      : input.weather === null
+        ? Prisma.DbNull
+        : input.weather;
+
   const record = await db.dailyLog.create({
     data: {
       organizationId: input.organizationId,
@@ -215,6 +230,7 @@ export async function importDailyLog(input: ImportDailyLogInput) {
       note: input.note,
       clientVisible: input.clientVisible ?? true,
       subVisible: input.subVisible ?? true,
+      ...(weatherData !== undefined ? { weather: weatherData } : {}),
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
       files: {

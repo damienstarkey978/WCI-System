@@ -117,6 +117,29 @@ describe("migration import idempotency", () => {
     expect(dailyLogCreate).not.toHaveBeenCalled();
   });
 
+  it("persists Buildertrend weather JSON when provided on create", async () => {
+    dailyLogFindFirst.mockResolvedValue(null);
+    const created = { id: "log_2", files: [] };
+    dailyLogCreate.mockResolvedValue(created);
+    const weather = { conditions: "Hazy", maxTemp: "78", minTemp: "70" };
+
+    const result = await importDailyLog({
+      organizationId: "org_1",
+      jobId: "job_1",
+      authorUserId: "user_1",
+      note: "Taped drywall",
+      createdAt: new Date("2026-10-28T20:39:00Z"),
+      weather,
+    });
+
+    expect(result.created).toBe(true);
+    expect(dailyLogCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ weather }),
+      }),
+    );
+  });
+
   it("skips recreating a purchase order with the same org+poNumber", async () => {
     const existing = {
       id: "po_1",
