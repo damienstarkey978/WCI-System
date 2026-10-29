@@ -699,6 +699,12 @@ Record every architectural decision that departs from the above, with the reason
 - **Permitting page is single-job scoped:** `/jobs/{jobId}/permitting` loads only
   that job (`getJobPermitting`). The earlier org-wide multi-job list was wrong for
   cutover — never reintroduce `listPermittingJobs` into the job route UI.
+- **Permitting header + defaults (status pass):** Header chips are **Docs missing /
+  Docs created** (`Job.buildingPermitDocsCreatedAt`) and **No active permit /
+  Active permit** (Building `pulled`). NOC/NTBO toggles live on the docs builder,
+  not as the top missing-style chips. Staff UI calls `ensureBuildingPermit` only —
+  Electrical / Plumbing / Mechanical / Roofing appear only after staff add them
+  from the same add list (no phantom MEP cards).
 - **Inspector share links are a fourth headless token namespace
   (`InspectionPictureShareLink`, prefix `wciips`):** same crypto as
   SubmittalReviewLink / SurveyResponseLink — no Client/Vendor seat. Reusable until

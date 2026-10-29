@@ -266,7 +266,9 @@ const ENDPOINTS: readonly EndpointDef[] = [
   {
     method: "patch",
     path: "/jobs/{jobId}/permitting-flags",
-    summary: "Update NOC / NTBO flags on a job",
+    summary: "Update NOC / NTBO / building-permit-docs-created flags",
+    description:
+      "buildingPermitDocsCreated drives the Permitting header Docs missing → Docs created chip.",
     tags: ["Permitting"],
     scopes: ["permits:write"],
     pathParams: ["jobId"],

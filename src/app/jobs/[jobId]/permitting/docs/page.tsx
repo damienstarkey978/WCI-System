@@ -5,8 +5,14 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { docsForPack } from "@/lib/permitting/docs";
-import { getJobPermitting, JobNotFoundError, tradeLabel } from "@/lib/permitting/service";
+import {
+  getJobPermitting,
+  hasBuildingPermitDocs,
+  JobNotFoundError,
+  tradeLabel,
+} from "@/lib/permitting/service";
 
+import { setBuildingPermitDocsCreatedAction, setNocNtboAction } from "../actions";
 import { PermitDocsForm } from "./permit-docs-form";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +55,7 @@ export default async function PermitDocsPage({
     ntboFiled: job.ntboFiled,
   });
   const included = pack.filter((d) => d.included);
+  const docsCreated = hasBuildingPermitDocs(job.buildingPermitDocsCreatedAt);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
@@ -67,6 +74,41 @@ export default async function PermitDocsPage({
         className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4"
         style={{ borderColor: "var(--bt-border)" }}
       >
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--bt-text)]">Pack status</h2>
+            <p className="mt-1 text-xs text-[var(--bt-muted)]">
+              Marking docs created updates the Permitting header (stops showing “Docs missing”).
+            </p>
+          </div>
+          <form action={setBuildingPermitDocsCreatedAction}>
+            <input type="hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="created" value={docsCreated ? "false" : "true"} />
+            <button
+              type="submit"
+              className="rounded px-3 py-1.5 text-xs font-semibold"
+              style={{
+                background: docsCreated ? "transparent" : "var(--bt-primary)",
+                color: docsCreated ? "var(--bt-text)" : "var(--bt-on-primary)",
+                border: "1px solid var(--bt-border)",
+              }}
+            >
+              {docsCreated ? "Clear docs created" : "Mark docs created"}
+            </button>
+          </form>
+        </div>
+        <p className="mt-2 text-sm font-medium text-[var(--bt-text)]">
+          {docsCreated ? "Docs created" : "Docs missing"}
+          {docsCreated && job.buildingPermitDocsCreatedAt
+            ? ` · ${job.buildingPermitDocsCreatedAt.toLocaleDateString()}`
+            : ""}
+        </p>
+      </section>
+
+      <section
+        className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4"
+        style={{ borderColor: "var(--bt-border)" }}
+      >
         <h2 className="text-sm font-semibold text-[var(--bt-text)]">Job &amp; municipality</h2>
         <dl className="mt-2 grid gap-1 text-xs text-[var(--bt-muted)] sm:grid-cols-2">
           <div>
@@ -79,11 +121,31 @@ export default async function PermitDocsPage({
           </div>
           <div>
             <dt className="font-medium">NOC</dt>
-            <dd className="text-[var(--bt-text)]">{job.nocOnFile ? "On file" : "Missing"}</dd>
+            <dd className="flex items-center gap-2 text-[var(--bt-text)]">
+              {job.nocOnFile ? "On file" : "Missing"}
+              <form action={setNocNtboAction}>
+                <input type="hidden" name="jobId" value={job.id} />
+                <input type="hidden" name="field" value="nocOnFile" />
+                <input type="hidden" name="value" value={job.nocOnFile ? "false" : "true"} />
+                <button type="submit" className="text-[10px] font-semibold text-[var(--bt-primary)] hover:underline">
+                  Toggle
+                </button>
+              </form>
+            </dd>
           </div>
           <div>
             <dt className="font-medium">NTBO</dt>
-            <dd className="text-[var(--bt-text)]">{job.ntboFiled ? "Filed" : "Not filed"}</dd>
+            <dd className="flex items-center gap-2 text-[var(--bt-text)]">
+              {job.ntboFiled ? "Filed" : "Not filed"}
+              <form action={setNocNtboAction}>
+                <input type="hidden" name="jobId" value={job.id} />
+                <input type="hidden" name="field" value="ntboFiled" />
+                <input type="hidden" name="value" value={job.ntboFiled ? "false" : "true"} />
+                <button type="submit" className="text-[10px] font-semibold text-[var(--bt-primary)] hover:underline">
+                  Toggle
+                </button>
+              </form>
+            </dd>
           </div>
           <div className="sm:col-span-2">
             <dt className="font-medium">Permits on this job</dt>

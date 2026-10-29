@@ -26,6 +26,7 @@ export const GET = withApiAuth<Context>(["permits:read"], async (_request, auth,
       permitNumber: true,
       nocOnFile: true,
       ntboFiled: true,
+      buildingPermitDocsCreatedAt: true,
     },
   });
   if (!job) {
@@ -42,7 +43,7 @@ export const GET = withApiAuth<Context>(["permits:read"], async (_request, auth,
   });
 
   // `data` stays the permit array for backward compatibility with Heather/MCP.
-  // Job NOC/NTBO flags ride along so bots can validate without a second call.
+  // Job flags ride along so bots can validate without a second call.
   return Response.json({
     data: permits,
     job: {
@@ -51,6 +52,7 @@ export const GET = withApiAuth<Context>(["permits:read"], async (_request, auth,
       permitNumber: job.permitNumber,
       nocOnFile: job.nocOnFile,
       ntboFiled: job.ntboFiled,
+      buildingPermitDocsCreatedAt: job.buildingPermitDocsCreatedAt,
     },
   });
 });

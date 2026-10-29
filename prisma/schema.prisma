@@ -321,6 +321,9 @@ model Job {
   nocOnFile    Boolean @default(false)
   /// Notice to Building Official filed (permitting checklist).
   ntboFiled    Boolean @default(false)
+  /// When staff mark the building permit doc pack as created (Duval/Jax builder).
+  /// Header shows "Docs created" instead of docs-missing / NOC-TBO-missing copy.
+  buildingPermitDocsCreatedAt DateTime?
 
   /// Job Info > Notes (Buildertrend). Plain text, 2500 characters max (enforced in updateJobDetails).
   notesInternal String?

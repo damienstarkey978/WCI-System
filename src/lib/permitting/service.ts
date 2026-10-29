@@ -106,8 +106,29 @@ const permitInclude = {
   inspections: { orderBy: { sortOrder: "asc" as const } },
 } as const;
 
+export type JobPermitSummary = {
+  readonly trade: PermitTrade;
+  readonly pulled: boolean;
+  readonly permitNumber: string | null;
+};
+
+/** Header chip: docs pack marked created on the job. */
+export function hasBuildingPermitDocs(docsCreatedAt: Date | null | undefined): boolean {
+  return docsCreatedAt != null;
+}
+
 /**
- * Load one job's permitting state. Never seeds permits — staff/API add them.
+ * Header chip: Active permit when the Building permit is pulled (city issued).
+ * MEP/Roofing pull status stays on each card — they are not the "active permit" signal.
+ */
+export function hasActiveBuildingPermit(permits: readonly JobPermitSummary[]): boolean {
+  const building = permits.find((p) => p.trade === PermitTrade.BUILDING);
+  return building?.pulled === true;
+}
+
+/**
+ * Load one job's permitting state. Never seeds permits — staff/API add them
+ * (staff UI may call ensureBuildingPermit separately).
  */
 export async function getJobPermitting(organizationId: string, jobId: string) {
   const job = await db.job.findFirst({
@@ -119,6 +140,7 @@ export async function getJobPermitting(organizationId: string, jobId: string) {
       permitNumber: true,
       nocOnFile: true,
       ntboFiled: true,
+      buildingPermitDocsCreatedAt: true,
       permits: {
         orderBy: { trade: "asc" },
         include: permitInclude,
@@ -130,9 +152,34 @@ export async function getJobPermitting(organizationId: string, jobId: string) {
 }
 
 /**
+ * Staff UI default: ensure a Building permit shell exists (no MEP/Roofing).
+ * Does not invent inspections — staff add those, or createJobPermit seeds them
+ * when adding a trade explicitly.
+ */
+export async function ensureBuildingPermit(organizationId: string, jobId: string) {
+  const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true, permitNumber: true } });
+  if (!job) throw new JobNotFoundError(jobId);
+
+  const existing = await db.jobPermit.findUnique({
+    where: { jobId_trade: { jobId, trade: PermitTrade.BUILDING } },
+  });
+  if (existing) return existing;
+
+  return db.jobPermit.create({
+    data: {
+      organizationId,
+      jobId,
+      trade: PermitTrade.BUILDING,
+      permitNumber: job.permitNumber,
+    },
+  });
+}
+
+/**
  * Explicit write: create Building + MEP shells when missing (no inspections).
- * Staff UI does not call this — bots that want a quick MEP scaffold still can
- * via POST .../permits/ensure-defaults. Prefer createJobPermit for one trade.
+ * Staff UI does **not** call this (would phantom-list Electrical/Plumbing/Mechanical).
+ * Bots that want a quick MEP scaffold still can via POST .../permits/ensure-defaults.
+ * Prefer createJobPermit for one trade.
  */
 export async function ensureDefaultPermits(organizationId: string, jobId: string) {
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true, permitNumber: true } });
@@ -151,6 +198,19 @@ export async function ensureDefaultPermits(organizationId: string, jobId: string
       },
     });
   }
+}
+
+export async function setBuildingPermitDocsCreated(
+  organizationId: string,
+  jobId: string,
+  created: boolean,
+) {
+  const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
+  if (!job) throw new JobNotFoundError(jobId);
+  return db.job.update({
+    where: { id: job.id },
+    data: { buildingPermitDocsCreatedAt: created ? new Date() : null },
+  });
 }
 
 export async function createJobPermit(
@@ -285,7 +345,11 @@ export async function setPermitPulled(organizationId: string, permitId: string, 
 export async function setJobNocNtbo(
   organizationId: string,
   jobId: string,
-  data: { nocOnFile?: boolean; ntboFiled?: boolean },
+  data: {
+    nocOnFile?: boolean;
+    ntboFiled?: boolean;
+    buildingPermitDocsCreated?: boolean;
+  },
 ) {
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
   if (!job) throw new JobNotFoundError(jobId);
@@ -294,6 +358,9 @@ export async function setJobNocNtbo(
     data: {
       ...(data.nocOnFile !== undefined ? { nocOnFile: data.nocOnFile } : {}),
       ...(data.ntboFiled !== undefined ? { ntboFiled: data.ntboFiled } : {}),
+      ...(data.buildingPermitDocsCreated !== undefined
+        ? { buildingPermitDocsCreatedAt: data.buildingPermitDocsCreated ? new Date() : null }
+        : {}),
     },
   });
 }
