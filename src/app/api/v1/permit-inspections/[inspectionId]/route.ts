@@ -1,13 +1,30 @@
 /**
- * /api/v1/permit-inspections/{inspectionId} — mark an inspection complete / incomplete.
+ * /api/v1/permit-inspections/{inspectionId} — mark complete / incomplete; DELETE removes it.
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { formatZodIssues, updatePermitInspectionSchema } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
-import { InspectionNotFoundError, setInspectionCompleted } from "@/lib/permitting/service";
+import {
+  InspectionNotFoundError,
+  removePermitInspection,
+  setInspectionCompleted,
+} from "@/lib/permitting/service";
 
 type Context = { params: Promise<{ inspectionId: string }> };
+
+export const DELETE = withApiAuth<Context>(["permits:write"], async (_request, auth, context) => {
+  const { inspectionId } = await context.params;
+  try {
+    await removePermitInspection(auth.organizationId, inspectionId);
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    if (error instanceof InspectionNotFoundError) {
+      return apiError(404, "not_found", error.message);
+    }
+    throw error;
+  }
+});
 
 export const PATCH = withApiAuth<Context>(["permits:write"], async (request, auth, context) => {
   const { inspectionId } = await context.params;

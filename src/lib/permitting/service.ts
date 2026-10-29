@@ -1,13 +1,16 @@
 /**
- * Permitting checklist per job: building + MEP permits, inspections, NOC/NTBO.
- * Placeholder inspection names for demo come from the Permit Rockstar catalog
- * (no pools). Production folder/inspection names come from city permitting software.
+ * Permitting checklist per job: staff-selected trade permits, per-permit
+ * inspections, NOC/NTBO. Multiple MEP permits per job (different subs) are the
+ * normal case — each JobPermit is one trade with its own vendor + inspections.
  */
 
 import { PermitTrade } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { EmailNotConfiguredError, sendEmail } from "@/lib/email/send";
 import { isTransactionalEmailConfigured } from "@/lib/env";
+import { tradeLabel } from "@/lib/permitting/labels";
+
+export { tradeLabel } from "@/lib/permitting/labels";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -37,6 +40,23 @@ export class NoVendorEmailError extends Error {
   }
 }
 
+export class PermitAlreadyExistsError extends Error {
+  constructor(trade: string) {
+    super(`A ${trade} permit is already on this job.`);
+    this.name = "PermitAlreadyExistsError";
+  }
+}
+
+/** Trades staff can add on a job (Building always relevant; MEP/Roofing as needed). */
+export const STAFF_PERMIT_TRADES: readonly PermitTrade[] = [
+  PermitTrade.BUILDING,
+  PermitTrade.ELECTRICAL,
+  PermitTrade.PLUMBING,
+  PermitTrade.MECHANICAL,
+  PermitTrade.ROOFING,
+];
+
+/** @deprecated Prefer STAFF_PERMIT_TRADES — kept for ensureDefaultPermits (Building + MEP shells). */
 export const DEFAULT_PERMIT_TRADES: readonly PermitTrade[] = [
   PermitTrade.BUILDING,
   PermitTrade.ELECTRICAL,
@@ -44,35 +64,75 @@ export const DEFAULT_PERMIT_TRADES: readonly PermitTrade[] = [
   PermitTrade.MECHANICAL,
 ];
 
-/** Demo/placeholder city-style inspection names mapped from Permit Rockstar guides (no pools). */
-export const DEMO_INSPECTIONS_BY_TRADE: Readonly<Record<PermitTrade, readonly string[]>> = {
-  BUILDING: ["Footer", "Slab", "Framing", "Dry-In", "Insulation", "Building Final"],
-  ELECTRICAL: ["Electrical Underground", "Electrical Rough", "Electrical Final"],
+/**
+ * Typical inspections seeded when staff/API adds a permit (editable afterward).
+ * Electrical defaults: Rough + Cover-Up + Final (cover before conceal; final at end).
+ */
+export const DEFAULT_INSPECTIONS_ON_ADD: Readonly<Record<PermitTrade, readonly string[]>> = {
+  BUILDING: ["Footer", "Slab", "Framing", "Building Final"],
+  ELECTRICAL: ["Electrical Rough", "Electrical Cover-Up", "Electrical Final"],
   PLUMBING: ["Plumbing Underground", "Plumbing Rough", "Plumbing Final"],
   MECHANICAL: ["Mechanical Rough", "Mechanical Final"],
+  ROOFING: ["Roof Sheathing", "Roof Final"],
   OTHER: [],
 };
 
-export function tradeLabel(trade: PermitTrade): string {
-  switch (trade) {
-    case PermitTrade.BUILDING:
-      return "Building";
-    case PermitTrade.ELECTRICAL:
-      return "Electrical";
-    case PermitTrade.PLUMBING:
-      return "Plumbing";
-    case PermitTrade.MECHANICAL:
-      return "Mechanical";
-    case PermitTrade.OTHER:
-      return "Other";
-  }
+/** Full catalog staff can add beyond the defaults (demo placeholders until city software). */
+export const DEMO_INSPECTIONS_BY_TRADE: Readonly<Record<PermitTrade, readonly string[]>> = {
+  BUILDING: [
+    "Footer",
+    "Slab",
+    "Framing",
+    "Wall Sheathing",
+    "Roof Sheathing",
+    "Dry-In",
+    "Insulation",
+    "Building Final",
+  ],
+  ELECTRICAL: [
+    "Electrical Underground",
+    "Electrical Rough",
+    "Electrical Cover-Up",
+    "Electrical Final",
+  ],
+  PLUMBING: ["Plumbing Underground", "Plumbing Rough", "Plumbing Final"],
+  MECHANICAL: ["Mechanical Rough", "Mechanical Final"],
+  ROOFING: ["Roof Sheathing", "Roof Final"],
+  OTHER: [],
+};
+
+const permitInclude = {
+  vendor: { select: { id: true, name: true, email: true } },
+  inspections: { orderBy: { sortOrder: "asc" as const } },
+} as const;
+
+/**
+ * Load one job's permitting state. Never seeds permits — staff/API add them.
+ */
+export async function getJobPermitting(organizationId: string, jobId: string) {
+  const job = await db.job.findFirst({
+    where: { id: jobId, organizationId, isTemplate: false },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      permitNumber: true,
+      nocOnFile: true,
+      ntboFiled: true,
+      permits: {
+        orderBy: { trade: "asc" },
+        include: permitInclude,
+      },
+    },
+  });
+  if (!job) throw new JobNotFoundError(jobId);
+  return job;
 }
 
 /**
- * Ensures BUILDING + MEP permit shells exist for a job (idempotent).
- * Does **not** seed the full demo inspection catalog — inspections are added
- * explicitly (city software / staff) so Inspection Pictures only shows folders
- * for inspections required on that job.
+ * Explicit write: create Building + MEP shells when missing (no inspections).
+ * Staff UI does not call this — bots that want a quick MEP scaffold still can
+ * via POST .../permits/ensure-defaults. Prefer createJobPermit for one trade.
  */
 export async function ensureDefaultPermits(organizationId: string, jobId: string) {
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true, permitNumber: true } });
@@ -91,6 +151,67 @@ export async function ensureDefaultPermits(organizationId: string, jobId: string
       },
     });
   }
+}
+
+export async function createJobPermit(
+  organizationId: string,
+  jobId: string,
+  trade: PermitTrade,
+  options?: {
+    readonly permitNumber?: string | null;
+    readonly vendorId?: string | null;
+    /** When true (default), seed DEFAULT_INSPECTIONS_ON_ADD for the trade. */
+    readonly seedDefaultInspections?: boolean;
+  },
+) {
+  const job = await db.job.findFirst({
+    where: { id: jobId, organizationId },
+    select: { id: true, permitNumber: true },
+  });
+  if (!job) throw new JobNotFoundError(jobId);
+
+  const existing = await db.jobPermit.findUnique({ where: { jobId_trade: { jobId, trade } } });
+  if (existing) throw new PermitAlreadyExistsError(tradeLabel(trade));
+
+  if (options?.vendorId) {
+    const vendor = await db.vendor.findFirst({
+      where: { id: options.vendorId, organizationId },
+      select: { id: true },
+    });
+    if (!vendor) throw new Error("Vendor not found.");
+  }
+
+  const seed = options?.seedDefaultInspections !== false;
+  const defaults = seed ? DEFAULT_INSPECTIONS_ON_ADD[trade] : [];
+  const permitNumber =
+    options?.permitNumber !== undefined
+      ? options.permitNumber
+      : trade === PermitTrade.BUILDING
+        ? job.permitNumber
+        : null;
+
+  return db.jobPermit.create({
+    data: {
+      organizationId,
+      jobId,
+      trade,
+      permitNumber,
+      vendorId: options?.vendorId ?? null,
+      inspections: {
+        create: defaults.map((name, index) => ({ name, sortOrder: index })),
+      },
+    },
+    include: permitInclude,
+  });
+}
+
+export async function deleteJobPermit(organizationId: string, permitId: string) {
+  const permit = await db.jobPermit.findFirst({
+    where: { id: permitId, organizationId },
+    select: { id: true },
+  });
+  if (!permit) throw new PermitNotFoundError(permitId);
+  await db.jobPermit.delete({ where: { id: permit.id } });
 }
 
 export async function addPermitInspection(organizationId: string, permitId: string, name: string) {
@@ -129,19 +250,24 @@ export function catalogInspectionNamesForTrade(trade: PermitTrade): readonly str
   return DEMO_INSPECTIONS_BY_TRADE[trade] ?? [];
 }
 
+/** Trades not yet on the job that staff can still add. */
+export function availableTradesToAdd(existingTrades: readonly PermitTrade[]): readonly PermitTrade[] {
+  const have = new Set(existingTrades);
+  return STAFF_PERMIT_TRADES.filter((trade) => !have.has(trade));
+}
+
+/**
+ * @deprecated Org-wide multi-job list — do not use for the job Permitting page.
+ * Prefer getJobPermitting(organizationId, jobId).
+ */
 export async function listPermittingJobs(organizationId: string) {
-  // Read-only — never seeds Building/MEP shells. Staff UI / agents that need
-  // defaults call ensureDefaultPermits (or POST .../permits/ensure-defaults).
   return db.job.findMany({
     where: { organizationId, isTemplate: false, status: { in: ["PRE_SALE", "OPEN", "WARRANTY"] } },
     orderBy: [{ status: "asc" }, { name: "asc" }],
     include: {
       permits: {
         orderBy: { trade: "asc" },
-        include: {
-          vendor: { select: { id: true, name: true, email: true } },
-          inspections: { orderBy: { sortOrder: "asc" } },
-        },
+        include: permitInclude,
       },
     },
   });

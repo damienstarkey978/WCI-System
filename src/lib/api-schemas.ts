@@ -15,6 +15,7 @@ import {
   InvoiceType,
   JobStatus,
   PaymentMethod,
+  PermitTrade,
   PurchaseOrderStatus,
   RateMode,
 } from "@/generated/prisma/enums";
@@ -1032,6 +1033,18 @@ export const importScheduleItemsSchema = z.object({
 // ---------------------------------------------------------------------------
 // Permitting (Heather / Atlas / field ops)
 // ---------------------------------------------------------------------------
+
+export const createJobPermitSchema = z.object({
+  trade: z.enum(PermitTrade),
+  permitNumber: z.string().trim().max(64).nullish(),
+  vendorId: z.string().min(1).max(64).nullish(),
+  /** Default true — seed typical inspections for the trade (editable afterward). */
+  seedDefaultInspections: z.boolean().optional().default(true),
+});
+
+export const createPermitInspectionSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
 
 export const updatePermitSchema = z
   .object({

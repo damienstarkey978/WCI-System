@@ -87,6 +87,8 @@ import {
   submitProposalFeedbackSchema,
   submitSurveyResponseSchema,
   transitionJobStatusSchema,
+  createJobPermitSchema,
+  createPermitInspectionSchema,
   updateBillStatusSchema,
   updateJobPermittingFlagsSchema,
   updateLeadStageSchema,
@@ -229,18 +231,32 @@ const ENDPOINTS: readonly EndpointDef[] = [
     path: "/jobs/{jobId}/permits",
     summary: "List permits for a job",
     description:
-      "Read-only list of Building + MEP permits and inspections. Does not create rows — " +
-      "call POST /jobs/{jobId}/permits/ensure-defaults when shells are missing.",
+      "Job-scoped permits + inspections plus NOC/NTBO flags. Does not create rows — " +
+      "POST /jobs/{jobId}/permits to add one trade, or POST .../ensure-defaults for Building+MEP shells.",
     tags: ["Permitting"],
     scopes: ["permits:read"],
     pathParams: ["jobId"],
   },
   {
     method: "post",
+    path: "/jobs/{jobId}/permits",
+    summary: "Add a trade permit to a job",
+    description:
+      "Creates one JobPermit (Building, Electrical, Plumbing, Mechanical, Roofing, Other). " +
+      "By default seeds typical inspections for that trade (editable afterward). 409 if trade already exists.",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["jobId"],
+    requestSchema: createJobPermitSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
     path: "/jobs/{jobId}/permits/ensure-defaults",
     summary: "Ensure Building + MEP permit shells exist",
     description:
-      "Explicit write that creates Building and MEP JobPermit rows when missing. " +
+      "Explicit write that creates Building and MEP JobPermit rows when missing (no inspections). " +
+      "Prefer POST /jobs/{jobId}/permits for staff-style add-one-trade with default inspections. " +
       "GET /permits and MCP list_job_permits never seed on read.",
     tags: ["Permitting"],
     scopes: ["permits:write"],
@@ -265,6 +281,25 @@ const ENDPOINTS: readonly EndpointDef[] = [
     requestSchema: updatePermitSchema,
   },
   {
+    method: "delete",
+    path: "/permits/{permitId}",
+    summary: "Remove a permit (and its inspections) from the job",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["permitId"],
+    successStatus: 204,
+  },
+  {
+    method: "post",
+    path: "/permits/{permitId}/inspections",
+    summary: "Add an inspection to a permit",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["permitId"],
+    requestSchema: createPermitInspectionSchema,
+    successStatus: 201,
+  },
+  {
     method: "post",
     path: "/permits/{permitId}/send-reminder",
     summary: "Email the assigned vendor a permit-pull reminder",
@@ -282,6 +317,15 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["permits:write"],
     pathParams: ["inspectionId"],
     requestSchema: updatePermitInspectionSchema,
+  },
+  {
+    method: "delete",
+    path: "/permit-inspections/{inspectionId}",
+    summary: "Remove an inspection from its permit",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["inspectionId"],
+    successStatus: 204,
   },
   {
     method: "get",
