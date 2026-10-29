@@ -384,6 +384,9 @@ export function TopNav({
   notifications = [],
   unreadCount = 0,
   jobs = [],
+  financialNav = FINANCIAL_NAV,
+  showSales = true,
+  showReports = true,
 }: {
   activeJobId?: string;
   /** Computed server-side (CLERK_SECRET_KEY isn't inlined into the client bundle, so this
@@ -395,6 +398,10 @@ export function TopNav({
   unreadCount?: number;
   /** For the mobile menu drawer's job jump-list — the same list JobSidebar renders, which is hidden below `md`. */
   jobs?: readonly SidebarJob[];
+  /** Financial dropdown items — Sales Rep without job financials gets Commission only. */
+  financialNav?: readonly JobNavLink[];
+  showSales?: boolean;
+  showReports?: boolean;
 }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -421,22 +428,26 @@ export function TopNav({
         </Link>
 
         <nav className="hidden items-center gap-0.5 text-sm font-medium xl:flex">
-          <FlatNavDropdown label="Sales" items={SALES_NAV} />
+          {showSales ? <FlatNavDropdown label="Sales" items={SALES_NAV} /> : null}
           <MixedNavDropdown label="Jobs" items={JOBS_NAV} activeJobId={activeJobId} />
 
           <JobNavDropdown label="Project Management" items={PROJECT_MANAGEMENT_NAV} activeJobId={activeJobId} />
           <JobNavDropdown label="Files" items={FILES_NAV} activeJobId={activeJobId} />
           <MixedNavDropdown label="Messaging" items={MESSAGING_NAV} activeJobId={activeJobId} />
 
-          <JobNavDropdown label="Financial" items={FINANCIAL_NAV} activeJobId={activeJobId} />
+          {financialNav.length > 0 ? (
+            <JobNavDropdown label="Financial" items={financialNav} activeJobId={activeJobId} />
+          ) : null}
 
-          <Link
-            href={REPORTS_HREF}
-            className="rounded px-3 py-2 transition hover:bg-white/10"
-            style={pathname?.startsWith(REPORTS_HREF) ? { background: "var(--bt-nav-hover)" } : undefined}
-          >
-            Reports
-          </Link>
+          {showReports ? (
+            <Link
+              href={REPORTS_HREF}
+              className="rounded px-3 py-2 transition hover:bg-white/10"
+              style={pathname?.startsWith(REPORTS_HREF) ? { background: "var(--bt-nav-hover)" } : undefined}
+            >
+              Reports
+            </Link>
+          ) : null}
         </nav>
       </div>
 
@@ -495,7 +506,15 @@ export function TopNav({
         ) : null}
       </div>
 
-      <MobileMenuDrawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} jobs={jobs} activeJobId={activeJobId} />
+      <MobileMenuDrawer
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        jobs={jobs}
+        activeJobId={activeJobId}
+        financialNav={financialNav}
+        showSales={showSales}
+        showReports={showReports}
+      />
     </header>
   );
 }

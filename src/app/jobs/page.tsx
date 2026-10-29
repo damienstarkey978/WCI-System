@@ -6,6 +6,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { salesRepJobWhere } from "@/lib/staff/sales-rep-scope";
 
 import { JobsGrid } from "./jobs-grid";
 
@@ -41,6 +42,7 @@ export default async function JobsIndexPage({ searchParams }: PageProps<"/jobs">
         organizationId: user.organizationId,
         isTemplate: false,
         ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
+        ...salesRepJobWhere(user),
       },
       orderBy: { createdAt: "desc" },
       select: {

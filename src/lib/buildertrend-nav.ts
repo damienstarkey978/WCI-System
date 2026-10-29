@@ -129,6 +129,26 @@ export const FINANCIAL_NAV: readonly JobNavLink[] = [
   { label: "Online Payment Report", path: "/online-payment-report" },
 ];
 
+/** Sales Rep with job financials OFF — Financial menu still opens, Commission only. */
+export const COMMISSION_NAV_ITEM: JobNavLink = { label: "Commission", path: "/commission" };
+
+/**
+ * Financial dropdown items for the current staff user. Sales Reps without job
+ * financials still get Commission; with financials on they get the full list
+ * plus Commission. Other roles never see Commission.
+ */
+export function financialNavForAccess(input: {
+  readonly canAccessFinancials: boolean;
+  readonly showCommission: boolean;
+}): readonly JobNavLink[] {
+  if (input.canAccessFinancials && input.showCommission) {
+    return [...FINANCIAL_NAV, COMMISSION_NAV_ITEM];
+  }
+  if (input.canAccessFinancials) return FINANCIAL_NAV;
+  if (input.showCommission) return [COMMISSION_NAV_ITEM];
+  return [];
+}
+
 export const REPORTS_HREF = "/reports";
 
 /**

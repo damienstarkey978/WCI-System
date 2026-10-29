@@ -131,11 +131,17 @@ export function MobileMenuDrawer({
   onClose,
   jobs,
   activeJobId,
+  financialNav = FINANCIAL_NAV,
+  showSales = true,
+  showReports = true,
 }: {
   open: boolean;
   onClose: () => void;
   jobs: readonly SidebarJob[];
   activeJobId?: string;
+  financialNav?: readonly JobNavLink[];
+  showSales?: boolean;
+  showReports?: boolean;
 }) {
   const [jobQuery, setJobQuery] = useState("");
 
@@ -170,16 +176,20 @@ export function MobileMenuDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <FlatSection label="Sales" items={SALES_NAV} onNavigate={onClose} />
+          {showSales ? <FlatSection label="Sales" items={SALES_NAV} onNavigate={onClose} /> : null}
           <MixedSection label="Jobs" items={JOBS_NAV} activeJobId={activeJobId} onNavigate={onClose} />
           <JobScopedSection label="Project Management" items={PROJECT_MANAGEMENT_NAV} activeJobId={activeJobId} onNavigate={onClose} />
           <JobScopedSection label="Files" items={FILES_NAV} activeJobId={activeJobId} onNavigate={onClose} />
           <MixedSection label="Messaging" items={MESSAGING_NAV} activeJobId={activeJobId} onNavigate={onClose} />
-          <JobScopedSection label="Financial" items={FINANCIAL_NAV} activeJobId={activeJobId} onNavigate={onClose} />
+          {financialNav.length > 0 ? (
+            <JobScopedSection label="Financial" items={financialNav} activeJobId={activeJobId} onNavigate={onClose} />
+          ) : null}
 
-          <Link href={REPORTS_HREF} onClick={onClose} className="block border-b px-4 py-3 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
-            Reports
-          </Link>
+          {showReports ? (
+            <Link href={REPORTS_HREF} onClick={onClose} className="block border-b px-4 py-3 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
+              Reports
+            </Link>
+          ) : null}
           {isJarvisUiEnabled() ? (
             <Link href="/jarvis" onClick={onClose} className="flex items-center gap-2 border-b px-4 py-3 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5" style={{ borderColor: "var(--bt-border)" }}>
               <SparkleIcon className="h-4 w-4" /> Jarvis

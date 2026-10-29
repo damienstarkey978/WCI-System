@@ -173,6 +173,9 @@ export async function convertLeadToJob(
         ...rest,
         organizationId,
         status: JobStatus.PRE_SALE,
+        // Sales Rep scoping keys off salespersonUserId — copy the lead assignee
+        // so the rep keeps seeing the job after conversion.
+        salespersonUserId: lead.assignedUserId,
         customFields: (customFields ?? {}) as Prisma.InputJsonValue,
       },
     });

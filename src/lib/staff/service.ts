@@ -48,8 +48,19 @@ export interface InviteStaffMemberInput {
   /** Cosmetic display label (e.g. "Sales Rep", "Org Owner") — see the schema comment on User.title. */
   readonly title?: string | null;
   readonly phone?: string | null;
+  /**
+   * When false (default), the row lands on Internal Users as Login Inactive —
+   * no Clerk invite email. Call sendStaffInvite() (or the list Send control)
+   * to activate + email. Pass true only for legacy/Jarvis paths that still
+   * create-and-invite in one step.
+   */
+  readonly isActive?: boolean;
 }
 
+/**
+ * Creates a staff User row. Default is inactive (listed, not invited) —
+ * separate from sendStaffInvite(), which activates and emails sign-in instructions.
+ */
 export async function inviteStaffMember(input: InviteStaffMemberInput) {
   const email = input.email.trim().toLowerCase();
   try {
@@ -61,6 +72,7 @@ export async function inviteStaffMember(input: InviteStaffMemberInput) {
         role: input.role,
         title: input.title ?? null,
         phone: input.phone ?? null,
+        isActive: input.isActive ?? false,
       },
     });
   } catch (error) {
@@ -69,6 +81,23 @@ export async function inviteStaffMember(input: InviteStaffMemberInput) {
     }
     throw error;
   }
+}
+
+/**
+ * Activates an inactive staff member and stamps inviteSentAt so Login moves
+ * off Inactive → Pending (until they link Clerk). Callers then email instructions.
+ */
+export async function markStaffInviteSent(organizationId: string, userId: string) {
+  const user = await db.user.findFirst({ where: { id: userId, organizationId } });
+  if (!user) throw new StaffMemberNotFoundError(userId);
+
+  return db.user.update({
+    where: { id: user.id },
+    data: {
+      isActive: true,
+      inviteSentAt: new Date(),
+    },
+  });
 }
 
 export async function listStaffMembers(organizationId: string) {

@@ -22,6 +22,10 @@ enum UserRole {
   PM
   OFFICE
   FIELD
+  /// Sales representative — sees only their assigned leads/activities and jobs
+  /// where they are the salesperson. Job financials default OFF; Financial →
+  /// Commission remains available for their commission bills.
+  SALES_REP
   AGENT
 }
 
@@ -166,6 +170,7 @@ model Organization {
   proposalDraftJobs       ProposalDraftJob[]
   quickBooksConnection    QuickBooksConnection?
   qboSyncLogs             QboSyncLog[]
+  roleSiteAccess          RoleSiteAccess[]
   creditMemos             CreditMemo[]
   deposits                Deposit[]
   inboundEmails           InboundEmail[]
@@ -193,11 +198,18 @@ model User {
   /// Set only when role = AGENT.
   agentKind   AgentKind?
   isActive    Boolean    @default(true)
+  /// Null = inherit RoleSiteAccess.canAccessFinancials for this user's role.
+  /// Explicit true/false overrides the role default (Sales Rep financials toggle).
+  canAccessJobFinancials Boolean?
+  /// When the admin last clicked Send to email Clerk sign-in instructions.
+  /// Null means never invited — Login stays Inactive until Send.
+  inviteSentAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   jobGrants                 JobAccessGrant[]
+  salesJobs                 Job[]                    @relation("JobSalesperson")
   createdApiKeys            ApiKey[]                 @relation("ApiKeyCreatedBy")
   jobStatusEvents           JobStatusEvent[]
   purchaseOrderEvents       PurchaseOrderEvent[]
@@ -226,6 +238,34 @@ model User {
   oauthRefreshTokens        OAuthRefreshToken[]
 
   @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+
+/// Per-organization, per-role site-module toggles (Settings → Role management).
+/// Missing rows fall back to DEFAULT_ROLE_SITE_ACCESS in src/lib/staff/role-site-access.ts
+/// — notably SALES_REP.canAccessFinancials defaults false (Commission still available).
+model RoleSiteAccess {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           UserRole
+
+  canAccessSales             Boolean @default(true)
+  canAccessJobs              Boolean @default(true)
+  canAccessProjectManagement Boolean @default(true)
+  canAccessFiles             Boolean @default(true)
+  canAccessMessaging         Boolean @default(true)
+  /// Full job financials (budget, POs, bills, invoices, …). Sales Rep default OFF.
+  canAccessFinancials        Boolean @default(true)
+  canAccessReports           Boolean @default(true)
+  canAccessPeople            Boolean @default(true)
+  canAccessSettings          Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, role])
   @@index([organizationId])
 }
 
@@ -319,6 +359,11 @@ model Job {
   statusEvents JobStatusEvent[]
   accessGrants JobAccessGrant[]
 
+  /// Staff salesperson for this job (copied from Lead.assignedUserId on conversion).
+  /// Sales Reps only see jobs where this matches their user id.
+  salespersonUserId String?
+  salespersonUser   User?   @relation("JobSalesperson", fields: [salespersonUserId], references: [id], onDelete: SetNull)
+
   estimates             Estimate[]
   budgetLines           BudgetLine[]
   purchaseOrders        PurchaseOrder[]
@@ -358,6 +403,7 @@ model Job {
   @@unique([organizationId, prefix])
   @@index([organizationId, status])
   @@index([jobGroupId])
+  @@index([salespersonUserId])
 }
 
 /// Append-only audit of every status transition. Written by transitionJobStatus()

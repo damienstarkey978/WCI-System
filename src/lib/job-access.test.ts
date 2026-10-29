@@ -15,4 +15,9 @@ describe("hasOrgWideJobAccess", () => {
     expect(hasOrgWideJobAccess(UserRole.FIELD)).toBe(false);
     expect(hasOrgWideJobAccess(UserRole.AGENT)).toBe(false);
   });
+
+  it("does not treat Sales Rep as org-wide (salesperson-scoped jobs)", () => {
+    expect(hasOrgWideJobAccess(UserRole.SALES_REP)).toBe(false);
+  });
 });
+

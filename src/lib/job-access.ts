@@ -8,6 +8,11 @@
  * support jobs across the company, not just the ones they're explicitly
  * assigned to. JobAccessGrant exists to extend the narrower FIELD default to
  * specific jobs with specific capabilities, not to restrict the broader roles.
+ *
+ * SALES_REP sees only jobs where they are Job.salespersonUserId (the lead
+ * assignee copied on Lead→Job conversion). They get job access without a
+ * JobAccessGrant; financial depth is gated separately via role site access /
+ * User.canAccessJobFinancials (Commission remains available either way).
  */
 
 import { UserRole } from "@/generated/prisma/enums";
@@ -40,6 +45,16 @@ const FULL_ACCESS: JobAccessLevel = {
   canCommunicateWithClient: true,
 };
 
+const SALES_REP_JOB_ACCESS: JobAccessLevel = {
+  allowed: true,
+  canViewPricing: false,
+  canViewCostDetail: false,
+  canManageSchedule: false,
+  canApproveChangeOrders: false,
+  canViewDocuments: true,
+  canCommunicateWithClient: true,
+};
+
 const NO_ACCESS: JobAccessLevel = {
   allowed: false,
   canViewPricing: false,
@@ -58,6 +73,14 @@ export async function getJobAccessLevel(user: { readonly id: string; readonly ro
   // Clerk-session path — reaching here at all would mean something is wrong, so
   // deny rather than guess.
   if (user.role === UserRole.AGENT) return NO_ACCESS;
+
+  if (user.role === UserRole.SALES_REP) {
+    const job = await db.job.findFirst({
+      where: { id: jobId, salespersonUserId: user.id },
+      select: { id: true },
+    });
+    return job ? SALES_REP_JOB_ACCESS : NO_ACCESS;
+  }
 
   const grant = await db.jobAccessGrant.findUnique({ where: { jobId_userId: { jobId, userId: user.id } } });
   if (!grant) return NO_ACCESS;

@@ -7,6 +7,7 @@
 
 import { UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
+import { salesRepJobWhere, salesRepLeadWhere } from "@/lib/staff/sales-rep-scope";
 
 export interface SearchResultItem {
   readonly id: string;
@@ -43,6 +44,7 @@ export async function searchStaffApp(
       organizationId,
       isTemplate: false,
       ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
+      ...salesRepJobWhere(user),
       OR: [{ name: { contains: q, mode: "insensitive" } }, { prefix: { contains: q, mode: "insensitive" } }],
     },
     take: MAX_PER_GROUP,
@@ -66,7 +68,11 @@ export async function searchStaffApp(
       select: { id: true, name: true, email: true },
     }),
     db.lead.findMany({
-      where: { organizationId, OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }] },
+      where: {
+        organizationId,
+        ...salesRepLeadWhere(user),
+        OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }],
+      },
       take: MAX_PER_GROUP,
       select: { id: true, name: true, email: true },
     }),
