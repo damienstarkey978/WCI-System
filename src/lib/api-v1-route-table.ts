@@ -52,6 +52,7 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/jobs/{jobId}/change-orders": ["GET"],
   "/jobs/{jobId}/files": ["GET"],
   "/jobs/{jobId}/permits": ["GET"],
+  "/jobs/{jobId}/permits/ensure-defaults": ["POST"],
   "/jobs/{jobId}/permitting-flags": ["PATCH"],
   "/jobs/{jobId}/progress": ["GET"],
   "/jobs/{jobId}/purchase-orders": ["GET"],
