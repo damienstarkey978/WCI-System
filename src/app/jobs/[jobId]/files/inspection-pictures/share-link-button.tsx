@@ -46,9 +46,19 @@ export function InspectionShareLinkButton({
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopiedUrl(shareUrl);
+      return;
     } catch {
-      setCopiedUrl(null);
+      /* fall through — select the URL so staff can copy manually */
     }
+    const selection = window.getSelection();
+    const code = document.getElementById(`inspection-share-url-${inspectionId}`);
+    if (selection && code) {
+      selection.removeAllRanges();
+      const range = document.createRange();
+      range.selectNodeContents(code);
+      selection.addRange(range);
+    }
+    setCopiedUrl(null);
   }
 
   const expiresLabel = expiresAt
@@ -61,36 +71,25 @@ export function InspectionShareLinkButton({
         <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
           <p className="text-[11px] text-[var(--bt-muted)]">
             {justCreated
-              ? "Link created and copied when allowed — send to the inspector (no login)."
-              : "Active inspector link for this folder only — no login."}
+              ? "Link created — copy it and text the inspector yourself (no login, no in-app SMS)."
+              : "Copy anytime and text the inspector yourself. Folder-only access, no login."}
             {expiresLabel ? ` Expires ${expiresLabel}.` : ""}
           </p>
-          <code className="mt-1.5 block break-all text-[11px] leading-snug text-[var(--bt-text)] sm:text-xs">
+          <code
+            id={`inspection-share-url-${inspectionId}`}
+            className="mt-1.5 block break-all text-[11px] leading-snug text-[var(--bt-text)] sm:text-xs"
+          >
             {shareUrl}
           </code>
-          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="mt-3">
             <button
               type="button"
               onClick={copy}
               className="w-full rounded-lg px-3 py-3 text-sm font-semibold text-[var(--bt-on-primary)] sm:py-2.5"
               style={{ background: "var(--bt-primary)" }}
             >
-              {copied ? "Copied" : "Copy share link"}
+              {copied ? "Copied — paste into your text" : "Copy share link"}
             </button>
-            <a
-              href={`sms:?&body=${encodeURIComponent(`Inspection photos for ${inspectionName}: ${shareUrl}`)}`}
-              className="inline-flex w-full items-center justify-center rounded-lg border px-3 py-3 text-sm font-semibold text-[var(--bt-text)] sm:py-2.5"
-              style={{ borderColor: "var(--bt-border)" }}
-            >
-              Text link
-            </a>
-            <a
-              href={`mailto:?subject=${encodeURIComponent(`${inspectionName} inspection photos`)}&body=${encodeURIComponent(`Please use this link to view and upload photos for ${inspectionName}:\n\n${shareUrl}`)}`}
-              className="inline-flex w-full items-center justify-center rounded-lg border px-3 py-3 text-sm font-semibold text-[var(--bt-text)] sm:py-2.5"
-              style={{ borderColor: "var(--bt-border)" }}
-            >
-              Email link
-            </a>
           </div>
           <form action={formAction} className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center" style={{ borderColor: "var(--bt-border)" }}>
             <input type="hidden" name="jobId" value={jobId} />
