@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { ActorAttribution } from "@/components/actor-attribution";
 import { RichTextDisplay } from "@/components/financial/RichTextDisplay";
 import { currentAppUser } from "@/lib/auth";
 import { extendedCostCents } from "@/lib/budget/funnel";
@@ -80,7 +81,10 @@ export default async function PurchaseOrderDetailPage({
       },
       events: {
         orderBy: { createdAt: "desc" },
-        include: { actorUser: { select: { name: true, email: true } } },
+        include: {
+          actorUser: { select: { name: true, email: true } },
+          actorApiKey: { select: { name: true, agentKind: true } },
+        },
       },
     },
   });
@@ -372,9 +376,14 @@ export default async function PurchaseOrderDetailPage({
                     {EVENT_LABEL[event.type] ?? event.type}
                     {event.version > 1 ? <span className="text-[var(--bt-muted)]"> (v{event.version})</span> : null}
                   </div>
-                  <div className="text-xs text-[var(--bt-muted)]">
-                    {formatDate(event.createdAt)}
-                    {event.actorUser ? ` · ${event.actorUser.name ?? event.actorUser.email}` : ""}
+                  <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-[var(--bt-muted)]">
+                    <span>{formatDate(event.createdAt)}</span>
+                    {event.actorUser || event.actorApiKey ? (
+                      <>
+                        <span>·</span>
+                        <ActorAttribution user={event.actorUser} apiKey={event.actorApiKey} />
+                      </>
+                    ) : null}
                   </div>
                   {event.note ? <div className="text-xs text-[var(--bt-muted)]">{event.note}</div> : null}
                 </li>

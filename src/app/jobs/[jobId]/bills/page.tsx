@@ -66,6 +66,7 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
       include: {
         lineItems: true,
         createdByUser: { select: { name: true, email: true } },
+        createdByApiKey: { select: { name: true, agentKind: true } },
         purchaseOrder: { select: { id: true, poNumber: true, title: true } },
       },
     }),
@@ -107,7 +108,11 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
     poId: bill.purchaseOrder?.id ?? null,
     poNumber: bill.purchaseOrder?.poNumber ?? null,
     poTitle: bill.purchaseOrder?.title ?? null,
-    createdByName: bill.createdByUser?.name ?? bill.createdByUser?.email ?? null,
+    createdByName: bill.createdByApiKey
+      ? `${bill.createdByApiKey.name} · API`
+      : bill.createdByUser
+        ? `${bill.createdByUser.name ?? bill.createdByUser.email} · Browser`
+        : null,
     approvalStatus: bill.approvalStatus,
     dateLabel: (bill.issuedOn ?? bill.createdAt).toISOString(),
     totalCents: bill.lineItems.reduce((total, item) => total + item.amountCents, 0),

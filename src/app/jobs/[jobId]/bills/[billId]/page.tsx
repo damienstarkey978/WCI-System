@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { actorSummaryText } from "@/components/actor-attribution";
 import { currentAppUser } from "@/lib/auth";
 import { TEMPLATE_NAMES } from "@/lib/bills/lien-waivers";
 import { db } from "@/lib/db";
@@ -57,6 +58,7 @@ export default async function BillDetailPage({ params }: PageProps<"/jobs/[jobId
       purchaseOrder: { select: { id: true, poNumber: true, title: true } },
       linkedScheduleItem: { select: { id: true, title: true } },
       createdByUser: { select: { name: true, email: true } },
+      createdByApiKey: { select: { name: true, agentKind: true } },
       lineItems: { orderBy: { sortOrder: "asc" }, include: { costCode: { select: { code: true, name: true } } } },
       files: { where: { deletedAt: null }, select: { id: true, fileName: true, url: true } },
       approvals: { include: { approverUser: { select: { name: true, email: true } } } },
@@ -167,7 +169,11 @@ export default async function BillDetailPage({ params }: PageProps<"/jobs/[jobId
               <Field label="Paid" value={bill.paidAt ? formatDate(bill.paidAt) : "—"} />
               <Field
                 label="Created by"
-                value={bill.createdByUser?.name ?? bill.createdByUser?.email ?? "—"}
+                value={
+                  bill.createdByUser || bill.createdByApiKey
+                    ? actorSummaryText({ user: bill.createdByUser, apiKey: bill.createdByApiKey })
+                    : "—"
+                }
               />
             </div>
             {bill.description ? (

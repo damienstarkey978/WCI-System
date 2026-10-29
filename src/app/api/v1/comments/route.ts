@@ -1,5 +1,6 @@
 /** /api/v1/comments — the unified Comment/Activity layer (CLAUDE.md 2.3). */
 
+import { actorFromApiKey } from "@/lib/actor";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createCommentSchema, formatZodIssues, listCommentsQuerySchema } from "@/lib/api-schemas";
 import { createComment, listComments } from "@/lib/comments/service";
@@ -33,6 +34,10 @@ export const POST = withApiAuth(["comments:write"], async (request, auth) => {
     return apiError(422, "validation_failed", "The comment could not be created.", formatZodIssues(parsed.error));
   }
 
-  const comment = await createComment({ organizationId: auth.organizationId, ...parsed.data });
+  const comment = await createComment({
+    organizationId: auth.organizationId,
+    ...parsed.data,
+    actor: actorFromApiKey(auth.apiKeyId),
+  });
   return Response.json({ data: comment }, { status: 201 });
 });

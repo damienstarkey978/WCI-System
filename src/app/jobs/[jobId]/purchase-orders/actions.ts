@@ -105,6 +105,7 @@ export async function createPurchaseOrderAction(_previous: ActionState, formData
       scopeOfWork,
       internalNotes,
       lineItems,
+      actor: { kind: "user", userId: user.id, role: user.role },
     });
     purchaseOrderId = created.id;
   } catch (error) {

@@ -13,6 +13,8 @@
  * the bucket is private and signed URLs expire).
  */
 
+import type { Actor } from "@/lib/actor";
+import { uploaderColumns } from "@/lib/actor";
 import { db } from "@/lib/db";
 import {
   buildStoragePath,
@@ -58,8 +60,9 @@ export type FileCategoryInput = "DOCUMENT" | "PHOTO" | "VIDEO" | "PRESALE_PHOTO"
 export interface RegisterFileInput {
   readonly organizationId: string;
   readonly jobId: string;
-  /** Null for headless inspector uploads (InspectionPictureShareLink). */
-  readonly uploadedByUserId: string | null;
+  /** Null for headless inspector uploads (InspectionPictureShareLink). Prefer `actor` for staff/API. */
+  readonly uploadedByUserId?: string | null;
+  readonly actor?: Actor;
   readonly fileName: string;
   readonly url: string;
   readonly mimeType?: string | null;
@@ -78,11 +81,16 @@ export async function registerFile(input: RegisterFileInput) {
   await assertPurchaseOrder(input.organizationId, input.jobId, input.purchaseOrderId);
   await assertBill(input.organizationId, input.jobId, input.billId);
 
+  const uploaders = input.actor
+    ? uploaderColumns(input.actor)
+    : { uploadedByUserId: input.uploadedByUserId ?? null, uploadedByApiKeyId: null };
+
   return db.file.create({
     data: {
       organizationId: input.organizationId,
       jobId: input.jobId,
-      uploadedByUserId: input.uploadedByUserId,
+      uploadedByUserId: uploaders.uploadedByUserId,
+      uploadedByApiKeyId: uploaders.uploadedByApiKeyId,
       fileName: input.fileName,
       url: input.url,
       mimeType: input.mimeType ?? null,
@@ -101,8 +109,9 @@ export async function registerFile(input: RegisterFileInput) {
 export interface UploadAndRegisterFileInput {
   readonly organizationId: string;
   readonly jobId: string;
-  /** Null for headless inspector uploads (InspectionPictureShareLink). */
-  readonly uploadedByUserId: string | null;
+  /** Null for headless inspector uploads (InspectionPictureShareLink). Prefer `actor`. */
+  readonly uploadedByUserId?: string | null;
+  readonly actor?: Actor;
   readonly fileName: string;
   readonly bytes: Uint8Array | Buffer;
   readonly mimeType?: string | null;
@@ -135,12 +144,17 @@ export async function uploadAndRegisterFile(input: UploadAndRegisterFileInput) {
 
   await uploadJobFile(path, input.bytes, input.mimeType ?? null);
 
+  const uploaders = input.actor
+    ? uploaderColumns(input.actor)
+    : { uploadedByUserId: input.uploadedByUserId ?? null, uploadedByApiKeyId: null };
+
   return db.file.create({
     data: {
       id,
       organizationId: input.organizationId,
       jobId: input.jobId,
-      uploadedByUserId: input.uploadedByUserId,
+      uploadedByUserId: uploaders.uploadedByUserId,
+      uploadedByApiKeyId: uploaders.uploadedByApiKeyId,
       fileName: input.fileName,
       url: path,
       mimeType: input.mimeType ?? null,

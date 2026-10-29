@@ -68,7 +68,14 @@ export default async function LeadDetailPage({
   if (!lead) notFound();
 
   const [activities, proposals, costCodes] = await Promise.all([
-    db.leadActivity.findMany({ where: { leadId: lead.id }, orderBy: { occurredAt: "desc" }, include: { createdByUser: true } }),
+    db.leadActivity.findMany({
+      where: { leadId: lead.id },
+      orderBy: { occurredAt: "desc" },
+      include: {
+        createdByUser: true,
+        createdByApiKey: { select: { name: true, agentKind: true } },
+      },
+    }),
     db.proposal.findMany({
       where: { leadId: lead.id },
       orderBy: { createdAt: "desc" },
@@ -236,7 +243,14 @@ export default async function LeadDetailPage({
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <span className="font-semibold text-[var(--bt-text)]">{activityTypeLabel(activity.type)}</span>
                           <span>{formatDate(activity.occurredAt)}</span>
-                          {activity.createdByUser ? <span>· {activity.createdByUser.email}</span> : null}
+                          {activity.createdByUser || activity.createdByApiKey ? (
+                            <span>
+                              ·{" "}
+                              {activity.createdByApiKey
+                                ? `${activity.createdByApiKey.name} · API`
+                                : `${activity.createdByUser?.email ?? activity.createdByUser?.name} · Browser`}
+                            </span>
+                          ) : null}
                         </div>
                         {activity.type === "TASK" ? (
                           <div className="flex items-center gap-2">

@@ -6,6 +6,7 @@
  * key — use GET /files/{fileId} for a signed downloadUrl.
  */
 
+import { actorFromApiKey } from "@/lib/actor";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { formatZodIssues, listFilesQuerySchema, registerFileSchema } from "@/lib/api-schemas";
 import { toCursorPage } from "@/lib/api-pagination";
@@ -49,7 +50,11 @@ export const POST = withApiAuth(["files:write"], async (request, auth) => {
   }
 
   try {
-    const file = await registerFile({ organizationId: auth.organizationId, ...parsed.data });
+    const file = await registerFile({
+      organizationId: auth.organizationId,
+      ...parsed.data,
+      actor: actorFromApiKey(auth.apiKeyId),
+    });
     return Response.json({ data: file }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError || error instanceof DailyLogNotFoundError) {

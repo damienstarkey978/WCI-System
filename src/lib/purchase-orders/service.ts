@@ -8,6 +8,8 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import type { CostType, FinancialSourceType } from "@/generated/prisma/enums";
+import type { Actor } from "@/lib/actor";
+import { actorColumns } from "@/lib/actor";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { db } from "@/lib/db";
 import { acceptsNewCommitments } from "@/lib/job-status";
@@ -99,6 +101,8 @@ export interface CreatePurchaseOrderInput {
   readonly agreementTemplateId?: string | null;
   /** Staff-only; never rendered in the vendor portal. */
   readonly internalNotes?: string | null;
+  /** Who created the PO — browser User or API key. Stamped on the CREATED event. */
+  readonly actor?: Actor;
 }
 
 export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
@@ -169,7 +173,13 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
         scopeOfWork,
         agreementTemplateId: input.agreementTemplateId ?? null,
         internalNotes: input.internalNotes ?? null,
-        events: { create: { type: "CREATED", version: 1 } },
+        events: {
+          create: {
+            type: "CREATED",
+            version: 1,
+            ...actorColumns(input.actor),
+          },
+        },
         lineItems: {
           create: input.lineItems.map((item, index) => ({
             costCodeId: item.costCodeId,

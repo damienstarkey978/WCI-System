@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { actorSummaryText } from "@/components/actor-attribution";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { ChatIcon, HeartIcon, NoteIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -65,6 +66,7 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
       take: size,
       include: {
         authorUser: { select: { id: true, name: true, email: true } },
+        authorApiKey: { select: { name: true, agentKind: true } },
         files: {
           where: { deletedAt: null },
           orderBy: { createdAt: "asc" },
@@ -169,7 +171,7 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
         ) : (
           cards.map(({ log, files }) => {
             const weather = weatherSummary(log.weather);
-            const author = log.authorUser.name ?? log.authorUser.email;
+            const author = actorSummaryText({ user: log.authorUser, apiKey: log.authorApiKey });
             const liked = log.likes.length > 0;
             const detailHref = `/jobs/${job.id}/daily-logs/${log.id}`;
             return (

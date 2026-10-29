@@ -6,6 +6,8 @@
  */
 
 import { BillApprovalStatus } from "@/generated/prisma/enums";
+import type { Actor } from "@/lib/actor";
+import { creatorColumns } from "@/lib/actor";
 import { db } from "@/lib/db";
 import { acceptsNewCommitments } from "@/lib/job-status";
 import { emitEvent } from "@/lib/webhooks";
@@ -80,7 +82,10 @@ export interface CreateBillInput {
   readonly dueOn?: Date | null;
   readonly linkedScheduleItemId?: string | null;
   readonly fromOcr?: boolean;
+  /** @deprecated Prefer `actor` — kept so staff actions that already pass user id keep working. */
   readonly createdByUserId?: string | null;
+  /** Browser User XOR API key — stamped on createdBy* columns. */
+  readonly actor?: Actor;
   readonly lineItems: readonly CreateBillLineItemInput[];
 }
 
@@ -143,7 +148,12 @@ export async function createBill(input: CreateBillInput) {
       dueOn: input.dueOn ?? null,
       linkedScheduleItemId: input.linkedScheduleItemId ?? null,
       fromOcr: input.fromOcr ?? false,
-      createdByUserId: input.createdByUserId ?? null,
+      ...(input.actor
+        ? creatorColumns(input.actor)
+        : {
+            createdByUserId: input.createdByUserId ?? null,
+            createdByApiKeyId: null,
+          }),
       lineItems: {
         create: input.lineItems.map((item, index) => ({
           costCodeId: item.costCodeId,
