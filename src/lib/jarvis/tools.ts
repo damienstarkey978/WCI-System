@@ -664,7 +664,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const draftTakeoffWithAiTool = betaZodTool({
     name: "draft_takeoff_with_ai",
     description:
-      "Draft a quantity takeoff from plan/measurement notes for a job. Always DRAFT for human review — never queues Duke or creates a PO. After review, use queue_takeoff_for_purchasing.",
+      "Draft a quantity takeoff from plan/measurement notes for a job. Always DRAFT for human review — never queues Estimating or creates a PO. After review, use queue_takeoff_for_purchasing.",
     inputSchema: z.object({
       jobId: z.string().describe("The job's id, from list_jobs"),
       notes: z.string().describe("Plan/measurement notes — quantities, rooms, waste, materials to buy"),
@@ -679,7 +679,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         ctx.sideEffects.push(`Drafted takeoff ${result.takeoffId} for job ${input.jobId}`);
         return `Drafted takeoff "${result.title}" (id: ${result.takeoffId}) with ${result.lineItemCount} line${
           result.lineItemCount === 1 ? "" : "s"
-        }. Status DRAFT — a human should review, then queue_takeoff_for_purchasing or Push to PO. View at /jobs/${input.jobId}/takeoffs/${result.takeoffId}.`;
+        }. Status DRAFT — a human should review, then Send to Estimating (queue_takeoff_for_purchasing) or Push to PO. View at /jobs/${input.jobId}/takeoffs/${result.takeoffId}.`;
       } catch (error) {
         if (error instanceof TakeoffAiNotConfiguredError) {
           return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
@@ -696,11 +696,11 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const queueTakeoffForPurchasingTool = betaZodTool({
     name: "queue_takeoff_for_purchasing",
     description:
-      "Explicit Send to Purchasing — queues takeoff lines for Duke. Never implied by drafting a takeoff. Pass takeoff id from list_takeoffs_for_job.",
+      "Explicit Send to Estimating — queues takeoff lines for Estimating. Never implied by drafting a takeoff. Pass takeoff id from list_takeoffs_for_job.",
     inputSchema: z.object({
       takeoffId: z.string().describe("The takeoff id from list_takeoffs_for_job"),
-      vendorHint: z.string().optional().describe("Optional preferred vendor name for Duke"),
-      notes: z.string().optional().describe("Optional notes for the purchasing agent"),
+      vendorHint: z.string().optional().describe("Optional preferred vendor name for Estimating"),
+      notes: z.string().optional().describe("Optional notes for Estimating"),
     }),
     run: async (input) => {
       try {
@@ -710,8 +710,8 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
           vendorHint: input.vendorHint,
           notes: input.notes,
         });
-        ctx.sideEffects.push(`Queued takeoff ${input.takeoffId} for purchasing (${result.intents.length} intents)`);
-        return `Queued ${result.intents.length} purchasing intent(s) for takeoff ${input.takeoffId} on job ${result.jobId}. Duke can claim them via GET /api/v1/purchasing-intents?status=QUEUED.`;
+        ctx.sideEffects.push(`Queued takeoff ${input.takeoffId} for Estimating (${result.intents.length} intents)`);
+        return `Queued ${result.intents.length} intent(s) for Estimating on takeoff ${input.takeoffId} (job ${result.jobId}). Claim via GET /api/v1/purchasing-intents?status=QUEUED.`;
       } catch (error) {
         if (error instanceof TakeoffNotFoundError || error instanceof TakeoffLinesNotConvertibleError) {
           return error.message;
@@ -724,7 +724,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const getJobPurchasingSummaryTool = betaZodTool({
     name: "get_job_purchasing_summary",
     description:
-      "Job purchasing rollup: not-yet purchased takeoff lines, queued for Duke, on-order POs, and purchased/complete POs. Pass the job's id from list_jobs.",
+      "Job purchasing rollup: not-yet purchased takeoff lines, queued for Estimating, on-order POs, and purchased/complete POs. Pass the job's id from list_jobs.",
     inputSchema: z.object({ jobId: z.string().describe("The job's id, from list_jobs") }),
     run: async (input) => {
       const job = await requireJob(ctx.organizationId, input.jobId);
@@ -734,7 +734,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       const lines = [
         `${job.name} purchasing:`,
         `Not yet: ${totals.notYetCount} (${formatMoney(totals.notYetCents)})`,
-        `Queued for Duke: ${totals.queuedCount} (${formatMoney(totals.queuedCents)})`,
+        `Queued for Estimating: ${totals.queuedCount} (${formatMoney(totals.queuedCents)})`,
         `On order: ${totals.onOrderCount} (${formatMoney(totals.onOrderCents)})`,
         `Purchased/complete: ${totals.purchasedCount} (${formatMoney(totals.purchasedCents)})`,
       ];
