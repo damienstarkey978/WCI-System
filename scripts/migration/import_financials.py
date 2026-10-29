@@ -46,6 +46,7 @@ safe: the migration API returns already_exists for natural-key matches.
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -123,6 +124,23 @@ def cell(row, *keys):
 def normalize_job_name(name):
     """BT job-name cells often carry trailing whitespace; match trimmed+casefold."""
     return " ".join(str(name or "").split()).casefold()
+
+
+def derive_job_prefix(job):
+    """PO/bill/invoice numbers are `{prefix}-{BT id}`. Prefer Job.prefix; when null,
+    derive the leading street/lot number from Job.name (BT convention:
+    '932 Candlebark…'). Never fall back to job.id[:8] first — cuid truncations
+    collide across jobs created in the same batch (CMVS* duplicates) and are not
+    stable human identifiers. id[:8] remains a last resort only when the name
+    has no leading digits."""
+    existing = (job.get("prefix") or "").strip()
+    if existing:
+        return existing, "job.prefix"
+    name = (job.get("name") or "").strip()
+    match = re.match(r"^(\d+)\b", name)
+    if match:
+        return match.group(1), "job.name leading number"
+    return job["id"][:8].upper(), "job.id[:8] last-resort"
 
 
 class ImportWarning:
@@ -500,10 +518,13 @@ def group_rows_by_job(rows):
 # ---------------------------------------------------------------------------
 
 def import_for_job(client, job, cost_code_ids, uploaded_by_user_id, po_rows, bill_rows, invoice_rows, payment_rows, dry_run):
-    prefix = job.get("prefix") or job["id"][:8].upper()
+    prefix, prefix_source = derive_job_prefix(job)
     print(f'\nResolved job: {job["name"]}  (id={job["id"]}, status={job["status"]}, prefix="{prefix}")')
-    if not job.get("prefix"):
-        print(f'  NOTE: no Job.prefix — using "{prefix}" so PO/Invoice numbers stay unique across jobs.')
+    if prefix_source != "job.prefix":
+        print(
+            f'  NOTE: no Job.prefix — using "{prefix}" from {prefix_source} '
+            "so PO/Invoice numbers stay unique and human-readable across jobs."
+        )
 
     po_payloads, po_number_map = ([], {})
     if po_rows:
