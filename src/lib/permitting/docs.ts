@@ -1,7 +1,8 @@
 /**
  * Building permit document pack (Duval / City of Jacksonville first).
- * Data model + checklist for a Permit Rockstar–style assembler. PDF generators
- * are stubs until Damien supplies Permit Rockstar login for deep mimic.
+ * Checklist + printable WCI worksheets for NOC / NTBO / building application
+ * (see generate-docs.ts). Product-approval sheets and JEA/health letters stay
+ * stubs until external templates / Permit Rockstar login land.
  */
 
 export type PermitMunicipality = "DUVAL_JAX" | "OTHER";
@@ -39,14 +40,14 @@ export const DUVAL_DOC_CATALOG: readonly PermitDocDefinition[] = [
     title: "Notice of Commencement (NOC)",
     description: "Recorded NOC for the job address — required before first inspection in Duval.",
     requiredByDefault: true,
-    status: "stub",
+    status: "ready",
   },
   {
     kind: "NTBO",
     title: "Notice to Building Official (NTBO)",
     description: "Filed notice that construction is starting under the building permit.",
     requiredByDefault: true,
-    status: "stub",
+    status: "ready",
   },
   {
     kind: "PRODUCT_APPROVAL",
@@ -60,7 +61,7 @@ export const DUVAL_DOC_CATALOG: readonly PermitDocDefinition[] = [
     title: "Building permit application",
     description: "City of Jacksonville / EPICS building permit application pack.",
     requiredByDefault: true,
-    status: "stub",
+    status: "ready",
   },
   {
     kind: "JEA_LETTER",

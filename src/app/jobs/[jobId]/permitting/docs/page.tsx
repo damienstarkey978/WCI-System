@@ -61,8 +61,9 @@ export default async function PermitDocsPage({
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
       <PageHeader jobName={job.name} title="Building permit docs" />
       <p className="-mt-2 text-sm text-[var(--bt-muted)]">
-        Duval / City of Jacksonville first — layout modeled on Permit Rockstar. Generators are
-        stubs until the Permit Rockstar login lands; checklist and branches are live.
+        Duval / City of Jacksonville first. NOC, NTBO, and the building application are printable
+        WCI worksheets (Print / Save as PDF). Product approvals and JEA/health letters stay external
+        until those templates / Permit Rockstar login land.
       </p>
       <p className="text-xs text-[var(--bt-muted)]">
         <Link href={`/jobs/${job.id}/permitting`} className="font-medium text-[var(--bt-primary)] hover:underline">
@@ -177,15 +178,13 @@ export default async function PermitDocsPage({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Document pack</h2>
-          <button
-            type="button"
-            disabled
-            title="PDF pack download lands after Permit Rockstar login / generator wiring"
-            className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] opacity-60"
+          <Link
+            href={`/jobs/${job.id}/permitting/docs/print?water=${waterService}${bathroomAdd ? "&bathroom=1" : ""}`}
+            className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]"
             style={{ background: "var(--bt-primary)" }}
           >
-            Download pack ({included.length}) — coming soon
-          </button>
+            Print pack ({included.filter((d) => d.status === "ready").length} ready / {included.length} in pack)
+          </Link>
         </div>
         <ul className="mt-3 divide-y" style={{ borderColor: "var(--bt-border)" }}>
           {pack.map((doc) => (
