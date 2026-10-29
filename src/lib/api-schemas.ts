@@ -262,6 +262,11 @@ export const emitEventSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
+/** POST /admin/heather-test-purge — explicit confirm so a preview GET cannot mutate. */
+export const heatherTestPurgeSchema = z.object({
+  confirm: z.literal(true),
+});
+
 export const aiDraftEstimateSchema = z.object({
   jobId: z.string().min(1).max(64),
   notes: z.string().trim().min(10).max(10_000),
