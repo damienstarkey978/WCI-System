@@ -508,6 +508,8 @@ async function backfillInvoicePaymentsIfEmpty(
   existing: {
     id: string;
     amountCents: number;
+    paidAt: Date | null;
+    status: InvoiceStatus;
     payments: readonly { id: string }[];
     lineItems: unknown;
     files: unknown;
@@ -519,16 +521,39 @@ async function backfillInvoicePaymentsIfEmpty(
     return { record: existing, created: false as const, paymentsBackfilled: false as const };
   }
   assertPaymentsFitInvoice(existing.amountCents, payments);
-  await db.payment.createMany({
-    data: payments.map((payment) => ({
-      organizationId,
-      invoiceId: existing.id,
-      method: payment.method,
-      amountCents: payment.amountCents,
-      reference: payment.reference ?? null,
-      receivedAt: payment.receivedAt,
-      createdAt: payment.receivedAt,
-    })),
+  const paymentsTotalCents = payments.reduce((total, payment) => total + payment.amountCents, 0);
+  const nextStatus: InvoiceStatus =
+    paymentsTotalCents >= existing.amountCents
+      ? "PAID"
+      : paymentsTotalCents > 0
+        ? "PARTIALLY_PAID"
+        : existing.status;
+  const latestReceivedAt = payments.reduce<Date | null>((latest, payment) => {
+    if (!latest || payment.receivedAt > latest) return payment.receivedAt;
+    return latest;
+  }, null);
+  await db.$transaction(async (tx) => {
+    await tx.payment.createMany({
+      data: payments.map((payment) => ({
+        organizationId,
+        invoiceId: existing.id,
+        method: payment.method,
+        amountCents: payment.amountCents,
+        reference: payment.reference ?? null,
+        receivedAt: payment.receivedAt,
+        createdAt: payment.receivedAt,
+      })),
+    });
+    // Mirror recordPayment: status must move to PAID/PARTIALLY_PAID or the UI
+    // still shows SENT even after Amount paid is non-zero.
+    await tx.invoice.update({
+      where: { id: existing.id },
+      data: {
+        status: nextStatus,
+        paidAt:
+          nextStatus === "PAID" ? (existing.paidAt ?? latestReceivedAt) : existing.paidAt,
+      },
+    });
   });
   const refreshed = await db.invoice.findFirstOrThrow({
     where: { id: existing.id },

@@ -451,6 +451,18 @@ def build_bills(rows, prefix, cost_code_ids, po_number_map, po_id_by_number):
     return payloads
 
 
+def normalize_invoice_id_keys(raw):
+    """BT Invoices.csv ID# is often '1' while InvoicePayments.csv Invoice is '0001'.
+    Return every lookup key that should match the same logical invoice."""
+    s = str(raw or "").strip()
+    if not s:
+        return []
+    keys = {s}
+    if s.isdigit():
+        keys.add(str(int(s)))  # '0001' → '1'
+    return list(keys)
+
+
 def build_invoices(rows, prefix, payments_by_invoice):
     payloads = []
     for row in rows:
@@ -471,8 +483,12 @@ def build_invoices(rows, prefix, payments_by_invoice):
         if created_at is None:
             warn("invoices", label, "Missing dates — row skipped.")
             continue
-        # Payments keyed by invoice # within a job; multi-job mode prefixes the key.
-        payments = payments_by_invoice.get(original_id, [])
+        # Payments keyed by invoice # within a job; zero-pad variants resolve here.
+        payments = []
+        for key in normalize_invoice_id_keys(original_id):
+            if key in payments_by_invoice:
+                payments = payments_by_invoice[key]
+                break
         payloads.append({
             "type": "FLAT",
             "invoiceNumber": f"{prefix}-{original_id}",
@@ -493,11 +509,14 @@ def build_payments_by_invoice(rows):
         if not invoice_id:
             continue
         label = f"Payment on invoice #{invoice_id}"
-        by_invoice.setdefault(invoice_id, []).append({
+        payment = {
             "method": map_payment_method(cell(row, "Payment method", "Payment Method"), label),
             "amountCents": round(float(cell(row, "Payment amount", "Payment Amount") or 0) * 100),
             "receivedAt": xl_to_iso(cell(row, "Date paid", "Date Paid")),
-        })
+        }
+        # Index under every zero-pad variant so lookup from Invoices ID# succeeds.
+        for key in normalize_invoice_id_keys(invoice_id):
+            by_invoice.setdefault(key, []).append(payment)
     return by_invoice
 
 
