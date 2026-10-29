@@ -14,8 +14,10 @@ const {
   paymentCreateMany,
   scheduleFindFirst,
   scheduleCreate,
+  scheduleUpdate,
   scheduleItemFindFirst,
   scheduleItemCreate,
+  scheduleItemUpdate,
   scheduleItemCount,
   jobFindFirst,
   userFindFirst,
@@ -41,8 +43,10 @@ const {
   paymentCreateMany: vi.fn(),
   scheduleFindFirst: vi.fn(),
   scheduleCreate: vi.fn(),
+  scheduleUpdate: vi.fn(),
   scheduleItemFindFirst: vi.fn(),
   scheduleItemCreate: vi.fn(),
+  scheduleItemUpdate: vi.fn(),
   scheduleItemCount: vi.fn(),
   jobFindFirst: vi.fn(),
   userFindFirst: vi.fn(),
@@ -75,10 +79,15 @@ vi.mock("@/lib/db", () => ({
       findFirstOrThrow: invoiceFindFirstOrThrow,
     },
     payment: { createMany: paymentCreateMany },
-    schedule: { findFirst: scheduleFindFirst, create: scheduleCreate },
+    schedule: {
+      findFirst: scheduleFindFirst,
+      create: scheduleCreate,
+      update: scheduleUpdate,
+    },
     scheduleItem: {
       findFirst: scheduleItemFindFirst,
       create: scheduleItemCreate,
+      update: scheduleItemUpdate,
       count: scheduleItemCount,
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -98,6 +107,7 @@ import {
   importDailyLog,
   importInvoice,
   importPurchaseOrder,
+  importScheduleFlags,
   importScheduleItem,
 } from "./service";
 
@@ -297,8 +307,16 @@ describe("migration import idempotency", () => {
 
   it("creates a schedule when missing, then skips duplicate title+start", async () => {
     scheduleFindFirst.mockResolvedValue(null);
-    scheduleCreate.mockResolvedValue({ id: "sched_1" });
-    scheduleItemFindFirst.mockResolvedValue({ id: "item_1", title: "Framing" });
+    scheduleCreate.mockResolvedValue({ id: "sched_1", isOnline: true });
+    scheduleItemFindFirst.mockResolvedValue({
+      id: "item_1",
+      title: "Framing",
+      durationDays: 10,
+      percentCompleteBasisPoints: 0,
+      clientVisible: true,
+      subVisible: true,
+      notesInternal: null,
+    });
 
     const result = await importScheduleItem({
       organizationId: "org_1",
@@ -310,7 +328,75 @@ describe("migration import idempotency", () => {
 
     expect(scheduleCreate).toHaveBeenCalledOnce();
     expect(result.created).toBe(false);
+    expect(result.updated).toBe(false);
     expect(scheduleItemCreate).not.toHaveBeenCalled();
+    expect(scheduleItemUpdate).not.toHaveBeenCalled();
+  });
+
+  it("repairs duration and flips Schedule.isOnline on schedule re-import", async () => {
+    scheduleFindFirst.mockResolvedValue({ id: "sched_1", isOnline: true });
+    scheduleUpdate.mockResolvedValue({ id: "sched_1", isOnline: false });
+    scheduleItemFindFirst.mockResolvedValue({
+      id: "item_1",
+      title: "Framing",
+      durationDays: 5,
+      percentCompleteBasisPoints: 0,
+      clientVisible: true,
+      subVisible: true,
+      notesInternal: null,
+    });
+    scheduleItemUpdate.mockResolvedValue({
+      id: "item_1",
+      title: "Framing",
+      durationDays: 10,
+    });
+
+    const result = await importScheduleItem({
+      organizationId: "org_1",
+      jobId: "job_1",
+      title: "  Framing  ",
+      durationDays: 10,
+      manualStartDate: new Date("2026-08-31T00:00:00Z"),
+      scheduleIsOnline: false,
+    });
+
+    expect(scheduleUpdate).toHaveBeenCalledWith({
+      where: { id: "sched_1" },
+      data: { isOnline: false },
+    });
+    expect(scheduleItemUpdate).toHaveBeenCalledOnce();
+    expect(result.created).toBe(false);
+    expect(result.updated).toBe(true);
+    expect(scheduleItemCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates or updates schedule online flags without items", async () => {
+    scheduleFindFirst.mockResolvedValue(null);
+    scheduleCreate.mockResolvedValue({ id: "sched_1", isOnline: false });
+
+    const created = await importScheduleFlags({
+      organizationId: "org_1",
+      jobId: "job_1",
+      isOnline: false,
+    });
+    expect(created.created).toBe(true);
+    expect(scheduleCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ isOnline: false, name: "Schedule" }),
+    });
+
+    scheduleFindFirst.mockResolvedValue({ id: "sched_1", isOnline: true, isDraft: false });
+    scheduleUpdate.mockResolvedValue({ id: "sched_1", isOnline: false });
+    const updated = await importScheduleFlags({
+      organizationId: "org_1",
+      jobId: "job_1",
+      isOnline: false,
+    });
+    expect(updated.created).toBe(false);
+    expect(updated.updated).toBe(true);
+    expect(scheduleUpdate).toHaveBeenCalledWith({
+      where: { id: "sched_1" },
+      data: { isOnline: false },
+    });
   });
 
   it("skips recreating an approved proposal with the same bt-proposal external key", async () => {

@@ -24,9 +24,11 @@
  *   - Invoice: (organizationId, invoiceNumber)
  *   - Bill: (organizationId, jobId, billNumber) when billNumber is present
  *   - DailyLog: (jobId, createdAt, note)
- *   - ScheduleItem: (jobId, title, manualStartDate)
- * An existing match returns `{ created: false }` and does not invent or overwrite
- * financial amounts.
+ *   - ScheduleItem: (jobId, title, manualStartDate) — re-runs may repair
+ *     durationDays / percentComplete / clientVisible / Schedule.isOnline from BT
+ *     (schedule is not money; BT calendarOffline + CSV are source of truth).
+ * An existing financial match returns `{ created: false }` and does not invent or
+ * overwrite financial amounts.
  *
  * Deliberately does not call emitEvent: webhook subscribers (Duke, Jarvis) react to
  * these event types as live signals ("a bill was just paid, act on it"), and a
@@ -642,12 +644,19 @@ export interface ImportScheduleItemInput {
   readonly notesInternal?: string | null;
   /** Optional Buildertrend external id for future correlation; stored in notes when set. */
   readonly externalRef?: string | null;
+  /**
+   * When set, forces `Schedule.isOnline` to this value (BT `calendarOffline` →
+   * `isOnline: !calendarOffline`). Applied on create and on every re-run so a
+   * cutover repair can flip Online/Offline without a separate endpoint.
+   */
+  readonly scheduleIsOnline?: boolean;
 }
 
 /**
- * Ensures the job has a Schedule row, then creates a ScheduleItem. Idempotent on
- * (jobId, title, manualStartDate) — Buildertrend schedule exports have no stable
- * GUID column in the CSV path, so title+start is the durable natural key.
+ * Ensures the job has a Schedule row, then creates or repairs a ScheduleItem.
+ * Idempotent on (jobId, title, manualStartDate). Re-runs repair duration /
+ * percent complete / visibility / schedule online flag from BT — they are not
+ * financial amounts.
  */
 export async function importScheduleItem(input: ImportScheduleItemInput) {
   await assertJob(input.organizationId, input.jobId);
@@ -662,31 +671,74 @@ export async function importScheduleItem(input: ImportScheduleItemInput) {
         organizationId: input.organizationId,
         jobId: input.jobId,
         name: "Schedule",
+        ...(input.scheduleIsOnline !== undefined
+          ? { isOnline: input.scheduleIsOnline }
+          : {}),
       },
+    });
+  } else if (
+    input.scheduleIsOnline !== undefined &&
+    schedule.isOnline !== input.scheduleIsOnline
+  ) {
+    schedule = await db.schedule.update({
+      where: { id: schedule.id },
+      data: { isOnline: input.scheduleIsOnline },
     });
   }
 
+  const title = input.title.trim();
   const existing = await db.scheduleItem.findFirst({
     where: {
       scheduleId: schedule.id,
-      title: input.title,
+      title,
       ...(input.manualStartDate
         ? { manualStartDate: input.manualStartDate }
         : { manualStartDate: null }),
     },
   });
-  if (existing) return { record: existing, created: false };
 
-  const count = await db.scheduleItem.count({ where: { scheduleId: schedule.id } });
   const notesInternal =
     input.externalRef != null && input.externalRef !== ""
       ? [input.notesInternal, `[BT ref: ${input.externalRef}]`].filter(Boolean).join("\n")
       : (input.notesInternal ?? null);
 
+  if (existing) {
+    const percentCompleteBasisPoints = input.percentCompleteBasisPoints ?? existing.percentCompleteBasisPoints;
+    const clientVisible = input.clientVisible ?? existing.clientVisible;
+    const subVisible = input.subVisible ?? existing.subVisible;
+    const nextNotes =
+      notesInternal && !existing.notesInternal?.includes(notesInternal)
+        ? [existing.notesInternal, notesInternal].filter(Boolean).join("\n")
+        : existing.notesInternal;
+
+    const needsRepair =
+      existing.durationDays !== input.durationDays ||
+      existing.percentCompleteBasisPoints !== percentCompleteBasisPoints ||
+      existing.clientVisible !== clientVisible ||
+      existing.subVisible !== subVisible ||
+      nextNotes !== existing.notesInternal;
+
+    if (!needsRepair) return { record: existing, created: false, updated: false };
+
+    const record = await db.scheduleItem.update({
+      where: { id: existing.id },
+      data: {
+        durationDays: input.durationDays,
+        percentCompleteBasisPoints,
+        clientVisible,
+        subVisible,
+        notesInternal: nextNotes,
+      },
+    });
+    return { record, created: false, updated: true };
+  }
+
+  const count = await db.scheduleItem.count({ where: { scheduleId: schedule.id } });
+
   const record = await db.scheduleItem.create({
     data: {
       scheduleId: schedule.id,
-      title: input.title,
+      title,
       durationDays: input.durationDays,
       manualStartDate: input.manualStartDate ?? null,
       percentCompleteBasisPoints: input.percentCompleteBasisPoints ?? 0,
@@ -696,7 +748,46 @@ export async function importScheduleItem(input: ImportScheduleItemInput) {
       sortOrder: count,
     },
   });
-  return { record, created: true };
+  return { record, created: true, updated: false };
+}
+
+/**
+ * Ensure a job has a Schedule and set Online/Offline from BT `calendarOffline`
+ * without requiring schedule items (empty offline calendars still need the flag).
+ */
+export async function importScheduleFlags(input: {
+  readonly organizationId: string;
+  readonly jobId: string;
+  readonly isOnline: boolean;
+  readonly isDraft?: boolean;
+}) {
+  await assertJob(input.organizationId, input.jobId);
+  let schedule = await db.schedule.findFirst({
+    where: { organizationId: input.organizationId, jobId: input.jobId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!schedule) {
+    schedule = await db.schedule.create({
+      data: {
+        organizationId: input.organizationId,
+        jobId: input.jobId,
+        name: "Schedule",
+        isOnline: input.isOnline,
+        isDraft: input.isDraft ?? false,
+      },
+    });
+    return { record: schedule, created: true, updated: false };
+  }
+  const patch: { isOnline?: boolean; isDraft?: boolean } = {};
+  if (schedule.isOnline !== input.isOnline) patch.isOnline = input.isOnline;
+  if (input.isDraft !== undefined && schedule.isDraft !== input.isDraft) {
+    patch.isDraft = input.isDraft;
+  }
+  if (Object.keys(patch).length === 0) {
+    return { record: schedule, created: false, updated: false };
+  }
+  const record = await db.schedule.update({ where: { id: schedule.id }, data: patch });
+  return { record, created: false, updated: true };
 }
 
 // ---------------------------------------------------------------------------

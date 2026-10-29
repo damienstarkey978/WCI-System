@@ -1024,10 +1024,18 @@ export const importScheduleItemSchema = z.object({
   subVisible: z.boolean().optional(),
   notesInternal: z.string().trim().max(10_000).nullish(),
   externalRef: z.string().trim().max(64).nullish(),
+  /** BT calendarOffline → isOnline: !calendarOffline. */
+  scheduleIsOnline: z.boolean().optional(),
 });
 
 export const importScheduleItemsSchema = z.object({
   scheduleItems: z.array(importScheduleItemSchema).min(1).max(100),
+});
+
+export const importScheduleFlagsSchema = z.object({
+  jobId: z.string().min(1).max(64),
+  isOnline: z.boolean(),
+  isDraft: z.boolean().optional(),
 });
 
 // ---------------------------------------------------------------------------

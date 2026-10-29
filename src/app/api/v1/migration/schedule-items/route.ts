@@ -1,7 +1,9 @@
 /**
  * POST /api/v1/migration/schedule-items — bulk-import historical Schedule Items
- * from Buildertrend. Ensures each job has a Schedule, then creates items with
- * historical start/duration/progress. Idempotent on (job, title, manualStartDate).
+ * from Buildertrend. Ensures each job has a Schedule, then creates or repairs
+ * items with historical start/duration/progress. Idempotent on
+ * (job, title, manualStartDate); re-runs may update duration / % complete /
+ * visibility / Schedule.isOnline from BT.
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
@@ -23,16 +25,19 @@ export const POST = withApiAuth(["migration:write"], async (request, auth) => {
 
   const results: Array<{
     index: number;
-    status: "success" | "already_exists" | "error";
+    status: "success" | "already_exists" | "updated" | "error";
     scheduleItemId?: string;
     error?: string;
   }> = [];
   for (const [index, input] of parsed.data.scheduleItems.entries()) {
     try {
-      const { record, created } = await importScheduleItem({ organizationId: auth.organizationId, ...input });
+      const { record, created, updated } = await importScheduleItem({
+        organizationId: auth.organizationId,
+        ...input,
+      });
       results.push({
         index,
-        status: created ? "success" : "already_exists",
+        status: created ? "success" : updated ? "updated" : "already_exists",
         scheduleItemId: record.id,
       });
     } catch (error) {
