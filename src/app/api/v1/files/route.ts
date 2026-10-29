@@ -1,6 +1,11 @@
 /**
- * /api/v1/files — file metadata registration. See src/lib/files/service.ts for
- * why there's no upload endpoint yet (no S3/R2 credentials configured).
+ * /api/v1/files — register file metadata and/or upload bytes into Supabase Storage.
+ *
+ * POST accepts:
+ *   1. multipart/form-data with a `file` (or `bytes`) field — preferred for bots/staff
+ *      putting image bytes into an inspection folder.
+ *   2. JSON `{ dataBase64, fileName, jobId, ... }` — same upload path without multipart.
+ *   3. JSON `{ url, fileName, jobId, ... }` — URL-only registration (legacy).
  *
  * List honors limit/cursor/folderId/jobId/category. File.url may be a storage
  * key — use GET /files/{fileId} for a signed downloadUrl.
@@ -8,10 +13,21 @@
 
 import { actorFromApiKey } from "@/lib/actor";
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { formatZodIssues, listFilesQuerySchema, registerFileSchema } from "@/lib/api-schemas";
+import {
+  formatZodIssues,
+  listFilesQuerySchema,
+  registerFileSchema,
+  uploadFileJsonSchema,
+} from "@/lib/api-schemas";
 import { toCursorPage } from "@/lib/api-pagination";
 import { db } from "@/lib/db";
-import { DailyLogNotFoundError, JobNotFoundError, registerFile } from "@/lib/files/service";
+import {
+  DailyLogNotFoundError,
+  JobNotFoundError,
+  registerFile,
+  uploadAndRegisterFile,
+} from "@/lib/files/service";
+import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
 
 export const GET = withApiAuth(["files:read"], async (request, auth) => {
   const parsed = listFilesQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
@@ -36,17 +52,144 @@ export const GET = withApiAuth(["files:read"], async (request, auth) => {
   return Response.json(toCursorPage(files, limit));
 });
 
+const CATEGORIES = new Set(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO", "PLAN"]);
+
+function parseCategory(raw: FormDataEntryValue | null | undefined) {
+  const value = typeof raw === "string" ? raw.toUpperCase() : "";
+  return CATEGORIES.has(value) ? (value as "DOCUMENT" | "PHOTO" | "VIDEO" | "PRESALE_PHOTO" | "PLAN") : undefined;
+}
+
+function parseBool(raw: FormDataEntryValue | null | undefined, fallback: boolean | undefined) {
+  if (typeof raw !== "string" || raw === "") return fallback;
+  if (raw === "true" || raw === "1") return true;
+  if (raw === "false" || raw === "0") return false;
+  return fallback;
+}
+
+async function handleMultipartUpload(request: Request, organizationId: string, apiKeyId: string) {
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return apiError(400, "invalid_multipart", "Request body must be valid multipart/form-data.");
+  }
+
+  const jobId = String(form.get("jobId") ?? "");
+  const fileNameField = String(form.get("fileName") ?? "");
+  const blob = form.get("file") ?? form.get("bytes");
+  const isUpload =
+    blob != null &&
+    typeof blob === "object" &&
+    "arrayBuffer" in blob &&
+    typeof (blob as { arrayBuffer: unknown }).arrayBuffer === "function";
+  if (!jobId || !isUpload) {
+    return apiError(
+      422,
+      "validation_failed",
+      "multipart upload requires jobId and a file (field name `file` or `bytes`).",
+    );
+  }
+
+  const upload = blob as Blob & { name?: string; type?: string };
+  const fileName = fileNameField || (typeof upload.name === "string" && upload.name ? upload.name : "upload.bin");
+  const bytes = new Uint8Array(await upload.arrayBuffer());
+  const mimeType =
+    (typeof form.get("mimeType") === "string" && String(form.get("mimeType"))) ||
+    upload.type ||
+    null;
+  const category = parseCategory(form.get("category")) ?? "PHOTO";
+  const folderIdRaw = form.get("folderId");
+  const folderId = typeof folderIdRaw === "string" && folderIdRaw ? folderIdRaw : null;
+  const dailyLogIdRaw = form.get("dailyLogId");
+  const dailyLogId = typeof dailyLogIdRaw === "string" && dailyLogIdRaw ? dailyLogIdRaw : null;
+
+  try {
+    const file = await uploadAndRegisterFile({
+      organizationId,
+      jobId,
+      actor: actorFromApiKey(apiKeyId),
+      fileName,
+      bytes,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      category,
+      clientVisible: parseBool(form.get("clientVisible"), false),
+      subVisible: parseBool(form.get("subVisible"), true),
+      dailyLogId,
+      folderId,
+    });
+    return Response.json({ data: file }, { status: 201 });
+  } catch (error) {
+    if (error instanceof StorageNotConfiguredError) {
+      return apiError(503, "storage_not_configured", error.message);
+    }
+    if (error instanceof JobNotFoundError || error instanceof DailyLogNotFoundError) {
+      return apiError(422, "not_found", error.message);
+    }
+    throw error;
+  }
+}
+
 export const POST = withApiAuth(["files:write"], async (request, auth) => {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    return handleMultipartUpload(request, auth.organizationId, auth.apiKeyId);
+  }
+
   let payload: unknown;
   try {
     payload = await request.json();
   } catch {
-    return apiError(400, "invalid_json", "Request body must be valid JSON.");
+    return apiError(400, "invalid_json", "Request body must be valid JSON or multipart/form-data.");
+  }
+
+  const asRecord = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+
+  // Bytes upload (preferred for inspection photos when multipart isn't convenient).
+  if (typeof asRecord.dataBase64 === "string") {
+    const parsed = uploadFileJsonSchema.safeParse(payload);
+    if (!parsed.success) {
+      return apiError(422, "validation_failed", "The file could not be uploaded.", formatZodIssues(parsed.error));
+    }
+    try {
+      const bytes = Buffer.from(parsed.data.dataBase64, "base64");
+      if (bytes.byteLength === 0) {
+        return apiError(422, "validation_failed", "dataBase64 decoded to an empty file.");
+      }
+      const file = await uploadAndRegisterFile({
+        organizationId: auth.organizationId,
+        jobId: parsed.data.jobId,
+        actor: actorFromApiKey(auth.apiKeyId),
+        fileName: parsed.data.fileName,
+        bytes,
+        mimeType: parsed.data.mimeType ?? null,
+        sizeBytes: bytes.byteLength,
+        category: parsed.data.category ?? "PHOTO",
+        clientVisible: parsed.data.clientVisible ?? false,
+        subVisible: parsed.data.subVisible ?? true,
+        dailyLogId: parsed.data.dailyLogId ?? null,
+        folderId: parsed.data.folderId ?? null,
+      });
+      return Response.json({ data: file }, { status: 201 });
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) {
+        return apiError(503, "storage_not_configured", error.message);
+      }
+      if (error instanceof JobNotFoundError || error instanceof DailyLogNotFoundError) {
+        return apiError(422, "not_found", error.message);
+      }
+      throw error;
+    }
   }
 
   const parsed = registerFileSchema.safeParse(payload);
   if (!parsed.success) {
-    return apiError(422, "validation_failed", "The file could not be registered.", formatZodIssues(parsed.error));
+    return apiError(
+      422,
+      "validation_failed",
+      "Provide multipart file, JSON dataBase64, or a public url to register.",
+      formatZodIssues(parsed.error),
+    );
   }
 
   try {

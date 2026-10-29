@@ -209,17 +209,39 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const listJobs = betaZodTool({
     name: "list_jobs",
     description:
-      "List this organization's jobs with their id, name, and status. Call this first whenever you need a job's id — never guess or invent one.",
-    inputSchema: z.object({}),
-    run: async () => {
+      "List this organization's jobs with their id, name, and status. Optional q searches name/prefix/address. Call this first whenever you need a job's id — never guess or invent one.",
+    inputSchema: z.object({
+      q: z.string().optional().describe("Search name, prefix, or address"),
+      limit: z.number().int().positive().max(200).optional().describe("Max rows (default 100, max 200)"),
+    }),
+    run: async (input) => {
+      const query = input.q?.trim();
+      const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
       const jobs = await db.job.findMany({
-        where: { organizationId: ctx.organizationId },
-        select: { id: true, name: true, status: true },
+        where: {
+          organizationId: ctx.organizationId,
+          isTemplate: false,
+          ...(query
+            ? {
+                OR: [
+                  { name: { contains: query, mode: "insensitive" } },
+                  { prefix: { contains: query, mode: "insensitive" } },
+                  { addressLine1: { contains: query, mode: "insensitive" } },
+                  { city: { contains: query, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
+        select: { id: true, name: true, status: true, prefix: true },
         orderBy: { createdAt: "desc" },
-        take: 50,
+        take: limit,
       });
-      if (jobs.length === 0) return "This organization has no jobs yet.";
-      return jobs.map((job) => `${job.id} | ${job.name} | ${job.status}`).join("\n");
+      if (jobs.length === 0) {
+        return query ? `No jobs matched “${query}”.` : "This organization has no jobs yet.";
+      }
+      return jobs
+        .map((job) => `${job.id} | ${job.prefix ? `${job.prefix} ` : ""}${job.name} | ${job.status}`)
+        .join("\n");
     },
   });
 

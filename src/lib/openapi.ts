@@ -209,7 +209,9 @@ const ENDPOINTS: readonly EndpointDef[] = [
       { name: "contractType", description: "Filter by ContractType" },
       { name: "jobGroupId", description: "Filter by job group" },
       { name: "includeTemplates", description: "Include template jobs (default false)" },
-      { name: "limit", description: "Page size, 1-200 (default 25). Keep small for MCP clients (~11.8KB truncation)." },
+      { name: "q", description: "Search name, prefix, or address (alias: search)" },
+      { name: "search", description: "Alias of q" },
+      { name: "limit", description: "Page size, 1-200 (default 25). Use cursor for more pages." },
       { name: "cursor", description: "Opaque pagination cursor (a job id) from pagination.nextCursor" },
     ],
   },
@@ -269,8 +271,9 @@ const ENDPOINTS: readonly EndpointDef[] = [
     path: "/jobs/{jobId}/permits",
     summary: "Add a trade permit to a job",
     description:
-      "Creates one JobPermit (Building, Electrical, Plumbing, Mechanical, Roofing, Other). " +
-      "By default seeds typical inspections for that trade (editable afterward). 409 if trade already exists.",
+      "Creates one JobPermit (Building, Temp pole, Site, Electrical, Plumbing, Mechanical, Roofing, Other). " +
+      "Multiple permits of the same trade are allowed — set label to distinguish. " +
+      "By default seeds typical inspections for that trade (Roofing seeds Roof Final only; Roof Sheathing is opt-in).",
     tags: ["Permitting"],
     scopes: ["permits:write"],
     pathParams: ["jobId"],
@@ -303,7 +306,7 @@ const ENDPOINTS: readonly EndpointDef[] = [
   {
     method: "patch",
     path: "/permits/{permitId}",
-    summary: "Update a permit (pulled, vendor, number)",
+    summary: "Update a permit (status, dates, contractor, pulled, vendor, number)",
     tags: ["Permitting"],
     scopes: ["permits:write"],
     pathParams: ["permitId"],
@@ -322,6 +325,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     method: "post",
     path: "/permits/{permitId}/inspections",
     summary: "Add an inspection to a permit",
+    description:
+      "Idempotent: if the name already exists on this permit, returns the existing inspection with HTTP 200 and created=false; otherwise 201.",
     tags: ["Permitting"],
     scopes: ["permits:write"],
     pathParams: ["permitId"],
@@ -341,7 +346,9 @@ const ENDPOINTS: readonly EndpointDef[] = [
   {
     method: "patch",
     path: "/permit-inspections/{inspectionId}",
-    summary: "Mark a permit inspection complete or incomplete",
+    summary: "Update inspection result, pass date, confirmation #, inspector, or completed",
+    description:
+      "passedAt is the real city pass/completed date (distinct from createdAt / completedAt system stamps).",
     tags: ["Permitting"],
     scopes: ["permits:write"],
     pathParams: ["inspectionId"],
@@ -1133,9 +1140,12 @@ const ENDPOINTS: readonly EndpointDef[] = [
   {
     method: "post",
     path: "/files",
-    summary: "Register a file",
+    summary: "Upload or register a file",
     description:
-      "Metadata registration only — there is no upload endpoint yet (no S3/R2 credentials configured), so url must already point at a hosted file.",
+      "Preferred: multipart/form-data with `file`/`bytes` + jobId (+ optional folderId) — uploads into Supabase job-files storage. " +
+      "Also accepts JSON `{ dataBase64, fileName, jobId, folderId? }` for the same storage path. " +
+      "Legacy: JSON `{ url, fileName, jobId }` registers an already-hosted URL without uploading bytes. " +
+      "Returns 503 storage_not_configured when Supabase credentials are missing.",
     tags: ["Files"],
     scopes: ["files:write"],
     requestSchema: registerFileSchema,

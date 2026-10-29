@@ -1,15 +1,13 @@
 /**
- * /api/v1/permits/{permitId} — update pulled status, vendor, or permit number; DELETE removes the permit.
+ * /api/v1/permits/{permitId} — update permit fields; DELETE removes the permit.
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { formatZodIssues, updatePermitSchema } from "@/lib/api-schemas";
-import { db } from "@/lib/db";
+import { formatZodIssues, parseOptionalDate, updatePermitSchema } from "@/lib/api-schemas";
 import {
-  assignPermitVendor,
   deleteJobPermit,
   PermitNotFoundError,
-  setPermitPulled,
+  updatePermitFields,
 } from "@/lib/permitting/service";
 
 type Context = { params: Promise<{ permitId: string }> };
@@ -43,29 +41,17 @@ export const PATCH = withApiAuth<Context>(["permits:write"], async (request, aut
   }
 
   try {
-    if (parsed.data.pulled !== undefined) {
-      await setPermitPulled(auth.organizationId, permitId, parsed.data.pulled);
-    }
-    if (parsed.data.vendorId !== undefined) {
-      await assignPermitVendor(auth.organizationId, permitId, parsed.data.vendorId ?? null);
-    }
-    if (parsed.data.permitNumber !== undefined) {
-      const existing = await db.jobPermit.findFirst({ where: { id: permitId, organizationId: auth.organizationId } });
-      if (!existing) throw new PermitNotFoundError(permitId);
-      await db.jobPermit.update({
-        where: { id: permitId },
-        data: { permitNumber: parsed.data.permitNumber },
-      });
-    }
-
-    const permit = await db.jobPermit.findFirst({
-      where: { id: permitId, organizationId: auth.organizationId },
-      include: {
-        vendor: { select: { id: true, name: true, email: true } },
-        inspections: { orderBy: { sortOrder: "asc" } },
-      },
+    const permit = await updatePermitFields(auth.organizationId, permitId, {
+      pulled: parsed.data.pulled,
+      vendorId: parsed.data.vendorId,
+      permitNumber: parsed.data.permitNumber,
+      label: parsed.data.label,
+      status: parsed.data.status,
+      issuedAt: parseOptionalDate(parsed.data.issuedAt),
+      expiresAt: parseOptionalDate(parsed.data.expiresAt),
+      jurisdiction: parsed.data.jurisdiction,
+      contractorName: parsed.data.contractorName,
     });
-    if (!permit) throw new PermitNotFoundError(permitId);
     return Response.json({ data: permit });
   } catch (error) {
     if (error instanceof PermitNotFoundError) {

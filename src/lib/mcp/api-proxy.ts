@@ -62,11 +62,16 @@ export async function callApiV1(input: ApiV1ProxyInput): Promise<ApiV1ProxyResul
   return { status: response.status, bodyText };
 }
 
-/** Format a proxy result for an MCP tool response (status + body, capped). */
-export function formatApiV1ProxyResult(result: ApiV1ProxyResult, maxChars = 12_000): string {
+/**
+ * Format a proxy result for an MCP tool response (status + body, capped).
+ * Cap raised well above the old ~12KB cliff so job lists / permit payloads are
+ * not silently cut mid-JSON; prefer `q`/`limit`/`cursor` on list endpoints for
+ * huge orgs rather than relying on truncation.
+ */
+export function formatApiV1ProxyResult(result: ApiV1ProxyResult, maxChars = 250_000): string {
   const truncated =
     result.bodyText.length > maxChars
-      ? `${result.bodyText.slice(0, maxChars)}\n…(truncated)`
+      ? `${result.bodyText.slice(0, maxChars)}\n…(truncated; pass q/limit/cursor or a narrower path)`
       : result.bodyText;
   return `HTTP ${result.status}\n${truncated || "(empty body)"}`;
 }

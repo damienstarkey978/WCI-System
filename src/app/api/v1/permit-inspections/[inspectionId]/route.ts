@@ -1,14 +1,13 @@
 /**
- * /api/v1/permit-inspections/{inspectionId} — mark complete / incomplete; DELETE removes it.
+ * /api/v1/permit-inspections/{inspectionId} — update result / pass date / etc.; DELETE removes it.
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { formatZodIssues, updatePermitInspectionSchema } from "@/lib/api-schemas";
-import { db } from "@/lib/db";
+import { formatZodIssues, parseOptionalDate, updatePermitInspectionSchema } from "@/lib/api-schemas";
 import {
   InspectionNotFoundError,
   removePermitInspection,
-  setInspectionCompleted,
+  updateInspectionFields,
 } from "@/lib/permitting/service";
 
 type Context = { params: Promise<{ inspectionId: string }> };
@@ -42,11 +41,13 @@ export const PATCH = withApiAuth<Context>(["permits:write"], async (request, aut
   }
 
   try {
-    await setInspectionCompleted(auth.organizationId, inspectionId, parsed.data.completed);
-    const inspection = await db.jobPermitInspection.findFirst({
-      where: { id: inspectionId, permit: { organizationId: auth.organizationId } },
+    const inspection = await updateInspectionFields(auth.organizationId, inspectionId, {
+      completed: parsed.data.completed,
+      result: parsed.data.result,
+      passedAt: parseOptionalDate(parsed.data.passedAt),
+      confirmationNumber: parsed.data.confirmationNumber,
+      inspector: parsed.data.inspector,
     });
-    if (!inspection) throw new InspectionNotFoundError(inspectionId);
     return Response.json({ data: inspection });
   } catch (error) {
     if (error instanceof InspectionNotFoundError) {

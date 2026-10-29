@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { PermitTrade } from "@/generated/prisma/enums";
+import { InspectionResult, PermitStatus, PermitTrade } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { EmailNotConfiguredError, EmailSendError } from "@/lib/email/send";
 import {
@@ -13,13 +13,14 @@ import {
   InspectionNotFoundError,
   JobNotFoundError,
   NoVendorEmailError,
-  PermitAlreadyExistsError,
   PermitNotFoundError,
   removePermitInspection,
   sendPermitReminder,
   setInspectionCompleted,
   setJobNocNtbo,
   setPermitPulled,
+  updateInspectionFields,
+  updatePermitFields,
 } from "@/lib/permitting/service";
 
 export interface ActionState {
@@ -34,31 +35,79 @@ function revalidate(jobId: string) {
   revalidatePath(`/jobs/${jobId}/files/inspection-pictures`);
 }
 
-const STAFF_TRADES = new Set<string>([
-  PermitTrade.BUILDING,
-  PermitTrade.ELECTRICAL,
-  PermitTrade.PLUMBING,
-  PermitTrade.MECHANICAL,
-  PermitTrade.ROOFING,
-]);
+const STAFF_TRADES = new Set<string>(Object.values(PermitTrade));
+const PERMIT_STATUSES = new Set<string>(Object.values(PermitStatus));
+const INSPECTION_RESULTS = new Set<string>(Object.values(InspectionResult));
+
+function optionalDate(raw: FormDataEntryValue | null): Date | null | undefined {
+  if (raw === null) return undefined;
+  const value = String(raw).trim();
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 export async function addJobPermitAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();
   const jobId = String(formData.get("jobId") ?? "");
   const tradeRaw = String(formData.get("trade") ?? "");
+  const label = String(formData.get("label") ?? "").trim();
   if (!STAFF_TRADES.has(tradeRaw)) {
     return { error: "Select a valid permit type." };
   }
   try {
-    await createJobPermit(user.organizationId, jobId, tradeRaw as PermitTrade);
+    await createJobPermit(user.organizationId, jobId, tradeRaw as PermitTrade, {
+      label: label || null,
+      seedDefaultInspections: formData.get("seedDefaults") !== "false",
+    });
   } catch (error) {
-    if (
-      error instanceof JobNotFoundError ||
-      error instanceof PermitAlreadyExistsError ||
-      error instanceof Error
-    ) {
+    if (error instanceof JobNotFoundError || error instanceof Error) {
       return { error: error instanceof Error ? error.message : "Could not add permit." };
     }
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function updatePermitFieldsAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const permitId = String(formData.get("permitId") ?? "");
+  const statusRaw = String(formData.get("status") ?? "");
+  try {
+    await updatePermitFields(user.organizationId, permitId, {
+      permitNumber: String(formData.get("permitNumber") ?? "").trim() || null,
+      label: String(formData.get("label") ?? "").trim() || null,
+      status: PERMIT_STATUSES.has(statusRaw) ? (statusRaw as PermitStatus) : undefined,
+      issuedAt: optionalDate(formData.get("issuedAt")),
+      expiresAt: optionalDate(formData.get("expiresAt")),
+      jurisdiction: String(formData.get("jurisdiction") ?? "").trim() || null,
+      contractorName: String(formData.get("contractorName") ?? "").trim() || null,
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not update permit." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function updateInspectionFieldsAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const resultRaw = String(formData.get("result") ?? "");
+  try {
+    await updateInspectionFields(user.organizationId, inspectionId, {
+      result: INSPECTION_RESULTS.has(resultRaw) ? (resultRaw as InspectionResult) : undefined,
+      passedAt: optionalDate(formData.get("passedAt")),
+      confirmationNumber: String(formData.get("confirmationNumber") ?? "").trim() || null,
+      inspector: String(formData.get("inspector") ?? "").trim() || null,
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not update inspection." };
   }
   revalidate(jobId);
   return { ok: true };

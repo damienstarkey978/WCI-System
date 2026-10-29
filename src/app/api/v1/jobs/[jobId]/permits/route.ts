@@ -7,11 +7,8 @@
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createJobPermitSchema, formatZodIssues } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
-import {
-  createJobPermit,
-  JobNotFoundError,
-  PermitAlreadyExistsError,
-} from "@/lib/permitting/service";
+import { parseOptionalDate } from "@/lib/api-schemas";
+import { createJobPermit, JobNotFoundError } from "@/lib/permitting/service";
 
 type Context = { params: Promise<{ jobId: string }> };
 
@@ -76,15 +73,18 @@ export const POST = withApiAuth<Context>(["permits:write"], async (request, auth
     const permit = await createJobPermit(auth.organizationId, jobId, parsed.data.trade, {
       permitNumber: parsed.data.permitNumber,
       vendorId: parsed.data.vendorId,
+      label: parsed.data.label,
+      status: parsed.data.status,
+      issuedAt: parseOptionalDate(parsed.data.issuedAt),
+      expiresAt: parseOptionalDate(parsed.data.expiresAt),
+      jurisdiction: parsed.data.jurisdiction,
+      contractorName: parsed.data.contractorName,
       seedDefaultInspections: parsed.data.seedDefaultInspections,
     });
     return Response.json({ data: permit }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) {
       return apiError(404, "not_found", `No job ${jobId} in this organization.`);
-    }
-    if (error instanceof PermitAlreadyExistsError) {
-      return apiError(409, "conflict", error.message);
     }
     if (error instanceof Error && error.message === "Vendor not found.") {
       return apiError(422, "unknown_vendor", error.message);

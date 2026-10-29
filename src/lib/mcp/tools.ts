@@ -44,8 +44,8 @@ import {
   createJobPermit,
   ensureDefaultPermits,
   JobNotFoundError as PermitJobNotFoundError,
-  PermitAlreadyExistsError,
   setInspectionCompleted,
+  updateInspectionFields,
   setPermitPulled,
 } from "@/lib/permitting/service";
 import {
@@ -166,16 +166,46 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     auth,
     "jobs:read",
     "list_jobs",
-    { description: "List this organization's jobs with their id, name, and status." },
-    async () => {
+    {
+      description:
+        "List this organization's jobs with their id, name, and status. " +
+        "Optional search (q) matches name/prefix/address. Default limit 100 (max 200).",
+      inputSchema: {
+        q: z.string().optional().describe("Search name, prefix, or address"),
+        limit: z.number().int().positive().max(200).optional().describe("Max rows (default 100, max 200)"),
+      },
+    },
+    async (input) => {
+      const { q, limit: limitRaw } = (input ?? {}) as { q?: string; limit?: number };
+      const query = q?.trim();
+      const limit = Math.min(Math.max(limitRaw ?? 100, 1), 200);
       const jobs = await db.job.findMany({
-        where: { organizationId, isTemplate: false },
-        select: { id: true, name: true, status: true },
+        where: {
+          organizationId,
+          isTemplate: false,
+          ...(query
+            ? {
+                OR: [
+                  { name: { contains: query, mode: "insensitive" } },
+                  { prefix: { contains: query, mode: "insensitive" } },
+                  { addressLine1: { contains: query, mode: "insensitive" } },
+                  { city: { contains: query, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
+        select: { id: true, name: true, status: true, prefix: true },
         orderBy: { createdAt: "desc" },
-        take: 50,
+        take: limit,
       });
-      if (jobs.length === 0) return text("This organization has no jobs yet.");
-      return text(jobs.map((job) => `${job.id} | ${job.name} | ${job.status}`).join("\n"));
+      if (jobs.length === 0) {
+        return text(query ? `No jobs matched “${query}”.` : "This organization has no jobs yet.");
+      }
+      return text(
+        jobs
+          .map((job) => `${job.id} | ${job.prefix ? `${job.prefix} ` : ""}${job.name} | ${job.status}`)
+          .join("\n"),
+      );
     },
   );
 
@@ -284,25 +314,38 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
         "Seeds typical inspections by default. Use when validating which permits should exist on a job.",
       inputSchema: {
         jobId: z.string().describe("The job's id"),
-        trade: z.enum(["BUILDING", "ELECTRICAL", "PLUMBING", "MECHANICAL", "ROOFING", "OTHER"]),
+        trade: z.enum([
+          "BUILDING",
+          "TEMP_POLE",
+          "SITE",
+          "ELECTRICAL",
+          "PLUMBING",
+          "MECHANICAL",
+          "ROOFING",
+          "OTHER",
+        ]),
+        label: z.string().optional().describe("Optional label to distinguish duplicate trades"),
         seedDefaultInspections: z.boolean().optional().describe("Default true"),
       },
     },
     async (input) => {
-      const { jobId, trade, seedDefaultInspections } = input as {
+      const { jobId, trade, label, seedDefaultInspections } = input as {
         jobId: string;
         trade: keyof typeof PermitTrade;
+        label?: string;
         seedDefaultInspections?: boolean;
       };
       try {
         const permit = await createJobPermit(organizationId, jobId, PermitTrade[trade], {
           seedDefaultInspections,
+          label: label ?? null,
         });
         const inspections = permit.inspections.map((i) => `  ${i.id} | ${i.name}`).join("\n");
-        return text(`${permit.id} | ${permit.trade} | inspections:\n${inspections || "  (none)"}`);
+        return text(
+          `${permit.id} | ${permit.trade}${permit.label ? ` (${permit.label})` : ""} | ${permit.status} | inspections:\n${inspections || "  (none)"}`,
+        );
       } catch (error) {
         if (error instanceof PermitJobNotFoundError) return refusal(error.message);
-        if (error instanceof PermitAlreadyExistsError) return refusal(error.message);
         throw error;
       }
     },
@@ -368,17 +411,49 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     "permits:write",
     "set_inspection_completed",
     {
-      description: "Mark a permit inspection complete or incomplete.",
+      description:
+        "Update a permit inspection: completed flag, result (PASS/FAIL/PARTIAL/PENDING), " +
+        "real city pass date (passedAt ISO), confirmation number, and/or inspector name.",
       inputSchema: {
         inspectionId: z.string().describe("Inspection id from list_job_permits"),
-        completed: z.boolean(),
+        completed: z.boolean().optional(),
+        result: z.enum(["PENDING", "PASS", "FAIL", "PARTIAL"]).optional(),
+        passedAt: z.string().optional().describe("Real city pass/completed date (ISO), not entry time"),
+        confirmationNumber: z.string().optional(),
+        inspector: z.string().optional(),
       },
     },
     async (input) => {
-      const { inspectionId, completed } = input as { inspectionId: string; completed: boolean };
+      const { inspectionId, completed, result, passedAt, confirmationNumber, inspector } = input as {
+        inspectionId: string;
+        completed?: boolean;
+        result?: "PENDING" | "PASS" | "FAIL" | "PARTIAL";
+        passedAt?: string;
+        confirmationNumber?: string;
+        inspector?: string;
+      };
       try {
-        const inspection = await setInspectionCompleted(organizationId, inspectionId, completed);
-        return text(`${inspection.id} | ${inspection.name} | ${inspection.completedAt ? "DONE" : "open"}`);
+        const inspection =
+          completed !== undefined &&
+          result === undefined &&
+          passedAt === undefined &&
+          confirmationNumber === undefined &&
+          inspector === undefined
+            ? await setInspectionCompleted(organizationId, inspectionId, completed)
+            : await updateInspectionFields(organizationId, inspectionId, {
+                completed,
+                result,
+                passedAt: passedAt === undefined ? undefined : passedAt ? new Date(passedAt) : null,
+                confirmationNumber: confirmationNumber ?? undefined,
+                inspector: inspector ?? undefined,
+              });
+        return text(
+          `${inspection.id} | ${inspection.name} | result=${inspection.result}` +
+            `${inspection.passedAt ? ` | passedAt=${inspection.passedAt.toISOString()}` : ""}` +
+            `${inspection.confirmationNumber ? ` | conf=${inspection.confirmationNumber}` : ""}` +
+            `${inspection.inspector ? ` | inspector=${inspection.inspector}` : ""}` +
+            ` | ${inspection.completedAt ? "DONE" : "open"}`,
+        );
       } catch (error) {
         if (error instanceof Error && error.name === "InspectionNotFoundError") return refusal(error.message);
         throw error;

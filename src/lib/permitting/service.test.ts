@@ -11,13 +11,15 @@ import {
   STAFF_PERMIT_TRADES,
   tradeLabel,
 } from "@/lib/permitting/service";
-import { PermitTrade } from "@/generated/prisma/enums";
+import { PermitStatus, PermitTrade } from "@/generated/prisma/enums";
 
 describe("permitting helpers", () => {
   it("labels trades for display", () => {
     expect(tradeLabel(PermitTrade.ELECTRICAL)).toBe("Electrical");
     expect(tradeLabel(PermitTrade.BUILDING)).toBe("Building");
     expect(tradeLabel(PermitTrade.ROOFING)).toBe("Roofing");
+    expect(tradeLabel(PermitTrade.TEMP_POLE)).toBe("Temp pole");
+    expect(tradeLabel(PermitTrade.SITE)).toBe("Site");
   });
 
   it("builds a permit reminder email", () => {
@@ -37,6 +39,7 @@ describe("permitting helpers", () => {
     expect(catalogInspectionNamesForTrade(PermitTrade.BUILDING)).toEqual(DEMO_INSPECTIONS_BY_TRADE.BUILDING);
     expect(catalogInspectionNamesForTrade(PermitTrade.PLUMBING)).toContain("Plumbing Rough");
     expect(catalogInspectionNamesForTrade(PermitTrade.OTHER)).toEqual([]);
+    expect(DEMO_INSPECTIONS_BY_TRADE.ROOFING).toContain("Roof Sheathing");
   });
 
   it("defaults electrical to rough, cover-up, and final", () => {
@@ -47,12 +50,17 @@ describe("permitting helpers", () => {
     ]);
   });
 
-  it("lists staff-addable trades and excludes ones already on the job", () => {
+  it("does not auto-seed Roof Sheathing on roofing permits", () => {
+    expect(DEFAULT_INSPECTIONS_ON_ADD.ROOFING).toEqual(["Roof Final"]);
+    expect(DEFAULT_INSPECTIONS_ON_ADD.ROOFING).not.toContain("Roof Sheathing");
+  });
+
+  it("always offers the full staff trade catalog (duplicates allowed)", () => {
     expect(STAFF_PERMIT_TRADES).toContain(PermitTrade.ROOFING);
+    expect(STAFF_PERMIT_TRADES).toContain(PermitTrade.TEMP_POLE);
+    expect(STAFF_PERMIT_TRADES).toContain(PermitTrade.SITE);
     expect(availableTradesToAdd([PermitTrade.BUILDING, PermitTrade.ELECTRICAL])).toEqual([
-      PermitTrade.PLUMBING,
-      PermitTrade.MECHANICAL,
-      PermitTrade.ROOFING,
+      ...STAFF_PERMIT_TRADES,
     ]);
   });
 
@@ -61,20 +69,27 @@ describe("permitting helpers", () => {
     expect(hasBuildingPermitDocs(new Date())).toBe(true);
   });
 
-  it("treats active permit as building pulled, not MEP alone", () => {
+  it("treats active permit as building ACTIVE/pulled, not MEP alone", () => {
     expect(
       hasActiveBuildingPermit([
-        { trade: PermitTrade.ELECTRICAL, pulled: true, permitNumber: null },
+        { trade: PermitTrade.ELECTRICAL, pulled: true, permitNumber: null, status: PermitStatus.ACTIVE },
       ]),
     ).toBe(false);
     expect(
       hasActiveBuildingPermit([
-        { trade: PermitTrade.BUILDING, pulled: false, permitNumber: "X" },
-        { trade: PermitTrade.ELECTRICAL, pulled: true, permitNumber: null },
+        { trade: PermitTrade.BUILDING, pulled: false, permitNumber: "X", status: PermitStatus.DRAFT },
+        { trade: PermitTrade.ELECTRICAL, pulled: true, permitNumber: null, status: PermitStatus.ACTIVE },
       ]),
     ).toBe(false);
     expect(
-      hasActiveBuildingPermit([{ trade: PermitTrade.BUILDING, pulled: true, permitNumber: "X" }]),
+      hasActiveBuildingPermit([
+        { trade: PermitTrade.BUILDING, pulled: true, permitNumber: "X", status: PermitStatus.ACTIVE },
+      ]),
     ).toBe(true);
+    expect(
+      hasActiveBuildingPermit([
+        { trade: PermitTrade.BUILDING, pulled: false, permitNumber: "X", status: PermitStatus.EXPIRED },
+      ]),
+    ).toBe(false);
   });
 });
