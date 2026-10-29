@@ -56,14 +56,14 @@ export default async function TakeoffsPage({ params }: PageProps<"/jobs/[jobId]/
       />
 
       <p className="text-sm text-[var(--bt-muted)]">
-        Quantity takeoffs from plans and measurements. Review, then explicitly send lines to Duke or push to a PO.
+        Quantity takeoffs from plans and measurements. Review, then explicitly send lines to Estimating or push to a PO.
       </p>
 
       {takeoffs.length === 0 ? (
         <EmptyState
           icon={<NoteIcon className="h-10 w-10" />}
           title="No takeoffs yet"
-          description="Draft one from plan or measurement notes. Nothing is purchased until you Send to Purchasing or Push to PO."
+          description="Draft one from plan or measurement notes. Nothing is purchased until you Send to Estimating or Push to PO."
         />
       ) : (
         <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "var(--bt-border)" }}>

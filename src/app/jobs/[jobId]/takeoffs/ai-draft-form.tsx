@@ -25,7 +25,7 @@ export function AiDraftTakeoffForm({ jobId }: { jobId: string }) {
         />
       </label>
       <p className="text-xs text-[var(--bt-muted)]">
-        Drafts a takeoff against your cost codes. Review lines, then explicitly Send to Purchasing (Duke) or Push to PO —
+        Drafts a takeoff against your cost codes. Review lines, then explicitly Send to Estimating or Push to PO —
         never automatic.
       </p>
       {state.error ? (

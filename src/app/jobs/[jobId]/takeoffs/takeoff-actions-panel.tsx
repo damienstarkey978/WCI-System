@@ -40,11 +40,11 @@ export function TakeoffActionsPanel({
         {queueableLineIds.map((id) => (
           <input key={id} type="hidden" name="lineId" value={id} />
         ))}
-        <h2 className="text-sm font-semibold text-[var(--bt-text)]">Send to Purchasing (Duke)</h2>
+        <h2 className="text-sm font-semibold text-[var(--bt-text)]">Send to Estimating</h2>
         <p className="text-xs text-[var(--bt-muted)]">
           {queueableLineIds.length === 0
             ? "No draft/ready lines left to queue."
-            : `Queues ${queueableLineIds.length} line(s) for the purchasing agent. Explicit only — AI draft never does this.`}
+            : `Queues ${queueableLineIds.length} line(s) for Estimating. Explicit only — AI draft never does this.`}
         </p>
         <label className="grid gap-1 text-sm">
           <span className="text-xs font-medium text-[var(--bt-muted)]">Vendor hint (optional)</span>
@@ -57,7 +57,7 @@ export function TakeoffActionsPanel({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="text-xs font-medium text-[var(--bt-muted)]">Notes for Duke (optional)</span>
+          <span className="text-xs font-medium text-[var(--bt-muted)]">Notes for Estimating (optional)</span>
           <textarea
             name="notes"
             rows={2}
@@ -71,14 +71,14 @@ export function TakeoffActionsPanel({
             {queueState.error}
           </p>
         ) : null}
-        {queueState.ok ? <p className="text-xs text-green-700">Queued for purchasing.</p> : null}
+        {queueState.ok ? <p className="text-xs text-green-700">Queued for Estimating.</p> : null}
         <button
           type="submit"
           disabled={queuePending || queueableLineIds.length === 0}
           className="self-start rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
           style={{ background: "var(--bt-primary)" }}
         >
-          {queuePending ? "Queuing…" : "Send to Purchasing"}
+          {queuePending ? "Queuing…" : "Send to Estimating"}
         </button>
       </form>
 

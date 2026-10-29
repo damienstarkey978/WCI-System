@@ -116,7 +116,7 @@ export function buildJobPurchasingSummary(input: {
     let statusLabel: string = line.status;
     if (line.status === "QUEUED" || line.intentStatus === "QUEUED" || line.intentStatus === "CLAIMED") {
       bucket = "queued";
-      statusLabel = line.intentStatus === "CLAIMED" ? "CLAIMED by Duke" : "QUEUED for purchasing";
+      statusLabel = line.intentStatus === "CLAIMED" ? "CLAIMED by Estimating" : "QUEUED for Estimating";
     }
 
     rows.push({

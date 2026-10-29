@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const BUCKET_LABEL: Record<PurchasingBucket, string> = {
   not_yet: "Not yet purchased",
-  queued: "Queued for Duke",
+  queued: "Queued for Estimating",
   on_order: "On order",
   purchased: "Purchased / complete",
 };
