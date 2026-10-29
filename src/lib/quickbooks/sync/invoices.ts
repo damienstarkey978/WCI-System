@@ -93,9 +93,15 @@ export async function syncInvoiceToQuickBooks(organizationId: string, invoiceId:
             },
           ];
 
+    // QBO DocNumber max length is 21. WCI invoice numbers can be longer when they
+    // carry a job prefix + BT title fragment (e.g. Newcomb draws). Truncate for the
+    // QBO field only — full number stays on Invoice.invoiceNumber and in Description.
+    const docNumber =
+      invoice.invoiceNumber.length <= 21 ? invoice.invoiceNumber : invoice.invoiceNumber.slice(0, 21);
+
     const invoiceFields = {
       CustomerRef: { value: qboCustomerId },
-      DocNumber: invoice.invoiceNumber,
+      DocNumber: docNumber,
       Line: lines,
       ...(invoice.dueOn ? { DueDate: invoice.dueOn.toISOString().slice(0, 10) } : {}),
     };
