@@ -460,6 +460,57 @@ export interface ImportInvoiceInput {
   readonly attachments?: readonly MigrationAttachmentInput[];
 }
 
+function assertPaymentsFitInvoice(amountCents: number, payments: readonly ImportInvoicePaymentInput[]) {
+  const paymentsTotalCents = payments.reduce((total, payment) => total + payment.amountCents, 0);
+  // The overpayment guard has to follow the invoice's sign. A negative invoice is a
+  // refund or credit — money flowing back to the client — and against one of those a
+  // plain `paymentsTotal > amountCents` is true even with no payments at all
+  // (0 > -5000), so every refund in a historical import was rejected as overpaid.
+  const overpaid = amountCents >= 0 ? paymentsTotalCents > amountCents : paymentsTotalCents < amountCents;
+  if (overpaid) {
+    throw new OverpaidInvoiceError(amountCents, paymentsTotalCents);
+  }
+}
+
+/**
+ * When an invoice was imported without its payments (or an earlier run hit
+ * already_exists before payments were in the payload), a re-run must be able to
+ * attach them. Only fills an empty payment set — never overwrites or doubles
+ * existing Payment rows (amounts stay frozen once recorded).
+ */
+async function backfillInvoicePaymentsIfEmpty(
+  existing: {
+    id: string;
+    amountCents: number;
+    payments: readonly { id: string }[];
+    lineItems: unknown;
+    files: unknown;
+  },
+  organizationId: string,
+  payments: readonly ImportInvoicePaymentInput[],
+) {
+  if (existing.payments.length > 0 || payments.length === 0) {
+    return { record: existing, created: false as const, paymentsBackfilled: false as const };
+  }
+  assertPaymentsFitInvoice(existing.amountCents, payments);
+  await db.payment.createMany({
+    data: payments.map((payment) => ({
+      organizationId,
+      invoiceId: existing.id,
+      method: payment.method,
+      amountCents: payment.amountCents,
+      reference: payment.reference ?? null,
+      receivedAt: payment.receivedAt,
+      createdAt: payment.receivedAt,
+    })),
+  });
+  const refreshed = await db.invoice.findFirstOrThrow({
+    where: { id: existing.id },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true, files: true },
+  });
+  return { record: refreshed, created: false as const, paymentsBackfilled: true as const };
+}
+
 export async function importInvoice(input: ImportInvoiceInput) {
   await assertJob(input.organizationId, input.jobId);
   await assertUser(input.organizationId, input.uploadedByUserId);
@@ -468,7 +519,9 @@ export async function importInvoice(input: ImportInvoiceInput) {
     where: { organizationId: input.organizationId, invoiceNumber: input.invoiceNumber },
     include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true, files: true },
   });
-  if (existing) return { record: existing, created: false };
+  if (existing) {
+    return backfillInvoicePaymentsIfEmpty(existing, input.organizationId, input.payments ?? []);
+  }
 
   const usesLineItems = input.lineItems !== undefined && input.lineItems.length > 0;
   if (!usesLineItems && input.amountCents === undefined) {
@@ -478,15 +531,7 @@ export async function importInvoice(input: ImportInvoiceInput) {
     ? input.lineItems!.reduce((total, line) => total + line.amountCents, 0)
     : input.amountCents!;
 
-  const paymentsTotalCents = (input.payments ?? []).reduce((total, payment) => total + payment.amountCents, 0);
-  // The overpayment guard has to follow the invoice's sign. A negative invoice is a
-  // refund or credit — money flowing back to the client — and against one of those a
-  // plain `paymentsTotal > amountCents` is true even with no payments at all
-  // (0 > -5000), so every refund in a historical import was rejected as overpaid.
-  const overpaid = amountCents >= 0 ? paymentsTotalCents > amountCents : paymentsTotalCents < amountCents;
-  if (overpaid) {
-    throw new OverpaidInvoiceError(amountCents, paymentsTotalCents);
-  }
+  assertPaymentsFitInvoice(amountCents, input.payments ?? []);
 
   const invoice = await db.invoice.create({
     data: {
@@ -527,7 +572,7 @@ export async function importInvoice(input: ImportInvoiceInput) {
     include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true, files: true },
   });
 
-  return { record: invoice, created: true };
+  return { record: invoice, created: true, paymentsBackfilled: false as const };
 }
 
 // ---------------------------------------------------------------------------

@@ -595,7 +595,10 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     async () => {
       const jobs = await getJobsOverBudget(organizationId);
       if (jobs.length === 0) return text("No jobs are over budget.");
-      return text(jobs.map((job) => `${job.jobName} — over by ${formatMoney(job.varianceCents)}`).join("\n"));
+      // varianceCents is revisedBudget − projected (negative when over). Abs matches
+      // get_budget_vs_projected_report's "OVER BUDGET by $X" wording — never print a
+      // negative amount after the words "over by".
+      return text(jobs.map((job) => `${job.jobName} — over by ${formatMoney(Math.abs(job.varianceCents))}`).join("\n"));
     },
   );
 

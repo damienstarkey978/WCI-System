@@ -33,10 +33,15 @@ export const POST = withApiAuth(["migration:write"], async (request, auth) => {
   }> = [];
   for (const [index, input] of parsed.data.invoices.entries()) {
     try {
-      const { record, created } = await importInvoice({ organizationId: auth.organizationId, ...input });
+      const { record, created, paymentsBackfilled } = await importInvoice({
+        organizationId: auth.organizationId,
+        ...input,
+      });
       results.push({
         index,
-        status: created ? "success" : "already_exists",
+        // Payment backfill on an existing invoice is still a successful write — callers
+        // that only look for already_exists would otherwise skip re-running InvoicePayments.
+        status: created || paymentsBackfilled ? "success" : "already_exists",
         invoiceId: record.id,
         amountCents: record.amountCents,
       });

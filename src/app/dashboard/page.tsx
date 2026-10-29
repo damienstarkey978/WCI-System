@@ -12,6 +12,7 @@ import { currentAppUserOrRedirect } from "@/lib/auth";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
+import { marginBasisPoints } from "@/lib/money";
 import { getDailyBrief } from "@/lib/reports/daily-brief";
 import {
   getBudgetedVsProjectedReport,
@@ -84,10 +85,15 @@ export default async function DashboardPage() {
   const activeJobCount = wip.length;
   const totalContractValueCents = wip.reduce((sum, row) => sum + row.revisedClientPriceCents, 0);
   const totalProjectedProfitCents = profitability.reduce((sum, row) => sum + row.projectedProfitCents, 0);
-  const avgMarginBasisPoints =
-    activeJobCount === 0 ? 0 : Math.round(profitability.reduce((sum, row) => sum + row.projectedMarginBasisPoints, 0) / activeJobCount);
+  // Portfolio margin (total profit ÷ total contract), not an unweighted average of
+  // per-job margins. Jobs with $0 client price (no send-to-budget yet) contribute 0%
+  // to a simple average while still dragging total projected profit deeply negative —
+  // that mismatch is what made the dashboard tiles disagree (Heather test #14).
+  const totalProjectedCostCents = profitability.reduce((sum, row) => sum + row.projectedCostCents, 0);
+  const avgMarginBasisPoints = marginBasisPoints(totalContractValueCents, totalProjectedCostCents);
   const jobsOverBudgetCount = budgetVariance.filter((row) => row.isOverBudget).length;
   const totalOutstandingCents = invoicing.reduce((sum, row) => sum + row.outstandingCents, 0);
+  const cashInLast30Cents = cashFlow.historical.reduce((sum, day) => sum + day.cashInCents, 0);
   const lowMarginJobs = profitability.filter((row) => row.projectedMarginBasisPoints < 1000).slice(0, 5);
   const jarvisUiEnabled = isAnthropicConfigured() && isJarvisUiEnabled();
 
@@ -188,7 +194,7 @@ export default async function DashboardPage() {
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Tile label="Outstanding (unpaid)" value={formatMoney(totalOutstandingCents)} warn={totalOutstandingCents > 0} href="/reports?report=invoicing" />
-          <Tile label="Cash in, last 30 days" value={formatMoney(cashFlow.historicalNetCents)} href="/reports?report=cash-flow" />
+          <Tile label="Cash in, last 30 days" value={formatMoney(cashInLast30Cents)} href="/reports?report=cash-flow" />
           <Tile label="Projected cash out" value={formatMoney(cashFlow.projection.projectedCashOutCents)} href="/reports?report=cash-flow" />
         </div>
 
