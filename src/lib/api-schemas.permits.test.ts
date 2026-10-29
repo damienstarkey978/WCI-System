@@ -23,6 +23,7 @@ describe("permit API schemas", () => {
   it("requires at least one permitting flag", () => {
     expect(updateJobPermittingFlagsSchema.safeParse({}).success).toBe(false);
     expect(updateJobPermittingFlagsSchema.safeParse({ nocOnFile: true }).success).toBe(true);
+    expect(updateJobPermittingFlagsSchema.safeParse({ buildingPermitDocsCreated: true }).success).toBe(true);
   });
 
   it("accepts create permit with trade and optional seed flag", () => {

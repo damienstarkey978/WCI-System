@@ -116,6 +116,19 @@ export async function setNocNtboAction(formData: FormData): Promise<void> {
   revalidate(jobId);
 }
 
+/** Mark / clear building permit doc pack created — drives header "Docs created". */
+export async function setBuildingPermitDocsCreatedAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const created = formData.get("created") === "true";
+  try {
+    await setJobNocNtbo(user.organizationId, jobId, { buildingPermitDocsCreated: created });
+  } catch {
+    // Refresh either way.
+  }
+  revalidate(jobId);
+}
+
 export async function assignPermitVendorAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();
   const jobId = String(formData.get("jobId") ?? "");

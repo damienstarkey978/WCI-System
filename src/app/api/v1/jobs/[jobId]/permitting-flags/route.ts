@@ -1,5 +1,5 @@
 /**
- * /api/v1/jobs/{jobId}/permitting-flags — NOC on file / NTBO filed toggles.
+ * /api/v1/jobs/{jobId}/permitting-flags — NOC / NTBO / building-permit-docs-created.
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
@@ -26,7 +26,12 @@ export const PATCH = withApiAuth<Context>(["permits:write"], async (request, aut
   try {
     const job = await setJobNocNtbo(auth.organizationId, jobId, parsed.data);
     return Response.json({
-      data: { id: job.id, nocOnFile: job.nocOnFile, ntboFiled: job.ntboFiled },
+      data: {
+        id: job.id,
+        nocOnFile: job.nocOnFile,
+        ntboFiled: job.ntboFiled,
+        buildingPermitDocsCreatedAt: job.buildingPermitDocsCreatedAt,
+      },
     });
   } catch (error) {
     if (error instanceof JobNotFoundError) {

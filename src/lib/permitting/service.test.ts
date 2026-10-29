@@ -6,6 +6,8 @@ import {
   catalogInspectionNamesForTrade,
   DEFAULT_INSPECTIONS_ON_ADD,
   DEMO_INSPECTIONS_BY_TRADE,
+  hasActiveBuildingPermit,
+  hasBuildingPermitDocs,
   STAFF_PERMIT_TRADES,
   tradeLabel,
 } from "@/lib/permitting/service";
@@ -52,5 +54,27 @@ describe("permitting helpers", () => {
       PermitTrade.MECHANICAL,
       PermitTrade.ROOFING,
     ]);
+  });
+
+  it("treats docs created only when a timestamp is set", () => {
+    expect(hasBuildingPermitDocs(null)).toBe(false);
+    expect(hasBuildingPermitDocs(new Date())).toBe(true);
+  });
+
+  it("treats active permit as building pulled, not MEP alone", () => {
+    expect(
+      hasActiveBuildingPermit([
+        { trade: PermitTrade.ELECTRICAL, pulled: true, permitNumber: null },
+      ]),
+    ).toBe(false);
+    expect(
+      hasActiveBuildingPermit([
+        { trade: PermitTrade.BUILDING, pulled: false, permitNumber: "X" },
+        { trade: PermitTrade.ELECTRICAL, pulled: true, permitNumber: null },
+      ]),
+    ).toBe(false);
+    expect(
+      hasActiveBuildingPermit([{ trade: PermitTrade.BUILDING, pulled: true, permitNumber: "X" }]),
+    ).toBe(true);
   });
 });

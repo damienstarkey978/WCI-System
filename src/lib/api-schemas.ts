@@ -1072,8 +1072,16 @@ export const updateJobPermittingFlagsSchema = z
   .object({
     nocOnFile: z.boolean().optional(),
     ntboFiled: z.boolean().optional(),
+    /** Mark / clear building permit doc pack created (header "Docs created"). */
+    buildingPermitDocsCreated: z.boolean().optional(),
   })
-  .refine((value) => value.nocOnFile !== undefined || value.ntboFiled !== undefined, {
-    message: "Provide nocOnFile and/or ntboFiled.",
-  });
+  .refine(
+    (value) =>
+      value.nocOnFile !== undefined ||
+      value.ntboFiled !== undefined ||
+      value.buildingPermitDocsCreated !== undefined,
+    {
+      message: "Provide nocOnFile, ntboFiled, and/or buildingPermitDocsCreated.",
+    },
+  );
 
