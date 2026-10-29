@@ -72,5 +72,15 @@ export function LeadProposalsGrid({ rows }: { rows: readonly LeadProposalRow[] }
       render: (row) => (row.totalMaxCents !== null ? `${formatMoney(row.totalCents)} to ${formatMoney(row.totalMaxCents)}` : formatMoney(row.totalCents)),
     },
   ];
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="lead-proposals" selectable emptyMessage="No proposals match." />;
+  return (
+    <DataGrid
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      rowHref={(row) => `/leads/proposals/${row.id}`}
+      viewKey="lead-proposals"
+      selectable
+      emptyMessage="No proposals match."
+    />
+  );
 }

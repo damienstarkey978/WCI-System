@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { formatTime } from "@/lib/format";
+
 import { clockInAction, type ActionState } from "./actions";
 
 const INITIAL: ActionState = {};
@@ -20,7 +22,7 @@ export function ClockInForm({
   defaultUserId: string;
 }) {
   const [state, formAction, pending] = useActionState(clockInAction, INITIAL);
-  const nowLabel = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const nowLabel = formatTime(new Date());
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
