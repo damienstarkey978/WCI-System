@@ -3,8 +3,14 @@ import type { ReactNode } from "react";
 import { JarvisLauncher } from "@/components/jarvis/JarvisLauncher";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
+import { financialNavForAccess } from "@/lib/buildertrend-nav";
 import { isAnthropicConfigured, isClerkConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
+import {
+  canAccessCommissionMenu,
+  getRoleSiteAccess,
+  userCanAccessJobFinancials,
+} from "@/lib/staff/role-site-access";
 
 import { organizationNameForShell, sidebarTemplateJobsForOrg } from "./data";
 import { JobSidebar, type SidebarJob } from "./JobSidebar";
@@ -45,10 +51,23 @@ export async function AppShell({
   // themselves, don't all need updating just to add this one tab. Skip the fetch
   // entirely when the rail is hidden (Sales) so we don't pay for unused templates.
   // Org name feeds the BT company strip above the Current Job card.
-  const [templateJobs, organizationName] = await Promise.all([
+  const [templateJobs, organizationName, canAccessFinancials, siteAccess] = await Promise.all([
     showJobSidebar && user ? sidebarTemplateJobsForOrg(user.organizationId) : Promise.resolve([]),
     showJobSidebar && user ? organizationNameForShell(user.organizationId) : Promise.resolve("World Construction Inc."),
+    user
+      ? userCanAccessJobFinancials({
+          organizationId: user.organizationId,
+          role: user.role,
+          canAccessJobFinancials: user.canAccessJobFinancials,
+        })
+      : Promise.resolve(true),
+    user ? getRoleSiteAccess(user.organizationId, user.role) : Promise.resolve(null),
   ]);
+
+  const financialNav = financialNavForAccess({
+    canAccessFinancials,
+    showCommission: user ? canAccessCommissionMenu(user.role) : false,
+  });
 
   return (
     <div className="flex h-screen flex-col">
@@ -59,6 +78,9 @@ export async function AppShell({
         notifications={notifications}
         unreadCount={unreadCount}
         jobs={jobs}
+        financialNav={financialNav}
+        showSales={siteAccess?.canAccessSales ?? true}
+        showReports={siteAccess?.canAccessReports ?? true}
       />
       <div className="flex flex-1 overflow-hidden">
         {showJobSidebar ? (

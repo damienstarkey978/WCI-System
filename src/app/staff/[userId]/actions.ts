@@ -12,6 +12,7 @@ import { ASSIGNABLE_STAFF_ROLES } from "@/lib/staff/role-descriptions";
 import {
   grantStaffJobAccess,
   LastAdminError,
+  markStaffInviteSent,
   revokeStaffJobAccess,
   setStaffActive,
   StaffJobNotFoundError,
@@ -29,6 +30,8 @@ export interface EmailStaffSignInState {
   readonly error?: string;
   readonly invite?: StaffInviteEmailResult;
 }
+
+export type SendInviteState = EmailStaffSignInState;
 
 function isAssignableRole(value: string): value is (typeof ASSIGNABLE_STAFF_ROLES)[number] {
   return (ASSIGNABLE_STAFF_ROLES as readonly string[]).includes(value);
@@ -133,21 +136,36 @@ export async function grantJobAccessAction(_previous: ActionState, formData: For
   return { ok: true };
 }
 
-export async function emailStaffSignInAction(
-  _previous: EmailStaffSignInState,
+/**
+ * Internal Users Login → Send (and profile "Email sign-in instructions"):
+ * activate if needed, stamp inviteSentAt, then email Clerk instructions.
+ */
+export async function sendStaffInviteAction(
+  _previous: SendInviteState,
   formData: FormData,
-): Promise<EmailStaffSignInState> {
+): Promise<SendInviteState> {
   const admin = await requireRole(UserRole.ADMIN);
   const userId = String(formData.get("userId") ?? "");
   if (!userId) return { error: "Missing staff member." };
 
   try {
+    await markStaffInviteSent(admin.organizationId, userId);
     const invite = await emailStaffSignInInstructions(admin.organizationId, userId, await appBaseUrl());
+    revalidatePath("/staff");
+    revalidatePath(`/staff/${userId}`);
     return { invite };
   } catch (error) {
     if (error instanceof StaffMemberNotFoundError) return { error: error.message };
     throw error;
   }
+}
+
+/** @deprecated Prefer sendStaffInviteAction — kept as an alias for the profile button. */
+export async function emailStaffSignInAction(
+  previous: EmailStaffSignInState,
+  formData: FormData,
+): Promise<EmailStaffSignInState> {
+  return sendStaffInviteAction(previous, formData);
 }
 
 export async function revokeJobAccessAction(formData: FormData): Promise<void> {

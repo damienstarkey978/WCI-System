@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { CalendarIcon, TaskIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { salesRepLeadActivityWhere } from "@/lib/staff/sales-rep-scope";
 
 import { ActivitiesGrid } from "./activities-grid";
 
@@ -40,6 +41,7 @@ export default async function LeadActivitiesPage({ searchParams }: PageProps<"/l
   const activities = await db.leadActivity.findMany({
     where: {
       organizationId: user.organizationId,
+      ...salesRepLeadActivityWhere(user),
       ...(tab === "open-tasks" ? { type: "TASK" as const, completedAt: null } : tab !== "all" ? { type: tab } : {}),
     },
     orderBy: { occurredAt: "desc" },

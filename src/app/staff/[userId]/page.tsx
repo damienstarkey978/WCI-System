@@ -65,8 +65,12 @@ export default async function StaffMemberPage({ params }: PageProps<"/staff/[use
           {member.clerkUserId
             ? `Signed in and linked ${formatDate(member.updatedAt)}`
             : member.isActive
-              ? "Pre-authorized — hasn't signed in yet"
-              : "Deactivated"}
+              ? member.inviteSentAt
+                ? "Invite sent — hasn't signed in yet (Pending)"
+                : "Active account — hasn't signed in yet (Pending)"
+              : member.inviteSentAt
+                ? "Deactivated"
+                : "Saved to the list — not invited yet (Inactive). Use Send below when ready."}
         </p>
       </div>
 
@@ -94,6 +98,17 @@ export default async function StaffMemberPage({ params }: PageProps<"/staff/[use
             <p className="text-sm font-medium text-[var(--bt-text)]">Full access to all jobs by role</p>
             <p className="mt-1 text-xs text-[var(--bt-muted)]">
               {roleInfo.label} already sees every job (Buildertrend-style). Per-job grants are only for Field Crew — nothing to assign here.
+            </p>
+          </div>
+        ) : member.role === UserRole.SALES_REP ? (
+          <div className="mt-3 rounded border bg-[var(--bt-page-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
+            <p className="text-sm font-medium text-[var(--bt-text)]">Salesperson-scoped jobs</p>
+            <p className="mt-1 text-xs text-[var(--bt-muted)]">
+              This Sales Rep only sees leads assigned to them and jobs where they are the salesperson (set from the lead assignee on conversion). Job financials default off — they still get Financial → Commission. Change role-wide financials under{" "}
+              <a href="/settings/roles" className="text-[var(--bt-primary)] hover:underline">
+                Role management
+              </a>
+              .
             </p>
           </div>
         ) : member.role === UserRole.AGENT ? (

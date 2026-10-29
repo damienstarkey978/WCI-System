@@ -6,10 +6,12 @@ import { DirectoryTable, type DirectoryColumn } from "@/components/directory/dir
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
 import { parseDirectoryParams } from "@/lib/directory/params";
+import { isTransactionalEmailConfigured } from "@/lib/env";
 import { ROLE_DESCRIPTIONS } from "@/lib/staff/role-descriptions";
 import { listStaffMembers } from "@/lib/staff/service";
 
 import { InviteStaffForm } from "./invite-staff-form";
+import { SendInviteButton } from "./send-invite-button";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +53,7 @@ export default async function StaffPage() {
   }
 
   const isAdmin = user.role === UserRole.ADMIN;
+  const emailConfigured = isTransactionalEmailConfigured();
   const staff = [...(await listStaffMembers(user.organizationId))].sort((a, b) => {
     if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
     return (a.name ?? a.email).toLowerCase().localeCompare((b.name ?? b.email).toLowerCase());
@@ -71,7 +74,18 @@ export default async function StaffPage() {
     },
     { key: "role", label: "Role", render: (member) => member.title ?? ROLE_DESCRIPTIONS[member.role].label },
     { key: "companySettings", label: "Company Settings", render: companySettingsBadge },
-    { key: "login", label: "Login", render: loginBadge },
+    {
+      key: "login",
+      label: "Login",
+      render: (member) => (
+        <div className="flex flex-wrap items-center gap-2">
+          {loginBadge(member)}
+          {isAdmin && !member.isActive ? (
+            <SendInviteButton userId={member.id} email={member.email} emailConfigured={emailConfigured} />
+          ) : null}
+        </div>
+      ),
+    },
     { key: "email", label: "Email", render: (member) => member.email },
     {
       key: "phone",

@@ -3,6 +3,7 @@ import { cache } from "react";
 import { JobStatus, UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { countUnreadNotifications, listNotificationsForUser } from "@/lib/notifications/service";
+import { salesRepJobWhere } from "@/lib/staff/sales-rep-scope";
 
 import type { SidebarJob } from "./JobSidebar";
 import type { BellNotification } from "./TopNav";
@@ -55,8 +56,9 @@ function toSidebarJob(job: {
  * Every job the given user can actually open, grouped for the sidebar exactly
  * the way JobGroup models it. ADMIN/PM/OFFICE see every job in the org (their
  * roles have org-wide visibility by design, see src/lib/job-access.ts);
- * FIELD only sees jobs they hold an explicit JobAccessGrant for, so the
- * sidebar never lists a job that clicking into would just deny.
+ * FIELD only sees jobs they hold an explicit JobAccessGrant for; SALES_REP only
+ * sees jobs where they are Job.salespersonUserId — so the sidebar never lists a
+ * job that clicking into would just deny.
  *
  * Excludes PRE_SALE jobs. A Lead's proposal/estimate stay scoped to just the
  * Lead (no Job row at all — src/lib/crm/lead-proposal.ts, src/lib/proposals/
@@ -80,6 +82,7 @@ export const sidebarJobsForOrg = cache(async function sidebarJobsForOrg(
       isTemplate: false,
       status: { not: JobStatus.PRE_SALE },
       ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
+      ...salesRepJobWhere(user),
     },
     orderBy: { createdAt: "desc" },
     select: SIDEBAR_JOB_SELECT,

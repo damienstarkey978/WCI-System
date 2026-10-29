@@ -2363,15 +2363,15 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const inviteStaffMemberTool = betaZodTool({
     name: "invite_staff_member",
     description:
-      "Queue pre-authorizing a new staff member's email with a role — they get real access as soon as they sign in with that email (Clerk; no WCI OS password). Admin-only. On confirm, WCI OS emails sign-in instructions when EMAIL_* is configured; otherwise the admin must share the /sign-in link.",
+      "Queue saving a new internal user (Inactive Login — no Clerk invite email yet). Admin-only. After confirm they appear on Internal Users; use Send on that row when ready to email sign-in instructions.",
     inputSchema: z.object({
-      email: z.string().describe("Their email — must match what they sign in with"),
+      email: z.string().describe("Their email — must match what they will sign in with later"),
       name: z.string().optional(),
       title: z
         .string()
         .optional()
         .describe('Cosmetic display title, e.g. "Sales Rep" or "Org Owner" — purely for the staff directory, doesn\'t affect permissions'),
-      role: z.enum(["ADMIN", "PM", "OFFICE", "FIELD"]),
+      role: z.enum(["ADMIN", "PM", "OFFICE", "FIELD", "SALES_REP"]),
     }),
     run: async (input) => {
       const denial = await requireAdminUser(ctx);
@@ -2381,9 +2381,9 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
         conversationId: ctx.conversationId,
         toolName: "invite_staff_member",
         input: { email: input.email, name: input.name ?? null, title: input.title ?? null, role: input.role },
-        summary: `Pre-authorize ${input.email} as ${input.role}`,
+        summary: `Save ${input.email} as ${input.role} (inactive, no invite yet)`,
       });
-      return `Queued pre-authorizing ${input.email} as ${input.role} for the user's confirmation. Nothing has changed yet.`;
+      return `Queued saving ${input.email} as ${input.role} (inactive) for the user's confirmation. Nothing has changed yet.`;
     },
   });
 
@@ -2393,7 +2393,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       "Queue changing a staff member's role/permissions. This does NOT execute immediately — it queues for the user's explicit confirmation, since it changes what someone can access. Admin-only. Pass the staff member's id from list_staff.",
     inputSchema: z.object({
       userId: z.string().describe("The staff member's id, from list_staff"),
-      role: z.enum(["ADMIN", "PM", "OFFICE", "FIELD"]),
+      role: z.enum(["ADMIN", "PM", "OFFICE", "FIELD", "SALES_REP"]),
     }),
     run: async (input) => {
       const denial = await requireAdminUser(ctx);

@@ -31,6 +31,11 @@ export const ROLE_DESCRIPTIONS: Record<UserRole, RoleDescription> = {
     label: "Field Crew",
     blurb: "Field access only for jobs with an explicit grant — daily logs, time clock, schedule, and to-dos. No pricing or cost visibility unless granted.",
   },
+  [UserRole.SALES_REP]: {
+    label: "Sales Rep",
+    blurb:
+      "Sees only their assigned lead opportunities, activities, and jobs where they are the salesperson. Job financials are off by default — Financial → Commission shows their commission bills; an admin can turn full job financials on in Role management.",
+  },
   [UserRole.AGENT]: {
     label: "Agent",
     blurb: "A non-human integration account (Heather, Duke, Hank, Vince, Neil, or Jarvis) authenticating via API key, not sign-in.",
@@ -38,4 +43,10 @@ export const ROLE_DESCRIPTIONS: Record<UserRole, RoleDescription> = {
 };
 
 /** Roles an admin can assign to a human staff member from the staff directory. */
-export const ASSIGNABLE_STAFF_ROLES = [UserRole.ADMIN, UserRole.PM, UserRole.OFFICE, UserRole.FIELD] as const;
+export const ASSIGNABLE_STAFF_ROLES = [
+  UserRole.ADMIN,
+  UserRole.PM,
+  UserRole.OFFICE,
+  UserRole.FIELD,
+  UserRole.SALES_REP,
+] as const;

@@ -51,7 +51,6 @@ import {
   SelectionNotFoundError,
   SelectionOptionNotFoundError,
 } from "@/lib/selections/service";
-import { emailStaffSignInInstructions } from "@/lib/staff/invite-email";
 import {
   DuplicateStaffEmailError,
   inviteStaffMember,
@@ -224,12 +223,9 @@ async function executePendingAction(organizationId: string, toolName: string, in
     }
     case "invite_staff_member": {
       const { email, name, title, role } = input as { email: string; name: string | null; title?: string | null; role: UserRole };
-      const staff = await inviteStaffMember({ organizationId, email, name, title: title ?? null, role });
-      const invite = await emailStaffSignInInstructions(organizationId, staff.id, await appBaseUrl());
-      if (invite.emailed) {
-        return `Pre-authorized ${staff.email} as ${staff.role} and emailed sign-in instructions. They get access when they sign in with that email (Clerk — no WCI OS password).`;
-      }
-      return `Pre-authorized ${staff.email} as ${staff.role}. Tell them to sign in at ${invite.signInUrl} with that email (Clerk — no WCI OS password)${invite.emailError ? ` — invite email didn't send: ${invite.emailError}` : ""}.`;
+      // Save-without-invite: inactive row only. Admin uses Send on Internal Users to email.
+      const staff = await inviteStaffMember({ organizationId, email, name, title: title ?? null, role, isActive: false });
+      return `Saved ${staff.email} as ${staff.role} (Inactive Login). No invite emailed — use Send on Internal Users when ready.`;
     }
     case "update_staff_role": {
       const { userId, role } = input as { userId: string; role: UserRole };

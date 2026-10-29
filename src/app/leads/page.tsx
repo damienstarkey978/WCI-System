@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { FunnelIcon, GearIcon, PeopleIcon, SearchIcon } from "@/components/shell/icons";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { salesRepLeadWhere } from "@/lib/staff/sales-rep-scope";
 
 import { AddLeadOpportunityModal } from "./add-lead-opportunity-modal";
 import { ImportLeadsForm } from "./import-leads-form";
@@ -47,7 +48,10 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
   }
 
   const [leads, clients] = await Promise.all([
-    db.lead.findMany({ where: { organizationId: user.organizationId }, orderBy: { createdAt: "desc" } }),
+    db.lead.findMany({
+      where: { organizationId: user.organizationId, ...salesRepLeadWhere(user) },
+      orderBy: { createdAt: "desc" },
+    }),
     db.client.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
   ]);
 

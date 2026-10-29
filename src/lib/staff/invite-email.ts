@@ -108,8 +108,10 @@ export async function emailStaffSignInInstructions(
     signUpUrl,
   };
 
+  // Send activates first (markStaffInviteSent); a still-inactive row means the
+  // admin deactivated them after invite — don't email until reactivated.
   if (!member.isActive) {
-    return { ...base, emailed: false, emailError: "This account is deactivated." };
+    return { ...base, emailed: false, emailError: "This account is deactivated — reactivate before sending sign-in instructions." };
   }
 
   if (!isTransactionalEmailConfigured()) {
