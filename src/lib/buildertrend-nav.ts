@@ -40,6 +40,8 @@ export const JOBS_NAV: readonly JobsMenuItem[] = [
   { label: "Jobs List", kind: "global", href: "/jobs" },
   { label: "Job Groups", kind: "global", href: "/job-groups" },
   { label: "Jobs Map", kind: "global", href: "/jobs/map" },
+  { label: "Calendar", kind: "global", href: "/calendar" },
+  { label: "Time Clock", kind: "global", href: "/time-clock" },
   { label: "New Job From Scratch", kind: "global", href: "/jobs/new" },
   { label: "New Job From Template", kind: "soon" },
 ];

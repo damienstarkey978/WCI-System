@@ -10,11 +10,13 @@ import {
   deleteTestJarvisPhotoQaLeadAction,
   reparentMiscategorizedCostCodesAction,
   runCostCodeFixAction,
+  runHeatherTestPurgeAction,
   runJarvis403CheckAction,
   type ArchiveInactiveCostCodesActionState,
   type CostCodeFixActionState,
   type CreateMissingCostCodesActionState,
   type DeleteTestLeadActionState,
+  type HeatherTestPurgeActionState,
   type Jarvis403ActionState,
   type ReparentMiscategorizedCostCodesActionState,
 } from "./actions";
@@ -349,6 +351,53 @@ export function DeleteTestLeadButton({ hasRecords }: { hasRecords: boolean }) {
         Delete test records
       </button>
       {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
+      {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
+    </div>
+  );
+}
+
+const INITIAL_HEATHER_PURGE_STATE: HeatherTestPurgeActionState = {};
+
+export function HeatherTestPurgeButton({ hasWork }: { hasWork: boolean }) {
+  const { state, pending, run } = useDirectServerAction(runHeatherTestPurgeAction, INITIAL_HEATHER_PURGE_STATE);
+  const confirmStep = useTwoStepConfirm();
+
+  const handleConfirm = async () => {
+    await run();
+    confirmStep.disarm();
+  };
+
+  if (!hasWork && !state.summary) {
+    return <p className="mt-3 text-sm text-black/60 dark:text-white/60">Nothing matching Heather&apos;s Oct 28 test leftovers.</p>;
+  }
+
+  if (confirmStep.armed) {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm">Purge flagged test vendors/invoices/logs/proposals/receipts and rewrite job-style client names? This cannot be undone.</span>
+        <button type="button" disabled={pending} onClick={handleConfirm} className={BUTTON}>
+          {pending ? "Purging…" : "Yes, purge"}
+        </button>
+        <button type="button" disabled={pending} onClick={confirmStep.disarm} className={CANCEL_BUTTON}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3">
+      <button type="button" onClick={confirmStep.arm} disabled={!hasWork} className={BUTTON}>
+        Purge Heather test leftovers
+      </button>
+      {state.summary ? <p className="mt-2 text-sm text-green-700 dark:text-green-400">{state.summary}</p> : null}
+      {state.skipped && state.skipped.length > 0 ? (
+        <ul className="mt-2 list-disc pl-5 text-xs text-amber-700 dark:text-amber-400">
+          {state.skipped.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      ) : null}
       {state.error ? <p className="mt-2 text-sm text-red-600">{state.error}</p> : null}
     </div>
   );

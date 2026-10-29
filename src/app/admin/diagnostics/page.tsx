@@ -1,6 +1,7 @@
 import { AuthConfigurationError, requireRole } from "@/lib/auth";
 import { UserRole } from "@/generated/prisma/enums";
 import { diagnoseCostCodes, fixCostCodes } from "@/lib/cost-codes/diagnostics";
+import { previewHeatherTestPurge } from "@/lib/admin/heather-test-purge";
 import { findTestRecordsByEmail } from "@/lib/admin/test-data-cleanup";
 
 import { SetupNotice } from "../setup-notice";
@@ -9,6 +10,7 @@ import {
   CostCodeFixButton,
   CreateMissingCostCodesButton,
   DeleteTestLeadButton,
+  HeatherTestPurgeButton,
   JarvisIsolationPanel,
   ReparentMiscategorizedCostCodesButton,
 } from "./diagnostics-panels";
@@ -36,11 +38,21 @@ export default async function DiagnosticsPage() {
     throw error;
   }
 
-  const [costCodeReport, costCodeFixPreview, testRecords] = await Promise.all([
+  const [costCodeReport, costCodeFixPreview, testRecords, heatherPurge] = await Promise.all([
     diagnoseCostCodes(user.organizationId),
     fixCostCodes(user.organizationId, { dryRun: true }),
     findTestRecordsByEmail(TEST_JARVIS_PHOTOQA_EMAIL),
+    previewHeatherTestPurge(user.organizationId),
   ]);
+
+  const heatherHasWork =
+    heatherPurge.vendors.length +
+      heatherPurge.invoices.length +
+      heatherPurge.dailyLogs.length +
+      heatherPurge.proposals.length +
+      heatherPurge.inboundEmails.length +
+      heatherPurge.clientNameRepairs.length >
+    0;
 
   return (
     <>
@@ -118,6 +130,50 @@ export default async function DiagnosticsPage() {
           </div>
         ) : null}
         <DeleteTestLeadButton hasRecords={testRecords.leads.length > 0 || testRecords.clients.length > 0} />
+      </div>
+
+      <div className={PANEL}>
+        <h2 className="text-sm font-semibold">Heather Oct 28 test leftovers</h2>
+        <p className="mt-1 text-xs text-black/60 dark:text-white/60">
+          Purge the test vendors / invoices / daily logs / draft proposals / inbound receipts Heather flagged, and rewrite
+          Client Contacts whose names are still job/address strings (e.g. &quot;1747 Debbie Ln-Suzanne Singleton-…&quot; →
+          &quot;Suzanne Singleton&quot;).
+        </p>
+        {heatherHasWork ? (
+          <div className="mt-3 max-h-56 overflow-y-auto rounded border border-black/10 font-mono text-xs dark:border-white/15">
+            {heatherPurge.vendors.map((row) => (
+              <div key={row.id} className="border-b border-black/5 px-2 py-1 last:border-0 dark:border-white/10">
+                vendor | {row.name} | {row.email ?? "no email"}
+              </div>
+            ))}
+            {heatherPurge.invoices.map((row) => (
+              <div key={row.id} className="border-b border-black/5 px-2 py-1 last:border-0 dark:border-white/10">
+                invoice | {row.invoiceNumber} | {row.status}
+              </div>
+            ))}
+            {heatherPurge.dailyLogs.map((row) => (
+              <div key={row.id} className="border-b border-black/5 px-2 py-1 last:border-0 dark:border-white/10">
+                daily-log | {row.title ?? "(no title)"} | {row.note.slice(0, 60)}
+              </div>
+            ))}
+            {heatherPurge.proposals.map((row) => (
+              <div key={row.id} className="border-b border-black/5 px-2 py-1 last:border-0 dark:border-white/10">
+                proposal | {row.title} | {row.status}
+              </div>
+            ))}
+            {heatherPurge.inboundEmails.map((row) => (
+              <div key={row.id} className="border-b border-black/5 px-2 py-1 last:border-0 dark:border-white/10">
+                inbound | {row.subject ?? "(no subject)"} | {row.fromAddress}
+              </div>
+            ))}
+            {heatherPurge.clientNameRepairs.map((row) => (
+              <div key={row.id} className="border-b border-black/5 px-2 py-1 last:border-0 dark:border-white/10">
+                client-name | {row.before} → {row.after}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <HeatherTestPurgeButton hasWork={heatherHasWork} />
       </div>
     </>
   );

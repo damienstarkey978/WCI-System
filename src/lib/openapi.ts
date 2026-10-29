@@ -58,6 +58,7 @@ import {
   generateWeeklySummarySchema,
   grantJobAccessSchema,
   grantVendorJobAccessSchema,
+  heatherTestPurgeSchema,
   importBillsSchema,
   importDailyLogsSchema,
   importInvoicesSchema,
@@ -170,6 +171,29 @@ const ENDPOINTS: readonly EndpointDef[] = [
       "Requires a valid API key only (no module scope) so every consumer can verify what it was issued.",
     tags: ["Auth"],
     scopes: [],
+  },
+  // --- Admin / one-shot cutover helpers ------------------------------------
+  {
+    method: "get",
+    path: "/admin/heather-test-purge",
+    summary: "Preview Heather Oct 28 test leftover purge",
+    description:
+      "Lists the narrow set of test vendors, TEST-INV-*/TAXTEST-* invoices, Phillips Hwy " +
+      '"Testing" daily logs, TEST Jarvis / placeholder draft proposals, Test Receipt inbound emails, ' +
+      "and job-style client contact names that would be repaired. Does not mutate.",
+    tags: ["Admin"],
+    scopes: ["clients:write", "vendors:write", "invoices:write", "daily-logs:write", "proposals:write"],
+  },
+  {
+    method: "post",
+    path: "/admin/heather-test-purge",
+    summary: "Apply Heather Oct 28 test leftover purge",
+    description:
+      'Hard-deletes the previewed test rows and rewrites job-style client names (e.g. "1747 Debbie Ln-Suzanne Singleton-…"). ' +
+      'Requires { "confirm": true }. Same logic as /admin/diagnostics and scripts/purge-heather-test-leftovers.mts.',
+    tags: ["Admin"],
+    scopes: ["clients:write", "vendors:write", "invoices:write", "daily-logs:write", "proposals:write"],
+    requestSchema: heatherTestPurgeSchema,
   },
   // --- Jobs ---------------------------------------------------------------
   {

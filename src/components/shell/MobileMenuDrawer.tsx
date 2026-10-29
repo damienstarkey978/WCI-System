@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   FILES_NAV,
@@ -144,6 +144,15 @@ export function MobileMenuDrawer({
   showReports?: boolean;
 }) {
   const [jobQuery, setJobQuery] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   // Same section-preserving behavior as JobSidebar.tsx's job list: switching jobs
   // from "Jump to job" should stay on the current top-level section, not bounce

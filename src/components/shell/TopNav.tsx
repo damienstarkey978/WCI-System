@@ -6,6 +6,8 @@ import { useState } from "react";
 
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
+import { useDismissible } from "./use-dismissible";
+
 import {
   FILES_NAV,
   FINANCIAL_NAV,
@@ -58,14 +60,13 @@ function notificationText(payload: Record<string, unknown>): string {
 
 /** The Bell icon's dropdown: recent in-app notifications, with mark-read actions. */
 function NotificationBell({ notifications, unreadCount }: { notifications: readonly BellNotification[]; unreadCount: number }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, rootRef } = useDismissible();
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="relative rounded p-2 transition hover:bg-white/10"
         aria-label="Notifications"
         aria-expanded={open}
@@ -124,15 +125,14 @@ const PEOPLE_ICONS = { users: PeopleIcon, hammer: HammerIcon, home: ClientHomeIc
  * Highlighted while open or while any of the three pages is showing.
  */
 function PeopleDropdown({ pathname }: { pathname: string | null }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, rootRef } = useDismissible();
   const onPeoplePage = PEOPLE_NAV.some((item) => pathname?.startsWith(item.href));
 
   return (
-    <div className="relative hidden sm:block">
+    <div className="relative hidden sm:block" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="rounded p-2 transition hover:bg-white/10"
         style={open || onPeoplePage ? { background: "var(--bt-nav-hover)" } : undefined}
         aria-label="People"
@@ -166,14 +166,13 @@ function PeopleDropdown({ pathname }: { pathname: string | null }) {
 
 /** One of Buildertrend's job-scoped mega-dropdowns (Project Management, Files, Financial). */
 function JobNavDropdown({ label, items, activeJobId }: { label: string; items: readonly JobNavLink[]; activeJobId?: string }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, rootRef } = useDismissible();
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="flex items-center gap-1 rounded px-3 py-2 transition hover:bg-white/10"
         aria-expanded={open}
       >
@@ -208,14 +207,13 @@ function JobNavDropdown({ label, items, activeJobId }: { label: string; items: r
 
 /** A dropdown of plain (non job-scoped) links, e.g. the "Sales" menu. */
 function FlatNavDropdown({ label, items }: { label: string; items: readonly { label: string; href: string }[] }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, rootRef } = useDismissible();
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="flex items-center gap-1 rounded px-3 py-2 transition hover:bg-white/10"
         aria-expanded={open}
       >
@@ -273,14 +271,13 @@ function JobsMenuItemRow({ item, activeJobId, onNavigate }: { item: JobsMenuItem
 
 /** Shared by the Jobs and Messaging dropdowns — both mix job-scoped and org-wide items (JobsMenuItem's "job"/"global"/"soon" kinds). */
 function MixedNavDropdown({ label, items, activeJobId }: { label: string; items: readonly JobsMenuItem[]; activeJobId?: string }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, rootRef } = useDismissible();
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="flex items-center gap-1 rounded px-3 py-2 transition hover:bg-white/10"
         aria-expanded={open}
       >
@@ -304,14 +301,13 @@ function MixedNavDropdown({ label, items, activeJobId }: { label: string; items:
  * dropdowns since several labels ("Time Clock Shift", "Warranty Claim") run long.
  */
 function QuickAddMenu({ activeJobId }: { activeJobId?: string }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, rootRef } = useDismissible();
 
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="flex items-center justify-center rounded p-2 transition hover:bg-white/10"
         aria-label="Quick add"
         aria-haspopup="menu"
@@ -335,14 +331,13 @@ function QuickAddMenu({ activeJobId }: { activeJobId?: string }) {
 
 /** The top bar's Help (?) menu — HELP_MENU_ITEMS' own doc comment explains why none of these have a real destination yet. */
 function HelpMenu() {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, rootRef } = useDismissible();
 
   return (
-    <div className="relative hidden sm:block">
+    <div className="relative hidden sm:block" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="rounded p-2 transition hover:bg-white/10"
         aria-label="Help"
         aria-haspopup="menu"

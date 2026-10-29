@@ -5,6 +5,7 @@
  */
 
 export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> = {
+  "/admin/heather-test-purge": ["GET","POST"],
   "/allowances": ["GET","POST"],
   "/bid-packages": ["GET","POST"],
   "/bid-packages/{bidPackageId}/close": ["POST"],
