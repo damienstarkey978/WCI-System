@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { computeInvoiceTotals, daysOverdue, dueDateFor } from "@/lib/invoicing/terms";
+import {
+  computeInvoiceTotals,
+  daysOverdue,
+  dueDateFor,
+  effectiveInvoiceStatus,
+  paymentTermsDisplayLabel,
+} from "@/lib/invoicing/terms";
 
 const ISSUED = new Date("2026-09-10T22:30:00.000Z");
 
@@ -24,6 +30,29 @@ describe("payment terms", () => {
     expect(dueDateFor("NET_30", new Date("2026-01-31T23:59:00.000Z"))!.toISOString()).toBe(
       "2026-03-02T23:59:00.000Z",
     );
+  });
+});
+
+describe("payment terms display", () => {
+  it("hides CUSTOM so the invoices list never invents Net 30", () => {
+    expect(paymentTermsDisplayLabel("CUSTOM")).toBeNull();
+    expect(paymentTermsDisplayLabel("NET_30")).toBe("Net 30");
+  });
+});
+
+describe("effectiveInvoiceStatus", () => {
+  it("never shows PAID when amount paid is zero", () => {
+    expect(effectiveInvoiceStatus("PAID", 1_688_615, 0)).toBe("SENT");
+  });
+
+  it("shows PAID only once payments cover the total", () => {
+    expect(effectiveInvoiceStatus("SENT", 1_688_615, 1_688_615)).toBe("PAID");
+    expect(effectiveInvoiceStatus("PAID", 1_688_615, 500_000)).toBe("PARTIALLY_PAID");
+  });
+
+  it("preserves DRAFT and VOID", () => {
+    expect(effectiveInvoiceStatus("DRAFT", 100, 0)).toBe("DRAFT");
+    expect(effectiveInvoiceStatus("VOID", 100, 0)).toBe("VOID");
   });
 });
 

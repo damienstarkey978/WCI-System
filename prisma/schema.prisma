@@ -1619,7 +1619,9 @@ model Invoice {
   /// How long the client has to pay. dueOn is derived from this and issuedOn when
   /// the invoice is sent (src/lib/invoicing/terms.ts), except on CUSTOM where the
   /// office sets dueOn by hand.
-  paymentTerms PaymentTerms @default(NET_30)
+  /// WCI does not use Net 30 (Buildertrend default). CUSTOM = no implied due-date
+  /// math; office sets dueOn explicitly or leaves it blank to match BT.
+  paymentTerms PaymentTerms @default(CUSTOM)
 
   issuedOn DateTime?
   dueOn    DateTime?

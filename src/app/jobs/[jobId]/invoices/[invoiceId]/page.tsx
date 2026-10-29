@@ -6,7 +6,7 @@ import { CommentThread } from "@/components/comments/CommentThread";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
-import { PAYMENT_TERMS_LABELS, daysOverdue } from "@/lib/invoicing/terms";
+import { daysOverdue, effectiveInvoiceStatus, paymentTermsDisplayLabel } from "@/lib/invoicing/terms";
 import { formatBasisPoints } from "@/lib/money";
 
 import { RecordPaymentForm } from "../record-payment-form";
@@ -71,23 +71,25 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
   const qboConnection = await db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } });
   const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
 
-  const style = STATUS_STYLE[invoice.status] ?? STATUS_STYLE.DRAFT;
   const paidCents = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
+  const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paidCents);
+  const style = STATUS_STYLE[displayStatus] ?? STATUS_STYLE.DRAFT;
+  const termsLabel = paymentTermsDisplayLabel(invoice.paymentTerms);
   const creditedCents = invoice.creditMemos
     .filter((memo) => memo.status === "APPLIED")
     .reduce((sum, memo) => sum + memo.amountCents, 0);
   const subtotalCents = invoice.amountCents - invoice.taxCents;
   const balanceCents = invoice.amountCents - paidCents - creditedCents;
   const lateDays =
-    invoice.status === "PAID" || invoice.status === "DRAFT" || invoice.status === "VOID"
+    displayStatus === "PAID" || displayStatus === "DRAFT" || displayStatus === "VOID"
       ? 0
       : daysOverdue(invoice.dueOn, new Date());
-  const canAct = invoice.status !== "VOID" && invoice.status !== "PAID";
+  const canAct = displayStatus !== "VOID" && displayStatus !== "PAID";
   const hasOnlinePayment = invoice.payments.some((p) => p.method === "STRIPE_CARD" || p.method === "STRIPE_ACH");
   const hasQboPayment = invoice.payments.some((p) => p.method === "QBO_SYNC");
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
       <div>
         <Link href={`/jobs/${job.id}/invoices`} className="text-xs text-[var(--bt-muted)] hover:underline">
           ← Back to invoices
@@ -104,9 +106,9 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
               </span>
             ) : null}
             <span className="rounded px-1.5 py-0.5 text-xs font-semibold" style={{ background: style.bg, color: style.text }}>
-              {invoice.status.replace(/_/g, " ")}
+              {displayStatus.replace(/_/g, " ")}
             </span>
-            <SendInvoiceButtons jobId={job.id} invoiceId={invoice.id} status={invoice.status} />
+            <SendInvoiceButtons jobId={job.id} invoiceId={invoice.id} status={displayStatus} />
           </div>
         </div>
       </div>
@@ -120,7 +122,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
           </div>
           <div>
             <dt className="text-xs text-[var(--bt-muted)]">Terms</dt>
-            <dd className="text-sm text-[var(--bt-text)]">{PAYMENT_TERMS_LABELS[invoice.paymentTerms]}</dd>
+            <dd className="text-sm text-[var(--bt-text)]">{termsLabel ?? "—"}</dd>
           </div>
           <div>
             <dt className="text-xs text-[var(--bt-muted)]">Issued</dt>
@@ -255,7 +257,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
           invoiceNumber: invoice.invoiceNumber,
           issuedOn: formatDate(invoice.issuedOn),
           dueOn: formatDate(invoice.dueOn),
-          terms: PAYMENT_TERMS_LABELS[invoice.paymentTerms],
+          terms: termsLabel ?? "",
           lines: invoice.lineItems.map((item) => ({
             id: item.id,
             title: item.title,

@@ -22,6 +22,7 @@ const XLSX = require("xlsx") as typeof import("xlsx");
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../../src/generated/prisma/client";
 import type { CostType } from "../../src/generated/prisma/enums";
+import { markupBasisPointsFromProposalRow } from "../../src/lib/migration/bt-proposal-markup";
 import { importApprovedProposal } from "../../src/lib/migration/service";
 
 const connectionString = process.env.DATABASE_URL;
@@ -183,7 +184,6 @@ async function main() {
       }
       const qty = Number(row["Quantity"] || 0);
       const unitCost = Number(row["Unit Cost"] || row["Builder Cost"] || 0);
-      const markupPct = Number(row["Markup"] || 0);
       lineItems.push({
         costCodeId,
         title,
@@ -193,7 +193,8 @@ async function main() {
         quantityMilli: Math.round(qty * 1000),
         unit: String(row["Unit"] ?? "") || null,
         unitCostCents: Math.round(unitCost * 100),
-        markupBasisPoints: Math.round(markupPct * 100),
+        // Prefer Client Price / honor Markup Type "$" — percent-only blew Candlebark.
+        markupBasisPoints: markupBasisPointsFromProposalRow(row as Record<string, unknown>),
         internalNote: String(row["Internal Notes"] ?? "") || null,
       });
     }
