@@ -17,10 +17,15 @@ const CONCRETE = { id: "g-concrete", code: "02", name: "Concrete/ Foundations" }
 const PAINTING = { id: "g-painting", code: "05", name: "Painting" };
 
 const COST_CODES: Record<string, CostCodeLookupEntry> = {
-  "02-labor": { code: "02-CONCRETE-LABOR", name: "Concrete Labor", group: CONCRETE },
-  "02-material": { code: "02-CONCRETE-MATERIAL", name: "Concrete Material", group: CONCRETE },
-  "05-labor": { code: "05-PAINT-LABOR", name: "Paint Labor", group: PAINTING },
-  orphan: { code: "99-MISC", name: "Miscellaneous", group: null },
+  "02-labor": { code: "02-CONCRETE-LABOR", name: "Concrete Labor", group: CONCRETE, defaultCostType: "LABOR" },
+  "02-material": {
+    code: "02-CONCRETE-MATERIAL",
+    name: "Concrete Material",
+    group: CONCRETE,
+    defaultCostType: "MATERIAL",
+  },
+  "05-labor": { code: "05-PAINT-LABOR", name: "Paint Labor", group: PAINTING, defaultCostType: "LABOR" },
+  orphan: { code: "99-MISC", name: "Miscellaneous", group: null, defaultCostType: "OTHER" },
 };
 
 /** $500 concrete labor, $1,500 concrete material, $1,000 paint, $200 unparented. */

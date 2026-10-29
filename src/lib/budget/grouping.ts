@@ -41,6 +41,12 @@ export interface CostCodeLookupEntry {
   readonly code: string;
   readonly name: string;
   readonly group: CostCodeGroupRef | null;
+  /**
+   * Catalog default (LABOR / MATERIAL / …). The Job Costing Budget uses this to
+   * badge each row and roll Labor vs Materials totals — WCI's leaves are already
+   * split that way (e.g. "Siding Labor" / "Siding Materials").
+   */
+  readonly defaultCostType: string;
 }
 
 /**

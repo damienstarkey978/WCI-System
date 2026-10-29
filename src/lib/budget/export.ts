@@ -16,6 +16,7 @@ export const BUDGET_COLUMN_LABELS: Record<BudgetColumnId, string> = {
   actualCost: "Actual cost",
   projectedCost: "Projected cost",
   costToComplete: "Cost to complete",
+  variance: "Variance",
   originalClientPrice: "Original price",
   revisedClientPrice: "Revised price",
   amountInvoiced: "Amount invoiced",
@@ -62,6 +63,9 @@ function measuredValue(source: Measured, columnId: BudgetColumnId): string {
       return dollars(source.projectedCostCents);
     case "costToComplete":
       return dollars(source.costToCompleteCents);
+    case "variance":
+      // Revised budget − actual: same figure the screen's Variance column shows.
+      return dollars(source.revisedBudgetCostCents - source.actualCostCents);
     case "originalClientPrice":
       return dollars(source.originalClientPriceCents);
     case "revisedClientPrice":

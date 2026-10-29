@@ -118,10 +118,12 @@ export const MESSAGING_NAV: readonly JobsMenuItem[] = [
 /** The "Financial" dropdown — every one of these is scoped to whichever job is selected. */
 export const FINANCIAL_NAV: readonly JobNavLink[] = [
   { label: "Bids", path: "/bids" },
-  { label: "Estimate", path: "/estimates" },
+  // Job Costing Budget is the commitment-funnel screen (BT JobCostingBudget). Estimate
+  // worksheets stay at /jobs/{id}/estimates for Send-to-Budget / revisions, but are not
+  // a Financial nav item — Jarvis drafting lives on Leads → Proposals only.
+  { label: "Job Costing Budget", path: "/budget" },
   { label: "Purchase Orders", path: "/purchase-orders" },
   { label: "Bills", path: "/bills" },
-  { label: "Job Costing Budget", path: "/budget" },
   { label: "Cost Inbox", path: "/cost-inbox" },
   { label: "Invoices", path: "/invoices" },
   { label: "Online Payment Report", path: "/online-payment-report" },

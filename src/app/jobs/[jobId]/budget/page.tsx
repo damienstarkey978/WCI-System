@@ -1,14 +1,27 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { ChartIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
-import { getJobBudget, JobNotFoundError } from "@/lib/budget/service";
+import {
+  COST_TYPE_LABELS,
+  costTypeForLine,
+  spendPercent,
+  spendVarianceCents,
+  type CostTypeTotals,
+} from "@/lib/budget/cost-types";
+import { getJobBudget, JobNotFoundError, type BudgetSourceEstimate } from "@/lib/budget/service";
 import type { FunnelLine, FunnelSubtotal, FunnelTotals } from "@/lib/budget/funnel";
 import { BUDGET_COLUMN_LABELS } from "@/lib/budget/export";
 import { groupFunnelLines } from "@/lib/budget/grouping";
-import { BUDGET_VIEWS, budgetViewByKey, type BudgetColumnId } from "@/lib/contract-type";
+import {
+  BUDGET_VIEWS,
+  budgetViewByKey,
+  DEFAULT_BUDGET_VIEW_KEY,
+  type BudgetColumnId,
+} from "@/lib/contract-type";
 import { formatMoney, formatPercent } from "@/lib/format";
 
 import { BudgetGrid, type GridCell } from "./budget-grid";
@@ -16,6 +29,20 @@ import { BudgetViewSelect } from "./budget-view-select";
 import { FinancialPageHeader } from "../financial-tabs";
 
 export const dynamic = "force-dynamic";
+
+function varianceCell(revisedBudgetCostCents: number, actualCostCents: number): GridCell {
+  const variance = revisedBudgetCostCents - actualCostCents;
+  // Unbudgeted spend (revised = 0, actual > 0) is "over" against nothing — warn, don't
+  // pretend a budget was blown through.
+  if (revisedBudgetCostCents <= 0 && actualCostCents > 0) {
+    return { text: formatMoney(variance), warn: true };
+  }
+  return {
+    text: formatMoney(variance),
+    danger: variance < 0,
+    warn: variance >= 0 && actualCostCents > 0 && actualCostCents / revisedBudgetCostCents >= 0.9,
+  };
+}
 
 function lineCell(line: FunnelLine, columnId: BudgetColumnId): GridCell {
   // An unbudgeted line is "over budget" against a budget of zero, which is true but
@@ -32,11 +59,16 @@ function lineCell(line: FunnelLine, columnId: BudgetColumnId): GridCell {
     case "committedCost":
       return { text: formatMoney(line.committedCostCents) };
     case "actualCost":
-      return { text: formatMoney(line.actualCostCents) };
+      return {
+        text: formatMoney(line.actualCostCents),
+        danger: !line.isUnbudgeted && line.actualCostCents > line.revisedBudgetCostCents,
+      };
     case "projectedCost":
       return { text: formatMoney(line.projectedCostCents), danger };
     case "costToComplete":
       return { text: formatMoney(line.costToCompleteCents) };
+    case "variance":
+      return varianceCell(line.revisedBudgetCostCents, line.actualCostCents);
     case "originalClientPrice":
       return { text: formatMoney(line.originalClientPriceCents) };
     case "revisedClientPrice":
@@ -68,7 +100,10 @@ function subtotalCell(subtotal: FunnelSubtotal, columnId: BudgetColumnId): GridC
     case "committedCost":
       return { text: formatMoney(subtotal.committedCostCents) };
     case "actualCost":
-      return { text: formatMoney(subtotal.actualCostCents) };
+      return {
+        text: formatMoney(subtotal.actualCostCents),
+        danger: subtotal.actualCostCents > subtotal.revisedBudgetCostCents && subtotal.revisedBudgetCostCents > 0,
+      };
     case "projectedCost":
       return {
         text: formatMoney(subtotal.projectedCostCents),
@@ -76,6 +111,8 @@ function subtotalCell(subtotal: FunnelSubtotal, columnId: BudgetColumnId): GridC
       };
     case "costToComplete":
       return { text: formatMoney(subtotal.costToCompleteCents) };
+    case "variance":
+      return varianceCell(subtotal.revisedBudgetCostCents, subtotal.actualCostCents);
     case "originalClientPrice":
       return { text: formatMoney(subtotal.originalClientPriceCents) };
     case "revisedClientPrice":
@@ -105,27 +142,41 @@ function SummaryStrip({ totals }: { totals: FunnelTotals }) {
   const losing = totals.projectedProfitCents < 0;
   return (
     <div
-      className="flex flex-wrap items-center gap-4 rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3 sm:gap-6"
+      className="flex flex-wrap items-center gap-3 rounded-lg border bg-[var(--bt-panel-bg)] px-3 py-3 sm:gap-6 sm:px-4"
       style={{ borderColor: "var(--bt-border)" }}
     >
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Total revised price</div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.revisedClientPriceCents)}</div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)] sm:text-xs">
+          Total revised price
+        </div>
+        <div className="mt-1 text-base font-semibold text-[var(--bt-text)] sm:text-lg">
+          {formatMoney(totals.revisedClientPriceCents)}
+        </div>
       </div>
       <div className="hidden h-10 w-px bg-[var(--bt-border)] sm:block" />
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Revised price</div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.revisedClientPriceCents)}</div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)] sm:text-xs">
+          Revised price
+        </div>
+        <div className="mt-1 text-base font-semibold text-[var(--bt-text)] sm:text-lg">
+          {formatMoney(totals.revisedClientPriceCents)}
+        </div>
       </div>
-      <span className="text-lg text-[var(--bt-muted)]">−</span>
+      <span className="text-base text-[var(--bt-muted)] sm:text-lg">−</span>
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Projected cost</div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(totals.projectedCostCents)}</div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)] sm:text-xs">
+          Projected cost
+        </div>
+        <div className="mt-1 text-base font-semibold text-[var(--bt-text)] sm:text-lg">
+          {formatMoney(totals.projectedCostCents)}
+        </div>
       </div>
-      <span className="text-lg text-[var(--bt-muted)]">=</span>
+      <span className="text-base text-[var(--bt-muted)] sm:text-lg">=</span>
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Projected profit</div>
-        <div className="mt-1 text-lg font-semibold" style={{ color: losing ? "var(--bt-danger)" : "var(--bt-text)" }}>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)] sm:text-xs">
+          Projected profit
+        </div>
+        <div className="mt-1 text-base font-semibold sm:text-lg" style={{ color: losing ? "var(--bt-danger)" : "var(--bt-text)" }}>
           {formatMoney(totals.projectedProfitCents)}
         </div>
       </div>
@@ -141,6 +192,101 @@ function SummaryStrip({ totals }: { totals: FunnelTotals }) {
         {formatPercent(totals.projectedMarginBasisPoints)} profit margin
       </span>
     </div>
+  );
+}
+
+/**
+ * Labor / Materials / … rollup — same numbers as the grid, grouped by cost-code
+ * catalog type so staff can see materials vs labor budget and actuals at a glance.
+ */
+function CostTypeStrip({ totals }: { totals: readonly CostTypeTotals[] }) {
+  const visible = totals.filter((entry) => entry.costType !== "NONE" || entry.actualCostCents > 0 || entry.revisedBudgetCostCents > 0);
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {visible.map((entry) => {
+        const over = entry.isOverBudget;
+        return (
+          <div
+            key={entry.costType}
+            className="rounded-lg border bg-[var(--bt-panel-bg)] px-3 py-2.5"
+            style={{ borderColor: over ? "var(--bt-danger)" : "var(--bt-border)" }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+                {entry.label}
+              </span>
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{
+                  background: over
+                    ? "color-mix(in srgb, var(--bt-danger) 14%, transparent)"
+                    : "color-mix(in srgb, var(--bt-primary) 14%, transparent)",
+                  color: over ? "var(--bt-danger)" : "var(--bt-primary)",
+                }}
+              >
+                {over ? "Over budget" : "On budget"}
+              </span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              <div>
+                <div className="text-[var(--bt-muted)]">Budget</div>
+                <div className="font-semibold text-[var(--bt-text)]">{formatMoney(entry.revisedBudgetCostCents)}</div>
+              </div>
+              <div>
+                <div className="text-[var(--bt-muted)]">Actual</div>
+                <div className="font-semibold" style={{ color: over ? "var(--bt-danger)" : "var(--bt-text)" }}>
+                  {formatMoney(entry.actualCostCents)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[var(--bt-muted)]">Committed</div>
+                <div className="font-medium text-[var(--bt-text)]">{formatMoney(entry.committedCostCents)}</div>
+              </div>
+              <div>
+                <div className="text-[var(--bt-muted)]">Variance</div>
+                <div className="font-medium" style={{ color: entry.spendVarianceCents < 0 ? "var(--bt-danger)" : "var(--bt-text)" }}>
+                  {formatMoney(entry.spendVarianceCents)}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SourceBanner({ jobId, source }: { jobId: string; source: BudgetSourceEstimate | null }) {
+  if (!source) {
+    return (
+      <p className="rounded-lg border px-3 py-2 text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+        No locked estimate has been sent to this budget yet. Accept a proposal or send a locked
+        estimate to budget to populate cost codes. Jarvis drafting stays on{" "}
+        <Link href="/leads" className="font-medium underline" style={{ color: "var(--bt-primary)" }}>
+          Leads → Proposals
+        </Link>
+        .
+      </p>
+    );
+  }
+  const when = new Date(source.sentToBudgetAt);
+  return (
+    <p className="rounded-lg border px-3 py-2 text-sm text-[var(--bt-text)]" style={{ borderColor: "var(--bt-border)" }}>
+      Budget lines from{" "}
+      <Link
+        href={`/jobs/${jobId}/estimates/${source.id}`}
+        className="font-medium underline"
+        style={{ color: "var(--bt-primary)" }}
+      >
+        {source.title}
+      </Link>
+      {" · "}
+      sent to budget{" "}
+      {when.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+      . Actuals update automatically from bills (and committed from approved POs).
+    </p>
   );
 }
 
@@ -170,7 +316,9 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
   const contractTypeColumns = view.columns as readonly BudgetColumnId[];
 
   const { view: viewParam } = await searchParams;
-  const selectedBudgetView = budgetViewByKey(typeof viewParam === "string" ? viewParam : "standard");
+  const selectedBudgetView = budgetViewByKey(
+    typeof viewParam === "string" ? viewParam : DEFAULT_BUDGET_VIEW_KEY,
+  );
   // Intersect with what this contract type actually exposes — e.g. Open Book has no
   // "original client price" column, so Standard just renders without it here.
   const columns = contractTypeColumns.filter((id) =>
@@ -183,26 +331,36 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
     name: group.name,
     hasOverBudgetLine: group.hasOverBudgetLine,
     subtotalCells: columns.map((columnId) => subtotalCell(group.subtotal, columnId)),
-    rows: group.lines.map((entry) => ({
-      key: entry.line.costCodeId,
-      code: entry.code,
-      name: entry.name,
-      unbudgeted: entry.line.isUnbudgeted,
-      cells: columns.map((columnId) => lineCell(entry.line, columnId)),
-    })),
+    rows: group.lines.map((entry) => {
+      const costType = costTypeForLine(entry.line, view.costCodes);
+      return {
+        key: entry.line.costCodeId,
+        code: entry.code,
+        name: entry.name,
+        unbudgeted: entry.line.isUnbudgeted,
+        overBudget: entry.line.isOverBudget && !entry.line.isUnbudgeted,
+        costType,
+        spendPercent: spendPercent(entry.line),
+        cells: columns.map((columnId) => lineCell(entry.line, columnId)),
+      };
+    }),
   }));
 
+  const activeTab = selectedBudgetView.key === "job-costing" ? "job-costing" : "standard";
+
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4 p-4 sm:p-6">
       <FinancialPageHeader
         jobName={view.job.name}
         title="Job Costing Budget"
         action={
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[var(--bt-muted)]">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="hidden text-xs text-[var(--bt-muted)] sm:inline">
               {view.job.projectionReference === "GREATEST"
                 ? "Projected at worst of budget/committed/actual"
                 : view.job.projectionReference}
+              {" · "}
+              {view.job.accountingBasis === "ACCRUAL" ? "Accrual actuals" : "Cash actuals"}
             </span>
             {/* A download, not a page: a plain anchor, so no client-side navigation. */}
             <a
@@ -216,7 +374,11 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
         }
       />
 
+      <SourceBanner jobId={jobId} source={view.sourceEstimate} />
+
       <SummaryStrip totals={view.funnel.totals} />
+
+      <CostTypeStrip totals={view.costTypeTotals} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
@@ -224,9 +386,9 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
             { key: "standard", label: "Cost categories" },
             { key: "job-costing", label: "Job costing" },
           ].map((tab) => {
-            const isActive = selectedBudgetView.key === tab.key;
+            const isActive = activeTab === tab.key;
             return (
-              <a
+              <Link
                 key={tab.key}
                 href={`/jobs/${jobId}/budget?view=${tab.key}`}
                 className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
@@ -236,7 +398,7 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
                 }}
               >
                 {tab.label}
-              </a>
+              </Link>
             );
           })}
         </nav>
@@ -251,7 +413,7 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
         <EmptyState
           icon={<ChartIcon className="h-10 w-10" />}
           title="No budget lines yet"
-          description="Send an estimate to budget to populate cost codes and the commitment funnel for this job."
+          description="Send an approved proposal or locked estimate to budget to populate cost codes. Actual costs then roll in from bills automatically."
         />
       ) : (
         <BudgetGrid
@@ -260,6 +422,18 @@ export default async function JobBudgetPage({ params, searchParams }: PageProps<
           totalCells={columns.map((columnId) => totalsCell(view.funnel.totals, columnId))}
         />
       )}
+
+      <p className="text-xs text-[var(--bt-muted)]">
+        Variance = revised budget − actual. Negative means overspent on that cost code. Labor and{" "}
+        {COST_TYPE_LABELS.MATERIAL.toLowerCase()} are separate catalog lines (e.g. Siding Labor /
+        Siding Materials); bills update Actual as soon as they leave Inbox.
+        {spendVarianceCents({
+          revisedBudgetCostCents: view.funnel.totals.revisedBudgetCostCents,
+          actualCostCents: view.funnel.totals.actualCostCents,
+        }) < 0
+          ? " This job's total actual already exceeds its revised budget."
+          : ""}
+      </p>
     </div>
   );
 }
