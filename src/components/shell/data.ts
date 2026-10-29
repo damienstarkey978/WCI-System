@@ -15,6 +15,8 @@ const SIDEBAR_JOB_SELECT = {
   status: true,
   addressLine1: true,
   city: true,
+  state: true,
+  postalCode: true,
   qboCustomerId: true,
   jobGroup: { select: { name: true } },
   clientAccess: { take: 1, select: { client: { select: { name: true } } } },
@@ -27,10 +29,13 @@ function toSidebarJob(job: {
   status: string;
   addressLine1: string | null;
   city: string | null;
+  state: string | null;
+  postalCode: string | null;
   qboCustomerId: string | null;
   jobGroup: { name: string } | null;
   clientAccess: { client: { name: string } }[];
 }): SidebarJob {
+  const cityLine = [job.city, [job.state, job.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ") || null;
   return {
     id: job.id,
     name: job.name,
@@ -38,6 +43,9 @@ function toSidebarJob(job: {
     status: job.status,
     groupName: job.jobGroup?.name ?? "General",
     clientName: job.clientAccess[0]?.client.name ?? null,
+    addressLine1: job.addressLine1,
+    cityLine,
+    /** Compact single-line fallback for jump lists that still want one string. */
     address: [job.addressLine1, job.city].filter(Boolean).join(", ") || null,
     qboLinked: job.qboCustomerId !== null,
   };
