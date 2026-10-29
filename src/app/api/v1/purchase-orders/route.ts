@@ -2,6 +2,7 @@
  * /api/v1/purchase-orders — Duke's primary write surface.
  */
 
+import { actorFromApiKey } from "@/lib/actor";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createPurchaseOrderSchema, formatZodIssues, listPurchaseOrdersQuerySchema } from "@/lib/api-schemas";
 import { toCursorPage } from "@/lib/api-pagination";
@@ -54,7 +55,11 @@ export const POST = withApiAuth(["purchase-orders:write"], async (request, auth)
   const input = parsed.data;
 
   try {
-    const purchaseOrder = await createPurchaseOrder({ organizationId: auth.organizationId, ...input });
+    const purchaseOrder = await createPurchaseOrder({
+      organizationId: auth.organizationId,
+      ...input,
+      actor: actorFromApiKey(auth.apiKeyId),
+    });
     return Response.json({ data: purchaseOrder }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) return apiError(422, "unknown_job", error.message);

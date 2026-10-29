@@ -5,6 +5,7 @@
  * PO-to-bill reconciliation (and the poSuffix workflow) possible.
  */
 
+import { actorFromApiKey } from "@/lib/actor";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createBillSchema, formatZodIssues, listBillsQuerySchema } from "@/lib/api-schemas";
 import { toCursorPage } from "@/lib/api-pagination";
@@ -58,7 +59,11 @@ export const POST = withApiAuth(["bills:write"], async (request, auth) => {
   const input = parsed.data;
 
   try {
-    const bill = await createBill({ organizationId: auth.organizationId, ...input });
+    const bill = await createBill({
+      organizationId: auth.organizationId,
+      ...input,
+      actor: actorFromApiKey(auth.apiKeyId),
+    });
     return Response.json({ data: bill }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) return apiError(422, "unknown_job", error.message);

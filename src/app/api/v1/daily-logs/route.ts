@@ -1,5 +1,6 @@
 /** /api/v1/daily-logs — Heather's core surface: notes, media, auto-weather. */
 
+import { actorFromApiKey } from "@/lib/actor";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createDailyLogSchema, formatZodIssues, listDailyLogsQuerySchema } from "@/lib/api-schemas";
 import { createDailyLog, JobNotFoundError } from "@/lib/daily-logs/service";
@@ -37,7 +38,11 @@ export const POST = withApiAuth(["daily-logs:write"], async (request, auth) => {
   }
 
   try {
-    const dailyLog = await createDailyLog({ organizationId: auth.organizationId, ...parsed.data });
+    const dailyLog = await createDailyLog({
+      organizationId: auth.organizationId,
+      ...parsed.data,
+      actor: actorFromApiKey(auth.apiKeyId),
+    });
     return Response.json({ data: dailyLog }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) {

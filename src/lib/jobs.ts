@@ -8,15 +8,14 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import type { JobModel } from "@/generated/prisma/models";
-import { AccountingBasis, ContractType, JobStatus, ProjectionReference, type UserRole } from "@/generated/prisma/enums";
+import { AccountingBasis, ContractType, JobStatus, ProjectionReference } from "@/generated/prisma/enums";
+import { actorColumns, type Actor } from "@/lib/actor";
 import { db } from "@/lib/db";
 import { assertJobStatusTransition, JobStatusTransitionError } from "@/lib/job-status";
 import { emitEvent } from "@/lib/webhooks";
 
-/** Who made a change: a signed-in human, or an agent's API key. Never both. */
-export type Actor =
-  | { readonly kind: "user"; readonly userId: string; readonly role: UserRole }
-  | { readonly kind: "apiKey"; readonly apiKeyId: string };
+/** @deprecated Import from `@/lib/actor` — re-exported here for existing call sites. */
+export type { Actor } from "@/lib/actor";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -80,8 +79,7 @@ export async function transitionJobStatus(input: TransitionJobStatusInput): Prom
         jobId: job.id,
         from: job.status,
         to,
-        actorUserId: actor?.kind === "user" ? actor.userId : null,
-        actorApiKeyId: actor?.kind === "apiKey" ? actor.apiKeyId : null,
+        ...actorColumns(actor),
         reason: reason ?? null,
       },
     });

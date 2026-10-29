@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { actorSummaryText } from "@/components/actor-attribution";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { ChatIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
@@ -61,7 +62,10 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
         { featureType: "DailyLog", featureId: { in: dailyLogs.map((log) => log.id) } },
       ],
     },
-    include: { authorUser: { select: { name: true, email: true } } },
+    include: {
+      authorUser: { select: { name: true, email: true } },
+      authorApiKey: { select: { name: true, agentKind: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -76,7 +80,7 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
         id: comment.id,
         sourceLabel: `Invoice ${invoice?.invoiceNumber ?? comment.featureId}`,
         sourceHref: `/jobs/${job.id}/invoices/${comment.featureId}`,
-        authorLabel: comment.authorUser?.name ?? comment.authorUser?.email ?? "Unknown",
+        authorLabel: actorSummaryText({ user: comment.authorUser, apiKey: comment.authorApiKey }),
         body: comment.body,
         createdAt: comment.createdAt,
       };
@@ -87,7 +91,7 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
         id: comment.id,
         sourceLabel: log ? `Daily Log — ${logHeading(log.createdAt, log.title)}` : `Daily Log ${comment.featureId}`,
         sourceHref: `/jobs/${job.id}/daily-logs/${comment.featureId}`,
-        authorLabel: comment.authorUser?.name ?? comment.authorUser?.email ?? "Unknown",
+        authorLabel: actorSummaryText({ user: comment.authorUser, apiKey: comment.authorApiKey }),
         body: comment.body,
         createdAt: comment.createdAt,
       };
@@ -97,7 +101,7 @@ export default async function JobCommentsPage({ params }: PageProps<"/jobs/[jobI
       id: comment.id,
       sourceLabel: `Proposal "${proposal?.title ?? comment.featureId}"`,
       sourceHref: `/leads/proposals/${comment.featureId}`,
-      authorLabel: comment.authorUser?.name ?? comment.authorUser?.email ?? "Unknown",
+      authorLabel: actorSummaryText({ user: comment.authorUser, apiKey: comment.authorApiKey }),
       body: comment.body,
       createdAt: comment.createdAt,
     };

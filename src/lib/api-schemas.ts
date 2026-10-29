@@ -486,9 +486,10 @@ export const pushChangeOrderToPurchaseOrderSchema = z.object({
 
 export const createDailyLogSchema = z.object({
   jobId: z.string().min(1).max(64),
-  // Required: /api/v1 is API-key-only, so there is no session user to default to.
-  authorUserId: z.string().min(1).max(64),
+  // Author is stamped from the authenticating ApiKey — do not accept a User id
+  // from the body (that would misattribute a bot write as a human).
   note: z.string().trim().min(1).max(10_000),
+  title: z.string().trim().max(200).nullish(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
 });
@@ -534,7 +535,7 @@ export const answerRfiSchema = z.object({
 
 export const registerFileSchema = z.object({
   jobId: z.string().min(1).max(64),
-  uploadedByUserId: z.string().min(1).max(64),
+  // Uploader is stamped from the authenticating ApiKey — not a body User id.
   fileName: z.string().trim().min(1).max(255),
   url: z.string().url().max(2_000),
   mimeType: z.string().trim().max(255).nullish(),
@@ -552,7 +553,7 @@ export const registerFileSchema = z.object({
 export const createCommentSchema = z.object({
   featureType: z.string().trim().min(1).max(64),
   featureId: z.string().trim().min(1).max(64),
-  authorUserId: z.string().min(1).max(64).nullish(),
+  // Author is stamped from the authenticating ApiKey.
   body: z.string().trim().min(1).max(10_000),
   mentions: z.array(z.string().min(1).max(64)).max(50).optional(),
 });

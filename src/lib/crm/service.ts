@@ -9,6 +9,8 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import { JobStatus, ProposalStatus, type LeadActivityType, type LeadStage } from "@/generated/prisma/enums";
+import type { Actor } from "@/lib/actor";
+import { creatorColumns } from "@/lib/actor";
 import type { CreateJobInput } from "@/lib/api-schemas";
 import { moveLeadAttachmentsToJob } from "@/lib/crm/attachments";
 import { db } from "@/lib/db";
@@ -207,12 +209,18 @@ export interface CreateLeadActivityInput {
   readonly note: string;
   readonly occurredAt?: Date;
   readonly dueDate?: Date | null;
+  /** @deprecated Prefer `actor`. */
   readonly createdByUserId?: string | null;
+  readonly actor?: Actor;
 }
 
 export async function createLeadActivity(input: CreateLeadActivityInput) {
   const lead = await db.lead.findFirst({ where: { id: input.leadId, organizationId: input.organizationId }, select: { id: true } });
   if (!lead) throw new LeadNotFoundError(input.leadId);
+
+  const creators = input.actor
+    ? creatorColumns(input.actor)
+    : { createdByUserId: input.createdByUserId ?? null, createdByApiKeyId: null };
 
   return db.leadActivity.create({
     data: {
@@ -222,7 +230,8 @@ export async function createLeadActivity(input: CreateLeadActivityInput) {
       note: input.note,
       occurredAt: input.occurredAt ?? new Date(),
       dueDate: input.dueDate ?? null,
-      createdByUserId: input.createdByUserId ?? null,
+      createdByUserId: creators.createdByUserId,
+      createdByApiKeyId: creators.createdByApiKeyId,
     },
   });
 }

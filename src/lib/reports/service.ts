@@ -308,16 +308,31 @@ export async function getBaselineVsActualDurationReport(organizationId: string) 
 export async function getDailyLogCountByUserReport(organizationId: string) {
   const logs = await db.dailyLog.findMany({
     where: { organizationId },
-    select: { authorUserId: true, authorUser: { select: { name: true, email: true } } },
+    select: {
+      authorUserId: true,
+      authorApiKeyId: true,
+      authorUser: { select: { name: true, email: true } },
+      authorApiKey: { select: { name: true } },
+    },
   });
 
-  const byUser = new Map<string, { name: string; count: number }>();
+  const byActor = new Map<string, { name: string; count: number }>();
   for (const log of logs) {
-    const existing = byUser.get(log.authorUserId);
-    byUser.set(log.authorUserId, { name: log.authorUser.name ?? log.authorUser.email, count: (existing?.count ?? 0) + 1 });
+    const key = log.authorApiKeyId
+      ? `api:${log.authorApiKeyId}`
+      : log.authorUserId
+        ? `user:${log.authorUserId}`
+        : "system";
+    const name = log.authorApiKey
+      ? `${log.authorApiKey.name} · API`
+      : log.authorUser
+        ? `${log.authorUser.name ?? log.authorUser.email} · Browser`
+        : "System";
+    const existing = byActor.get(key);
+    byActor.set(key, { name, count: (existing?.count ?? 0) + 1 });
   }
 
-  return Array.from(byUser.entries())
+  return Array.from(byActor.entries())
     .map(([userId, { name, count }]) => ({ userId, userName: name, dailyLogCount: count }))
     .sort((a, b) => b.dailyLogCount - a.dailyLogCount);
 }

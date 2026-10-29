@@ -44,7 +44,11 @@ export default async function LeadActivitiesPage({ searchParams }: PageProps<"/l
     },
     orderBy: { occurredAt: "desc" },
     take: 500,
-    include: { lead: { select: { id: true, name: true } }, createdByUser: true },
+    include: {
+      lead: { select: { id: true, name: true } },
+      createdByUser: true,
+      createdByApiKey: { select: { name: true } },
+    },
   });
 
   return (
@@ -99,7 +103,11 @@ export default async function LeadActivitiesPage({ searchParams }: PageProps<"/l
             leadName: activity.lead.name,
             type: activity.type,
             note: activity.note,
-            by: activity.createdByUser?.email ?? null,
+            by: activity.createdByApiKey
+              ? `${activity.createdByApiKey.name} · API`
+              : activity.createdByUser
+                ? `${activity.createdByUser.email ?? activity.createdByUser.name} · Browser`
+                : null,
             occurredAt: activity.occurredAt.toISOString(),
             dueDate: activity.dueDate ? activity.dueDate.toISOString() : null,
             completed: activity.completedAt !== null,

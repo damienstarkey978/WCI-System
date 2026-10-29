@@ -155,7 +155,12 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
       take: 5,
       select: { id: true, invoiceNumber: true, title: true, amountCents: true, createdAt: true },
     }),
-    db.dailyLog.findMany({ where: { jobId: job.id }, orderBy: { createdAt: "desc" }, take: 5, include: { authorUser: true } }),
+    db.dailyLog.findMany({
+      where: { jobId: job.id },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: { authorUser: true, authorApiKey: { select: { name: true } } },
+    }),
     db.changeOrder.findMany({ where: { jobId: job.id }, orderBy: { createdAt: "desc" }, take: 5 }),
     db.schedule.findFirst({ where: { jobId: job.id, organizationId: user.organizationId }, orderBy: { createdAt: "asc" } }),
   ]);
@@ -178,7 +183,11 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
     ...recentDailyLogs.map((log) => ({
       id: `dailylog-${log.id}`,
       description: "added a Daily Log",
-      actorLabel: log.authorUser.name ?? log.authorUser.email,
+      actorLabel: log.authorApiKey
+        ? `${log.authorApiKey.name} · API`
+        : log.authorUser
+          ? `${log.authorUser.name ?? log.authorUser.email} · Browser`
+          : "System",
       createdAt: log.createdAt,
       href: `/jobs/${job.id}/daily-logs`,
       itemLabel: log.note.slice(0, 60) + (log.note.length > 60 ? "…" : ""),

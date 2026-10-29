@@ -214,7 +214,7 @@ model User {
   authoredComments          Comment[]
   notifications             Notification[]
   assignedLeads             Lead[]
-  leadActivities            LeadActivity[]
+  leadActivities            LeadActivity[]           @relation("LeadActivityCreatedBy")
   uploadedLeadAttachments   LeadAttachment[]
   startedMessageThreads     MessageThread[]
   dailyLogLikes             DailyLogLike[]
@@ -511,9 +511,14 @@ model ApiKey {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  jobStatusEvents     JobStatusEvent[]
-  purchaseOrderEvents PurchaseOrderEvent[]
+  jobStatusEvents          JobStatusEvent[]
+  purchaseOrderEvents      PurchaseOrderEvent[]
   claimedPurchasingIntents PurchasingIntent[]
+  createdBills             Bill[]         @relation("BillCreatedByApiKey")
+  authoredDailyLogs        DailyLog[]     @relation("DailyLogAuthorApiKey")
+  uploadedFiles            File[]         @relation("FileUploadedByApiKey")
+  authoredComments         Comment[]      @relation("CommentAuthorApiKey")
+  leadActivities           LeadActivity[] @relation("LeadActivityCreatedByApiKey")
 
   @@index([organizationId])
 }
@@ -1313,8 +1318,12 @@ model Bill {
   source         BillSource         @default(MANUAL)
 
   /// Which staff member entered or forwarded it — Buildertrend's "Created by" column.
-  createdByUserId String?
-  createdByUser   User?   @relation("BillCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  /// Exactly one of createdByUserId / createdByApiKeyId is set for attributed creates
+  /// (browser vs API). Both null only for legacy/import rows.
+  createdByUserId   String?
+  createdByUser     User?   @relation("BillCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByApiKeyId String?
+  createdByApiKey   ApiKey? @relation("BillCreatedByApiKey", fields: [createdByApiKeyId], references: [id], onDelete: SetNull)
 
   /// Set when the bill arrived by forwarded email, for tracing it back to the message.
   /// The inbound email this bill was extracted from, when it arrived that way.
@@ -2159,8 +2168,12 @@ model DailyLog {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   jobId          String
   job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  authorUserId   String
-  authorUser     User         @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  /// Browser staff author XOR API-key author (Heather etc.). Both null only for
+  /// historical import rows that lacked an attributable actor.
+  authorUserId   String?
+  authorUser     User?        @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  authorApiKeyId String?
+  authorApiKey   ApiKey?      @relation("DailyLogAuthorApiKey", fields: [authorApiKeyId], references: [id], onDelete: SetNull)
 
   /// Buildertrend's log title ("Prime walk thru"). Null on logs from before titles existed.
   title String?
@@ -2323,8 +2336,11 @@ model File {
   subVisible    Boolean @default(true)
 
   /// Null for headless inspector uploads via InspectionPictureShareLink (no staff User).
-  uploadedByUserId String?
-  uploadedByUser   User?  @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  /// When an agent registers a file via /api/v1, uploadedByApiKeyId is set instead.
+  uploadedByUserId   String?
+  uploadedByUser     User?   @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  uploadedByApiKeyId String?
+  uploadedByApiKey   ApiKey? @relation("FileUploadedByApiKey", fields: [uploadedByApiKeyId], references: [id], onDelete: SetNull)
 
   /// Set when this file was attached to a Daily Log entry (photos/videos).
   dailyLogId String?
@@ -2436,8 +2452,11 @@ model Comment {
   featureType String
   featureId   String
 
-  authorUserId String?
-  authorUser   User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  /// Browser staff XOR API-key author — same dual-FK pattern as JobStatusEvent.
+  authorUserId   String?
+  authorUser     User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorApiKeyId String?
+  authorApiKey   ApiKey? @relation("CommentAuthorApiKey", fields: [authorApiKeyId], references: [id], onDelete: SetNull)
 
   body     String
   mentions String[]
@@ -3100,8 +3119,10 @@ model LeadActivity {
   dueDate     DateTime?
   completedAt DateTime?
 
-  createdByUserId String?
-  createdByUser   User?   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUserId   String?
+  createdByUser     User?   @relation("LeadActivityCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByApiKeyId String?
+  createdByApiKey   ApiKey? @relation("LeadActivityCreatedByApiKey", fields: [createdByApiKeyId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 

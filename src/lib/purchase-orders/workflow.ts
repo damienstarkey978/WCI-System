@@ -17,6 +17,8 @@
  */
 
 import type { PurchaseOrderEventType, PurchaseOrderStatus } from "@/generated/prisma/enums";
+import type { Actor } from "@/lib/actor";
+import { toPurchaseOrderActor } from "@/lib/actor";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { db } from "@/lib/db";
 import { emitEvent } from "@/lib/webhooks";
@@ -38,10 +40,25 @@ export class InvalidPurchaseOrderTransitionError extends Error {
   }
 }
 
-/** Who drove a change, for the audit trail. Vendor acceptances carry neither. */
+/**
+ * Who drove a change, for the audit trail. Vendor acceptances carry neither.
+ * Prefer passing an {@link Actor} at call sites; this flat shape remains for
+ * existing staff actions that set actorUserId directly.
+ */
 export interface PurchaseOrderActor {
   readonly actorUserId?: string | null;
   readonly actorApiKeyId?: string | null;
+}
+
+export type PurchaseOrderActorInput = PurchaseOrderActor | Actor;
+
+export function purchaseOrderActorFrom(actor?: PurchaseOrderActorInput | null): PurchaseOrderActor {
+  if (!actor) return {};
+  if ("kind" in actor) return toPurchaseOrderActor(actor);
+  return {
+    actorUserId: actor.actorUserId ?? null,
+    actorApiKeyId: actor.actorApiKeyId ?? null,
+  };
 }
 
 /**
@@ -76,16 +93,17 @@ function recordEvent(
   purchaseOrderId: string,
   type: PurchaseOrderEventType,
   version: number,
-  actor: PurchaseOrderActor,
+  actor: PurchaseOrderActor | Actor,
   note?: string | null,
 ) {
+  const cols = purchaseOrderActorFrom(actor);
   return db.purchaseOrderEvent.create({
     data: {
       purchaseOrderId,
       type,
       version,
-      actorUserId: actor.actorUserId ?? null,
-      actorApiKeyId: actor.actorApiKeyId ?? null,
+      actorUserId: cols.actorUserId ?? null,
+      actorApiKeyId: cols.actorApiKeyId ?? null,
       note: note ?? null,
     },
   });
@@ -95,7 +113,7 @@ function recordEvent(
 export async function sendForApproval(input: {
   readonly organizationId: string;
   readonly purchaseOrderId: string;
-  readonly actor?: PurchaseOrderActor;
+  readonly actor?: PurchaseOrderActorInput;
 }) {
   const purchaseOrder = await loadPurchaseOrder(input.organizationId, input.purchaseOrderId);
   if (!canTransition(purchaseOrder.status, "PENDING_APPROVAL")) {
@@ -133,7 +151,7 @@ export async function approvePurchaseOrder(input: {
   readonly approvedBy: "INTERNAL" | "VENDOR";
   readonly vendorSignatureName?: string | null;
   readonly vendorSignatureIp?: string | null;
-  readonly actor?: PurchaseOrderActor;
+  readonly actor?: PurchaseOrderActorInput;
 }) {
   const purchaseOrder = await loadPurchaseOrder(input.organizationId, input.purchaseOrderId);
   if (!canTransition(purchaseOrder.status, "APPROVED")) {
@@ -182,7 +200,7 @@ export async function declinePurchaseOrder(input: {
   readonly organizationId: string;
   readonly purchaseOrderId: string;
   readonly reason?: string | null;
-  readonly actor?: PurchaseOrderActor;
+  readonly actor?: PurchaseOrderActorInput;
 }) {
   const purchaseOrder = await loadPurchaseOrder(input.organizationId, input.purchaseOrderId);
   if (!canTransition(purchaseOrder.status, "DECLINED")) {
@@ -215,7 +233,7 @@ export async function amendPurchaseOrder(input: {
   readonly organizationId: string;
   readonly purchaseOrderId: string;
   readonly reason?: string | null;
-  readonly actor?: PurchaseOrderActor;
+  readonly actor?: PurchaseOrderActorInput;
 }) {
   const purchaseOrder = await loadPurchaseOrder(input.organizationId, input.purchaseOrderId);
   if (purchaseOrder.status === "CANCELLED") {
@@ -256,7 +274,7 @@ export async function recallPurchaseOrder(input: {
   readonly organizationId: string;
   readonly purchaseOrderId: string;
   readonly reason?: string | null;
-  readonly actor?: PurchaseOrderActor;
+  readonly actor?: PurchaseOrderActorInput;
 }) {
   const purchaseOrder = await loadPurchaseOrder(input.organizationId, input.purchaseOrderId);
   if (!canTransition(purchaseOrder.status, "CANCELLED")) {
@@ -285,7 +303,7 @@ export async function setWorkStatus(input: {
   readonly organizationId: string;
   readonly purchaseOrderId: string;
   readonly workComplete: boolean;
-  readonly actor?: PurchaseOrderActor;
+  readonly actor?: PurchaseOrderActorInput;
 }) {
   const purchaseOrder = await loadPurchaseOrder(input.organizationId, input.purchaseOrderId);
 

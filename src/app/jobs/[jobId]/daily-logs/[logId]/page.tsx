@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { actorSummaryText } from "@/components/actor-attribution";
 import { ChatIcon, DocumentIcon, HeartIcon, VideoIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
@@ -39,6 +40,7 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
     where: { id: logId, jobId: job.id },
     include: {
       authorUser: { select: { id: true, name: true, email: true } },
+      authorApiKey: { select: { name: true, agentKind: true } },
       files: {
         where: { deletedAt: null },
         orderBy: { createdAt: "asc" },
@@ -61,8 +63,15 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
     url: signedUrls[index] ?? null,
   }));
   const authorIds = [...new Set(comments.map((c) => c.authorUserId).filter((id): id is string => id !== null))];
-  const authors = authorIds.length ? await db.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, name: true, email: true } }) : [];
+  const apiKeyIds = [...new Set(comments.map((c) => c.authorApiKeyId).filter((id): id is string => id !== null))];
+  const [authors, apiKeys] = await Promise.all([
+    authorIds.length ? db.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, name: true, email: true } }) : Promise.resolve([]),
+    apiKeyIds.length
+      ? db.apiKey.findMany({ where: { id: { in: apiKeyIds } }, select: { id: true, name: true, agentKind: true } })
+      : Promise.resolve([]),
+  ]);
   const authorName = new Map(authors.map((a) => [a.id, a.name ?? a.email]));
+  const apiKeyById = new Map(apiKeys.map((key) => [key.id, key]));
 
   const weather = weatherSummary(log.weather);
   const liked = log.likes.length > 0;
@@ -76,7 +85,9 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-5" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[var(--bt-text)]">
-          <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>{log.authorUser.name ?? log.authorUser.email}</span>
+          <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>
+            {actorSummaryText({ user: log.authorUser, apiKey: log.authorApiKey })}
+          </span>
           {log.clientVisible ? <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>Client</span> : null}
           {log.subVisible ? <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>Subs</span> : null}
           <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>Internal</span>
@@ -136,7 +147,14 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
           {comments.map((comment) => (
             <div key={comment.id} className="rounded border px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
               <div className="flex items-center justify-between text-xs text-[var(--bt-muted)]">
-                <span className="font-medium text-[var(--bt-text)]">{comment.authorUserId ? (authorName.get(comment.authorUserId) ?? "Unknown") : "Unknown"}</span>
+                <span className="font-medium text-[var(--bt-text)]">
+                  {actorSummaryText({
+                    user: comment.authorUserId
+                      ? { name: authorName.get(comment.authorUserId) ?? null, email: null }
+                      : null,
+                    apiKey: comment.authorApiKeyId ? apiKeyById.get(comment.authorApiKeyId) : null,
+                  })}
+                </span>
                 <span>{formatDate(comment.createdAt)}</span>
               </div>
               <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{comment.body}</p>

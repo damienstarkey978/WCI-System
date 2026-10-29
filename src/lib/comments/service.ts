@@ -6,6 +6,8 @@
  */
 
 import { NotificationChannel } from "@/generated/prisma/enums";
+import type { Actor } from "@/lib/actor";
+import { authorColumns } from "@/lib/actor";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications/service";
 
@@ -13,18 +15,25 @@ export interface CreateCommentInput {
   readonly organizationId: string;
   readonly featureType: string;
   readonly featureId: string;
+  /** @deprecated Prefer `actor`. */
   readonly authorUserId?: string | null;
+  readonly actor?: Actor;
   readonly body: string;
   readonly mentions?: readonly string[];
 }
 
 export async function createComment(input: CreateCommentInput) {
+  const authors = input.actor
+    ? authorColumns(input.actor)
+    : { authorUserId: input.authorUserId ?? null, authorApiKeyId: null };
+
   const comment = await db.comment.create({
     data: {
       organizationId: input.organizationId,
       featureType: input.featureType,
       featureId: input.featureId,
-      authorUserId: input.authorUserId ?? null,
+      authorUserId: authors.authorUserId,
+      authorApiKeyId: authors.authorApiKeyId,
       body: input.body,
       mentions: [...(input.mentions ?? [])],
     },
@@ -42,7 +51,8 @@ export async function createComment(input: CreateCommentInput) {
           commentId: comment.id,
           featureType: input.featureType,
           featureId: input.featureId,
-          authorUserId: input.authorUserId ?? null,
+          authorUserId: authors.authorUserId,
+          authorApiKeyId: authors.authorApiKeyId,
           bodyPreview: input.body.slice(0, 280),
         },
       }).catch(() => undefined),
