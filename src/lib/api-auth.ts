@@ -130,6 +130,20 @@ export function apiError(
   return Response.json(body, { status });
 }
 
+/** JSON 405 with an Allow header — Next's default empty 405 body is useless to API clients. */
+export function methodNotAllowed(allowed: readonly string[]): Response {
+  return Response.json(
+    {
+      error: {
+        code: "method_not_allowed",
+        message: `Method not allowed. Allowed: ${allowed.join(", ")}.`,
+        details: { allowed },
+      },
+    } satisfies ApiErrorBody,
+    { status: 405, headers: { Allow: allowed.join(", ") } },
+  );
+}
+
 export function unauthorized(): Response {
   return Response.json(
     { error: { code: "unauthorized", message: "A valid API key is required." } } satisfies ApiErrorBody,

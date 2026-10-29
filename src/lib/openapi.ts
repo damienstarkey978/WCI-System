@@ -143,7 +143,13 @@ interface EndpointDef {
   readonly authKind?: "apiKey" | "clientPortal" | "vendorPortal" | "public";
   readonly scopes: readonly string[];
   readonly pathParams?: readonly string[];
-  readonly queryParams?: readonly { name: string; description: string; schema?: Record<string, unknown> }[];
+  readonly queryParams?: readonly {
+    name: string;
+    description: string;
+    schema?: Record<string, unknown>;
+    /** When true, OpenAPI marks the query param required (default false). */
+    required?: boolean;
+  }[];
   readonly requestSchema?: z.ZodType;
   readonly successStatus?: number;
   readonly successDescription?: string;
@@ -157,7 +163,7 @@ const ENDPOINTS: readonly EndpointDef[] = [
     path: "/me",
     summary: "Inspect the authenticated API key",
     description:
-      "Returns the key's name, agentKind, organizationId, and granted scopes. " +
+      "Returns apiKeyId, name, agentKind, organizationId, and granted scopes. " +
       "Requires a valid API key only (no module scope) so every consumer can verify what it was issued.",
     tags: ["Auth"],
     scopes: [],
@@ -174,8 +180,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
       { name: "contractType", description: "Filter by ContractType" },
       { name: "jobGroupId", description: "Filter by job group" },
       { name: "includeTemplates", description: "Include template jobs (default false)" },
-      { name: "limit", description: "Page size, 1-200 (default 50)" },
-      { name: "cursor", description: "Opaque pagination cursor (a job id) from a previous response" },
+      { name: "limit", description: "Page size, 1-200 (default 25). Keep small for MCP clients (~11.8KB truncation)." },
+      { name: "cursor", description: "Opaque pagination cursor (a job id) from pagination.nextCursor" },
     ],
   },
   {
@@ -287,6 +293,63 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["budgets:read"],
     pathParams: ["jobId"],
   },
+  {
+    method: "get",
+    path: "/jobs/{jobId}/bills",
+    summary: "List bills for a job",
+    description: "Job-scoped alias of GET /bills?jobId={jobId}. Same scopes and pagination.",
+    tags: ["Bills"],
+    scopes: ["bills:read"],
+    pathParams: ["jobId"],
+    queryParams: [
+      { name: "approvalStatus", description: "Filter by BillApprovalStatus" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+    ],
+  },
+  {
+    method: "get",
+    path: "/jobs/{jobId}/purchase-orders",
+    summary: "List purchase orders for a job",
+    description: "Job-scoped alias of GET /purchase-orders?jobId={jobId}.",
+    tags: ["Purchase Orders"],
+    scopes: ["purchase-orders:read"],
+    pathParams: ["jobId"],
+    queryParams: [
+      { name: "status", description: "Filter by PurchaseOrderStatus" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+    ],
+  },
+  {
+    method: "get",
+    path: "/jobs/{jobId}/change-orders",
+    summary: "List change orders for a job",
+    description: "Job-scoped alias of GET /change-orders?jobId={jobId}.",
+    tags: ["Change Orders"],
+    scopes: ["change-orders:read"],
+    pathParams: ["jobId"],
+    queryParams: [
+      { name: "status", description: "Filter by ChangeOrderStatus" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+    ],
+  },
+  {
+    method: "get",
+    path: "/jobs/{jobId}/files",
+    summary: "List files for a job",
+    description: "Job-scoped alias of GET /files?jobId={jobId}. Supports folderId filter.",
+    tags: ["Files"],
+    scopes: ["files:read"],
+    pathParams: ["jobId"],
+    queryParams: [
+      { name: "category", description: "Filter by FileCategory" },
+      { name: "folderId", description: "Filter to one FileFolder" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+    ],
+  },
 
   // --- Cost codes -----------------------------------------------------------
   {
@@ -372,6 +435,19 @@ const ENDPOINTS: readonly EndpointDef[] = [
     pathParams: ["jobId"],
   },
   {
+    method: "get",
+    path: "/takeoffs",
+    summary: "List takeoffs",
+    description: "Org-level list. Prefer ?jobId= or GET /jobs/{jobId}/takeoffs for smaller pages.",
+    tags: ["Takeoffs"],
+    scopes: ["takeoffs:read"],
+    queryParams: [
+      { name: "jobId", description: "Filter to one job" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+    ],
+  },
+  {
     method: "post",
     path: "/takeoffs/{takeoffId}/queue-purchasing",
     summary: "Send takeoff lines to Duke's purchasing queue",
@@ -440,8 +516,10 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Purchase Orders"],
     scopes: ["purchase-orders:read"],
     queryParams: [
-      { name: "jobId", description: "Filter to one job" },
+      { name: "jobId", description: "Filter to one job (also GET /jobs/{jobId}/purchase-orders)" },
       { name: "status", description: "Filter by PurchaseOrderStatus" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
     ],
   },
   {
@@ -492,8 +570,10 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Bills"],
     scopes: ["bills:read"],
     queryParams: [
-      { name: "jobId", description: "Filter to one job" },
+      { name: "jobId", description: "Filter to one job (also GET /jobs/{jobId}/bills)" },
       { name: "approvalStatus", description: "Filter by BillApprovalStatus" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
     ],
   },
   {
@@ -553,6 +633,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     queryParams: [
       { name: "jobId", description: "Filter to one job" },
       { name: "status", description: "Filter by InvoiceStatus" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
     ],
   },
   {
@@ -635,8 +717,10 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Change Orders"],
     scopes: ["change-orders:read"],
     queryParams: [
-      { name: "jobId", description: "Filter to one job" },
+      { name: "jobId", description: "Filter to one job (also available as GET /jobs/{jobId}/change-orders)" },
       { name: "status", description: "Filter by ChangeOrderStatus" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
     ],
   },
   {
@@ -960,11 +1044,17 @@ const ENDPOINTS: readonly EndpointDef[] = [
     method: "get",
     path: "/files",
     summary: "List file metadata",
+    description:
+      "File.url may be a private storage key, not an http(s) URL. Use GET /files/{fileId} for a signed downloadUrl. " +
+      "Also available as GET /jobs/{jobId}/files.",
     tags: ["Files"],
     scopes: ["files:read"],
     queryParams: [
       { name: "jobId", description: "Filter to one job" },
       { name: "category", description: "Filter by FileCategory" },
+      { name: "folderId", description: "Filter to one FileFolder" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
     ],
   },
   {
@@ -978,18 +1068,48 @@ const ENDPOINTS: readonly EndpointDef[] = [
     requestSchema: registerFileSchema,
     successStatus: 201,
   },
+  {
+    method: "get",
+    path: "/files/{fileId}",
+    summary: "Get a file with signed downloadUrl",
+    description:
+      "When File.url is a storage key, downloadUrl is a freshly signed URL (or null if signing fails). " +
+      "storageKey echoes the raw key; url remains the stored value.",
+    tags: ["Files"],
+    scopes: ["files:read"],
+    pathParams: ["fileId"],
+  },
+  {
+    method: "get",
+    path: "/folders",
+    summary: "List file folders for a job",
+    description: "Documents folders and inspection-picture folders. jobId is required.",
+    tags: ["Files"],
+    scopes: ["files:read"],
+    queryParams: [
+      { name: "jobId", description: "Required. Job whose folders to list.", required: true },
+    ],
+  },
 
   // --- Comments ---------------------------------------------------------------
   {
     method: "get",
     path: "/comments",
     summary: "List comments on a feature",
-    description: "The unified Comment/Activity layer — featureType/featureId identify the commented-on entity.",
+    description: "The unified Comment/Activity layer — featureType and featureId are required query parameters.",
     tags: ["Comments"],
     scopes: ["comments:read"],
     queryParams: [
-      { name: "featureType", description: "Required. The entity type the comment is attached to." },
-      { name: "featureId", description: "Required. The entity id the comment is attached to." },
+      {
+        name: "featureType",
+        description: "Required. Entity type the comment is attached to (e.g. daily_log, change_order, rfi).",
+        required: true,
+      },
+      {
+        name: "featureId",
+        description: "Required. Entity id the comment is attached to.",
+        required: true,
+      },
     ],
   },
   {
@@ -1007,12 +1127,14 @@ const ENDPOINTS: readonly EndpointDef[] = [
     method: "get",
     path: "/notifications",
     summary: "List a user's notifications",
+    description: "userId is required. Use limit+cursor to page (default limit 25).",
     tags: ["Notifications"],
     scopes: ["notifications:read"],
     queryParams: [
-      { name: "userId", description: "Required" },
+      { name: "userId", description: "Required. Staff User id whose notifications to list.", required: true },
       { name: "unreadOnly", description: "\"true\" to only return unread notifications (default false)" },
-      { name: "limit", description: "Page size, 1-200 (default 50)" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
     ],
   },
   {
@@ -1110,7 +1232,11 @@ const ENDPOINTS: readonly EndpointDef[] = [
     summary: "List clients",
     tags: ["Client Portal"],
     scopes: ["clients:read"],
-    queryParams: [{ name: "jobId", description: "Filter to clients with access to one job" }],
+    queryParams: [
+      { name: "jobId", description: "Filter to clients with access to one job" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+    ],
   },
   {
     method: "post",
@@ -1120,6 +1246,14 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["clients:write"],
     requestSchema: createClientSchema,
     successStatus: 201,
+  },
+  {
+    method: "get",
+    path: "/clients/{clientId}",
+    summary: "Get a client",
+    tags: ["Client Portal"],
+    scopes: ["clients:read"],
+    pathParams: ["clientId"],
   },
   {
     method: "post",
@@ -1333,7 +1467,11 @@ const ENDPOINTS: readonly EndpointDef[] = [
     summary: "List vendors",
     tags: ["Vendor Portal"],
     scopes: ["vendors:read"],
-    queryParams: [{ name: "jobId", description: "Filter to vendors with access to one job" }],
+    queryParams: [
+      { name: "jobId", description: "Filter to vendors with access to one job" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+    ],
   },
   {
     method: "post",
@@ -2132,7 +2270,7 @@ function toOperation(endpoint: EndpointDef): Record<string, unknown> {
     ...(endpoint.queryParams ?? []).map((param) => ({
       name: param.name,
       in: "query",
-      required: false,
+      required: param.required === true,
       description: param.description,
       schema: param.schema ?? { type: "string" },
     })),
@@ -2195,16 +2333,40 @@ function buildPaths(): Record<string, Record<string, unknown>> {
   return paths;
 }
 
+/** Compact path→methods→scopes map for MCP clients that truncate large JSON (~11.8KB). */
+export function buildOpenApiPathIndex(): Record<string, unknown> {
+  const paths: Record<string, Record<string, { scopes: readonly string[] }>> = {};
+  for (const endpoint of ENDPOINTS) {
+    paths[endpoint.path] ??= {};
+    paths[endpoint.path][endpoint.method] = { scopes: endpoint.scopes };
+  }
+  return {
+    openapi: "3.1.0",
+    info: {
+      title: "WCI OS API (path index)",
+      version: "1.0.0",
+      description:
+        "Compact path index. Full schemas: GET /api/v1/openapi.json. " +
+        "List endpoints accept limit (default 25, max 200) and cursor; follow pagination.nextCursor.",
+    },
+    servers: [{ url: "/api/v1" }],
+    paths,
+  };
+}
+
 export function buildOpenApiDocument(): Record<string, unknown> {
   return {
     openapi: "3.1.0",
     info: {
       title: "WCI OS API",
-      version: "1.0.0-phase1",
+      version: "1.0.0",
       description:
         "Public/agent-facing API for WCI OS (CLAUDE.md 2.5). Every route under /api/v1, except this document itself, " +
         "requires a scoped API key. Issue one with `npm run issue-api-key -- --name <consumer>`. " +
         `Every response body follows one of two envelopes: {"data": ...} on success, or {"error": {"code", "message", "details?"}} on failure. ` +
+        "List endpoints return { data, pagination: { nextCursor, hasMore, limit } }; pass cursor= nextCursor to page. " +
+        "Default limit is 25 (max 200) so MCP clients stay under ~11.8KB truncation — use GET /openapi.json?format=paths for a compact path index. " +
+        "GET /me returns the calling key's scopes. " +
         "Scopes: " +
         SCOPES.join(", ") +
         ". Default scopes per agent in the roster: " +

@@ -53,7 +53,8 @@ export const listJobsQuerySchema = z.object({
   contractType: z.enum(ContractType).optional(),
   jobGroupId: z.string().min(1).max(64).optional(),
   includeTemplates: z.coerce.boolean().optional().default(false),
-  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  // Default 25 keeps MCP connector responses under its ~11.8KB truncation cliff.
+  limit: z.coerce.number().int().min(1).max(200).optional().default(25),
   cursor: z.string().min(1).max(64).optional(),
 });
 
@@ -65,9 +66,42 @@ export const listJobsQuerySchema = z.object({
  */
 const financialListPaging = {
   jobId: z.string().min(1).max(64).optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(25),
   cursor: z.string().min(1).max(64).optional(),
 };
+
+/** Shared limit+cursor for org-level list endpoints (clients, vendors, files, …). */
+export const listPagingQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional().default(25),
+  cursor: z.string().min(1).max(64).optional(),
+});
+
+export const listClientsQuerySchema = listPagingQuerySchema.extend({
+  jobId: z.string().min(1).max(64).optional(),
+});
+
+export const listVendorsQuerySchema = listPagingQuerySchema.extend({
+  jobId: z.string().min(1).max(64).optional(),
+});
+
+export const listFilesQuerySchema = listPagingQuerySchema.extend({
+  jobId: z.string().min(1).max(64).optional(),
+  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO", "PLAN"]).optional(),
+  folderId: z.string().min(1).max(64).optional(),
+});
+
+export const listChangeOrdersQuerySchema = listPagingQuerySchema.extend({
+  jobId: z.string().min(1).max(64).optional(),
+  status: z.string().min(1).max(64).optional(),
+});
+
+export const listFoldersQuerySchema = z.object({
+  jobId: z.string().min(1).max(64),
+});
+
+export const listTakeoffsQuerySchema = listPagingQuerySchema.extend({
+  jobId: z.string().min(1).max(64).optional(),
+});
 
 export const listPurchaseOrdersQuerySchema = z.object({
   ...financialListPaging,
@@ -531,7 +565,8 @@ export const listCommentsQuerySchema = z.object({
 export const listNotificationsQuerySchema = z.object({
   userId: z.string().min(1).max(64),
   unreadOnly: z.coerce.boolean().optional().default(false),
-  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(25),
+  cursor: z.string().min(1).max(64).optional(),
 });
 
 // ---------------------------------------------------------------------------

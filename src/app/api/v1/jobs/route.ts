@@ -9,6 +9,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { JobStatus } from "@/generated/prisma/enums";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createJobSchema, formatZodIssues, listJobsQuerySchema } from "@/lib/api-schemas";
+import { toCursorPage } from "@/lib/api-pagination";
 import { db } from "@/lib/db";
 import { emitEvent } from "@/lib/webhooks";
 
@@ -33,16 +34,7 @@ export const GET = withApiAuth(["jobs:read"], async (request, auth) => {
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  const hasMore = jobs.length > limit;
-  const page = hasMore ? jobs.slice(0, limit) : jobs;
-
-  return Response.json({
-    data: page,
-    pagination: {
-      nextCursor: hasMore ? page[page.length - 1].id : null,
-      hasMore,
-    },
-  });
+  return Response.json(toCursorPage(jobs, limit));
 });
 
 export const POST = withApiAuth(["jobs:write"], async (request, auth) => {

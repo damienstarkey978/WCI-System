@@ -7,6 +7,7 @@
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createBillSchema, formatZodIssues, listBillsQuerySchema } from "@/lib/api-schemas";
+import { toCursorPage } from "@/lib/api-pagination";
 import {
   createBill,
   JobNotFoundError,
@@ -39,13 +40,7 @@ export const GET = withApiAuth(["bills:read"], async (request, auth) => {
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
 
-  const hasMore = bills.length > limit;
-  const page = hasMore ? bills.slice(0, limit) : bills;
-
-  return Response.json({
-    data: page,
-    pagination: { nextCursor: hasMore ? page[page.length - 1].id : null, hasMore },
-  });
+  return Response.json(toCursorPage(bills, limit));
 });
 
 export const POST = withApiAuth(["bills:write"], async (request, auth) => {

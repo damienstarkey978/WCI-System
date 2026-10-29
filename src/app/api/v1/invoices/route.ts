@@ -5,6 +5,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createInvoiceSchema, formatZodIssues, listInvoicesQuerySchema } from "@/lib/api-schemas";
+import { toCursorPage } from "@/lib/api-pagination";
 import { db } from "@/lib/db";
 import { createInvoice, JobNotFoundError, JobNotOpenError } from "@/lib/invoicing/service";
 
@@ -29,13 +30,7 @@ export const GET = withApiAuth(["invoices:read"], async (request, auth) => {
     include: { lineItems: { orderBy: { sortOrder: "asc" } }, payments: true },
   });
 
-  const hasMore = invoices.length > limit;
-  const page = hasMore ? invoices.slice(0, limit) : invoices;
-
-  return Response.json({
-    data: page,
-    pagination: { nextCursor: hasMore ? page[page.length - 1].id : null, hasMore },
-  });
+  return Response.json(toCursorPage(invoices, limit));
 });
 
 export const POST = withApiAuth(["invoices:write"], async (request, auth) => {

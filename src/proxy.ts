@@ -16,6 +16,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 
+import { matchApiV1Route } from "@/lib/api-v1-route-table";
 import { isClerkConfigured } from "@/lib/env";
 
 /**
@@ -50,9 +51,42 @@ const PUBLIC_API_PATHS: ReadonlySet<string> = new Set([
   "/api/v1/webhooks/quickbooks",
 ]);
 
+function apiJsonError(
+  status: number,
+  code: string,
+  message: string,
+  extraHeaders?: HeadersInit,
+  details?: unknown,
+): NextResponse {
+  return NextResponse.json(
+    { error: { code, message, ...(details === undefined ? {} : { details }) } },
+    { status, headers: extraHeaders },
+  );
+}
+
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (request.nextUrl.pathname.startsWith("/api/v1")) {
-    if (PUBLIC_API_PATHS.has(request.nextUrl.pathname)) {
+    const pathname = request.nextUrl.pathname;
+    const relative = pathname.slice("/api/v1".length) || "/";
+    const match = matchApiV1Route(relative);
+
+    if (match.kind === "not_found") {
+      // Unknown /api/v1 paths must not fall through to the website HTML 404.
+      return apiJsonError(404, "not_found", `No API route for ${pathname}.`);
+    }
+
+    const method = request.method.toUpperCase();
+    if (method !== "OPTIONS" && method !== "HEAD" && !match.methods.includes(method)) {
+      return apiJsonError(
+        405,
+        "method_not_allowed",
+        `Method not allowed. Allowed: ${match.methods.join(", ")}.`,
+        { Allow: match.methods.join(", ") },
+        { allowed: match.methods },
+      );
+    }
+
+    if (PUBLIC_API_PATHS.has(pathname)) {
       return NextResponse.next();
     }
 
@@ -60,10 +94,9 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
       request.headers.get("authorization") !== null || request.headers.get("x-api-key") !== null;
 
     if (!hasCredentials) {
-      return NextResponse.json(
-        { error: { code: "unauthorized", message: "A valid API key is required." } },
-        { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="wci-os"' } },
-      );
+      return apiJsonError(401, "unauthorized", "A valid API key is required.", {
+        "WWW-Authenticate": 'Bearer realm="wci-os"',
+      });
     }
     return NextResponse.next();
   }

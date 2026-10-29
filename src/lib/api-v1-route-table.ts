@@ -1,0 +1,210 @@
+/**
+ * Lightweight /api/v1 path → methods map for proxy.ts JSON 404/405.
+ * Keep in sync with ENDPOINTS in src/lib/openapi.ts (enforced by api-v1-route-table.test.ts).
+ * No Zod / OpenAPI imports — safe for the Edge proxy bundle.
+ */
+
+export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> = {
+  "/allowances": ["GET","POST"],
+  "/bid-packages": ["GET","POST"],
+  "/bid-packages/{bidPackageId}/close": ["POST"],
+  "/bid-packages/{bidPackageId}/invite": ["POST"],
+  "/bid-submissions/{bidSubmissionId}/accept": ["POST"],
+  "/bid-submissions/{bidSubmissionId}/decline": ["POST"],
+  "/bid-submissions/{bidSubmissionId}/lock": ["POST"],
+  "/bid-submissions/{bidSubmissionId}/push-to-purchase-order": ["POST"],
+  "/bid-submissions/{bidSubmissionId}/submit": ["POST"],
+  "/bills": ["GET","POST"],
+  "/bills/{billId}": ["DELETE"],
+  "/bills/{billId}/status": ["POST"],
+  "/bills/ai-ocr": ["POST"],
+  "/certifications/expiring": ["GET"],
+  "/change-orders": ["GET","POST"],
+  "/change-orders/{changeOrderId}/approval-link": ["POST"],
+  "/change-orders/{changeOrderId}/approve": ["POST"],
+  "/change-orders/{changeOrderId}/decline": ["POST"],
+  "/change-orders/{changeOrderId}/push-to-purchase-order": ["POST"],
+  "/clients": ["GET","POST"],
+  "/clients/{clientId}": ["GET"],
+  "/clients/{clientId}/job-access": ["POST"],
+  "/clients/{clientId}/portal-invite": ["POST"],
+  "/comments": ["GET","POST"],
+  "/cost-codes": ["GET","POST"],
+  "/daily-logs": ["GET","POST"],
+  "/draw-schedules": ["GET","POST"],
+  "/draws/{drawId}/generate-invoice": ["POST"],
+  "/estimates": ["GET","POST"],
+  "/estimates/{estimateId}/send-to-budget": ["POST"],
+  "/estimates/ai-draft": ["POST"],
+  "/events": ["POST"],
+  "/files": ["GET","POST"],
+  "/files/{fileId}": ["GET"],
+  "/folders": ["GET"],
+  "/invoices": ["GET","POST"],
+  "/invoices/{invoiceId}": ["DELETE"],
+  "/invoices/{invoiceId}/payments": ["POST"],
+  "/invoices/{invoiceId}/send": ["POST"],
+  "/jobs": ["GET","POST"],
+  "/jobs/{jobId}": ["GET"],
+  "/jobs/{jobId}/ai-summary": ["POST"],
+  "/jobs/{jobId}/bills": ["GET"],
+  "/jobs/{jobId}/budget": ["GET"],
+  "/jobs/{jobId}/change-orders": ["GET"],
+  "/jobs/{jobId}/files": ["GET"],
+  "/jobs/{jobId}/permits": ["GET"],
+  "/jobs/{jobId}/permits/ensure-defaults": ["POST"],
+  "/jobs/{jobId}/permitting-flags": ["PATCH"],
+  "/jobs/{jobId}/progress": ["GET"],
+  "/jobs/{jobId}/purchase-orders": ["GET"],
+  "/jobs/{jobId}/purchasing": ["GET"],
+  "/jobs/{jobId}/status": ["POST"],
+  "/jobs/{jobId}/takeoffs": ["GET"],
+  "/leads": ["GET","POST"],
+  "/leads/{leadId}/convert-to-job": ["POST"],
+  "/leads/{leadId}/stage": ["POST"],
+  "/me": ["GET"],
+  "/migration/bills": ["POST"],
+  "/migration/daily-logs": ["POST"],
+  "/migration/invoices": ["POST"],
+  "/migration/purchase-orders": ["POST"],
+  "/migration/schedule-items": ["POST"],
+  "/non-working-days": ["GET","POST"],
+  "/notifications": ["GET"],
+  "/notifications/{notificationId}/read": ["POST"],
+  "/permit-inspections/{inspectionId}": ["PATCH"],
+  "/permits/{permitId}": ["PATCH"],
+  "/permits/{permitId}/send-reminder": ["POST"],
+  "/portal/change-orders/{changeOrderId}/approve": ["POST"],
+  "/portal/invoices/{invoiceId}/pay": ["POST"],
+  "/portal/jobs": ["GET"],
+  "/portal/jobs/{jobId}/budget": ["GET"],
+  "/portal/jobs/{jobId}/change-orders": ["GET"],
+  "/portal/jobs/{jobId}/daily-logs": ["GET"],
+  "/portal/jobs/{jobId}/documents": ["GET"],
+  "/portal/jobs/{jobId}/invoices": ["GET"],
+  "/portal/jobs/{jobId}/schedule": ["GET"],
+  "/portal/jobs/{jobId}/selections": ["GET"],
+  "/portal/jobs/{jobId}/weekly-summaries": ["GET"],
+  "/portal/login": ["POST"],
+  "/portal/proposals/{proposalId}/accept": ["POST"],
+  "/portal/proposals/{proposalId}/feedback": ["POST"],
+  "/portal/selections/{selectionId}/options/{optionId}/approve": ["POST"],
+  "/portal/warranty-claims/{claimId}/accept-client": ["POST"],
+  "/proposal-templates": ["GET","POST"],
+  "/proposal-templates/{templateId}": ["GET","PUT","DELETE"],
+  "/proposals": ["GET","POST"],
+  "/proposals/{proposalId}/apply-template": ["POST"],
+  "/proposals/{proposalId}/approval-link": ["POST"],
+  "/proposals/{proposalId}/decline": ["POST"],
+  "/proposals/{proposalId}/send": ["POST"],
+  "/purchase-orders": ["GET","POST"],
+  "/purchase-orders/{purchaseOrderId}": ["DELETE"],
+  "/purchase-orders/{purchaseOrderId}/approval-link": ["POST"],
+  "/purchase-orders/{purchaseOrderId}/approve": ["POST"],
+  "/purchase-orders/match-by-road-name": ["POST"],
+  "/purchasing-intents": ["GET"],
+  "/purchasing-intents/{intentId}/claim": ["POST"],
+  "/purchasing-intents/{intentId}/convert-to-po": ["POST"],
+  "/reports/budgeted-vs-projected": ["GET"],
+  "/reports/cash-flow": ["GET"],
+  "/reports/invoicing": ["GET"],
+  "/reports/labor": ["GET"],
+  "/reports/profitability": ["GET"],
+  "/reports/wip": ["GET"],
+  "/rfis": ["GET","POST"],
+  "/rfis/{rfiId}/answer": ["POST"],
+  "/rfis/{rfiId}/close": ["POST"],
+  "/schedule-items/{itemId}": ["POST"],
+  "/schedules": ["GET","POST"],
+  "/schedules/{scheduleId}": ["GET"],
+  "/schedules/{scheduleId}/baseline": ["POST"],
+  "/schedules/{scheduleId}/items": ["POST"],
+  "/selections": ["GET","POST"],
+  "/selections/{selectionId}/options/{optionId}/approval-link": ["POST"],
+  "/specifications": ["GET","POST"],
+  "/specifications/generate-from-estimate": ["POST"],
+  "/submittal-reviews": ["POST"],
+  "/submittals": ["GET","POST"],
+  "/submittals/{submittalId}/review-link": ["POST"],
+  "/submittals/{submittalId}/revisions": ["POST"],
+  "/survey-responses": ["POST"],
+  "/surveys": ["GET","POST"],
+  "/surveys/{surveyId}/response-link": ["POST"],
+  "/takeoffs": ["GET"],
+  "/takeoffs/{takeoffId}/push-to-purchase-order": ["POST"],
+  "/takeoffs/{takeoffId}/queue-purchasing": ["POST"],
+  "/takeoffs/ai-draft": ["POST"],
+  "/time-clock": ["GET","POST"],
+  "/time-clock/{entryId}/approve": ["POST"],
+  "/time-clock/{entryId}/breaks/end": ["POST"],
+  "/time-clock/{entryId}/breaks/start": ["POST"],
+  "/time-clock/{entryId}/clock-out": ["POST"],
+  "/time-clock/{entryId}/reject": ["POST"],
+  "/time-clock/bulk-clock-in": ["POST"],
+  "/time-clock/overtime-summary": ["GET"],
+  "/todos": ["GET","POST"],
+  "/todos/{todoId}/status": ["POST"],
+  "/todos/checklist-items/{checklistItemId}": ["POST"],
+  "/vendor-portal/bid-packages": ["GET"],
+  "/vendor-portal/bid-submissions/{bidSubmissionId}/submit": ["POST"],
+  "/vendor-portal/jobs": ["GET"],
+  "/vendor-portal/jobs/{jobId}/bills": ["GET","POST"],
+  "/vendor-portal/jobs/{jobId}/documents": ["GET"],
+  "/vendor-portal/jobs/{jobId}/purchase-orders": ["GET"],
+  "/vendor-portal/jobs/{jobId}/schedule": ["GET"],
+  "/vendor-portal/login": ["POST"],
+  "/vendor-portal/purchase-orders/{purchaseOrderId}/accept": ["POST"],
+  "/vendor-portal/warranty-claims/{claimId}/accept-trade": ["POST"],
+  "/vendors": ["GET","POST"],
+  "/vendors/{vendorId}/certifications": ["GET","POST"],
+  "/vendors/{vendorId}/job-access": ["POST"],
+  "/vendors/{vendorId}/portal-invite": ["POST"],
+  "/warranty-claims": ["GET","POST"],
+  "/warranty-claims/{claimId}/client-approval-link": ["POST"],
+  "/warranty-claims/{claimId}/schedule": ["POST"],
+  "/warranty-claims/{claimId}/trade-approval-link": ["POST"],
+  "/webhooks": ["GET","POST"],
+  "/weekly-summaries": ["GET","POST"],
+};
+
+/** Paths under /api/v1 that exist but are intentionally absent from OpenAPI ENDPOINTS. */
+export const API_V1_UNDOCUMENTED_PATHS: Readonly<Record<string, readonly string[]>> = {
+  "/openapi.json": ["GET"],
+  "/webhooks/stripe": ["POST"],
+  "/webhooks/quickbooks": ["POST"],
+  "/webhooks/process": ["POST"],
+  "/workers/proposal-drafts": ["POST"],
+};
+
+const ALL_ROUTES: Readonly<Record<string, readonly string[]>> = {
+  ...API_V1_ROUTE_METHODS,
+  ...API_V1_UNDOCUMENTED_PATHS,
+};
+
+function escapeRegexLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function templateToRegex(template: string): RegExp {
+  const parts = template.split("/").map((seg) =>
+    seg.startsWith("{") && seg.endsWith("}") ? "[^/]+" : escapeRegexLiteral(seg),
+  );
+  return new RegExp(`^${parts.join("/")}$`);
+}
+
+const COMPILED: readonly { regex: RegExp; methods: readonly string[]; template: string }[] = Object.entries(ALL_ROUTES).map(
+  ([template, methods]) => ({ template, methods, regex: templateToRegex(template) }),
+);
+
+export type ApiV1RouteMatch =
+  | { readonly kind: "matched"; readonly template: string; readonly methods: readonly string[] }
+  | { readonly kind: "not_found" };
+
+/** Match a path relative to /api/v1 (e.g. "/jobs/abc"). */
+export function matchApiV1Route(apiRelativePath: string): ApiV1RouteMatch {
+  const path = apiRelativePath.startsWith("/") ? apiRelativePath : `/${apiRelativePath}`;
+  for (const route of COMPILED) {
+    if (route.regex.test(path)) return { kind: "matched", template: route.template, methods: route.methods };
+  }
+  return { kind: "not_found" };
+}

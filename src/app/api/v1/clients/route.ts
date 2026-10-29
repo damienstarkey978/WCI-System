@@ -1,13 +1,18 @@
 /** /api/v1/clients — create/list Client Portal contacts. */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { createClientSchema, formatZodIssues } from "@/lib/api-schemas";
+import { createClientSchema, formatZodIssues, listClientsQuerySchema } from "@/lib/api-schemas";
+import { toCursorPage } from "@/lib/api-pagination";
 import { createClient } from "@/lib/client-portal/service";
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 
 export const GET = withApiAuth(["clients:read"], async (request, auth) => {
-  const jobId = new URL(request.url).searchParams.get("jobId");
+  const parsed = listClientsQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+  if (!parsed.success) {
+    return apiError(400, "invalid_query", "Invalid query parameters.", formatZodIssues(parsed.error));
+  }
+  const { jobId, limit, cursor } = parsed.data;
 
   const clients = await db.client.findMany({
     where: {
@@ -15,11 +20,12 @@ export const GET = withApiAuth(["clients:read"], async (request, auth) => {
       ...(jobId ? { jobAccess: { some: { jobId } } } : {}),
     },
     orderBy: { createdAt: "desc" },
-    take: 200,
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     include: { jobAccess: true },
   });
 
-  return Response.json({ data: clients });
+  return Response.json(toCursorPage(clients, limit));
 });
 
 export const POST = withApiAuth(["clients:write"], async (request, auth) => {
