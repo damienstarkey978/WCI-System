@@ -44,7 +44,18 @@ async function main() {
     orderBy: { name: "asc" },
   });
 
-  const summary: any[] = [];
+  type RepairSummary = {
+    name: string;
+    actions: string[];
+    btCount: number;
+    wciCount?: number;
+    created?: number;
+    updated?: number;
+    isOnline?: boolean;
+    wantOnline?: boolean | null;
+    actionCount?: number;
+  };
+  const summary: RepairSummary[] = [];
 
   for (const job of jobs) {
     const offlineKey = Object.keys(bt.offline).find(
@@ -118,7 +129,7 @@ async function main() {
       const refTag = `[BT ref: ${b.id}]`;
       const title = b.title.replace(/\s+$/, ""); // store trimmed; BT trailing space is noise
 
-      let existing =
+      const existing =
         sched.items.find((i) => i.notesInternal?.includes(refTag)) ||
         sched.items.find(
           (i) =>
@@ -154,7 +165,15 @@ async function main() {
         created++;
         actions.push(`+ ${title} @ ${b.start}`);
       } else {
-        const patch: any = {};
+        const patch: {
+          title?: string;
+          durationDays?: number;
+          manualStartDate?: Date;
+          percentCompleteBasisPoints?: number;
+          clientVisible?: boolean;
+          sortOrder?: number;
+          notesInternal?: string;
+        } = {};
         if (existing.title !== title) patch.title = title;
         if (existing.durationDays !== b.duration)
           patch.durationDays = b.duration;

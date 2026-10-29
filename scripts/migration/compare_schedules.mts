@@ -76,9 +76,13 @@ async function main() {
       "/cursor/stores/bc-01a17807-bb2b-7977-80c5-3491017e6440/docs/bt-exports/Schedule_AllOpenJobs.json",
       "utf8",
     ),
-  );
+  ) as {
+    jobs?: Array<{ name?: string; calendarOffline?: boolean }>;
+  };
   const offlineByName = new Map<string, boolean>(
-    (json.jobs || []).map((j: any) => [j.name as string, !!j.calendarOffline]),
+    (json.jobs || [])
+      .filter((j): j is { name: string; calendarOffline?: boolean } => !!j.name)
+      .map((j) => [j.name, !!j.calendarOffline]),
   );
 
   const btByJob = new Map<string, Record<string, string>[]>();
@@ -120,7 +124,15 @@ async function main() {
       include: { items: true },
     });
     const wciItems = sched?.items || [];
-    const mismatches: any[] = [];
+    type Mismatch = {
+      type: string;
+      title: string;
+      start?: string | null;
+      dur?: number;
+      bt?: string | number;
+      wci?: string | number | null;
+    };
+    const mismatches: Mismatch[] = [];
     for (const b of items) {
       const title = b.Title;
       const start = (b.StartDate || "").slice(0, 10);
