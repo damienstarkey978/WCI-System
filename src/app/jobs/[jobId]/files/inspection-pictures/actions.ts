@@ -2,10 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 
+import { PermitTrade } from "@/generated/prisma/enums";
 import { appBaseUrl } from "@/lib/app-url";
 import { requireAppUser } from "@/lib/auth";
 import { JobNotFoundError, purgeFile, trashFile, uploadAndRegisterFile } from "@/lib/files/service";
-import { issueInspectionPictureShareLink } from "@/lib/permitting/inspection-pictures";
+import {
+  createInspectionPictureFolder,
+  InspectionFolderNameRequiredError,
+  issueInspectionPictureShareLink,
+} from "@/lib/permitting/inspection-pictures";
 import { InspectionNotFoundError } from "@/lib/permitting/service";
 import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
 
@@ -13,6 +18,7 @@ export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
   readonly uploaded?: number;
+  readonly folderId?: string;
 }
 
 export interface ShareLinkActionState {
@@ -25,6 +31,37 @@ function revalidate(jobId: string, folderId?: string) {
   revalidatePath(`/jobs/${jobId}/files/inspection-pictures`);
   if (folderId) revalidatePath(`/jobs/${jobId}/files/inspection-pictures/${folderId}`);
   revalidatePath(`/jobs/${jobId}/files`);
+  revalidatePath(`/jobs/${jobId}/permitting`);
+}
+
+const PERMIT_TRADES = new Set<string>(Object.values(PermitTrade));
+
+export async function createInspectionFolderAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const name = String(formData.get("name") ?? "");
+  const tradeRaw = String(formData.get("trade") ?? "").trim();
+  const trade = tradeRaw && PERMIT_TRADES.has(tradeRaw) ? (tradeRaw as PermitTrade) : undefined;
+  if (!jobId) return { error: "Job is required." };
+
+  try {
+    const folder = await createInspectionPictureFolder({
+      organizationId: user.organizationId,
+      jobId,
+      name,
+      trade,
+    });
+    revalidate(jobId, folder.folderId);
+    return { ok: true, folderId: folder.folderId };
+  } catch (error) {
+    if (error instanceof InspectionFolderNameRequiredError || error instanceof JobNotFoundError) {
+      return { error: error.message };
+    }
+    return { error: error instanceof Error ? error.message : "Could not create inspection folder." };
+  }
 }
 
 export async function issueInspectionShareLinkAction(

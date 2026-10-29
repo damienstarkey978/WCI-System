@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { tradeLabel } from "@/lib/permitting/service";
 import { listInspectionPictureFolders } from "@/lib/permitting/inspection-pictures";
 
+import { CreateInspectionFolderForm } from "./create-folder-form";
 import { InspectionShareLinkButton } from "./share-link-button";
 
 export const dynamic = "force-dynamic";
@@ -43,27 +44,20 @@ export default async function InspectionPicturesPage({
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 sm:p-6">
       <PageHeader jobName={job.name} title="Inspection Pictures" />
       <p className="-mt-2 text-sm text-[var(--bt-muted)]">
-        Folders for inspections required on this job only. Add or remove inspections on{" "}
+        Folders use city inspection names for this job. Create one below, or manage permits/inspections on{" "}
         <Link href={`/jobs/${job.id}/permitting`} className="font-medium text-[var(--bt-primary)] hover:underline">
           Permitting
         </Link>
         . Copy each folder’s share link and text it to the inspector yourself (no login).
       </p>
 
+      <CreateInspectionFolderForm jobId={job.id} />
+
       {folders.length === 0 ? (
         <EmptyState
           icon={<PhotoIcon className="h-10 w-10" />}
           title="No inspection folders yet"
-          description="Add the inspections this job needs on Permitting — folders appear here automatically."
-          action={
-            <Link
-              href={`/jobs/${job.id}/permitting`}
-              className="rounded px-3 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
-              style={{ background: "var(--bt-primary)" }}
-            >
-              Open Permitting
-            </Link>
-          }
+          description="Create a folder with the city inspection name above, or add inspections on Permitting — folders appear here automatically."
         />
       ) : (
         <ul className="grid gap-3">
