@@ -73,17 +73,28 @@ function matchKey(title: string, costCode: string, qty: number, unitCostCents: n
   return `${costCode}||${title}||${qty}||${unitCostCents}`;
 }
 
+type XlsTotals = ReturnType<typeof xlsTotals>;
+
+type ScanFinding = XlsTotals & {
+  folder: string;
+  wciId: string | null | undefined;
+  estimateId: string | null;
+  wciPrice: number | null;
+  wciCost: number | null;
+  ratio: number | null;
+  inflated: boolean;
+};
+
+type RepairResult = Awaited<ReturnType<typeof repairJob>> & { folder: string };
+
 async function scanAll() {
-  const findings: any[] = [];
+  const findings: ScanFinding[] = [];
   for (const folder of readdirSync(PROPOSALS)) {
     const xls = join(PROPOSALS, folder, "ProposalReport.xls");
     if (!existsSync(xls)) continue;
     const rows = readXls(xls);
     const tot = xlsTotals(rows);
-    const map =
-      JOB_MAP.find((j) => (j.slug || "").includes(folder.slice(0, 20)) || folder.includes((j.slug || "").slice(0, 20))) ||
-      JOB_MAP.find((j) => folder.startsWith(j.btName?.toLowerCase?.()?.slice?.(0, 8) || "___"));
-    // better: match by folder name against map btName slugified
+    // Match by folder name against map btName slugified
     const slug = folder;
     const mapped = JOB_MAP.find((j) => {
       const s = (j.btName || "")
@@ -297,7 +308,7 @@ async function main() {
   const inflated = findings.filter((f) => f.inflated && f.wciId && f.estimateId);
   console.log("\nInflated jobs to repair:", inflated.map((f) => f.folder));
 
-  const results: any[] = [];
+  const results: RepairResult[] = [];
   for (const f of inflated) {
     const r = await repairJob(f.folder, f.wciId!, f.estimateId!, false);
     results.push({ folder: f.folder, ...r });
