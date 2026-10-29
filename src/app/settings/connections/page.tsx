@@ -2,6 +2,7 @@ import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
 import { listConnections } from "@/lib/oauth/connections";
+import { MCP_GRANTABLE_SCOPES } from "@/lib/oauth/service";
 
 import { disconnectApplication } from "./actions";
 
@@ -10,12 +11,22 @@ export const dynamic = "force-dynamic";
 /** The same plain-language wording the consent screen used, so the two agree. */
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
   "jobs:read": "read jobs",
+  "jobs:write": "write jobs",
   "cost-codes:read": "read cost codes",
   "reports:read": "read financial reports",
   "leads:read": "read leads",
+  "leads:write": "write leads",
   "proposals:read": "read proposals",
   "proposals:write": "draft proposals",
+  "files:read": "read files/photos",
+  "files:write": "write files/photos",
+  "bills:read": "read bills",
+  "bills:write": "write bills",
+  "invoices:read": "read invoices",
+  "invoices:write": "write invoices",
 };
+
+const FULL_ACCESS_LABEL = "full WCI OS API access (files, financials, jobs, …)";
 
 /**
  * Connected applications — Claude, ChatGPT, or anything else someone has authorized
@@ -36,8 +47,8 @@ export default async function ConnectionsSettingsPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">Connected applications</h1>
         <p className="text-sm text-[var(--bt-muted)]">
-          Assistants connected to WCI OS — Claude, ChatGPT, or anything else someone has authorized. Each acts as the
-          person who connected it, and can draft proposals but never send one to a client.
+          Assistants connected to WCI OS — Claude, ChatGPT, Heather MCP, or anything else someone has authorized. Each
+          acts as the person who connected it, with the API scopes granted at connect time (full catalog by default).
         </p>
       </div>
 
@@ -84,7 +95,9 @@ export default async function ConnectionsSettingsPage() {
                       {mine ? <span className="ml-1 text-xs text-[var(--bt-muted)]">(you)</span> : null}
                     </td>
                     <td className="px-4 py-3 text-xs text-[var(--bt-muted)]">
-                      {connection.scopes.map((scope) => SCOPE_DESCRIPTIONS[scope] ?? scope).join(", ")}
+                      {connection.scopes.length >= MCP_GRANTABLE_SCOPES.length
+                        ? FULL_ACCESS_LABEL
+                        : connection.scopes.map((scope) => SCOPE_DESCRIPTIONS[scope] ?? scope).join(", ")}
                     </td>
                     <td className="px-4 py-3 text-[var(--bt-muted)]">{formatDate(connection.connectedAt)}</td>
                     <td className="px-4 py-3 text-[var(--bt-muted)]">

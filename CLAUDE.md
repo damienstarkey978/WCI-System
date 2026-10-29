@@ -395,14 +395,14 @@ build Phase 4 on an unvalidated Phase 1.
 
 | Key name | Agent | Scope |
 |---|---|---|
-| jarvis | Orchestrator | Read-heavy, cross-module, all webhook subscriptions |
-| heather | Office manager | All module reads + staff-bot writes (logs/files/permits/schedule/todos/comments/notifications/clients/vendors/RFIs/COs/selections/leads/proposals/bills/POs/invoices/takeoffs/events) — not `*` / migration / cost-codes:write |
-| atlas | Marks (progress/accountability) | All reads + targeted writes (schedule, todos, comments, notifications, daily logs, permits, events) |
-| roy | Garry (financials) | Budgets/reports read, POs/bills/invoices R/W, vendors, files, events |
-| duke | Purchasing | Purchase Orders, Bills, unmatched-transaction webhook (Phase 1) |
-| hank | PM | Project management module (Phase 2 onward); Specifications/Submittals/Warranty/Surveys (Phase 6); permits |
-| vince | Sales | Leads/Opportunities/Proposals (Phase 5) |
-| neil | Estimator | Estimates (Phase 5, though Estimate itself ships in Phase 1) |
+| jarvis | Orchestrator | `*` — full `/api/v1` catalog (Damien 2026-10-29) |
+| heather | Office manager | `*` — full catalog including files/photos/docs |
+| atlas | Marks (progress/accountability) | `*` — full catalog |
+| roy | Garry (financials) | `*` — full catalog |
+| duke | Purchasing | `*` — full catalog |
+| hank | PM | `*` — full catalog |
+| vince | Sales | `*` — full catalog |
+| neil | Estimator | `*` — full catalog |
 
 Default scopes live in `src/lib/api-scopes.ts` (`AGENT_DEFAULT_SCOPES`). Issue with
 `npm run issue-api-key -- --name <agent>`. MCP (`/api/mcp`) uses the same keys and
@@ -705,9 +705,7 @@ Record every architectural decision that departs from the above, with the reason
   the source of truth with scoped `ApiKey`s; `/api/mcp` authenticates with the same
   keys and exposes `api_v1_request` plus convenience tools that call the same services
   the routes use — no parallel authorization or write path. Agent kinds `ATLAS` and
-  `ROY` join the enum; Heather's default scopes are all module reads plus staff-bot
-  writes (financials/CRM/PM/portal) without `*` / migration:write / cost-codes:write.
-  Decision brief: project store `docs/agent-access-atlas-roy-heather.md`.
+  `ROY` join the enum. Decision brief: project store `docs/agent-access-atlas-roy-heather.md`.
   `GET /api/v1/me` returns the key's scopes; permit shell seeding is
   `POST /jobs/{id}/permits/ensure-defaults` (never a side effect of list/read).
 - **AI takeoffs + job Purchasing page (purchasing handoff):** `Takeoff` /
@@ -718,3 +716,15 @@ Record every architectural decision that departs from the above, with the reason
   (`sourceType=TAKEOFF`). Job PM nav adds Takeoffs + Purchasing; Purchasing rolls
   up takeoff lines + existing PO statuses (purchased vs not-yet) rather than a
   parallel AP module. Duke scopes include `takeoffs:read`/`takeoffs:write`.
+- **Bot full API access + MCP OAuth→`/api/v1` (2026-10-29):** Damien required every
+  roster agent (Heather/Atlas/Roy/Jarvis/Duke/Hank/Vince/Neil) to reach every data
+  point — files/photos/docs included — so `AGENT_DEFAULT_SCOPES` is now `*` for all.
+  Root cause of Heather's "A valid API key is required" on general MCP calls: Cursor
+  reconnects `wci-os-heather` via OAuth (`wcia_*`); convenience tools used the
+  authenticated MCP context, but `api_v1_request` forwarded that bearer to `/api/v1`,
+  which only accepted `wci_*` API keys. `withApiAuth` now uses
+  `authenticateMachineRequest` (API key or OAuth). `MCP_GRANTABLE_SCOPES` is the full
+  catalog minus `migration:write`, and `authenticateOAuthAccessToken` returns that
+  live allowlist so already-connected assistants unlock files after deploy without
+  re-consent. Brief: project store `docs/bot-full-api-access.md` /
+  `docs/heather-api-key-auth-fix.md`.

@@ -49,7 +49,12 @@ const registered = await registerClient({
 });
 check("a client can register itself", registered.clientId.length > 0);
 check("a public client gets no secret to leak", registered.clientSecret === null);
-check("it is granted only MCP scopes", registered.scopes.every((scope) => !scope.endsWith(":write") || scope === "proposals:write"));
+check(
+  "it is granted MCP-catalog scopes (full API minus migration:write)",
+  registered.scopes.includes("files:read") &&
+    registered.scopes.includes("proposals:write") &&
+    !registered.scopes.includes("migration:write"),
+);
 
 await refuses("an http redirect is refused", () => registerClient({ clientName: "x", redirectUris: ["http://evil.test/cb"] }), "invalid_redirect_uri");
 await refuses("a redirect with a fragment is refused", () => registerClient({ clientName: "x", redirectUris: ["https://ok.test/cb#frag"] }), "invalid_redirect_uri");
@@ -116,7 +121,12 @@ const context = await authenticateOAuthAccessToken(tokens.accessToken);
 check("the access token resolves", context !== null);
 check("to the right organization", context?.organizationId === org.id);
 check("and to the person who approved it", context?.userId === user.id);
-check("carrying only the granted scopes", JSON.stringify(context?.scopes.slice().sort()) === JSON.stringify(["leads:read", "proposals:write"]));
+// authenticateOAuthAccessToken returns the live MCP allowlist (not the frozen grant
+// row) so expanding MCP_GRANTABLE_SCOPES unblocks already-connected assistants.
+check(
+  "carrying the live MCP allowlist (includes files + granted subset)",
+  Boolean(context?.scopes.includes("files:read") && context?.scopes.includes("leads:read") && context?.scopes.includes("proposals:write")),
+);
 check("a made-up token resolves to nothing", (await authenticateOAuthAccessToken("wcia_deadbeef_nope")) === null);
 
 // 6. Refresh, and rotation.

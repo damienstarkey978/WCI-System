@@ -1,10 +1,13 @@
 /**
  * Scopes for the machine-facing API (CLAUDE.md 2.4, 2.5).
  *
- * Agent keys are scoped to their domain, not to admin-everything: Duke's key writes
- * purchase orders and bills, Heather's writes daily logs and files, Jarvis reads broadly.
- * Scopes named here for later phases are intentional — they are the contract those
- * phases will implement against, and issuing a key is a config change, not a code change.
+ * Historical design scoped each agent to its domain (Duke = purchasing, Heather =
+ * office ops, Jarvis = read-heavy). Damien 2026-10-29: every bot needs direct API
+ * access to every data point (files/photos/docs/financials/logs/schedule/…) — so
+ * `AGENT_DEFAULT_SCOPES` now grants `*` for the whole roster. Narrow module lists
+ * remain available via explicit `--scopes` on `issue-api-key` when a key must stay
+ * constrained. Scopes named here for later phases are still the contract those
+ * phases implement against.
  */
 
 export const SCOPES = [
@@ -113,135 +116,26 @@ export function missingScopes(granted: readonly string[], required: readonly Sco
   return required.filter((scope) => !grantsScope(granted, scope));
 }
 
-/** Read scopes for every resource — the basis of Jarvis's read-heavy orchestrator key. */
-const ALL_READ_SCOPES: readonly Scope[] = SCOPES.filter((scope) => scope.endsWith(":read"));
+/**
+ * Full-catalog grant for agent keys (`*` → every Scope via grantsScope).
+ * Kept as a shared constant so issue-api-key / OpenAPI / tests stay in sync.
+ */
+export const AGENT_FULL_ACCESS_SCOPES: readonly string[] = ["*"];
 
 /**
  * The default scope set for each agent in the roster (CLAUDE.md section 6).
  * Used by `npm run issue-api-key` so a key's scopes match the documented intent.
  *
- * Atlas / Roy / expanded Heather: see docs/agent-access-atlas-roy-heather.md in the
- * project store. Do not weaken duke/jarvis/hank/vince/neil when extending this map.
+ * 2026-10-29: every roster agent defaults to `*` (full `/api/v1` catalog including
+ * files/photos/docs). Pass `--scopes` explicitly to mint a narrower key.
  */
-export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly Scope[]>> = {
-  jarvis: [...ALL_READ_SCOPES, "webhooks:write", "events:write"],
-  duke: [
-    "jobs:read",
-    "cost-codes:read",
-    "purchase-orders:read",
-    "purchase-orders:write",
-    "bills:read",
-    "bills:write",
-    "budgets:read",
-    "takeoffs:read",
-    "takeoffs:write",
-    "webhooks:read",
-    "events:write",
-    "vendors:read",
-    "vendors:write",
-    "bids:read",
-    "bids:write",
-  ],
-  // Office manager / staff bot: every module readable (Atlas-style ALL_READ) plus
-  // the writes Heather needs to run day-to-day ops — financials, CRM, PM, and
-  // portal parties — without `*` / migration:write / cost-codes:write.
-  heather: [
-    ...ALL_READ_SCOPES,
-    "jobs:write",
-    "daily-logs:write",
-    "files:write",
-    "permits:write",
-    "schedule:write",
-    "todos:write",
-    "comments:write",
-    "notifications:write",
-    "clients:write",
-    "vendors:write",
-    "rfis:write",
-    "change-orders:write",
-    "selections:write",
-    "leads:write",
-    "proposals:write",
-    "bills:write",
-    "purchase-orders:write",
-    "invoices:write",
-    "takeoffs:write",
-    "events:write",
-  ],
-  atlas: [
-    ...ALL_READ_SCOPES,
-    "schedule:write",
-    "todos:write",
-    "comments:write",
-    "notifications:write",
-    "daily-logs:write",
-    "permits:write",
-    "events:write",
-  ],
-  roy: [
-    "jobs:read",
-    "cost-codes:read",
-    "budgets:read",
-    "reports:read",
-    "estimates:read",
-    "purchase-orders:read",
-    "purchase-orders:write",
-    "bills:read",
-    "bills:write",
-    "invoices:read",
-    "invoices:write",
-    "change-orders:read",
-    "time-clock:read",
-    "vendors:read",
-    "vendors:write",
-    "files:read",
-    "files:write",
-    "webhooks:read",
-    "events:write",
-  ],
-  hank: [
-    "jobs:read",
-    "jobs:write",
-    "schedule:read",
-    "schedule:write",
-    "daily-logs:read",
-    "daily-logs:write",
-    "todos:read",
-    "todos:write",
-    "rfis:read",
-    "rfis:write",
-    "change-orders:read",
-    "change-orders:write",
-    "comments:read",
-    "comments:write",
-    "clients:read",
-    "selections:read",
-    "selections:write",
-    "vendors:read",
-    "bids:read",
-    "permits:read",
-    "permits:write",
-    "specifications:read",
-    "specifications:write",
-    "submittals:read",
-    "submittals:write",
-    "warranty:read",
-    "warranty:write",
-    "surveys:read",
-    "surveys:write",
-    "weekly-summaries:read",
-    "weekly-summaries:write",
-    "takeoffs:read",
-    "takeoffs:write",
-  ],
-  vince: ["jobs:read", "jobs:write", "leads:read", "leads:write", "proposals:read", "proposals:write"],
-  neil: [
-    "jobs:read",
-    "cost-codes:read",
-    "estimates:read",
-    "estimates:write",
-    "budgets:read",
-    "takeoffs:read",
-    "takeoffs:write",
-  ],
+export const AGENT_DEFAULT_SCOPES: Readonly<Record<string, readonly string[]>> = {
+  jarvis: AGENT_FULL_ACCESS_SCOPES,
+  duke: AGENT_FULL_ACCESS_SCOPES,
+  heather: AGENT_FULL_ACCESS_SCOPES,
+  atlas: AGENT_FULL_ACCESS_SCOPES,
+  roy: AGENT_FULL_ACCESS_SCOPES,
+  hank: AGENT_FULL_ACCESS_SCOPES,
+  vince: AGENT_FULL_ACCESS_SCOPES,
+  neil: AGENT_FULL_ACCESS_SCOPES,
 };

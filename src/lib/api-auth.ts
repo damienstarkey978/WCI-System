@@ -5,7 +5,13 @@
  * a user session, and a browser session never authenticates an API call. The two paths
  * share no code beyond the database.
  *
- * Token format: `wci_<tokenId>_<secret>`
+ * Accepted credentials:
+ *   - API key `wci_<tokenId>_<secret>` — primary machine credential for agents / MCP.
+ *   - OAuth access token `wcia_<tokenId>_<secret>` — same tokens `/api/mcp` already
+ *     accepts. MCP's `api_v1_request` forwards the caller's bearer to `/api/v1`; without
+ *     OAuth here, an OAuth-connected assistant gets working convenience tools but 401s
+ *     on every proxied REST call ("A valid API key is required").
+ *
  *   - tokenId  — public, indexed, safe to display and log
  *   - secret   — shown exactly once at issue time; only its SHA-256 is stored
  */
@@ -13,6 +19,7 @@
 import type { AgentKind } from "@/generated/prisma/enums";
 import { grantsAllScopes, missingScopes, type Scope } from "@/lib/api-scopes";
 import { db } from "@/lib/db";
+import { authenticateOAuthAccessToken } from "@/lib/oauth/service";
 import {
   generateSecureToken,
   hashSecret,
@@ -74,8 +81,11 @@ export type AuthResult =
   | { readonly ok: false; readonly reason: AuthFailureReason };
 
 /**
- * Authenticate a request's API key. Every failure mode returns the same 401 to the
- * caller — the specific reason is for our logs, not for an attacker probing tokens.
+ * Authenticate a request's API key only (`wci_*`). Prefer `authenticateMachineRequest`
+ * at the `/api/v1` boundary so OAuth-connected MCP clients are not rejected.
+ *
+ * Every failure mode returns the same 401 to the caller — the specific reason is for
+ * our logs, not for an attacker probing tokens.
  */
 export async function authenticateApiKey(request: Request): Promise<AuthResult> {
   const token = extractToken(request);
@@ -110,6 +120,39 @@ export async function authenticateApiKey(request: Request): Promise<AuthResult> 
       scopes: apiKey.scopes,
     },
   };
+}
+
+/**
+ * Authenticate a machine caller the same way `/api/mcp` does: API key first, then
+ * OAuth access token. Both resolve to `ApiKeyContext` so route handlers stay identical.
+ */
+export async function authenticateMachineRequest(request: Request): Promise<AuthResult> {
+  const token = extractToken(request);
+  if (!token) return { ok: false, reason: "MISSING_TOKEN" };
+
+  // API keys are the agent/MCP default. Try them before OAuth so a malformed `wci_*`
+  // never silently falls through to a different credential family.
+  if (parseApiKeyToken(token)) {
+    return authenticateApiKey(request);
+  }
+
+  const oauth = await authenticateOAuthAccessToken(token);
+  if (oauth) {
+    return {
+      ok: true,
+      context: {
+        // OAuth access-token id fills the audit slot ApiKeyContext expects; there is
+        // no ApiKey row for a person-approved connector (same mapping as /api/mcp).
+        apiKeyId: oauth.accessTokenId,
+        organizationId: oauth.organizationId,
+        name: oauth.clientName,
+        agentKind: null,
+        scopes: oauth.scopes,
+      },
+    };
+  }
+
+  return { ok: false, reason: "MALFORMED_TOKEN" };
 }
 
 export interface ApiErrorBody {
@@ -176,7 +219,7 @@ export function withApiAuth<Context = unknown>(
   handler: ApiHandler<Context>,
 ): (request: Request, context: Context) => Promise<Response> {
   return async (request: Request, context: Context): Promise<Response> => {
-    const auth = await authenticateApiKey(request);
+    const auth = await authenticateMachineRequest(request);
     if (!auth.ok) {
       return unauthorized();
     }

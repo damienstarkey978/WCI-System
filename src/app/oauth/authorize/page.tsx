@@ -16,7 +16,7 @@ import { redirect } from "next/navigation";
 
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { OAuthError, validateAuthorizationRequest } from "@/lib/oauth/service";
+import { OAuthError, MCP_GRANTABLE_SCOPES, validateAuthorizationRequest } from "@/lib/oauth/service";
 import type { Scope } from "@/lib/api-scopes";
 
 import { approveAuthorization, denyAuthorization } from "./actions";
@@ -26,12 +26,30 @@ export const dynamic = "force-dynamic";
 /** Plain-language descriptions. A scope name means nothing to the person approving it. */
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
   "jobs:read": "See your jobs and their addresses, status, and contract type",
+  "jobs:write": "Create and update jobs",
   "cost-codes:read": "See your cost code catalog",
+  "cost-codes:write": "Create and update cost codes",
   "reports:read": "See your financial reports — profitability, WIP, cash flow, and the daily brief",
   "leads:read": "See your sales leads and their contact details",
+  "leads:write": "Create and update sales leads",
   "proposals:read": "See your proposals and what they are priced at",
-  "proposals:write": "Draft new proposals — as drafts only; it can never send one to a client",
+  "proposals:write": "Draft and update proposals",
+  "files:read": "See job files, photos, and documents",
+  "files:write": "Upload and update job files, photos, and documents",
+  "daily-logs:read": "See daily logs",
+  "daily-logs:write": "Create and update daily logs",
+  "bills:read": "See bills and AP",
+  "bills:write": "Create and update bills",
+  "invoices:read": "See invoices",
+  "invoices:write": "Create and update invoices",
+  "purchase-orders:read": "See purchase orders",
+  "purchase-orders:write": "Create and update purchase orders",
+  "schedule:read": "See the job schedule",
+  "schedule:write": "Create and update schedule items",
 };
+
+const FULL_ACCESS_SUMMARY =
+  "Read and write every WCI OS data point this organization exposes over the API — jobs, files/photos/documents, financials, schedule, logs, CRM, permitting, and the rest of the catalog (historical migration tools excluded).";
 
 interface PageProps {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -146,17 +164,21 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
           </span>
         </div>
         <ul className="space-y-2 px-4 py-3">
-          {grantedScopes.map((scope) => (
-            <li key={scope} className="text-sm text-[var(--bt-text)]">
-              {SCOPE_DESCRIPTIONS[scope] ?? scope}
-            </li>
-          ))}
+          {grantedScopes.length >= MCP_GRANTABLE_SCOPES.length ? (
+            <li className="text-sm text-[var(--bt-text)]">{FULL_ACCESS_SUMMARY}</li>
+          ) : (
+            grantedScopes.map((scope) => (
+              <li key={scope} className="text-sm text-[var(--bt-text)]">
+                {SCOPE_DESCRIPTIONS[scope] ?? scope}
+              </li>
+            ))
+          )}
         </ul>
       </div>
 
       <p className="text-sm text-[var(--bt-muted)]">
-        It cannot send anything to a client, move money, or change a job. You can disconnect it at any time under
-        Settings → Connected applications.
+        It acts with the scopes above through the agent API — including files/photos and financial records when those
+        scopes are granted. You can disconnect it at any time under Settings → Connected applications.
       </p>
 
       <div className="flex gap-3">
