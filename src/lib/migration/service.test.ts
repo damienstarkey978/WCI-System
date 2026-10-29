@@ -20,6 +20,12 @@ const {
   userFindFirst,
   vendorFindFirst,
   costCodeFindMany,
+  clientFindFirst,
+  estimateFindFirst,
+  estimateCreate,
+  proposalFindFirst,
+  proposalCreate,
+  sendEstimateToBudget,
 } = vi.hoisted(() => ({
   dailyLogFindFirst: vi.fn(),
   dailyLogCreate: vi.fn(),
@@ -40,6 +46,12 @@ const {
   userFindFirst: vi.fn(),
   vendorFindFirst: vi.fn(),
   costCodeFindMany: vi.fn(),
+  clientFindFirst: vi.fn(),
+  estimateFindFirst: vi.fn(),
+  estimateCreate: vi.fn(),
+  proposalFindFirst: vi.fn(),
+  proposalCreate: vi.fn(),
+  sendEstimateToBudget: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -48,6 +60,9 @@ vi.mock("@/lib/db", () => ({
     user: { findFirst: userFindFirst },
     vendor: { findFirst: vendorFindFirst },
     costCode: { findMany: costCodeFindMany },
+    client: { findFirst: clientFindFirst },
+    estimate: { findFirst: estimateFindFirst, create: estimateCreate },
+    proposal: { findFirst: proposalFindFirst, create: proposalCreate },
     dailyLog: { findFirst: dailyLogFindFirst, create: dailyLogCreate },
     purchaseOrder: { findFirst: purchaseOrderFindFirst, create: purchaseOrderCreate },
     bill: { findFirst: billFindFirst, create: billCreate },
@@ -62,7 +77,12 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+vi.mock("@/lib/budget/send-to-budget", () => ({
+  sendEstimateToBudget: sendEstimateToBudget,
+}));
+
 import {
+  importApprovedProposal,
   importDailyLog,
   importInvoice,
   importPurchaseOrder,
@@ -75,6 +95,8 @@ beforeEach(() => {
   userFindFirst.mockResolvedValue({ id: "user_1" });
   vendorFindFirst.mockResolvedValue({ id: "vendor_1" });
   costCodeFindMany.mockResolvedValue([{ id: "cc_1", defaultCostType: "MATERIAL" }]);
+  clientFindFirst.mockResolvedValue({ id: "cli_1" });
+  sendEstimateToBudget.mockResolvedValue({ budgetLinesWritten: 1 });
 });
 
 describe("migration import idempotency", () => {
@@ -227,5 +249,38 @@ describe("migration import idempotency", () => {
     expect(scheduleCreate).toHaveBeenCalledOnce();
     expect(result.created).toBe(false);
     expect(scheduleItemCreate).not.toHaveBeenCalled();
+  });
+
+  it("skips recreating an approved proposal with the same bt-proposal external key", async () => {
+    estimateFindFirst.mockResolvedValue({
+      id: "est_1",
+      aiPromptNotes: "bt-proposal:pine-st",
+      lineItems: [],
+    });
+    proposalFindFirst.mockResolvedValue({ id: "prop_1" });
+
+    const result = await importApprovedProposal({
+      organizationId: "org_1",
+      jobId: "job_1",
+      clientId: "cli_1",
+      title: "Proposal for Pine St",
+      externalKey: "pine-st",
+      lineItems: [
+        {
+          costCodeId: "cc_1",
+          title: "Plans",
+          quantityMilli: 1000,
+          unitCostCents: 350000,
+          markupBasisPoints: 2100,
+        },
+      ],
+    });
+
+    expect(result.created).toBe(false);
+    expect(result.estimateId).toBe("est_1");
+    expect(result.proposalId).toBe("prop_1");
+    expect(estimateCreate).not.toHaveBeenCalled();
+    expect(proposalCreate).not.toHaveBeenCalled();
+    expect(sendEstimateToBudget).not.toHaveBeenCalled();
   });
 });

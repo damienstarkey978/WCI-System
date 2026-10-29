@@ -50,7 +50,10 @@ import type {
   PaymentMethod,
   PurchaseOrderStatus,
 } from "@/generated/prisma/enums";
+import { EstimateStatus, ProposalStatus, RateMode } from "@/generated/prisma/enums";
+import { sendEstimateToBudget } from "@/lib/budget/send-to-budget";
 import { db } from "@/lib/db";
+import type { BasisPoints, Cents } from "@/lib/money";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -77,6 +80,13 @@ export class UnknownVendorError extends Error {
   constructor(vendorId: string) {
     super(`No vendor ${vendorId} in this organization.`);
     this.name = "UnknownVendorError";
+  }
+}
+
+export class UnknownClientError extends Error {
+  constructor(clientId: string) {
+    super(`No client ${clientId} in this organization.`);
+    this.name = "UnknownClientError";
   }
 }
 
@@ -646,4 +656,175 @@ export async function importScheduleItem(input: ImportScheduleItemInput) {
     },
   });
   return { record, created: true };
+}
+
+// ---------------------------------------------------------------------------
+// Approved proposals (Buildertrend Estimate/Proposals → Estimate + Proposal + budget)
+// ---------------------------------------------------------------------------
+
+export interface ImportApprovedProposalLineInput {
+  readonly costCodeId: string;
+  readonly title: string;
+  readonly description?: string | null;
+  readonly groupLabel?: string | null;
+  readonly costType?: CostType;
+  /** Quantity × 1000 (same as live EstimateLineItem). */
+  readonly quantityMilli: number;
+  readonly unit?: string | null;
+  /** Builder unit cost in cents. */
+  readonly unitCostCents: Cents;
+  /** Markup basis points (21% → 2100). */
+  readonly markupBasisPoints: BasisPoints;
+  readonly internalNote?: string | null;
+}
+
+export interface ImportApprovedProposalInput {
+  readonly organizationId: string;
+  readonly jobId: string;
+  readonly clientId: string;
+  readonly title: string;
+  /**
+   * Natural key for idempotency — typically the Buildertrend proposal/print id
+   * or a stable "BT:{jobPrefix}:{proposalTitle}" string. Stored on the Estimate
+   * as `aiPromptNotes` when created so re-runs can find it without a new column.
+   */
+  readonly externalKey: string;
+  readonly lineItems: readonly ImportApprovedProposalLineInput[];
+  readonly clientSignatureName?: string | null;
+  readonly clientSignedAt?: Date | null;
+  readonly coverMessage?: string | null;
+  /** When true (default), call sendEstimateToBudget after creating the estimate. */
+  readonly sendToBudget?: boolean;
+}
+
+export interface ImportApprovedProposalResult {
+  readonly estimateId: string;
+  readonly proposalId: string;
+  readonly created: boolean;
+  readonly budgetLinesWritten: number;
+}
+
+/**
+ * Import a Buildertrend-approved proposal as a locked Estimate + ACCEPTED Proposal
+ * and (by default) send the estimate to the job budget. Does NOT run acceptProposal()
+ * — that would try PRE_SALE→OPEN and e-sign flows that don't apply to an already-OPEN
+ * migrated job. Idempotent on Estimate.aiPromptNotes === `bt-proposal:{externalKey}`.
+ */
+export async function importApprovedProposal(
+  input: ImportApprovedProposalInput,
+): Promise<ImportApprovedProposalResult> {
+  await assertJob(input.organizationId, input.jobId);
+  const client = await db.client.findFirst({
+    where: { id: input.clientId, organizationId: input.organizationId },
+    select: { id: true },
+  });
+  if (!client) throw new UnknownClientError(input.clientId);
+
+  const marker = `bt-proposal:${input.externalKey}`;
+  const existingEstimate = await db.estimate.findFirst({
+    where: { organizationId: input.organizationId, jobId: input.jobId, aiPromptNotes: marker },
+    include: { lineItems: true },
+  });
+  if (existingEstimate) {
+    const existingProposal = await db.proposal.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        jobId: input.jobId,
+        options: { some: { estimateId: existingEstimate.id } },
+      },
+    });
+    return {
+      estimateId: existingEstimate.id,
+      proposalId: existingProposal?.id ?? "",
+      created: false,
+      budgetLinesWritten: 0,
+    };
+  }
+
+  if (input.lineItems.length === 0) {
+    throw new Error("importApprovedProposal requires at least one line item from Buildertrend.");
+  }
+
+  const costCodeIds = [...new Set(input.lineItems.map((line) => line.costCodeId))];
+  const known = await db.costCode.findMany({
+    where: { id: { in: costCodeIds }, organizationId: input.organizationId },
+    select: { id: true, defaultCostType: true },
+  });
+  if (known.length !== costCodeIds.length) {
+    const knownIds = new Set(known.map((code) => code.id));
+    throw new UnknownCostCodeError(costCodeIds.filter((id) => !knownIds.has(id)));
+  }
+  const defaultCostTypeById = new Map(known.map((code) => [code.id, code.defaultCostType]));
+
+  const estimate = await db.estimate.create({
+    data: {
+      organizationId: input.organizationId,
+      jobId: input.jobId,
+      title: input.title,
+      status: EstimateStatus.DRAFT,
+      rateMode: RateMode.MARKUP,
+      defaultRateBasisPoints: 0,
+      aiGenerated: false,
+      aiPromptNotes: marker,
+      lineItems: {
+        create: input.lineItems.map((line, index) => ({
+          costCodeId: line.costCodeId,
+          costType: line.costType ?? defaultCostTypeById.get(line.costCodeId) ?? "NONE",
+          title: line.title,
+          description: line.description ?? null,
+          quantityMilli: line.quantityMilli,
+          unit: line.unit?.trim() || null,
+          unitCostCents: line.unitCostCents,
+          rateMode: RateMode.MARKUP,
+          rateBasisPoints: line.markupBasisPoints,
+          taxable: false,
+          internalNote: line.internalNote ?? null,
+          groupLabel: line.groupLabel ?? null,
+          sortOrder: index,
+        })),
+      },
+    },
+  });
+
+  let budgetLinesWritten = 0;
+  if (input.sendToBudget !== false) {
+    const budget = await sendEstimateToBudget({
+      estimateId: estimate.id,
+      organizationId: input.organizationId,
+    });
+    budgetLinesWritten = budget.budgetLinesWritten;
+  }
+
+  const proposal = await db.proposal.create({
+    data: {
+      organizationId: input.organizationId,
+      jobId: input.jobId,
+      clientId: input.clientId,
+      title: input.title,
+      coverMessage: input.coverMessage ?? null,
+      status: ProposalStatus.ACCEPTED,
+      clientSignatureName: input.clientSignatureName ?? null,
+      clientSignedAt: input.clientSignedAt ?? null,
+      sentAt: input.clientSignedAt ?? new Date(),
+      options: {
+        create: [{ estimateId: estimate.id, label: "Accepted", sortOrder: 0 }],
+      },
+    },
+    include: { options: true },
+  });
+
+  const selectedOptionId = proposal.options[0]?.id;
+  if (selectedOptionId) {
+    await db.proposal.update({
+      where: { id: proposal.id },
+      data: { selectedOptionId },
+    });
+  }
+
+  return {
+    estimateId: estimate.id,
+    proposalId: proposal.id,
+    created: true,
+    budgetLinesWritten,
+  };
 }
