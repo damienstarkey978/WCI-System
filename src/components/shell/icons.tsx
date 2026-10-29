@@ -473,6 +473,45 @@ export function AlertIcon({ className }: IconProps) {
   );
 }
 
+/** Plus-in-circle — Gantt row “add child item” (BT metaphor). */
+export function PlusCircleIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <circle cx="10" cy="10" r="7.25" stroke="currentColor" strokeWidth={NAV} />
+      <path d="M10 6.5v7M6.5 10h7" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Upload / export arrow — Gantt export (BT metaphor). */
+export function UploadIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M10 12.5V3.75M10 3.75 6.75 7M10 3.75 13.25 7" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 12.5v2.75A1.25 1.25 0 0 0 5.25 16.5h9.5A1.25 1.25 0 0 0 16 15.25V12.5" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Four-way expand — Gantt fullscreen (BT metaphor). */
+export function MaximizeIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M3.5 7.5V3.5H7.5M12.5 3.5h4v4M16.5 12.5v4h-4M7.5 16.5h-4v-4" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Horizontal double-arrows — expand/collapse Gantt columns (BT metaphor). */
+export function ExpandColumnsIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M8 6.5 4.5 10 8 13.5M12 6.5 15.5 10 12 13.5" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 4v12" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" opacity="0.35" />
+    </svg>
+  );
+}
+
 /** Purchase Orders — clipboard with PO lines. */
 export function PurchaseOrderIcon({ className }: IconProps) {
   return (

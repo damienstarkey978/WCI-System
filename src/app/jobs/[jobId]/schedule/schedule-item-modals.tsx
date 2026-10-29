@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
 import {
   ScheduleItemForm,
@@ -45,6 +45,10 @@ export function NewScheduleItemButton({
   existingItems,
   phases,
   staff,
+  children,
+  className,
+  style,
+  "aria-label": ariaLabel,
 }: {
   jobId: string;
   scheduleId: string;
@@ -52,6 +56,10 @@ export function NewScheduleItemButton({
   existingItems: readonly ScheduleItemOption[];
   phases: readonly PhaseOption[];
   staff: readonly StaffOption[];
+  children?: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  "aria-label"?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -59,10 +67,11 @@ export function NewScheduleItemButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
-        style={{ background: "var(--bt-primary)" }}
+        aria-label={ariaLabel}
+        className={className ?? "h-9 rounded px-4 text-sm font-semibold text-[var(--bt-on-primary)]"}
+        style={style ?? { background: "var(--bt-primary)" }}
       >
-        New Schedule Item
+        {children ?? "New Schedule Item"}
       </button>
       <ModalShell open={open} onClose={() => setOpen(false)} labelledBy="new-schedule-item-title">
         <ScheduleItemForm
@@ -90,6 +99,7 @@ export function EditScheduleItemButton({
   staff,
   initial,
   children,
+  className,
 }: {
   jobId: string;
   scheduleId: string;
@@ -99,11 +109,12 @@ export function EditScheduleItemButton({
   staff: readonly StaffOption[];
   initial: ScheduleItemFormValues & { id: string };
   children: ReactNode;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="text-left hover:underline">
+      <button type="button" onClick={() => setOpen(true)} className={className ?? "text-left hover:underline"}>
         {children}
       </button>
       <ModalShell open={open} onClose={() => setOpen(false)} labelledBy="edit-schedule-item-title">
