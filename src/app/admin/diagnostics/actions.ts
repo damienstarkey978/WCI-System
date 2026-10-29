@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { UserRole } from "@/generated/prisma/enums";
 import { archiveKnownBuildertrendInactiveCostCodes, fixCostCodes, reparentKnownMiscategorizedCostCodes } from "@/lib/cost-codes/diagnostics";
+import { applyHeatherTestPurge } from "@/lib/admin/heather-test-purge";
 import { deleteTestRecordsByEmail } from "@/lib/admin/test-data-cleanup";
 import { runJarvis403Isolation, type Jarvis403CheckResult } from "@/lib/jarvis/diagnostics";
 
@@ -150,6 +151,37 @@ export async function deleteTestJarvisPhotoQaLeadAction(_previous: DeleteTestLea
     const { deletedLeads, deletedClients } = await deleteTestRecordsByEmail(TEST_JARVIS_PHOTOQA_EMAIL);
     revalidatePath("/admin/diagnostics");
     return { summary: `Deleted ${deletedLeads} lead(s) and ${deletedClients} client(s) for ${TEST_JARVIS_PHOTOQA_EMAIL}.` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export interface HeatherTestPurgeActionState {
+  readonly summary?: string;
+  readonly skipped?: readonly string[];
+  readonly error?: string;
+}
+
+/** Heather Oct 28 leftovers: purge test vendors/invoices/logs/proposals/receipts and repair job-style client names. */
+export async function runHeatherTestPurgeAction(
+  _previous: HeatherTestPurgeActionState,
+  _formData: FormData,
+): Promise<HeatherTestPurgeActionState> {
+  const user = await requireRole(UserRole.ADMIN);
+  try {
+    const result = await applyHeatherTestPurge(user.organizationId);
+    revalidatePath("/admin/diagnostics");
+    revalidatePath("/clients");
+    revalidatePath("/vendors");
+    const parts = [
+      `${result.deletedVendors} vendor(s)`,
+      `${result.deletedInvoices} invoice(s)`,
+      `${result.deletedDailyLogs} daily log(s)`,
+      `${result.deletedProposals} proposal(s)`,
+      `${result.deletedInboundEmails} inbound email(s)`,
+      `${result.repairedClientNames} client name(s) repaired`,
+    ];
+    return { summary: `Purged ${parts.join(", ")}.`, skipped: result.skipped };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
