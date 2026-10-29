@@ -103,7 +103,7 @@ export default async function InspectionPictureFolderPage({
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="mb-2 text-sm font-semibold text-[var(--bt-text)]">Share with inspector</h2>
         <p className="mb-3 text-xs text-[var(--bt-muted)]">
-          Folder-scoped signed link — view and upload with no login. Copy anytime; rotate only if the URL leaked.
+          Copy the share link and text it to the inspector yourself. Folder-only view/upload, no login. Rotate only if the URL leaked.
         </p>
         <InspectionShareLinkButton
           jobId={job.id}

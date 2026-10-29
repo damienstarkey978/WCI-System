@@ -47,7 +47,7 @@ export default async function InspectionPicturesPage({
         <Link href={`/jobs/${job.id}/permitting`} className="font-medium text-[var(--bt-primary)] hover:underline">
           Permitting
         </Link>
-        . Each folder has a shareable inspector link (no login).
+        . Copy each folder’s share link and text it to the inspector yourself (no login).
       </p>
 
       {folders.length === 0 ? (
