@@ -877,6 +877,8 @@ export const importDailyLogSchema = z.object({
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
   createdAt: z.coerce.date(),
+  /** Buildertrend weatherInformation JSON when present — never fabricate. */
+  weather: z.record(z.string(), z.unknown()).nullish(),
   attachments: z.array(migrationAttachmentSchema).max(200).optional(),
 });
 

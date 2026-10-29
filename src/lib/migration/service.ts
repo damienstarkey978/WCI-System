@@ -41,6 +41,7 @@
  * in code.
  */
 
+import type { Prisma } from "@/generated/prisma/client";
 import type {
   BillApprovalStatus,
   CostType,
@@ -189,6 +190,12 @@ export interface ImportDailyLogInput {
   readonly subVisible?: boolean;
   /** The date this log actually documents in Buildertrend — becomes createdAt/updatedAt. */
   readonly createdAt: Date;
+  /**
+   * Buildertrend's weatherInformation blob when present. Pass through as-is —
+   * never fabricate. Null/omitted leaves DailyLog.weather null (same as live
+   * creates without WEATHER_API_KEY).
+   */
+  readonly weather?: Prisma.InputJsonValue | null;
   readonly attachments?: readonly MigrationAttachmentInput[];
 }
 
@@ -215,6 +222,7 @@ export async function importDailyLog(input: ImportDailyLogInput) {
       note: input.note,
       clientVisible: input.clientVisible ?? true,
       subVisible: input.subVisible ?? true,
+      weather: input.weather === undefined ? undefined : input.weather,
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
       files: {
