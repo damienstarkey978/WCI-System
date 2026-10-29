@@ -38,7 +38,9 @@
      CSS fallback / first-paint default. Row pitch ≈26px with live BT metrics
      (14px / 22px lh + py 2px). Consumed by JobSidebar.tsx (hidden below md). */
   --bt-job-sidebar-width: 203px;
-  --bt-job-sidebar-row-py: 2px;
+  /* Unselected row pitch ≈32px (14/22 + py 5) — BT list density from 2026-10-29
+     Purcell select shot; selected row uses the same py inside a taller highlight. */
+  --bt-job-sidebar-row-py: 5px;
   /* Live BT Jobs sidebar (buildertrend.net/app/Landing, 2026-10-28, 100%-class
      zoom): system UI stack, 14px / 400 / ~22px lh / letter-spacing normal /
      color #202227. Blueprint DS tokens still list Inter body.M at 14/20 + 2%
@@ -52,6 +54,18 @@
   --bt-job-sidebar-font-weight: 400;
   --bt-job-sidebar-letter-spacing: normal;
   --bt-job-sidebar-color: #202227;
+  /* Current-job card + selected-row chrome — sampled from BT Purcell select shot
+     (olive accent bar / status dot, sky selected fill, filter count badge). */
+  --bt-job-card-accent: #5a6b3f;
+  --bt-job-status-dot: #5a6b3f;
+  --bt-job-selected-bg: #e8f6fe;
+  --bt-job-filter-badge-bg: #5ba3d9;
+  --bt-job-sidebar-card-title-size: 14px;
+  --bt-job-sidebar-card-title-weight: 700;
+  --bt-job-sidebar-meta-size: 12px;
+  --bt-job-sidebar-meta-lh: 16px;
+  --bt-job-sidebar-header-size: 15px;
+  --bt-job-sidebar-header-weight: 700;
   /* Jobs rail CONTROL CHROME — measured 2026-10-28 from BT parity-shot-2
      (3376×1746 @2× → CSS) vs WCI prod sidebar (203×1×). Heights/radii/gaps
      match BT; + Job fill stays --bt-primary (WCI teal), not BT action blue
@@ -125,6 +139,10 @@
   --bt-muted: #8a9098;
   --bt-text: #edeef0;
   --bt-job-sidebar-color: #edeef0;
+  --bt-job-selected-bg: rgba(95, 184, 214, 0.18);
+  --bt-job-card-accent: #8fa66a;
+  --bt-job-status-dot: #8fa66a;
+  --bt-job-filter-badge-bg: #5fb8d6;
   --bt-job-chrome-pill-track: #1b1f24;
   --bt-job-chrome-input-border: #24282e;
   /* Reused across the app for "good/approved/awarded/accepted" pills (see every

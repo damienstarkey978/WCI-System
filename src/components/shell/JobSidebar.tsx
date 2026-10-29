@@ -4,9 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
+import { BRAND_LOGO_LIGHT_PATH } from "@/lib/branding/logo";
 import { shouldShowJobPrefix } from "@/lib/job-display";
 
-import { ChevronDownIcon, FunnelIcon, HomeIcon, InfoIcon, MailIcon, SearchIcon, SortIcon } from "./icons";
+import { selectionFilterQuery } from "./job-sidebar-selection-filter";
+import {
+  ChevronDownIcon,
+  CloseIcon,
+  FunnelIcon,
+  HomeIcon,
+  InfoIcon,
+  MailIcon,
+  SearchIcon,
+  SortIcon,
+} from "./icons";
 
 export interface SidebarJob {
   readonly id: string;
@@ -17,6 +28,11 @@ export interface SidebarJob {
   readonly groupName: string;
   /** The first client with portal access on this job, if any — shown on the active job's mini-card. */
   readonly clientName: string | null;
+  /** Street line for the BT current-job card (above city/state/zip). */
+  readonly addressLine1?: string | null;
+  /** "City, ST ZIP" line for the BT current-job card. */
+  readonly cityLine?: string | null;
+  /** Compact single-line address (jump lists / older callers). */
   readonly address: string | null;
   /** True once this job has a QuickBooks Customer Id (qboCustomerId) — shows BT's "QB" badge. */
   readonly qboLinked: boolean;
@@ -95,7 +111,11 @@ const JOB_STATUS_LABEL: Record<string, string> = {
  * show still comes from the server (sidebarJobsForOrg already scopes it to what
  * this user can open). Width defaults to 203px and persists in localStorage.
  *
- * Hidden entirely below `md` (Buildertrend's 203px desktop rail / ~26px job rows —
+ * Selecting a job mirrors Buildertrend: Search is filled with a short unique
+ * token (e.g. "purcell"), the list header switches to "VIEW 1 OPEN JOB", and
+ * other jobs disappear until the Search X clears the filter.
+ *
+ * Hidden entirely below `md` (Buildertrend's 203px desktop rail / ~32px job rows —
  * or the collapsed 48px strip — has no reasonable place on a phone-width screen):
  * TopNav's hamburger opens MobileMenuDrawer instead, which has its own simpler
  * job jump-list. The resize handle is desktop-only for the same reason.
@@ -105,6 +125,7 @@ export function JobSidebar({
   templateJobs = [],
   activeJobId,
   organizationName = "World Construction Inc.",
+  suppressSelectionFilter = false,
 }: {
   jobs: SidebarJob[];
   /** Buildertrend's "Templates" tab — Job.isTemplate rows. Defaults to empty for any caller not yet passing it. */
@@ -112,6 +133,12 @@ export function JobSidebar({
   activeJobId?: string;
   /** Shown above the Current Job card — matches BT's company name strip. */
   organizationName?: string;
+  /**
+   * Dev/harness only: skip BT select→filter seeding so Search starts empty while
+   * `activeJobId` stays set (SSR stand-in for after the Search X). Production
+   * StaffShell never passes this.
+   */
+  suppressSelectionFilter?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -128,11 +155,21 @@ export function JobSidebar({
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(JOB_SIDEBAR_DEFAULT_WIDTH_PX);
   const [tab, setTab] = useState<"jobs" | "templates">("jobs");
-  const [query, setQuery] = useState("");
+  // Seed Search from the active job on first paint (BT select→filter) so the list
+  // never flashes "ALL N OPEN JOBS" before the effect runs.
+  const [query, setQuery] = useState(() => {
+    if (suppressSelectionFilter || !activeJobId) return "";
+    const job = jobs.find((row) => row.id === activeJobId) ?? templateJobs.find((row) => row.id === activeJobId);
+    return job ? selectionFilterQuery(job, jobs.length > 0 ? jobs : templateJobs) : "";
+  });
   // BT's Jobs rail defaults to Open jobs ("ALL N OPEN JOBS") with a filter badge of 1.
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("OPEN");
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("recent");
+  /** Last job id we auto-filled Search for — clearing X keeps this so we don't re-filter until navigation. */
+  const autoFilteredJobIdRef = useRef<string | null>(
+    suppressSelectionFilter ? activeJobId ?? null : activeJobId ?? null,
+  );
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- hydrate width from localStorage after mount (SSR-safe) */
@@ -148,6 +185,28 @@ export function JobSidebar({
       document.body.style.cursor = "";
     };
   }, [resizing]);
+
+  // BT select → filter: opening a job fills Search with a unique token and collapses the list.
+  useEffect(() => {
+    if (suppressSelectionFilter) {
+      autoFilteredJobIdRef.current = activeJobId ?? null;
+      return;
+    }
+    if (!activeJobId) {
+      autoFilteredJobIdRef.current = null;
+      return;
+    }
+    if (autoFilteredJobIdRef.current === activeJobId) return;
+    const source = tab === "templates" ? templateJobs : jobs;
+    const job = source.find((row) => row.id === activeJobId) ?? jobs.find((row) => row.id === activeJobId);
+    if (!job) return;
+    const peers = source.length > 0 ? source : jobs;
+    const next = selectionFilterQuery(job, peers);
+    autoFilteredJobIdRef.current = activeJobId;
+    /* eslint-disable react-hooks/set-state-in-effect -- BT select→filter mirrors navigation into Search */
+    setQuery(next);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [activeJobId, jobs, templateJobs, tab, suppressSelectionFilter]);
 
   function toggleCollapsed() {
     setCollapsed((value) => {
@@ -190,7 +249,15 @@ export function JobSidebar({
     document.body.style.cursor = "";
   }
 
-  const activeJob = activeJobId ? jobs.find((job) => job.id === activeJobId) : undefined;
+  function clearSearch() {
+    setQuery("");
+    // Keep autoFilteredJobIdRef so clearing while still on the same job does not
+    // immediately re-apply the select→filter — matches BT's Search X.
+  }
+
+  const activeJob = activeJobId
+    ? (jobs.find((job) => job.id === activeJobId) ?? templateJobs.find((job) => job.id === activeJobId))
+    : undefined;
 
   // Preserve the current section (e.g. "/invoices") when switching jobs, so picking
   // a different job from the list doesn't bounce back to the job overview page —
@@ -214,7 +281,13 @@ export function JobSidebar({
     const filtered = source.filter((job) => {
       if (tab === "jobs" && statusFilter !== "ALL" && job.status !== statusFilter) return false;
       if (!q) return true;
-      return job.name.toLowerCase().includes(q) || (job.prefix?.toLowerCase().includes(q) ?? false);
+      return (
+        job.name.toLowerCase().includes(q) ||
+        (job.prefix?.toLowerCase().includes(q) ?? false) ||
+        (job.addressLine1?.toLowerCase().includes(q) ?? false) ||
+        (job.address?.toLowerCase().includes(q) ?? false) ||
+        (job.clientName?.toLowerCase().includes(q) ?? false)
+      );
     });
     if (sortMode === "name") return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
     return filtered;
@@ -230,6 +303,12 @@ export function JobSidebar({
     return map;
   }, [filteredJobs]);
 
+  const listIsSearchFiltered = query.trim().length > 0;
+  const listCountLabel = tab === "templates" ? "TEMPLATE" : statusFilter === "ALL" ? "" : STATUS_FILTER_LABEL[statusFilter].toUpperCase();
+  const listHeader = `${listIsSearchFiltered ? "VIEW" : "ALL"} ${filteredJobs.length}${listCountLabel ? ` ${listCountLabel}` : ""} JOB${
+    filteredJobs.length === 1 ? "" : "S"
+  }`;
+
   if (collapsed) {
     return (
       <aside
@@ -241,9 +320,10 @@ export function JobSidebar({
           onClick={toggleCollapsed}
           aria-label="Expand job list"
           title="Expand job list"
-          className="rounded p-1.5 text-[var(--bt-muted)] hover:bg-black/5"
+          className="rounded border p-1.5 text-[var(--bt-muted)] hover:bg-black/5"
+          style={{ borderColor: "var(--bt-border)" }}
         >
-          <ChevronDownIcon className="h-4 w-4 -rotate-90" />
+          <ChevronDownIcon className="h-3.5 w-3.5 -rotate-90" />
         </button>
       </aside>
     );
@@ -279,82 +359,145 @@ export function JobSidebar({
         title="Drag to resize"
       />
       {/* Company strip + collapse — matches BT's "World Construction Inc." header. */}
-      <div className="flex items-center justify-between gap-1.5 border-b px-2.5 py-2" style={{ borderColor: "var(--bt-border)" }}>
-        <span
-          className="min-w-0 truncate font-semibold"
-          style={{
-            fontFamily: "var(--bt-font-sans)",
-            fontSize: "var(--bt-job-sidebar-font-size)",
-            lineHeight: "var(--bt-job-sidebar-line-height)",
-            letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
-            color: "var(--bt-job-sidebar-color)",
-          }}
-        >
-          {organizationName}
-        </span>
+      <div className="flex items-center justify-between gap-1.5 border-b px-2 py-2" style={{ borderColor: "var(--bt-border)" }}>
+        <div className="flex min-w-0 items-center gap-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element -- fixed brand mark on light rail */}
+          <img src={BRAND_LOGO_LIGHT_PATH} alt="" className="h-4 w-auto max-w-[28px] shrink-0 object-contain object-left" />
+          <span
+            className="min-w-0 truncate"
+            style={{
+              fontFamily: "var(--bt-font-sans)",
+              fontSize: "var(--bt-job-sidebar-header-size)",
+              fontWeight: 700,
+              lineHeight: "var(--bt-job-sidebar-line-height)",
+              letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+              color: "var(--bt-job-sidebar-color)",
+            }}
+          >
+            {organizationName}
+          </span>
+        </div>
         <button
           type="button"
           onClick={toggleCollapsed}
           aria-label="Collapse job list"
           title="Collapse job list"
-          className="shrink-0 rounded p-1 text-[var(--bt-muted)] hover:bg-black/5"
+          className="shrink-0 rounded border p-1 text-[var(--bt-muted)] hover:bg-black/5"
+          style={{ borderColor: "var(--bt-border)" }}
         >
           <ChevronDownIcon className="h-3.5 w-3.5 rotate-90" />
         </button>
       </div>
 
       {activeJob ? (
-        <div className="border-b px-2.5 py-2" style={{ borderColor: "var(--bt-border)" }} data-testid="job-sidebar-current-card">
-          <div className="flex items-start justify-between gap-1">
+        <div className="border-b px-2 py-2" style={{ borderColor: "var(--bt-border)" }} data-testid="job-sidebar-current-card">
+          <div
+            className="relative overflow-hidden rounded border bg-[var(--bt-panel-bg)] pl-2.5 pr-1.5 pt-1.5 pb-2"
+            style={{ borderColor: "var(--bt-border)" }}
+          >
             <span
-              className="w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
-            >
-              {JOB_STATUS_LABEL[activeJob.status] ?? activeJob.status.replace(/_/g, " ")}
-            </span>
-            <div className="flex shrink-0 items-center gap-0.5 text-[var(--bt-muted)]">
-              <Link
-                href={`/jobs/${activeJob.id}/settings`}
-                aria-label="Job info"
-                title="Job info"
-                className="rounded p-0.5 hover:bg-black/5 hover:text-[var(--bt-primary)]"
+              aria-hidden="true"
+              className="absolute inset-y-0 left-0 w-[3px]"
+              style={{ background: "var(--bt-job-card-accent)" }}
+            />
+            <div className="flex items-start justify-between gap-1">
+              <span
+                className="w-fit rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}
               >
-                <InfoIcon className="h-3.5 w-3.5" />
-              </Link>
-              <Link
-                href={`/jobs/${activeJob.id}/messages`}
-                aria-label="Messages"
-                title="Messages"
-                className="rounded p-0.5 hover:bg-black/5 hover:text-[var(--bt-primary)]"
-              >
-                <MailIcon className="h-3.5 w-3.5" />
-              </Link>
-              <Link
-                href={`/jobs/${activeJob.id}`}
-                aria-label="Job home"
-                title="Job home"
-                className="rounded p-0.5 hover:bg-black/5 hover:text-[var(--bt-primary)]"
-              >
-                <HomeIcon className="h-3.5 w-3.5" />
-              </Link>
+                {JOB_STATUS_LABEL[activeJob.status] ?? activeJob.status.replace(/_/g, " ")}
+              </span>
+              <div className="flex shrink-0 items-center gap-0.5 text-[var(--bt-muted)]">
+                <Link
+                  href={`/jobs/${activeJob.id}/settings`}
+                  aria-label="Job info"
+                  title="Job info"
+                  className="rounded p-0.5 hover:bg-black/5 hover:text-[var(--bt-primary)]"
+                >
+                  <InfoIcon className="h-4 w-4" />
+                </Link>
+                <Link
+                  href={`/jobs/${activeJob.id}/messages`}
+                  aria-label="Messages"
+                  title="Messages"
+                  className="rounded p-0.5 hover:bg-black/5 hover:text-[var(--bt-primary)]"
+                >
+                  <MailIcon className="h-4 w-4" />
+                </Link>
+                <Link
+                  href={`/jobs/${activeJob.id}`}
+                  aria-label="Job home"
+                  title="Job home"
+                  className="rounded p-0.5 hover:bg-black/5 hover:text-[var(--bt-primary)]"
+                >
+                  <HomeIcon className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
+            <Link href={`/jobs/${activeJob.id}`} className="mt-1.5 block min-w-0">
+              <div
+                className="truncate"
+                style={{
+                  fontFamily: "var(--bt-font-sans)",
+                  fontSize: "var(--bt-job-sidebar-card-title-size)",
+                  fontWeight: 700,
+                  lineHeight: "var(--bt-job-sidebar-line-height)",
+                  letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+                  color: "var(--bt-job-sidebar-color)",
+                }}
+              >
+                {activeJob.name}
+              </div>
+              {/* BT order: client → street → city/ST ZIP */}
+              {activeJob.clientName ? (
+                <div
+                  className="truncate text-[var(--bt-muted)]"
+                  style={{
+                    fontFamily: "var(--bt-font-sans)",
+                    fontSize: "var(--bt-job-sidebar-meta-size)",
+                    lineHeight: "var(--bt-job-sidebar-meta-lh)",
+                  }}
+                >
+                  {activeJob.clientName}
+                </div>
+              ) : null}
+              {activeJob.addressLine1 ? (
+                <div
+                  className="truncate text-[var(--bt-muted)]"
+                  style={{
+                    fontFamily: "var(--bt-font-sans)",
+                    fontSize: "var(--bt-job-sidebar-meta-size)",
+                    lineHeight: "var(--bt-job-sidebar-meta-lh)",
+                  }}
+                >
+                  {activeJob.addressLine1}
+                </div>
+              ) : activeJob.address ? (
+                <div
+                  className="truncate text-[var(--bt-muted)]"
+                  style={{
+                    fontFamily: "var(--bt-font-sans)",
+                    fontSize: "var(--bt-job-sidebar-meta-size)",
+                    lineHeight: "var(--bt-job-sidebar-meta-lh)",
+                  }}
+                >
+                  {activeJob.address}
+                </div>
+              ) : null}
+              {activeJob.cityLine ? (
+                <div
+                  className="truncate text-[var(--bt-muted)]"
+                  style={{
+                    fontFamily: "var(--bt-font-sans)",
+                    fontSize: "var(--bt-job-sidebar-meta-size)",
+                    lineHeight: "var(--bt-job-sidebar-meta-lh)",
+                  }}
+                >
+                  {activeJob.cityLine}
+                </div>
+              ) : null}
+            </Link>
           </div>
-          <Link href={`/jobs/${activeJob.id}`} className="mt-1.5 block min-w-0">
-            <div
-              className="truncate font-semibold"
-              style={{
-                fontFamily: "var(--bt-font-sans)",
-                fontSize: "var(--bt-job-sidebar-font-size)",
-                lineHeight: "var(--bt-job-sidebar-line-height)",
-                letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
-                color: "var(--bt-job-sidebar-color)",
-              }}
-            >
-              {activeJob.name}
-            </div>
-            {activeJob.address ? <div className="truncate text-[11px] leading-snug text-[var(--bt-muted)]">{activeJob.address}</div> : null}
-            {activeJob.clientName ? <div className="truncate text-[11px] leading-snug text-[var(--bt-muted)]">{activeJob.clientName}</div> : null}
-          </Link>
         </div>
       ) : null}
 
@@ -453,8 +596,20 @@ export function JobSidebar({
                 background: "var(--bt-panel-bg)",
               }}
             />
-            {/* BT places the magnifier on the RIGHT of the Search field. */}
-            <SearchIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--bt-muted)]" />
+            {/* BT: magnifier when empty; X clear when Search has a value (select→filter or typed). */}
+            {query ? (
+              <button
+                type="button"
+                onClick={clearSearch}
+                aria-label="Clear search"
+                data-testid="job-sidebar-search-clear"
+                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-[var(--bt-muted)] hover:bg-black/5 hover:text-[var(--bt-job-sidebar-color)]"
+              >
+                <CloseIcon className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <SearchIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--bt-muted)]" />
+            )}
           </div>
           {tab === "jobs" ? (
             <div className="relative shrink-0">
@@ -475,7 +630,10 @@ export function JobSidebar({
               >
                 <FunnelIcon className="h-[18px] w-[18px]" />
                 {statusFilter !== "ALL" ? (
-                  <span className="absolute right-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[var(--bt-primary)] px-0.5 text-[9px] font-bold text-[var(--bt-on-primary)]">
+                  <span
+                    className="absolute right-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold text-white"
+                    style={{ background: "var(--bt-job-filter-badge-bg)" }}
+                  >
                     1
                   </span>
                 ) : null}
@@ -525,14 +683,20 @@ export function JobSidebar({
       </div>
 
       <div
-        className="px-2.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
-        style={{ paddingTop: "var(--bt-job-chrome-list-gap)", paddingBottom: 4 }}
+        className="px-2.5 font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
+        data-testid="job-sidebar-list-header"
+        style={{
+          paddingTop: "var(--bt-job-chrome-list-gap)",
+          paddingBottom: 6,
+          fontFamily: "var(--bt-font-sans)",
+          fontSize: 10,
+          letterSpacing: "0.04em",
+        }}
       >
-        ALL {filteredJobs.length} {tab === "templates" ? "TEMPLATE" : statusFilter === "ALL" ? "" : STATUS_FILTER_LABEL[statusFilter].toUpperCase()} JOB
-        {filteredJobs.length === 1 ? "" : "S"}
+        {listHeader}
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-1.5">
+      <div className="flex-1 overflow-y-auto px-1.5 pb-1.5">
         {[...groups.entries()].map(([groupName, groupJobs]) => {
           // BT's Open-jobs list is flat — hide the default "General" bucket label (and any
           // single-group header) so the rail doesn't show a redundant GENERAL strip.
@@ -540,7 +704,7 @@ export function JobSidebar({
           return (
             <div key={groupName} className="mb-0.5">
               {showGroupHeader ? (
-                <div className="px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{groupName}</div>
+                <div className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{groupName}</div>
               ) : null}
               {groupJobs.map((job) => {
                 const isActive = job.id === activeJobId;
@@ -549,33 +713,30 @@ export function JobSidebar({
                     key={job.id}
                     href={jobHref(job.id)}
                     data-testid="job-sidebar-row"
-                    className={`flex items-center gap-1 truncate border-l-2 px-2.5 transition ${isActive ? "" : "border-transparent hover:bg-black/5"}`}
-                    style={
-                      isActive
-                        ? {
-                            borderLeftColor: "var(--bt-primary)",
-                            background: "color-mix(in srgb, var(--bt-primary) 10%, transparent)",
-                            color: "var(--bt-job-sidebar-color)",
-                            fontFamily: "var(--bt-font-sans)",
-                            fontSize: "var(--bt-job-sidebar-font-size)",
-                            fontWeight: "var(--bt-job-sidebar-font-weight)",
-                            lineHeight: "var(--bt-job-sidebar-line-height)",
-                            letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
-                            paddingTop: "var(--bt-job-sidebar-row-py)",
-                            paddingBottom: "var(--bt-job-sidebar-row-py)",
-                          }
-                        : {
-                            color: "var(--bt-job-sidebar-color)",
-                            fontFamily: "var(--bt-font-sans)",
-                            fontSize: "var(--bt-job-sidebar-font-size)",
-                            fontWeight: "var(--bt-job-sidebar-font-weight)",
-                            lineHeight: "var(--bt-job-sidebar-line-height)",
-                            letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
-                            paddingTop: "var(--bt-job-sidebar-row-py)",
-                            paddingBottom: "var(--bt-job-sidebar-row-py)",
-                          }
-                    }
+                    data-active={isActive ? "true" : "false"}
+                    className={`flex items-center gap-2 truncate px-2 transition ${isActive ? "rounded-md" : "rounded-md hover:bg-black/5"}`}
+                    style={{
+                      background: isActive ? "var(--bt-job-selected-bg)" : undefined,
+                      color: "var(--bt-job-sidebar-color)",
+                      fontFamily: "var(--bt-font-sans)",
+                      fontSize: "var(--bt-job-sidebar-font-size)",
+                      fontWeight: "var(--bt-job-sidebar-font-weight)",
+                      lineHeight: "var(--bt-job-sidebar-line-height)",
+                      letterSpacing: "var(--bt-job-sidebar-letter-spacing)",
+                      paddingTop: "var(--bt-job-sidebar-row-py)",
+                      paddingBottom: "var(--bt-job-sidebar-row-py)",
+                    }}
                   >
+                    {isActive ? (
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: "var(--bt-job-status-dot)" }}
+                        data-testid="job-sidebar-status-dot"
+                      />
+                    ) : (
+                      <span aria-hidden="true" className="h-2 w-2 shrink-0" />
+                    )}
                     <span className="min-w-0 flex-1 truncate">
                       {shouldShowJobPrefix(job.name, job.prefix) ? (
                         <span className="mr-1 font-mono text-[11px] text-[var(--bt-muted)]">{job.prefix}</span>
