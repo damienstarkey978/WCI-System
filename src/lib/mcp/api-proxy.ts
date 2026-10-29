@@ -1,10 +1,10 @@
 /**
  * Thin MCP → `/api/v1` forwarder.
  *
- * Grokbots (Atlas / Roy / Heather) authenticate to `/api/mcp` with the same scoped
- * API key they use for REST. This helper reuses that bearer token against the
- * versioned agent API so MCP never grows a parallel write path — scopes are
- * re-checked by `withApiAuth` on every call.
+ * Grokbots (Atlas / Roy / Heather) authenticate to `/api/mcp` with an API key or
+ * an OAuth access token. This helper reuses that same bearer against the versioned
+ * agent API so MCP never grows a parallel write path — `withApiAuth` accepts both
+ * credential kinds and re-checks scopes on every call.
  */
 
 export interface ApiV1ProxyInput {

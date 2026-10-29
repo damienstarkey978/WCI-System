@@ -19,7 +19,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { AgentKind } from "../src/generated/prisma/enums";
 import { generateApiKeyToken } from "../src/lib/api-auth";
-import { AGENT_DEFAULT_SCOPES, isScope, type Scope } from "../src/lib/api-scopes";
+import { AGENT_DEFAULT_SCOPES, isScope } from "../src/lib/api-scopes";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -68,7 +68,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  let scopes: readonly Scope[];
+  let scopes: readonly string[];
   if (args.scopes) {
     const requested = args.scopes.split(",").map((scope) => scope.trim()).filter(Boolean);
     const invalid = requested.filter((scope) => scope !== "*" && !scope.endsWith(":*") && !isScope(scope));
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
       console.error(`Unknown scope(s): ${invalid.join(", ")}`);
       process.exit(1);
     }
-    scopes = requested as Scope[];
+    scopes = requested;
   } else {
     const defaults = AGENT_DEFAULT_SCOPES[name];
     if (!defaults) {

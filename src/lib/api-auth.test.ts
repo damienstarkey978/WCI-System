@@ -155,93 +155,22 @@ describe("agent default scopes", () => {
     );
   });
 
-  it("only uses scopes the API actually defines", () => {
+  it("only uses defined scopes or explicit wildcards", () => {
     for (const [agent, scopes] of Object.entries(AGENT_DEFAULT_SCOPES)) {
       for (const scope of scopes) {
-        expect(isScope(scope), `${agent} has unknown scope ${scope}`).toBe(true);
+        const ok = scope === "*" || scope.endsWith(":*") || isScope(scope);
+        expect(ok, `${agent} has unknown scope ${scope}`).toBe(true);
       }
     }
   });
 
-  it("scopes Duke to purchasing, not to everything", () => {
-    const duke = AGENT_DEFAULT_SCOPES.duke;
-    expect(grantsScope(duke, "purchase-orders:write")).toBe(true);
-    expect(grantsScope(duke, "bills:write")).toBe(true);
-    expect(grantsScope(duke, "takeoffs:write")).toBe(true);
-    expect(grantsScope(duke, "invoices:write")).toBe(false);
-    expect(grantsScope(duke, "jobs:write")).toBe(false);
-  });
-
-  it("keeps Jarvis read-heavy — no module write access", () => {
-    const jarvis = AGENT_DEFAULT_SCOPES.jarvis;
-    expect(grantsScope(jarvis, "bills:read")).toBe(true);
-    expect(grantsScope(jarvis, "jobs:read")).toBe(true);
-    expect(grantsScope(jarvis, "bills:write")).toBe(false);
-    expect(grantsScope(jarvis, "purchase-orders:write")).toBe(false);
-  });
-
-  it("scopes Heather as office manager — all reads + staff-bot writes, not unbounded admin", () => {
-    const heather = AGENT_DEFAULT_SCOPES.heather;
-    // Reads that the 2026-10-28 test report flagged as 403 on her key
-    expect(grantsScope(heather, "leads:read")).toBe(true);
-    expect(grantsScope(heather, "proposals:read")).toBe(true);
-    expect(grantsScope(heather, "estimates:read")).toBe(true);
-    expect(grantsScope(heather, "purchase-orders:read")).toBe(true);
-    expect(grantsScope(heather, "bills:read")).toBe(true);
-    expect(grantsScope(heather, "invoices:read")).toBe(true);
-    expect(grantsScope(heather, "selections:read")).toBe(true);
-    expect(grantsScope(heather, "time-clock:read")).toBe(true);
-    expect(grantsScope(heather, "cost-codes:read")).toBe(true);
-    expect(grantsScope(heather, "bids:read")).toBe(true);
-    expect(grantsScope(heather, "warranty:read")).toBe(true);
-    expect(grantsScope(heather, "specifications:read")).toBe(true);
-    expect(grantsScope(heather, "submittals:read")).toBe(true);
-    expect(grantsScope(heather, "surveys:read")).toBe(true);
-    expect(grantsScope(heather, "weekly-summaries:read")).toBe(true);
-    expect(grantsScope(heather, "takeoffs:read")).toBe(true);
-    expect(grantsScope(heather, "webhooks:read")).toBe(true);
-    // Ops + financial/CRM writes she needs to replace Buildertrend work
-    expect(grantsScope(heather, "daily-logs:write")).toBe(true);
-    expect(grantsScope(heather, "files:write")).toBe(true);
-    expect(grantsScope(heather, "permits:write")).toBe(true);
-    expect(grantsScope(heather, "clients:write")).toBe(true);
-    expect(grantsScope(heather, "vendors:write")).toBe(true);
-    expect(grantsScope(heather, "notifications:write")).toBe(true);
-    expect(grantsScope(heather, "bills:write")).toBe(true);
-    expect(grantsScope(heather, "purchase-orders:write")).toBe(true);
-    expect(grantsScope(heather, "invoices:write")).toBe(true);
-    expect(grantsScope(heather, "change-orders:write")).toBe(true);
-    expect(grantsScope(heather, "selections:write")).toBe(true);
-    expect(grantsScope(heather, "leads:write")).toBe(true);
-    expect(grantsScope(heather, "proposals:write")).toBe(true);
-    expect(grantsScope(heather, "takeoffs:write")).toBe(true);
-    expect(grantsScope(heather, "rfis:write")).toBe(true);
-    // Still not dangerous unbounded admin
-    expect((heather as readonly string[]).includes("*")).toBe(false);
-    expect(grantsScope(heather, "migration:write")).toBe(false);
-    expect(grantsScope(heather, "cost-codes:write")).toBe(false);
-    expect(grantsScope(heather, "webhooks:write")).toBe(false);
-  });
-
-  it("gives Atlas cross-module read plus targeted accountability writes", () => {
-    const atlas = AGENT_DEFAULT_SCOPES.atlas;
-    expect(grantsScope(atlas, "jobs:read")).toBe(true);
-    expect(grantsScope(atlas, "budgets:read")).toBe(true);
-    expect(grantsScope(atlas, "schedule:write")).toBe(true);
-    expect(grantsScope(atlas, "todos:write")).toBe(true);
-    expect(grantsScope(atlas, "permits:write")).toBe(true);
-    expect(grantsScope(atlas, "purchase-orders:write")).toBe(false);
-    expect(grantsScope(atlas, "bills:write")).toBe(false);
-  });
-
-  it("scopes Roy to financials-heavy ops without jobs:write", () => {
-    const roy = AGENT_DEFAULT_SCOPES.roy;
-    expect(grantsScope(roy, "purchase-orders:write")).toBe(true);
-    expect(grantsScope(roy, "bills:write")).toBe(true);
-    expect(grantsScope(roy, "invoices:write")).toBe(true);
-    expect(grantsScope(roy, "budgets:read")).toBe(true);
-    expect(grantsScope(roy, "files:write")).toBe(true);
-    expect(grantsScope(roy, "jobs:write")).toBe(false);
-    expect(grantsScope(roy, "daily-logs:write")).toBe(false);
+  it("grants every roster agent full catalog access via * (Damien 2026-10-29)", () => {
+    for (const [agent, scopes] of Object.entries(AGENT_DEFAULT_SCOPES)) {
+      expect(scopes, agent).toEqual(["*"]);
+      expect(grantsScope(scopes, "files:read"), `${agent} files:read`).toBe(true);
+      expect(grantsScope(scopes, "files:write"), `${agent} files:write`).toBe(true);
+      expect(grantsScope(scopes, "bills:write"), `${agent} bills:write`).toBe(true);
+      expect(grantsScope(scopes, "migration:write"), `${agent} migration:write`).toBe(true);
+    }
   });
 });

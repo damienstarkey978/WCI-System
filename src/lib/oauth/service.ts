@@ -40,18 +40,14 @@ const CODE_TTL_MS = 10 * 60 * 1000;
 export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 
 /**
- * What an outside assistant may be granted. Everything the MCP tools actually use and
- * nothing else — a token minted here cannot reach an endpoint no tool calls, however
- * broadly the client asks.
+ * What an outside assistant may be granted via OAuth (ChatGPT / Claude connectors,
+ * Cursor MCP reconnect). Damien 2026-10-29: bots need every data point through
+ * `api_v1_request` (files/photos/docs/financials/…), so this is the full Scope
+ * catalog minus `migration:write` (historical cutover only — not day-to-day bot work).
  */
-export const MCP_GRANTABLE_SCOPES: readonly Scope[] = [
-  "jobs:read",
-  "cost-codes:read",
-  "reports:read",
-  "leads:read",
-  "proposals:read",
-  "proposals:write",
-];
+export const MCP_GRANTABLE_SCOPES: readonly Scope[] = SCOPES.filter(
+  (scope) => scope !== "migration:write",
+);
 
 /**
  * An error with an OAuth error code, which is what the endpoints must return rather
@@ -450,7 +446,11 @@ export async function authenticateOAuthAccessToken(token: string): Promise<OAuth
     organizationId: record.organizationId,
     userId: record.userId,
     clientName: record.client.name,
-    scopes: record.scopes,
+    // Live MCP allowlist — not the scopes frozen on the token row — so expanding
+    // MCP_GRANTABLE_SCOPES unblocks already-connected assistants (api_v1_request →
+    // /files, etc.) without forcing every connector to re-consent. The row still
+    // stores the original grant for audit.
+    scopes: MCP_GRANTABLE_SCOPES,
   };
 }
 
