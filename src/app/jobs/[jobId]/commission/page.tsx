@@ -7,7 +7,7 @@ import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatCents } from "@/lib/money";
-import { COMMISSION_COST_CODE, canAccessCommissionMenu } from "@/lib/staff/role-site-access";
+import { COMMISSION_COST_CODE, canAccessCommissionMenu } from "@/lib/staff/role-site-access-shared";
 
 import { FinancialPageHeader } from "../financial-tabs";
 

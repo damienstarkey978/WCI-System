@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { UserRole } from "@/generated/prisma/enums";
+import { financialNavForAccess } from "@/lib/buildertrend-nav";
 import {
   canAccessCommissionMenu,
   DEFAULT_ROLE_SITE_ACCESS,
   defaultRoleSiteAccess,
-} from "@/lib/staff/role-site-access";
-import { financialNavForAccess } from "@/lib/buildertrend-nav";
+} from "@/lib/staff/role-site-access-shared";
 
 describe("Sales Rep site access defaults", () => {
   it("defaults job financials OFF for Sales Rep", () => {

@@ -7,7 +7,7 @@ import {
   SITE_ACCESS_FLAG_KEYS,
   SITE_ACCESS_FLAG_LABELS,
   type RoleSiteAccessFlags,
-} from "@/lib/staff/role-site-access";
+} from "@/lib/staff/role-site-access-shared";
 
 import { updateRoleSiteAccessAction, type RoleAccessActionState } from "./actions";
 
