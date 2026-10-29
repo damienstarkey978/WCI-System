@@ -96,10 +96,18 @@ export async function syncBillToQuickBooks(organizationId: string, billId: strin
       }),
     );
 
+    // QBO DocNumber max length is 21. Prefixed migration bill numbers (JOB_…-…) can
+    // exceed that — truncate for QBO only; WCI keeps the full Bill.billNumber.
+    const docNumber = bill.billNumber
+      ? bill.billNumber.length <= 21
+        ? bill.billNumber
+        : bill.billNumber.slice(0, 21)
+      : undefined;
+
     const billFields = {
       VendorRef: { value: vendorQboId },
       Line: lines,
-      ...(bill.billNumber ? { DocNumber: bill.billNumber } : {}),
+      ...(docNumber ? { DocNumber: docNumber } : {}),
       ...(bill.issuedOn ? { TxnDate: bill.issuedOn.toISOString().slice(0, 10) } : {}),
       ...(bill.dueOn ? { DueDate: bill.dueOn.toISOString().slice(0, 10) } : {}),
     };
