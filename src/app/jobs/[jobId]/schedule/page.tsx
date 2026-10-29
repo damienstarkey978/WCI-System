@@ -346,6 +346,7 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
               scale={ganttScale}
               criticalPath={criticalPath}
               scrollToToday={todayParam === "1"}
+              unlocked={scheduleFlags.isDraft}
               rows={ganttRows.map((row) =>
                 row.type === "phase"
                   ? row
@@ -363,6 +364,8 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
                         baselineStart: row.item.baselineStart?.toISOString() ?? null,
                         baselineEnd: row.item.baselineEnd?.toISOString() ?? null,
                         phaseId: row.item.phaseId,
+                        assigneeUserIds: row.item.assigneeUserIds ?? [],
+                        percentComplete: row.item.percentCompleteBasisPoints / 100,
                         formValues: itemFormValues(row.item),
                       },
                     },
