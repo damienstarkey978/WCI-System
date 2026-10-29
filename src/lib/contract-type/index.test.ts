@@ -124,7 +124,13 @@ describe("policy registry", () => {
   it("gives every policy the shared cost columns", () => {
     for (const policy of allContractTypePolicies()) {
       expect(policy.budgetColumns()).toEqual(
-        expect.arrayContaining(["originalBudgetCost", "actualCost", "projectedCost", "costToComplete"]),
+        expect.arrayContaining([
+          "originalBudgetCost",
+          "actualCost",
+          "projectedCost",
+          "costToComplete",
+          "variance",
+        ]),
       );
     }
   });

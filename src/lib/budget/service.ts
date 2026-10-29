@@ -5,6 +5,7 @@
  */
 
 import { TimeClockApprovalStatus } from "@/generated/prisma/enums";
+import { rollUpByCostType, type CostTypeTotals } from "@/lib/budget/cost-types";
 import { contractRevenueOnly, extendedCostCents, computeJobFunnel, type JobFunnel } from "@/lib/budget/funnel";
 import type { CostCodeLookupEntry } from "@/lib/budget/grouping";
 import { contractTypePolicy } from "@/lib/contract-type";
@@ -16,6 +17,13 @@ export class JobNotFoundError extends Error {
     super(`Job ${jobId} not found`);
     this.name = "JobNotFoundError";
   }
+}
+
+/** The locked estimate that last populated this job's BudgetLines, when one exists. */
+export interface BudgetSourceEstimate {
+  readonly id: string;
+  readonly title: string;
+  readonly sentToBudgetAt: string;
 }
 
 export interface JobBudgetView {
@@ -35,6 +43,14 @@ export interface JobBudgetView {
   readonly costCodes: Readonly<Record<string, CostCodeLookupEntry>>;
   /** Which columns this job's contract type renders (CLAUDE.md 2.3). */
   readonly columns: readonly string[];
+  /**
+   * Labor / Materials / … rollups of the same funnel lines. Bills feed
+   * `actualCostCents` here the same way they feed the per-line grid — no
+   * parallel accounting path.
+   */
+  readonly costTypeTotals: readonly CostTypeTotals[];
+  /** Most recent locked estimate that wrote BudgetLines, or null if none. */
+  readonly sourceEstimate: BudgetSourceEstimate | null;
 }
 
 /**
@@ -51,7 +67,12 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
       budgetLines: {
         include: {
           costCode: {
-            select: { code: true, name: true, parent: { select: { id: true, code: true, name: true } } },
+            select: {
+              code: true,
+              name: true,
+              defaultCostType: true,
+              parent: { select: { id: true, code: true, name: true } },
+            },
           },
         },
       },
@@ -61,6 +82,12 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
       timeClockEntries: {
         where: { approvalStatus: TimeClockApprovalStatus.APPROVED, clockOutAt: { not: null } },
         include: { breaks: true },
+      },
+      estimates: {
+        where: { sentToBudgetAt: { not: null } },
+        orderBy: { sentToBudgetAt: "desc" },
+        take: 1,
+        select: { id: true, title: true, sentToBudgetAt: true },
       },
     },
   });
@@ -77,6 +104,9 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     })),
   );
 
+  // Bills drive actualCost in the funnel. Accrual counts every non-VOID/non-INBOX
+  // bill; cash counts PAID only (see funnel.countsAsActual). A new/approved/paid
+  // bill updates this view on the next read — nothing is stored on BudgetLine.
   const billCosts = job.bills.flatMap((bill) =>
     bill.lineItems.map((item) => ({
       costCodeId: item.costCodeId,
@@ -111,6 +141,7 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
       code: line.costCode.code,
       name: line.costCode.name,
       group: line.costCode.parent,
+      defaultCostType: line.costCode.defaultCostType,
     };
   }
 
@@ -121,12 +152,25 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
   if (unnamed.length > 0) {
     const extra = await db.costCode.findMany({
       where: { id: { in: unnamed }, organizationId },
-      select: { id: true, code: true, name: true, parent: { select: { id: true, code: true, name: true } } },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        defaultCostType: true,
+        parent: { select: { id: true, code: true, name: true } },
+      },
     });
     for (const costCode of extra) {
-      costCodes[costCode.id] = { code: costCode.code, name: costCode.name, group: costCode.parent };
+      costCodes[costCode.id] = {
+        code: costCode.code,
+        name: costCode.name,
+        group: costCode.parent,
+        defaultCostType: costCode.defaultCostType,
+      };
     }
   }
+
+  const source = job.estimates[0] ?? null;
 
   return {
     job: {
@@ -140,5 +184,13 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
     funnel,
     costCodes,
     columns: contractTypePolicy(job.contractType).budgetColumns(),
+    costTypeTotals: rollUpByCostType(funnel.lines, costCodes),
+    sourceEstimate: source
+      ? {
+          id: source.id,
+          title: source.title,
+          sentToBudgetAt: source.sentToBudgetAt!.toISOString(),
+        }
+      : null,
   };
 }

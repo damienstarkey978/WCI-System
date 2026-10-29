@@ -34,6 +34,8 @@ export type BudgetColumnId =
   | "actualCost"
   | "projectedCost"
   | "costToComplete"
+  /** Revised budget − actual spend. Positive = under budget; negative = over. */
+  | "variance"
   | "originalClientPrice"
   | "revisedClientPrice"
   | "amountInvoiced"
@@ -83,6 +85,7 @@ const COST_COLUMNS: readonly BudgetColumnId[] = [
   "actualCost",
   "projectedCost",
   "costToComplete",
+  "variance",
 ];
 
 function priceFromCost(costCents: Cents, rateBasisPoints: BasisPoints, rateMode: RateMode): Cents {
@@ -181,7 +184,18 @@ export const BUDGET_VIEWS = [
   {
     key: "job-costing",
     label: "Job Costing",
-    columns: ["originalBudgetCost", "revisedBudgetCost", "pendingCost", "committedCost", "actualCost", "projectedCost", "costToComplete"],
+    // Buildertrend's Job Costing tab: commitment funnel + variance so staff see
+    // whether each labor/materials line is still on budget as bills land.
+    columns: [
+      "originalBudgetCost",
+      "revisedBudgetCost",
+      "pendingCost",
+      "committedCost",
+      "actualCost",
+      "projectedCost",
+      "costToComplete",
+      "variance",
+    ],
   },
   {
     key: "client-pricing",
@@ -197,8 +211,15 @@ export const BUDGET_VIEWS = [
 
 export type BudgetViewKey = (typeof BUDGET_VIEWS)[number]["key"];
 
+/** Default the Job Costing Budget page to the commitment-funnel view (BT parity). */
+export const DEFAULT_BUDGET_VIEW_KEY: BudgetViewKey = "job-costing";
+
 export function budgetViewByKey(key: string): (typeof BUDGET_VIEWS)[number] {
-  return BUDGET_VIEWS.find((view) => view.key === key) ?? BUDGET_VIEWS[0];
+  return (
+    BUDGET_VIEWS.find((view) => view.key === key) ??
+    BUDGET_VIEWS.find((view) => view.key === DEFAULT_BUDGET_VIEW_KEY) ??
+    BUDGET_VIEWS[0]
+  );
 }
 
 export interface LineProfit {
