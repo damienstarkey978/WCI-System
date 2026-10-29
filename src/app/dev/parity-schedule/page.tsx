@@ -17,6 +17,8 @@ export default async function ParitySchedulePage({ searchParams }: PageProps<"/d
   const calParam = typeof sp.cal === "string" ? sp.cal : "month";
   const calendarMode: CalendarMode =
     calParam === "week" || calParam === "day" || calParam === "agenda" ? calParam : "month";
+  const isDraft = sp.draft === "1";
+  const isOnline = sp.online === "1";
 
   return (
     <ParityScheduleClient
@@ -25,6 +27,8 @@ export default async function ParitySchedulePage({ searchParams }: PageProps<"/d
       phasesOn={phasesOn}
       ganttScale={ganttScale}
       calendarMode={calendarMode}
+      isDraft={isDraft}
+      isOnline={isOnline}
     />
   );
 }

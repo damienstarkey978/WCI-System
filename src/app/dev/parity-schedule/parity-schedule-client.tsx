@@ -3,6 +3,7 @@
 /**
  * Client body for /dev/parity-schedule — view comes from the server page’s searchParams
  * so screenshots can deep-link ?view=list|calendar|gantt without relying on Link intercepts.
+ * Draft/online: ?draft=1&online=1 for lock/drag UX validation.
  */
 import { useState } from "react";
 
@@ -43,6 +44,11 @@ const RAW_ITEMS: {
   { title: "Drywall", start: "2026-12-18", days: 5, color: "Olive", preds: ["11"], critical: true },
 ];
 
+const STAFF = [
+  { id: "u_damien", name: "Damien Starkey" },
+  { id: "u_marks", name: "Marks" },
+] as const;
+
 function formValues(
   partial: Partial<ScheduleItemFormValues> & { id: string; title: string; startDate: string; durationDays: number; endDate: string },
 ): ScheduleItemFormValues & { id: string } {
@@ -82,6 +88,7 @@ const GANTT_ITEMS: GanttItem[] = RAW_ITEMS.map((raw, i) => {
   const id = `si_${i}`;
   const end = addWorkingDays(raw.start, raw.days);
   const predecessorIds = (raw.preds ?? []).map((p) => `si_${p}`);
+  const assigneeUserIds = i === 2 || i === 5 ? ["u_damien", "u_marks"] : i % 3 === 0 ? ["u_damien"] : [];
   return {
     id,
     title: raw.title,
@@ -94,6 +101,8 @@ const GANTT_ITEMS: GanttItem[] = RAW_ITEMS.map((raw, i) => {
     baselineStart: null,
     baselineEnd: null,
     phaseId: null,
+    assigneeUserIds,
+    percentComplete: 0,
     formValues: formValues({
       id,
       title: raw.title,
@@ -102,6 +111,8 @@ const GANTT_ITEMS: GanttItem[] = RAW_ITEMS.map((raw, i) => {
       durationDays: raw.days,
       displayColor: raw.color,
       predecessorIds,
+      assigneeUserIds,
+      percentComplete: 0,
     }),
   };
 });
@@ -112,15 +123,27 @@ export function ParityScheduleClient({
   phasesOn,
   calendarMode = "month",
   ganttScale = "day",
+  isDraft = false,
+  isOnline = false,
 }: {
   view: ScheduleViewKey;
   criticalPath: boolean;
   phasesOn: boolean;
   calendarMode?: CalendarMode;
   ganttScale?: GanttScale;
+  isDraft?: boolean;
+  isOnline?: boolean;
 }) {
-  const [isDraft] = useState(false);
-  const [isOnline] = useState(false);
+  // Local Draft override for fixture Save/toggle; URL ?draft=1 seeds initial only.
+  const [draftOverride, setDraftOverride] = useState<boolean | null>(null);
+  const draft = draftOverride ?? isDraft;
+  const setDraft = (next: boolean | ((prev: boolean) => boolean)) => {
+    setDraftOverride((prev) => {
+      const current = prev ?? isDraft;
+      return typeof next === "function" ? next(current) : next;
+    });
+  };
+
   const rows = GANTT_ITEMS.map((item) => ({ type: "item" as const, item }));
 
   return (
@@ -153,6 +176,15 @@ export function ParityScheduleClient({
             <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
             <span>Your schedule is offline and is unavailable to subs and clients. Notifications will not be sent.</span>
           </div>
+        ) : draft ? (
+          <div
+            className="flex items-start gap-2 rounded border px-3 py-2.5 text-sm"
+            style={{ borderColor: "#f0d78c", background: "#fff8db", color: "#7a5b00" }}
+            role="status"
+          >
+            <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Draft mode is on. Clients and subs cannot see this schedule.</span>
+          </div>
         ) : null}
 
         <ScheduleToolbar
@@ -161,7 +193,7 @@ export function ParityScheduleClient({
           view={view}
           criticalPath={criticalPath}
           phasesOn={phasesOn}
-          isDraft={isDraft}
+          isDraft={draft}
           isOnline={isOnline}
           ganttScale={ganttScale}
           calendarMode={calendarMode}
@@ -172,6 +204,21 @@ export function ParityScheduleClient({
           }
         />
 
+        {/* Fixture-only Draft toggle so screenshots can flip lock without a DB write */}
+        {view === "gantt" ? (
+          <div className="flex items-center gap-2 text-xs text-[var(--bt-muted)]">
+            <button
+              type="button"
+              data-testid="parity-toggle-draft"
+              className="rounded border px-2 py-1 font-medium"
+              style={{ borderColor: "var(--bt-border)", color: draft ? "var(--bt-primary)" : undefined }}
+              onClick={() => setDraft((d) => !d)}
+            >
+              {draft ? "Draft ON (unlocked)" : "Draft OFF (locked)"}
+            </button>
+          </div>
+        ) : null}
+
         {view === "gantt" ? (
           <ScheduleGantt
             jobId={JOB_ID}
@@ -179,11 +226,16 @@ export function ParityScheduleClient({
             jobName={JOB_NAME}
             existingItems={GANTT_ITEMS.map((i) => ({ id: i.id, title: i.title }))}
             phases={[]}
-            staff={[]}
+            staff={[...STAFF]}
             scale={ganttScale}
             criticalPath={criticalPath}
             scrollToToday
+            unlocked={draft}
             rows={rows}
+            onPersistMoves={async () => {
+              // Fixture has no DB — apply visual lock only (same BT Save→relock UX).
+              setDraft(false);
+            }}
           />
         ) : null}
 
@@ -210,7 +262,7 @@ export function ParityScheduleClient({
             scheduleId={SCHEDULE_ID}
             jobName={JOB_NAME}
             existingItems={GANTT_ITEMS.map((i) => ({ id: i.id, title: i.title }))}
-            staff={[]}
+            staff={[...STAFF]}
           />
         ) : null}
 

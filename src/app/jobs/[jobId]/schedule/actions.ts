@@ -270,3 +270,48 @@ export async function setScheduleFlagAction(formData: FormData): Promise<void> {
   }
   revalidatePath(`/jobs/${jobId}/schedule`);
 }
+
+/**
+ * Persist Gantt drag moves from Draft mode, then re-lock (isDraft=false) so the
+ * schedule isn’t left unlocked with unsaved edits — BT Save + lock flow.
+ * Moved items pin to the new start via manualStartDate; predecessors are cleared
+ * so CPM doesn’t snap them back to the old chain.
+ */
+export async function saveGanttMovesAction(input: {
+  jobId: string;
+  scheduleId: string;
+  moves: readonly { itemId: string; startDate: string }[];
+  relock?: boolean;
+}): Promise<ActionState> {
+  const user = await requireAppUser();
+  const { jobId, scheduleId, moves, relock = true } = input;
+
+  for (const move of moves) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(move.startDate)) {
+      return { error: `Invalid start date for ${move.itemId}.` };
+    }
+  }
+
+  try {
+    for (const move of moves) {
+      await updateScheduleItem({
+        organizationId: user.organizationId,
+        itemId: move.itemId,
+        manualStartDate: new Date(`${move.startDate}T00:00:00Z`),
+        predecessorIds: [],
+        lagDays: 0,
+      });
+    }
+    if (relock) {
+      await setScheduleFlags(user.organizationId, scheduleId, { isDraft: false });
+    }
+  } catch (error) {
+    if (error instanceof ScheduleItemNotFoundError || error instanceof ScheduleNotFoundError) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/schedule`);
+  return { ok: true };
+}
