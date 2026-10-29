@@ -9,7 +9,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 import { computeDrawAmountCents } from "@/lib/invoicing/calc";
-import { PAYMENT_TERMS_LABELS, daysOverdue } from "@/lib/invoicing/terms";
+import { daysOverdue, effectiveInvoiceStatus, paymentTermsDisplayLabel } from "@/lib/invoicing/terms";
 import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
 import { CreateInvoiceForm } from "./create-invoice-form";
@@ -227,11 +227,12 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
     0,
   );
   const overdueCents = live.reduce((total, invoice) => {
-    if (invoice.status === "PAID" || invoice.status === "DRAFT") return total;
+    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
+    const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paid);
+    if (displayStatus === "PAID" || displayStatus === "DRAFT") return total;
     if (daysOverdue(invoice.dueOn, now) === 0) return total;
     const settled =
-      invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0) +
-      invoice.creditMemos.reduce((sum, memo) => sum + memo.amountCents, 0);
+      paid + invoice.creditMemos.reduce((sum, memo) => sum + memo.amountCents, 0);
     return total + (invoice.amountCents - settled);
   }, 0);
   const unappliedDepositCents = deposits
@@ -355,27 +356,29 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                   const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
                   const credited = invoice.creditMemos.reduce((sum, memo) => sum + memo.amountCents, 0);
                   const balance = invoice.amountCents - paid - credited;
-                  const late = invoice.status !== "PAID" && invoice.status !== "DRAFT" && daysOverdue(invoice.dueOn, now);
-                  const canAct = invoice.status !== "VOID" && invoice.status !== "PAID";
+                  const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paid);
+                  const termsLabel = paymentTermsDisplayLabel(invoice.paymentTerms);
+                  const late = displayStatus !== "PAID" && displayStatus !== "DRAFT" && daysOverdue(invoice.dueOn, now);
+                  const canAct = displayStatus !== "VOID" && displayStatus !== "PAID";
                   return (
                     <tr key={invoice.id} className="border-b align-top last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                      <td className="px-4 py-3 text-[var(--bt-muted)]">{job.name}</td>
-                      <td className="px-4 py-3 font-medium">
+                      <td className="max-w-[9rem] px-3 py-3 text-[var(--bt-muted)] sm:px-4">{job.name}</td>
+                      <td className="px-3 py-3 font-medium sm:px-4">
                         <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
                           {invoice.invoiceNumber}
                         </Link>
                         <div className="mt-0.5 flex flex-col text-[10px] text-[var(--bt-muted)]">
-                          {invoice.paymentTerms !== "CUSTOM" ? <span>{PAYMENT_TERMS_LABELS[invoice.paymentTerms]}</span> : null}
+                          {termsLabel ? <span>{termsLabel}</span> : null}
                           <span>{invoice.clientLastViewedAt ? `Viewed ${formatDate(invoice.clientLastViewedAt)}` : "Not viewed yet"}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4">
                         <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
                           {invoice.title ?? "—"}
                         </Link>
                       </td>
-                      <td className="px-4 py-3">
-                        <Badge status={invoice.status} />
+                      <td className="px-3 py-3 sm:px-4">
+                        <Badge status={displayStatus} />
                       </td>
                       <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(invoice.amountCents)}</td>
                       <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(paid)}</td>

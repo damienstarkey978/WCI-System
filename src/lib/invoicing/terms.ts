@@ -4,7 +4,7 @@
  * a bill that is wrong, and that has to be testable without standing anything up.
  */
 
-import type { PaymentTerms } from "@/generated/prisma/enums";
+import type { InvoiceStatus, PaymentTerms } from "@/generated/prisma/enums";
 import { roundHalfAwayFromZero, type BasisPoints, type Cents } from "@/lib/money";
 
 const NET_DAYS: Readonly<Record<PaymentTerms, number | null>> = {
@@ -25,6 +25,37 @@ export const PAYMENT_TERMS_LABELS: Readonly<Record<PaymentTerms, string>> = {
   NET_60: "Net 60",
   CUSTOM: "Custom date",
 };
+
+/**
+ * Label shown under an invoice id. CUSTOM (WCI default / BT-with-no-terms) renders
+ * as blank — never "Net 30", which WCI does not use.
+ */
+export function paymentTermsDisplayLabel(terms: PaymentTerms): string | null {
+  if (terms === "CUSTOM") return null;
+  return PAYMENT_TERMS_LABELS[terms];
+}
+
+/**
+ * Status the invoices list/detail should show. A stored PAID with $0 in Payment
+ * rows is a migration gap (Heather #15) — never present as PAID until payments cover.
+ * DRAFT/VOID stay as stored.
+ */
+export function effectiveInvoiceStatus(
+  stored: InvoiceStatus,
+  amountCents: number,
+  paidCents: number,
+): InvoiceStatus {
+  if (stored === "VOID" || stored === "DRAFT") return stored;
+  if (amountCents >= 0) {
+    if (paidCents <= 0) return "SENT";
+    if (paidCents >= amountCents) return "PAID";
+    return "PARTIALLY_PAID";
+  }
+  // Credit/refund invoice (negative): "paid" means payments have reached the credit.
+  if (paidCents >= 0) return "SENT";
+  if (paidCents <= amountCents) return "PAID";
+  return "PARTIALLY_PAID";
+}
 
 /**
  * The due date these terms imply, or null on CUSTOM. Day arithmetic is done in UTC
