@@ -2,10 +2,11 @@
  * Persist AI takeoff drafts. Keeps takeoff-assistant free of Prisma.
  */
 
+import { TakeoffLineStatus } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { draftTakeoffFromNotes } from "@/lib/ai/takeoff-assistant";
 import type { CostCodeOption } from "@/lib/ai/takeoff-draft";
-import { createTakeoff } from "@/lib/takeoffs/service";
+import { createTakeoff, TakeoffNotFoundError } from "@/lib/takeoffs/service";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -21,10 +22,19 @@ export class NoCostCodesError extends Error {
   }
 }
 
+export class TakeoffNotEmptyForAiDraftError extends Error {
+  constructor() {
+    super("This takeoff already has lines. Create a new AI takeoff instead of overwriting.");
+    this.name = "TakeoffNotEmptyForAiDraftError";
+  }
+}
+
 export interface CreateAiTakeoffDraftInput {
   readonly organizationId: string;
   readonly jobId: string;
   readonly notes: string;
+  /** When set, fills this existing empty takeoff (keeps attached plans) instead of creating a new one. */
+  readonly takeoffId?: string;
 }
 
 export interface CreateAiTakeoffDraftResult {
@@ -55,6 +65,49 @@ export async function createAiTakeoffDraft(input: CreateAiTakeoffDraftInput): Pr
     notes: input.notes,
     costCodes,
   });
+
+  const lineCreates = draft.lineItems.map((line, index) => ({
+    costCodeId: line.costCodeId,
+    costType: defaultCostTypeById.get(line.costCodeId) ?? "NONE",
+    title: line.title,
+    description: line.description,
+    quantityMilli: line.quantityMilli,
+    unit: line.unit,
+    unitCostCents: line.unitCostCents,
+    groupLabel: line.groupLabel,
+    confidence: line.confidence,
+    sortOrder: index,
+    status: TakeoffLineStatus.DRAFT,
+  }));
+
+  if (input.takeoffId) {
+    const existing = await db.takeoff.findFirst({
+      where: { id: input.takeoffId, organizationId: input.organizationId, jobId: job.id },
+      include: { lines: { select: { id: true } } },
+    });
+    if (!existing) throw new TakeoffNotFoundError(input.takeoffId);
+    if (existing.lines.length > 0) throw new TakeoffNotEmptyForAiDraftError();
+
+    const takeoff = await db.takeoff.update({
+      where: { id: existing.id },
+      data: {
+        title: draft.title || existing.title,
+        notes: input.notes,
+        aiGenerated: true,
+        aiPromptNotes: input.notes,
+        assumptions: [...draft.assumptions],
+        lines: { create: lineCreates },
+      },
+      include: { lines: true },
+    });
+
+    return {
+      takeoffId: takeoff.id,
+      title: takeoff.title,
+      assumptions: draft.assumptions,
+      lineItemCount: takeoff.lines.length,
+    };
+  }
 
   const takeoff = await createTakeoff({
     organizationId: input.organizationId,

@@ -262,3 +262,16 @@ export async function setFileVisibility(
 
   return db.file.update({ where: { id: file.id }, data: visibility });
 }
+
+/**
+ * Plans & Specs source of truth for job plan drawings: File rows with
+ * category PLAN (not trashed). Takeoffs import-from-Plans-Specs and the
+ * Plans tab both read this — do not invent a parallel plans store.
+ */
+export async function listJobPlanFiles(organizationId: string, jobId: string) {
+  return db.file.findMany({
+    where: { organizationId, jobId, category: "PLAN", deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    include: { uploadedByUser: true },
+  });
+}

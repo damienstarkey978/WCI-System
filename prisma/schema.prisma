@@ -1115,9 +1115,28 @@ model Takeoff {
 
   lines   TakeoffLine[]
   intents PurchasingIntent[]
+  /// Plans attached to this takeoff (import from Plans & Specs or direct upload).
+  /// Join table — the File stays a job PLAN and still appears on Plans & Specs.
+  planFiles TakeoffFile[]
 
   @@index([organizationId])
   @@index([jobId, status])
+}
+
+/// Links a job File (typically category PLAN) to a Takeoff without moving or
+/// duplicating storage. Import from Plans & Specs and takeoff uploads both create
+/// rows here; detaching deletes the link only.
+model TakeoffFile {
+  id        String  @id @default(cuid())
+  takeoffId String
+  takeoff   Takeoff @relation(fields: [takeoffId], references: [id], onDelete: Cascade)
+  fileId    String
+  file      File    @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([takeoffId, fileId])
+  @@index([fileId])
 }
 
 model TakeoffLine {
@@ -2339,6 +2358,9 @@ model File {
   /// Soft delete (Buildertrend's View trash). Every read of files must filter deletedAt: null;
   /// "Delete forever" is the only thing that removes the row and the stored object.
   deletedAt DateTime?
+
+  /// Takeoffs that reference this file as a plan attachment (via TakeoffFile).
+  takeoffFiles TakeoffFile[]
 
   createdAt DateTime @default(now())
 

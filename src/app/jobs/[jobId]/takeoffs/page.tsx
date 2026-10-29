@@ -13,6 +13,7 @@ import { formatMoney } from "@/lib/format";
 import { listTakeoffsForJob } from "@/lib/takeoffs/service";
 
 import { AiDraftTakeoffForm } from "./ai-draft-form";
+import { NewTakeoffForm } from "./new-takeoff-form";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +43,22 @@ export default async function TakeoffsPage({ params }: PageProps<"/jobs/[jobId]/
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              href={`/jobs/${job.id}/plans-and-specs`}
+              className="rounded border px-3 py-2 text-sm font-semibold"
+              style={{ borderColor: "var(--bt-border)", color: "var(--bt-text)" }}
+            >
+              Plans &amp; Specs
+            </Link>
+            <Link
               href={`/jobs/${job.id}/purchasing`}
               className="rounded border px-3 py-2 text-sm font-semibold"
               style={{ borderColor: "var(--bt-border)", color: "var(--bt-text)" }}
             >
               Purchasing
             </Link>
+            <CreateModal triggerLabel="New takeoff" title="New takeoff" variant="secondary">
+              <NewTakeoffForm jobId={job.id} />
+            </CreateModal>
             <CreateModal triggerLabel="AI takeoff" title="Draft takeoff from plans / measurements">
               <AiDraftTakeoffForm jobId={job.id} />
             </CreateModal>
@@ -56,14 +67,25 @@ export default async function TakeoffsPage({ params }: PageProps<"/jobs/[jobId]/
       />
 
       <p className="text-sm text-[var(--bt-muted)]">
-        Quantity takeoffs from plans and measurements. Review, then explicitly send lines to Estimating or push to a PO.
+        Quantity takeoffs from plans and measurements. Attach drawings from Plans &amp; Specs, enter
+        measurements, then send lines to Estimating or push to a PO.
       </p>
 
       {takeoffs.length === 0 ? (
         <EmptyState
           icon={<NoteIcon className="h-10 w-10" />}
           title="No takeoffs yet"
-          description="Draft one from plan or measurement notes. Nothing is purchased until you Send to Estimating or Push to PO."
+          description="Create a takeoff to import plans from Plans & Specs or upload drawings, then enter measurements. Nothing is purchased until you Send to Estimating or Push to PO."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <CreateModal triggerLabel="New takeoff" title="New takeoff" variant="secondary">
+                <NewTakeoffForm jobId={job.id} />
+              </CreateModal>
+              <CreateModal triggerLabel="AI takeoff" title="Draft takeoff from plans / measurements">
+                <AiDraftTakeoffForm jobId={job.id} />
+              </CreateModal>
+            </div>
+          }
         />
       ) : (
         <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "var(--bt-border)" }}>
@@ -73,6 +95,7 @@ export default async function TakeoffsPage({ params }: PageProps<"/jobs/[jobId]/
                 <th className="px-3 py-2 font-medium">Title</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Lines</th>
+                <th className="px-3 py-2 font-medium">Plans</th>
                 <th className="px-3 py-2 font-medium">Est. cost</th>
                 <th className="px-3 py-2 font-medium">Source</th>
               </tr>
@@ -95,6 +118,7 @@ export default async function TakeoffsPage({ params }: PageProps<"/jobs/[jobId]/
                     </td>
                     <td className="px-3 py-2.5 text-[var(--bt-text)]">{takeoff.status}</td>
                     <td className="px-3 py-2.5 text-[var(--bt-text)]">{takeoff.lines.length}</td>
+                    <td className="px-3 py-2.5 text-[var(--bt-text)]">{takeoff._count.planFiles}</td>
                     <td className="px-3 py-2.5 text-[var(--bt-text)]">{formatMoney(estCents)}</td>
                     <td className="px-3 py-2.5 text-[var(--bt-muted)]">
                       {takeoff.aiGenerated ? "AI draft" : "Manual"}
