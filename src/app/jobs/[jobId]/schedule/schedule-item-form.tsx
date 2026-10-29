@@ -5,18 +5,9 @@ import { useActionState, useMemo, useState } from "react";
 import { CloseIcon } from "@/components/shell/icons";
 
 import { saveScheduleItemAction, type ActionState } from "./actions";
+import { SCHEDULE_DISPLAY_COLORS as DISPLAY_COLORS } from "./schedule-colors";
 
 const INITIAL: ActionState = {};
-
-const DISPLAY_COLORS = [
-  { name: "Olive", hex: "#6B8E23" },
-  { name: "Blue", hex: "#2563EB" },
-  { name: "Teal", hex: "#0D9488" },
-  { name: "Orange", hex: "#EA580C" },
-  { name: "Purple", hex: "#7C3AED" },
-  { name: "Red", hex: "#DC2626" },
-  { name: "Gray", hex: "#6B7280" },
-] as const;
 
 const REMINDER_OPTIONS = [
   { label: "None", value: "" },
