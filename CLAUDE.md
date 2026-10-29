@@ -694,8 +694,13 @@ Record every architectural decision that departs from the above, with the reason
   an optional bot helper for Building+MEP shells without inspections. Staff
   add/remove inspections on Permitting from the city-style catalog
   (`DEMO_INSPECTIONS_BY_TRADE`); Inspection Pictures creates a folder only for
-  inspections that exist on that job — it never seeds permit shells. Jobs that
-  already had older full seeds keep those rows until staff removes them.
+  inspections that exist on that job — it never seeds *new permit shells*. Empty
+  permit shells (zero inspections — the #67 Building-only default) get that
+  trade’s typical inspections seeded when folders are listed/ensured so photo
+  ops are not gated behind “open permitting.” Staff/bots may also
+  `POST /folders` with `kind=inspection` (city name) to create one folder
+  without a Permitting detour. Jobs that already had older full seeds keep
+  those rows until staff removes them.
 - **Permitting page is single-job scoped:** `/jobs/{jobId}/permitting` loads only
   that job (`getJobPermitting`). The earlier org-wide multi-job list was wrong for
   cutover — never reintroduce `listPermittingJobs` into the job route UI.

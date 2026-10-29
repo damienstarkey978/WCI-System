@@ -265,7 +265,7 @@ export default async function FilesPage({
                 </td>
                 <td className="px-4 py-3 text-xs text-[var(--bt-muted)]">
                   {inspectionFolders.length === 0
-                    ? "Add inspections on Permitting — folders appear here automatically"
+                    ? "Create folders on Inspection Pictures (or add inspections on Permitting)"
                     : `${inspectionFolders.length} inspection folder${inspectionFolders.length === 1 ? "" : "s"}`}
                 </td>
                 <td className="px-4 py-3" />

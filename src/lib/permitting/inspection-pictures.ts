@@ -1,14 +1,24 @@
 /**
  * Inspection Pictures: one FileFolder per JobPermitInspection on the job.
- * Folders are created only for inspections that exist on that job's permitting
- * list — never a global dump of every city/demo inspection type.
+ * Folders are created for inspections on that job's permitting list — never a
+ * global dump of every city/demo inspection type.
+ *
+ * Ops rule (Damien 2026-10-29): never gate folder create / photo upload behind
+ * "open permitting." Staff and bots may create an inspection folder by city
+ * inspection name; empty permit shells (Building-only default from #67) get
+ * typical inspections seeded so folders can materialize.
  * Inspectors get a headless signed share link (no seat/login) to view + upload.
  */
 
+import { PermitTrade } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
-import { createFolder } from "@/lib/files/folders";
+import { createFolder, FolderNameTakenError } from "@/lib/files/folders";
 import { resolveFileUrlsSafe, uploadAndRegisterFile } from "@/lib/files/service";
-import { InspectionNotFoundError, JobNotFoundError } from "@/lib/permitting/service";
+import {
+  DEFAULT_INSPECTIONS_ON_ADD,
+  InspectionNotFoundError,
+  JobNotFoundError,
+} from "@/lib/permitting/service";
 import {
   guideForInspectionName,
   inspectionPictureFolderName,
@@ -20,11 +30,51 @@ import { emitEvent } from "@/lib/webhooks";
 const SHARE_LINK_PREFIX = "wciips";
 const SHARE_LINK_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
+export class InspectionFolderNameRequiredError extends Error {
+  constructor() {
+    super("Inspection name is required.");
+    this.name = "InspectionFolderNameRequiredError";
+  }
+}
+
+/**
+ * Recover #67 empty permit shells: permits that exist with zero inspections
+ * get that trade's typical city-style defaults so Inspection Pictures can
+ * operate. Does not invent permits. Idempotent when inspections already exist.
+ */
+export async function seedTypicalInspectionsOnEmptyPermits(organizationId: string, jobId: string) {
+  const permits = await db.jobPermit.findMany({
+    where: { jobId, organizationId },
+    select: {
+      id: true,
+      trade: true,
+      _count: { select: { inspections: true } },
+    },
+  });
+
+  for (const permit of permits) {
+    if (permit._count.inspections > 0) continue;
+    const defaults = DEFAULT_INSPECTIONS_ON_ADD[permit.trade] ?? [];
+    if (defaults.length === 0) continue;
+    await db.jobPermitInspection.createMany({
+      data: defaults.map((name, index) => ({
+        permitId: permit.id,
+        name,
+        sortOrder: index,
+      })),
+    });
+  }
+}
+
 export async function ensureInspectionPictureFolders(organizationId: string, jobId: string) {
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
   if (!job) throw new JobNotFoundError(jobId);
 
-  // Folders only for inspections already on this job — never invents permits or inspections.
+  // Empty Building/MEP shells (ensureBuildingPermit / ensure-defaults) blocked
+  // photo ops after #67 — seed typical inspections so folders can appear.
+  await seedTypicalInspectionsOnEmptyPermits(organizationId, jobId);
+
+  // Folders only for inspections already on this job — never invents a catalog dump.
   const inspections = await db.jobPermitInspection.findMany({
     where: { permit: { jobId, organizationId } },
     orderBy: [{ permit: { trade: "asc" } }, { sortOrder: "asc" }],
@@ -45,6 +95,104 @@ export async function ensureInspectionPictureFolders(organizationId: string, job
       data: { folderId: folder.id },
     });
   }
+}
+
+export interface CreateInspectionPictureFolderInput {
+  readonly organizationId: string;
+  readonly jobId: string;
+  /** City inspection name (e.g. "Slab", "Electrical Rough") — not Permit Rockstar. */
+  readonly name: string;
+  /** Defaults from Permit Rockstar guide map, else BUILDING. */
+  readonly trade?: PermitTrade;
+}
+
+/**
+ * Create (or return) one inspection picture folder by city inspection name.
+ * Ensures the trade permit exists, adds the inspection if missing, and links
+ * a FileFolder — without requiring a trip through the Permitting UI.
+ */
+export async function createInspectionPictureFolder(input: CreateInspectionPictureFolderInput) {
+  const name = input.name.replace(/\s+/g, " ").trim();
+  if (!name) throw new InspectionFolderNameRequiredError();
+
+  const job = await db.job.findFirst({
+    where: { id: input.jobId, organizationId: input.organizationId },
+    select: { id: true, permitNumber: true },
+  });
+  if (!job) throw new JobNotFoundError(input.jobId);
+
+  const guide = guideForInspectionName(name);
+  const trade = input.trade ?? (guide?.trade as PermitTrade | undefined) ?? PermitTrade.BUILDING;
+
+  let permit = await db.jobPermit.findUnique({
+    where: { jobId_trade: { jobId: job.id, trade } },
+  });
+  if (!permit) {
+    permit = await db.jobPermit.create({
+      data: {
+        organizationId: input.organizationId,
+        jobId: job.id,
+        trade,
+        permitNumber: trade === PermitTrade.BUILDING ? job.permitNumber : null,
+      },
+    });
+  }
+
+  let inspection = await db.jobPermitInspection.findFirst({
+    where: { permitId: permit.id, name: { equals: name, mode: "insensitive" } },
+  });
+  if (!inspection) {
+    const last = await db.jobPermitInspection.findFirst({
+      where: { permitId: permit.id },
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true },
+    });
+    inspection = await db.jobPermitInspection.create({
+      data: {
+        permitId: permit.id,
+        name,
+        sortOrder: (last?.sortOrder ?? -1) + 1,
+      },
+    });
+  }
+
+  if (!inspection.folderId) {
+    const folderName = inspectionPictureFolderName(inspection.name);
+    let folder = await db.fileFolder.findFirst({
+      where: {
+        jobId: job.id,
+        organizationId: input.organizationId,
+        name: { equals: folderName, mode: "insensitive" },
+      },
+    });
+    if (!folder) {
+      try {
+        folder = await createFolder(input.organizationId, job.id, folderName);
+      } catch (error) {
+        if (!(error instanceof FolderNameTakenError)) throw error;
+        folder = await db.fileFolder.findFirstOrThrow({
+          where: {
+            jobId: job.id,
+            organizationId: input.organizationId,
+            name: { equals: folderName, mode: "insensitive" },
+          },
+        });
+      }
+    }
+    inspection = await db.jobPermitInspection.update({
+      where: { id: inspection.id },
+      data: { folderId: folder.id },
+    });
+  }
+
+  await ensureInspectionPictureFolders(input.organizationId, job.id);
+
+  const folders = await listInspectionPictureFolders(input.organizationId, job.id);
+  const created = folders.find((row) => row.inspectionId === inspection.id);
+  if (!created) {
+    throw new Error(`Inspection folder for "${name}" was created but could not be listed.`);
+  }
+  return created;
 }
 
 export async function listInspectionPictureFolders(organizationId: string, jobId: string) {

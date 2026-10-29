@@ -98,6 +98,31 @@ export const listChangeOrdersQuerySchema = listPagingQuerySchema.extend({
 
 export const listFoldersQuerySchema = z.object({
   jobId: z.string().min(1).max(64),
+  /** When `inspection`, returns Inspection Pictures folders (ensures empty permit shells get typical inspections + FileFolders). */
+  kind: z.enum(["document", "inspection", "all"]).optional().default("all"),
+});
+
+export const createFolderSchema = z
+  .object({
+    jobId: z.string().min(1).max(64),
+    name: z.string().trim().min(1).max(120),
+    /** `inspection` creates/links a JobPermitInspection folder; default is a Documents folder. */
+    kind: z.enum(["document", "inspection"]).optional().default("document"),
+    trade: z.enum(PermitTrade).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.kind !== "inspection" && value.trade !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["trade"],
+        message: "trade is only valid when kind is inspection.",
+      });
+    }
+  });
+
+export const issueInspectionShareLinkSchema = z.object({
+  label: z.string().trim().max(120).nullish(),
+  revokePrevious: z.boolean().optional(),
 });
 
 export const listTakeoffsQuerySchema = listPagingQuerySchema.extend({
@@ -550,6 +575,8 @@ export const registerFileSchema = z.object({
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
   dailyLogId: z.string().min(1).max(64).nullish(),
+  /** Put the file in a Documents or Inspection Pictures FileFolder on the same job. */
+  folderId: z.string().min(1).max(64).nullish(),
 });
 
 // ---------------------------------------------------------------------------

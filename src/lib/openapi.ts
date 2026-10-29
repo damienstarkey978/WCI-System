@@ -19,6 +19,7 @@ import {
   aiDraftTakeoffSchema,
   aiOcrBillSchema,
   convertPurchasingIntentSchema,
+  createFolderSchema,
   answerRfiSchema,
   approveChangeOrderSchema,
   bulkClockInSchema,
@@ -66,6 +67,7 @@ import {
   importScheduleFlagsSchema,
   importScheduleItemsSchema,
   inviteVendorToBidSchema,
+  issueInspectionShareLinkSchema,
   issueSubmittalReviewLinkSchema,
   issueSurveyResponseLinkSchema,
   matchByRoadNameSchema,
@@ -1154,12 +1156,46 @@ const ENDPOINTS: readonly EndpointDef[] = [
     method: "get",
     path: "/folders",
     summary: "List file folders for a job",
-    description: "Documents folders and inspection-picture folders. jobId is required.",
+    description:
+      "Documents and/or Inspection Pictures folders. jobId is required. " +
+      "kind=inspection returns inspection folders (and seeds typical inspections onto empty permit shells so photo ops are not blocked). " +
+      "kind=document excludes inspection-linked folders. kind=all (default) returns raw FileFolder rows.",
     tags: ["Files"],
     scopes: ["files:read"],
     queryParams: [
       { name: "jobId", description: "Required. Job whose folders to list.", required: true },
+      {
+        name: "kind",
+        description: "Optional. all (default) | document | inspection.",
+        required: false,
+      },
     ],
+  },
+  {
+    method: "post",
+    path: "/folders",
+    summary: "Create a Documents or Inspection Pictures folder",
+    description:
+      "kind=document (default): create a Documents FileFolder. " +
+      "kind=inspection: create/link a city-named inspection folder (ensures permit + JobPermitInspection + FileFolder) " +
+      "without requiring the Permitting UI. Prefer city inspection names (Slab, Electrical Rough), not Permit Rockstar titles.",
+    tags: ["Files"],
+    scopes: ["files:write"],
+    requestSchema: createFolderSchema,
+    successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/permit-inspections/{inspectionId}/share-link",
+    summary: "Issue an inspector share link for an inspection picture folder",
+    description:
+      "Returns a durable wciips_ URL for headless view/upload. No email/SMS — deliver out-of-band. " +
+      "Rotates prior active links for that inspection by default.",
+    tags: ["Files", "Permitting"],
+    scopes: ["files:write"],
+    pathParams: ["inspectionId"],
+    requestSchema: issueInspectionShareLinkSchema,
+    successStatus: 201,
   },
 
   // --- Comments ---------------------------------------------------------------

@@ -5,14 +5,16 @@ import { generateSecureToken, hashSecret } from "@/lib/secure-tokens";
 vi.mock("@/lib/db", () => ({
   db: {
     job: { findFirst: vi.fn() },
-    jobPermit: { findUnique: vi.fn(), create: vi.fn() },
+    jobPermit: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     jobPermitInspection: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
+      create: vi.fn(),
+      createMany: vi.fn(),
     },
-    fileFolder: { findFirst: vi.fn() },
+    fileFolder: { findFirst: vi.fn(), findFirstOrThrow: vi.fn() },
     file: { findMany: vi.fn(), create: vi.fn() },
     inspectionPictureShareLink: {
       create: vi.fn(),
@@ -53,6 +55,7 @@ import { db } from "@/lib/db";
 import { createFolder } from "@/lib/files/folders";
 import { uploadAndRegisterFile } from "@/lib/files/service";
 import {
+  createInspectionPictureFolder,
   getInspectionFolderForShareToken,
   InvalidInspectionShareLinkError,
   issueInspectionPictureShareLink,
@@ -64,6 +67,7 @@ import { emitEvent } from "@/lib/webhooks";
 describe("inspection pictures folders + share links", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(db.jobPermit.findMany).mockResolvedValue([] as never);
   });
 
   it("lists folders only for inspections that exist on the job", async () => {
@@ -105,6 +109,69 @@ describe("inspection pictures folders + share links", () => {
     expect(vi.mocked(db.jobPermitInspection.findMany).mock.calls[0]?.[0]).toMatchObject({
       where: { permit: { jobId: "job_1", organizationId: "org_1" } },
     });
+  });
+
+  it("seeds typical inspections onto empty permit shells before listing folders", async () => {
+    vi.mocked(db.job.findFirst).mockResolvedValue({ id: "job_1" } as never);
+    vi.mocked(db.jobPermit.findMany).mockResolvedValue([
+      { id: "permit_building", trade: "BUILDING", _count: { inspections: 0 } },
+    ] as never);
+    vi.mocked(db.jobPermitInspection.createMany).mockResolvedValue({ count: 4 } as never);
+    vi.mocked(db.jobPermitInspection.findMany).mockResolvedValue([] as never);
+
+    await listInspectionPictureFolders("org_1", "job_1");
+
+    expect(db.jobPermitInspection.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({ permitId: "permit_building", name: "Slab" }),
+          expect.objectContaining({ permitId: "permit_building", name: "Footer" }),
+        ]),
+      }),
+    );
+  });
+
+  it("creates an inspection folder by city name without a Permitting detour", async () => {
+    vi.mocked(db.job.findFirst).mockResolvedValue({ id: "job_1", permitNumber: "BP-1" } as never);
+    vi.mocked(db.jobPermit.findUnique).mockResolvedValue(null as never);
+    vi.mocked(db.jobPermit.create).mockResolvedValue({ id: "permit_1", trade: "BUILDING" } as never);
+    vi.mocked(db.jobPermitInspection.findFirst)
+      .mockResolvedValueOnce(null as never)
+      .mockResolvedValueOnce({ sortOrder: -1 } as never);
+    vi.mocked(db.jobPermitInspection.create).mockResolvedValue({
+      id: "insp_slab",
+      name: "Slab",
+      folderId: null,
+    } as never);
+    vi.mocked(db.fileFolder.findFirst).mockResolvedValue(null as never);
+    vi.mocked(createFolder).mockResolvedValue({ id: "folder_1", name: "Inspection: Slab" } as never);
+    vi.mocked(db.jobPermitInspection.update).mockResolvedValue({
+      id: "insp_slab",
+      name: "Slab",
+      folderId: "folder_1",
+    } as never);
+    vi.mocked(db.jobPermit.findMany).mockResolvedValue([] as never);
+    const listed = {
+      id: "insp_slab",
+      name: "Slab",
+      folderId: "folder_1",
+      completedAt: null,
+      permit: { trade: "BUILDING" },
+      folder: { id: "folder_1", name: "Inspection: Slab", _count: { files: 0 } },
+      shareLinks: [],
+    };
+    vi.mocked(db.jobPermitInspection.findMany).mockResolvedValue([listed] as never);
+
+    const folder = await createInspectionPictureFolder({
+      organizationId: "org_1",
+      jobId: "job_1",
+      name: "Slab",
+    });
+
+    expect(folder.folderId).toBe("folder_1");
+    expect(folder.name).toBe("Slab");
+    expect(db.jobPermit.create).toHaveBeenCalled();
+    expect(createFolder).toHaveBeenCalledWith("org_1", "job_1", "Inspection: Slab");
   });
 
   it("issues a reusable inspector share link and returns the public path", async () => {
