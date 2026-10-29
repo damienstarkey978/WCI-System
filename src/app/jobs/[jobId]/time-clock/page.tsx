@@ -8,7 +8,7 @@ import { CalendarIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatTime } from "@/lib/format";
 import { workedHours } from "@/lib/time-clock/hours";
 
 import { ClockInForm } from "./clock-in-form";
@@ -75,7 +75,7 @@ export default async function TimeClockPage({ params, searchParams }: PageProps<
   ]);
 
   const canReview = user.role === "ADMIN" || user.role === "PM";
-  const asOf = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const asOf = formatTime(new Date());
 
   const clockInModal = (
     <CreateModal triggerLabel="Clock In" title="Clock in" size="md">

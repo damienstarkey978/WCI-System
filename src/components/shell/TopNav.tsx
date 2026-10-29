@@ -4,8 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import { UserButton } from "@clerk/nextjs";
-
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
 import {
@@ -27,14 +25,12 @@ import { BrandMark } from "./BrandMark";
 import { GlobalSearch } from "./GlobalSearch";
 import type { SidebarJob } from "./JobSidebar";
 import { MobileMenuDrawer } from "./MobileMenuDrawer";
+import { StaffUserMenu } from "./StaffUserMenu";
 import {
   BellIcon,
-  BuildingIcon,
   ChatIcon,
   ChevronDownIcon,
   ClientHomeIcon,
-  GearIcon,
-  GlobeIcon,
   HammerIcon,
   HelpIcon,
   MenuIcon,
@@ -381,6 +377,9 @@ export function TopNav({
   activeJobId,
   clerkConfigured,
   isAdmin = false,
+  userName = "",
+  userEmail = "",
+  userRoleLabel = "",
   notifications = [],
   unreadCount = 0,
   jobs = [],
@@ -394,6 +393,9 @@ export function TopNav({
   clerkConfigured: boolean;
   /** Whether to show "Company settings" in the avatar menu below (AppShell.tsx resolves this). */
   isAdmin?: boolean;
+  userName?: string;
+  userEmail?: string;
+  userRoleLabel?: string;
   notifications?: readonly BellNotification[];
   unreadCount?: number;
   /** For the mobile menu drawer's job jump-list — the same list JobSidebar renders, which is hidden below `md`. */
@@ -491,19 +493,13 @@ export function TopNav({
         ) : null}
         <PeopleDropdown pathname={pathname} />
         <HelpMenu />
-        {clerkConfigured ? (
-          <div className="ml-1 sm:ml-2">
-            <UserButton>
-              <UserButton.MenuItems>
-                <UserButton.Link label="Settings" href="/settings" labelIcon={<GearIcon className="h-4 w-4" />} />
-                {isAdmin ? (
-                  <UserButton.Link label="Company settings" href="/settings/company" labelIcon={<BuildingIcon className="h-4 w-4" />} />
-                ) : null}
-                <UserButton.Link label="Integrations" href="/settings/connections" labelIcon={<GlobeIcon className="h-4 w-4" />} />
-              </UserButton.MenuItems>
-            </UserButton>
-          </div>
-        ) : null}
+        <StaffUserMenu
+          name={userName}
+          email={userEmail}
+          roleLabel={userRoleLabel}
+          isAdmin={isAdmin}
+          clerkConfigured={clerkConfigured}
+        />
       </div>
 
       <MobileMenuDrawer

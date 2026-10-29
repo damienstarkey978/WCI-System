@@ -1,6 +1,14 @@
 /** Shared display formatting for the Buildertrend-match staff UI. */
 
 /**
+ * WCI's business timezone (Jacksonville). Server-rendered clocks must use this —
+ * without it, Node's default (UTC on Vercel/Netlify) shows clock-in times four or
+ * five hours ahead of Eastern, which Heather reported as "3:41 PM when it was
+ * 11:41 AM Eastern."
+ */
+export const DISPLAY_TIMEZONE = "America/New_York";
+
+/**
  * Money, to the cent.
  *
  * This used to round to whole dollars, which quietly broke every screen that shows
@@ -30,7 +38,35 @@ export function formatDateUtc(date: Date | null): string {
 
 export function formatDate(date: Date | null): string {
   if (!date) return "—";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: DISPLAY_TIMEZONE,
+  });
+}
+
+/** Wall-clock time in the WCI business timezone (e.g. "11:41 AM"). */
+export function formatTime(date: Date | null): string {
+  if (!date) return "—";
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: DISPLAY_TIMEZONE,
+  });
+}
+
+/** Date + time in the WCI business timezone (e.g. "Oct 28, 2026, 11:41 AM"). */
+export function formatDateTime(date: Date | null): string {
+  if (!date) return "—";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: DISPLAY_TIMEZONE,
+  });
 }
 
 export function formatPercent(basisPoints: number): string {

@@ -5,7 +5,7 @@ import { DocumentIcon, ThumbsUpIcon } from "@/components/shell/icons";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatTime } from "@/lib/format";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 import { SetupNotice } from "@/app/admin/setup-notice";
 
@@ -298,7 +298,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
 
         <p className="mt-3 text-sm text-[var(--bt-text)]">
           {clockedInCount} internal user{clockedInCount === 1 ? "" : "s"} {clockedInCount === 1 ? "is" : "are"} clocked in as of{" "}
-          {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.
+          {formatTime(now)}.
         </p>
         <Link href={`/jobs/${job.id}/time-clock`} className="text-sm text-[var(--bt-primary)] hover:underline">
           View time sheets
@@ -447,7 +447,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
                             {entry.actorLabel ? <span className="font-semibold">{entry.actorLabel}</span> : null}{" "}
                             {entry.description}
                             <span className="ml-1.5 text-xs text-[var(--bt-muted)]">
-                              {entry.createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                              {formatTime(entry.createdAt)}
                             </span>
                           </p>
                           {entry.itemLabel ? (
