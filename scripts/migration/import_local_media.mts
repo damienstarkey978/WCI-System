@@ -7,7 +7,7 @@
  *       --job-map /path/to/bt-to-wci-job-map.json
  */
 import "dotenv/config";
-import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { join, extname } from "path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../../src/generated/prisma/client";
