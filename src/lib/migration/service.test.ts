@@ -9,6 +9,7 @@ const {
   billCreate,
   invoiceFindFirst,
   invoiceCreate,
+  invoiceUpdate,
   invoiceFindFirstOrThrow,
   paymentCreateMany,
   scheduleFindFirst,
@@ -35,6 +36,7 @@ const {
   billCreate: vi.fn(),
   invoiceFindFirst: vi.fn(),
   invoiceCreate: vi.fn(),
+  invoiceUpdate: vi.fn(),
   invoiceFindFirstOrThrow: vi.fn(),
   paymentCreateMany: vi.fn(),
   scheduleFindFirst: vi.fn(),
@@ -66,7 +68,12 @@ vi.mock("@/lib/db", () => ({
     dailyLog: { findFirst: dailyLogFindFirst, create: dailyLogCreate },
     purchaseOrder: { findFirst: purchaseOrderFindFirst, create: purchaseOrderCreate },
     bill: { findFirst: billFindFirst, create: billCreate },
-    invoice: { findFirst: invoiceFindFirst, create: invoiceCreate, findFirstOrThrow: invoiceFindFirstOrThrow },
+    invoice: {
+      findFirst: invoiceFindFirst,
+      create: invoiceCreate,
+      update: invoiceUpdate,
+      findFirstOrThrow: invoiceFindFirstOrThrow,
+    },
     payment: { createMany: paymentCreateMany },
     schedule: { findFirst: scheduleFindFirst, create: scheduleCreate },
     scheduleItem: {
@@ -74,6 +81,11 @@ vi.mock("@/lib/db", () => ({
       create: scheduleItemCreate,
       count: scheduleItemCount,
     },
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        payment: { createMany: paymentCreateMany },
+        invoice: { update: invoiceUpdate },
+      }),
   },
 }));
 
@@ -167,7 +179,16 @@ describe("migration import idempotency", () => {
   });
 
   it("skips recreating an invoice with the same org+invoiceNumber", async () => {
-    const existing = { id: "inv_1", invoiceNumber: "ABC-0001", amountCents: 1000, payments: [], lineItems: [], files: [] };
+    const existing = {
+      id: "inv_1",
+      invoiceNumber: "ABC-0001",
+      amountCents: 1000,
+      paidAt: null,
+      status: "SENT",
+      payments: [],
+      lineItems: [],
+      files: [],
+    };
     invoiceFindFirst.mockResolvedValue(existing);
 
     const result = await importInvoice({
@@ -187,14 +208,26 @@ describe("migration import idempotency", () => {
   });
 
   it("backfills payments onto an existing invoice that has none", async () => {
-    const existing = { id: "inv_1", invoiceNumber: "ABC-0001", amountCents: 1000, payments: [], lineItems: [], files: [] };
+    const existing = {
+      id: "inv_1",
+      invoiceNumber: "ABC-0001",
+      amountCents: 1000,
+      paidAt: null,
+      status: "SENT",
+      payments: [],
+      lineItems: [],
+      files: [],
+    };
     const refreshed = {
       ...existing,
+      status: "PAID",
+      paidAt: new Date("2026-01-03T12:00:00Z"),
       payments: [{ id: "pay_1", amountCents: 1000 }],
     };
     invoiceFindFirst.mockResolvedValue(existing);
     invoiceFindFirstOrThrow.mockResolvedValue(refreshed);
     paymentCreateMany.mockResolvedValue({ count: 1 });
+    invoiceUpdate.mockResolvedValue(refreshed);
 
     const receivedAt = new Date("2026-01-03T12:00:00Z");
     const result = await importInvoice({
@@ -225,6 +258,10 @@ describe("migration import idempotency", () => {
         },
       ],
     });
+    expect(invoiceUpdate).toHaveBeenCalledWith({
+      where: { id: "inv_1" },
+      data: { status: "PAID", paidAt: receivedAt },
+    });
     expect(result.record).toBe(refreshed);
   });
 
@@ -233,6 +270,8 @@ describe("migration import idempotency", () => {
       id: "inv_1",
       invoiceNumber: "ABC-0001",
       amountCents: 1000,
+      paidAt: null,
+      status: "SENT",
       payments: [{ id: "pay_1" }],
       lineItems: [],
       files: [],
