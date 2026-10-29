@@ -19,34 +19,48 @@ export function AddPermitForm({
   const [state, formAction, pending] = useActionState(addJobPermitAction, INITIAL);
 
   return (
-    <form action={formAction} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+    <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name="jobId" value={jobId} />
-      <select
-        name="trade"
-        required
-        defaultValue=""
-        className="w-full min-w-0 flex-1 rounded border bg-white px-2.5 py-2 text-xs outline-none focus:border-[var(--bt-primary)] sm:py-1.5"
-        style={{ borderColor: "var(--bt-border)" }}
-        aria-label="Permit trade to add"
-      >
-        <option value="" disabled>
-          Select permit type…
-        </option>
-        {trades.map((trade) => (
-          <option key={trade} value={trade}>
-            {tradeLabel(trade)}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <select
+          name="trade"
+          required
+          defaultValue=""
+          className="w-full min-w-0 flex-1 rounded border bg-white px-2.5 py-2 text-xs outline-none focus:border-[var(--bt-primary)] sm:py-1.5"
+          style={{ borderColor: "var(--bt-border)" }}
+          aria-label="Permit type to add"
+        >
+          <option value="" disabled>
+            Select permit type…
           </option>
-        ))}
-      </select>
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded px-3 py-2.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 sm:w-auto sm:py-1.5"
-        style={{ background: "var(--bt-primary)" }}
-      >
-        {pending ? "Adding…" : "Add permit"}
-      </button>
-      {state.error ? <p className="text-xs text-red-600 sm:basis-full">{state.error}</p> : null}
+          {trades.map((trade) => (
+            <option key={trade} value={trade}>
+              {tradeLabel(trade)}
+            </option>
+          ))}
+        </select>
+        <input
+          name="label"
+          type="text"
+          placeholder="Label (optional — e.g. Temp pole #2)"
+          className="w-full min-w-0 flex-1 rounded border bg-white px-2.5 py-2 text-xs outline-none focus:border-[var(--bt-primary)] sm:py-1.5"
+          style={{ borderColor: "var(--bt-border)" }}
+          aria-label="Optional permit label"
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="w-full rounded px-3 py-2.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 sm:w-auto sm:py-1.5"
+          style={{ background: "var(--bt-primary)" }}
+        >
+          {pending ? "Adding…" : "Add permit"}
+        </button>
+      </div>
+      <p className="text-[11px] text-[var(--bt-muted)]">
+        You can add more than one of the same type (second building, temp pole, site…). Roofing seeds
+        Roof Final only — add Roof Sheathing from the catalog if needed.
+      </p>
+      {state.error ? <p className="text-xs text-red-600">{state.error}</p> : null}
     </form>
   );
 }

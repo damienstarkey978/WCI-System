@@ -1,16 +1,16 @@
 /**
  * Permitting checklist per job: staff-selected trade permits, per-permit
- * inspections, NOC/NTBO. Multiple MEP permits per job (different subs) are the
- * normal case — each JobPermit is one trade with its own vendor + inspections.
+ * inspections, NOC/NTBO. Multiple permits per trade (second building, temp-pole,
+ * site, etc.) are allowed — each JobPermit has its own vendor + inspections.
  */
 
-import { PermitTrade } from "@/generated/prisma/enums";
+import { InspectionResult, PermitStatus, PermitTrade } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { EmailNotConfiguredError, sendEmail } from "@/lib/email/send";
 import { isTransactionalEmailConfigured } from "@/lib/env";
 import { tradeLabel } from "@/lib/permitting/labels";
 
-export { tradeLabel } from "@/lib/permitting/labels";
+export { permitStatusLabel, tradeLabel } from "@/lib/permitting/labels";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -40,6 +40,7 @@ export class NoVendorEmailError extends Error {
   }
 }
 
+/** @deprecated Unique-per-trade was removed — kept so older call sites compile until cleaned up. */
 export class PermitAlreadyExistsError extends Error {
   constructor(trade: string) {
     super(`A ${trade} permit is already on this job.`);
@@ -47,13 +48,16 @@ export class PermitAlreadyExistsError extends Error {
   }
 }
 
-/** Trades staff can add on a job (Building always relevant; MEP/Roofing as needed). */
+/** Trades staff can add on a job (duplicates of the same trade are allowed). */
 export const STAFF_PERMIT_TRADES: readonly PermitTrade[] = [
   PermitTrade.BUILDING,
+  PermitTrade.TEMP_POLE,
+  PermitTrade.SITE,
   PermitTrade.ELECTRICAL,
   PermitTrade.PLUMBING,
   PermitTrade.MECHANICAL,
   PermitTrade.ROOFING,
+  PermitTrade.OTHER,
 ];
 
 /** @deprecated Prefer STAFF_PERMIT_TRADES — kept for ensureDefaultPermits (Building + MEP shells). */
@@ -66,14 +70,17 @@ export const DEFAULT_PERMIT_TRADES: readonly PermitTrade[] = [
 
 /**
  * Typical inspections seeded when staff/API adds a permit (editable afterward).
- * Electrical defaults: Rough + Cover-Up + Final (cover before conceal; final at end).
+ * Roofing: only Roof Final by default — Roof Sheathing is opt-in (Damien: do not
+ * auto-create undeletable sheathing without consent).
  */
 export const DEFAULT_INSPECTIONS_ON_ADD: Readonly<Record<PermitTrade, readonly string[]>> = {
   BUILDING: ["Footer", "Slab", "Framing", "Building Final"],
+  TEMP_POLE: [],
+  SITE: [],
   ELECTRICAL: ["Electrical Rough", "Electrical Cover-Up", "Electrical Final"],
   PLUMBING: ["Plumbing Underground", "Plumbing Rough", "Plumbing Final"],
   MECHANICAL: ["Mechanical Rough", "Mechanical Final"],
-  ROOFING: ["Roof Sheathing", "Roof Final"],
+  ROOFING: ["Roof Final"],
   OTHER: [],
 };
 
@@ -89,6 +96,8 @@ export const DEMO_INSPECTIONS_BY_TRADE: Readonly<Record<PermitTrade, readonly st
     "Insulation",
     "Building Final",
   ],
+  TEMP_POLE: ["Temp Pole"],
+  SITE: ["Site"],
   ELECTRICAL: [
     "Electrical Underground",
     "Electrical Rough",
@@ -110,6 +119,7 @@ export type JobPermitSummary = {
   readonly trade: PermitTrade;
   readonly pulled: boolean;
   readonly permitNumber: string | null;
+  readonly status?: PermitStatus;
 };
 
 /** Header chip: docs pack marked created on the job. */
@@ -117,13 +127,18 @@ export function hasBuildingPermitDocs(docsCreatedAt: Date | null | undefined): b
   return docsCreatedAt != null;
 }
 
+function permitIsActive(permit: JobPermitSummary): boolean {
+  if (permit.status === PermitStatus.ACTIVE) return true;
+  if (permit.status === PermitStatus.EXPIRED || permit.status === PermitStatus.CANCELLED) return false;
+  return permit.pulled === true;
+}
+
 /**
- * Header chip: Active permit when the Building permit is pulled (city issued).
- * MEP/Roofing pull status stays on each card — they are not the "active permit" signal.
+ * Header chip: Active permit when any Building permit is ACTIVE / pulled.
+ * MEP/Roofing stay on each card — they are not the header "active permit" signal.
  */
 export function hasActiveBuildingPermit(permits: readonly JobPermitSummary[]): boolean {
-  const building = permits.find((p) => p.trade === PermitTrade.BUILDING);
-  return building?.pulled === true;
+  return permits.some((p) => p.trade === PermitTrade.BUILDING && permitIsActive(p));
 }
 
 /**
@@ -160,8 +175,9 @@ export async function ensureBuildingPermit(organizationId: string, jobId: string
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true, permitNumber: true } });
   if (!job) throw new JobNotFoundError(jobId);
 
-  const existing = await db.jobPermit.findUnique({
-    where: { jobId_trade: { jobId, trade: PermitTrade.BUILDING } },
+  const existing = await db.jobPermit.findFirst({
+    where: { jobId, trade: PermitTrade.BUILDING },
+    orderBy: { createdAt: "asc" },
   });
   if (existing) return existing;
 
@@ -186,7 +202,7 @@ export async function ensureDefaultPermits(organizationId: string, jobId: string
   if (!job) throw new JobNotFoundError(jobId);
 
   for (const trade of DEFAULT_PERMIT_TRADES) {
-    const existing = await db.jobPermit.findUnique({ where: { jobId_trade: { jobId, trade } } });
+    const existing = await db.jobPermit.findFirst({ where: { jobId, trade }, select: { id: true } });
     if (existing) continue;
 
     await db.jobPermit.create({
@@ -220,6 +236,12 @@ export async function createJobPermit(
   options?: {
     readonly permitNumber?: string | null;
     readonly vendorId?: string | null;
+    readonly label?: string | null;
+    readonly status?: PermitStatus;
+    readonly issuedAt?: Date | null;
+    readonly expiresAt?: Date | null;
+    readonly jurisdiction?: string | null;
+    readonly contractorName?: string | null;
     /** When true (default), seed DEFAULT_INSPECTIONS_ON_ADD for the trade. */
     readonly seedDefaultInspections?: boolean;
   },
@@ -229,9 +251,6 @@ export async function createJobPermit(
     select: { id: true, permitNumber: true },
   });
   if (!job) throw new JobNotFoundError(jobId);
-
-  const existing = await db.jobPermit.findUnique({ where: { jobId_trade: { jobId, trade } } });
-  if (existing) throw new PermitAlreadyExistsError(tradeLabel(trade));
 
   if (options?.vendorId) {
     const vendor = await db.vendor.findFirst({
@@ -250,12 +269,23 @@ export async function createJobPermit(
         ? job.permitNumber
         : null;
 
+  const status = options?.status ?? PermitStatus.DRAFT;
+  const pulled = status === PermitStatus.ACTIVE;
+
   return db.jobPermit.create({
     data: {
       organizationId,
       jobId,
       trade,
+      label: options?.label?.trim() || null,
       permitNumber,
+      status,
+      pulled,
+      pulledAt: pulled ? new Date() : null,
+      issuedAt: options?.issuedAt ?? null,
+      expiresAt: options?.expiresAt ?? null,
+      jurisdiction: options?.jurisdiction?.trim() || null,
+      contractorName: options?.contractorName?.trim() || null,
       vendorId: options?.vendorId ?? null,
       inspections: {
         create: defaults.map((name, index) => ({ name, sortOrder: index })),
@@ -274,7 +304,21 @@ export async function deleteJobPermit(organizationId: string, permitId: string) 
   await db.jobPermit.delete({ where: { id: permit.id } });
 }
 
-export async function addPermitInspection(organizationId: string, permitId: string, name: string) {
+export type AddPermitInspectionResult = {
+  readonly inspection: Awaited<ReturnType<typeof db.jobPermitInspection.create>>;
+  /** False when an existing same-name inspection was returned (idempotent). */
+  readonly created: boolean;
+};
+
+/**
+ * Add an inspection by name. Idempotent: if the name already exists on this
+ * permit (case-insensitive), returns the existing row instead of conflicting.
+ */
+export async function addPermitInspection(
+  organizationId: string,
+  permitId: string,
+  name: string,
+): Promise<AddPermitInspectionResult> {
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Inspection name is required.");
 
@@ -284,16 +328,16 @@ export async function addPermitInspection(organizationId: string, permitId: stri
   });
   if (!permit) throw new PermitNotFoundError(permitId);
 
-  const duplicate = await db.jobPermitInspection.findFirst({
+  const existing = await db.jobPermitInspection.findFirst({
     where: { permitId, name: { equals: trimmed, mode: "insensitive" } },
-    select: { id: true },
   });
-  if (duplicate) throw new Error(`Inspection "${trimmed}" is already on this permit.`);
+  if (existing) return { inspection: existing, created: false };
 
   const nextOrder = (permit.inspections[0]?.sortOrder ?? -1) + 1;
-  return db.jobPermitInspection.create({
+  const inspection = await db.jobPermitInspection.create({
     data: { permitId, name: trimmed, sortOrder: nextOrder },
   });
+  return { inspection, created: true };
 }
 
 export async function removePermitInspection(organizationId: string, inspectionId: string) {
@@ -310,10 +354,13 @@ export function catalogInspectionNamesForTrade(trade: PermitTrade): readonly str
   return DEMO_INSPECTIONS_BY_TRADE[trade] ?? [];
 }
 
-/** Trades not yet on the job that staff can still add. */
-export function availableTradesToAdd(existingTrades: readonly PermitTrade[]): readonly PermitTrade[] {
-  const have = new Set(existingTrades);
-  return STAFF_PERMIT_TRADES.filter((trade) => !have.has(trade));
+/**
+ * Trades staff can still add. Duplicates per trade are allowed (second building,
+ * temp-pole, site), so the full staff catalog is always offered.
+ */
+export function availableTradesToAdd(existingTrades?: readonly PermitTrade[]): readonly PermitTrade[] {
+  void existingTrades;
+  return STAFF_PERMIT_TRADES;
 }
 
 /**
@@ -338,7 +385,70 @@ export async function setPermitPulled(organizationId: string, permitId: string, 
   if (!permit) throw new PermitNotFoundError(permitId);
   return db.jobPermit.update({
     where: { id: permit.id },
-    data: { pulled, pulledAt: pulled ? new Date() : null },
+    data: {
+      pulled,
+      pulledAt: pulled ? new Date() : null,
+      // Keep status chips in sync with the legacy pulled toggle.
+      status: pulled ? PermitStatus.ACTIVE : PermitStatus.DRAFT,
+    },
+  });
+}
+
+export interface UpdatePermitFieldsInput {
+  readonly pulled?: boolean;
+  readonly vendorId?: string | null;
+  readonly permitNumber?: string | null;
+  readonly label?: string | null;
+  readonly status?: PermitStatus;
+  readonly issuedAt?: Date | null;
+  readonly expiresAt?: Date | null;
+  readonly jurisdiction?: string | null;
+  readonly contractorName?: string | null;
+}
+
+export async function updatePermitFields(
+  organizationId: string,
+  permitId: string,
+  input: UpdatePermitFieldsInput,
+) {
+  const permit = await db.jobPermit.findFirst({ where: { id: permitId, organizationId } });
+  if (!permit) throw new PermitNotFoundError(permitId);
+
+  if (input.vendorId) {
+    const vendor = await db.vendor.findFirst({
+      where: { id: input.vendorId, organizationId },
+      select: { id: true },
+    });
+    if (!vendor) throw new Error("Vendor not found.");
+  }
+
+  let status = input.status;
+  let pulled = input.pulled;
+  if (status !== undefined && pulled === undefined) {
+    pulled = status === PermitStatus.ACTIVE;
+  }
+  if (pulled !== undefined && status === undefined) {
+    status = pulled ? PermitStatus.ACTIVE : PermitStatus.DRAFT;
+  }
+
+  return db.jobPermit.update({
+    where: { id: permit.id },
+    data: {
+      ...(input.permitNumber !== undefined ? { permitNumber: input.permitNumber } : {}),
+      ...(input.label !== undefined ? { label: input.label?.trim() || null } : {}),
+      ...(input.vendorId !== undefined ? { vendorId: input.vendorId } : {}),
+      ...(input.jurisdiction !== undefined ? { jurisdiction: input.jurisdiction?.trim() || null } : {}),
+      ...(input.contractorName !== undefined
+        ? { contractorName: input.contractorName?.trim() || null }
+        : {}),
+      ...(input.issuedAt !== undefined ? { issuedAt: input.issuedAt } : {}),
+      ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(pulled !== undefined
+        ? { pulled, pulledAt: pulled ? (permit.pulledAt ?? new Date()) : null }
+        : {}),
+    },
+    include: permitInclude,
   });
 }
 
@@ -372,7 +482,74 @@ export async function setInspectionCompleted(organizationId: string, inspectionI
   if (!inspection) throw new InspectionNotFoundError(inspectionId);
   return db.jobPermitInspection.update({
     where: { id: inspection.id },
-    data: { completedAt: completed ? new Date() : null },
+    data: completed
+      ? {
+          completedAt: new Date(),
+          result: inspection.result === InspectionResult.PENDING ? InspectionResult.PASS : inspection.result,
+          // Do not invent a city pass date — staff set passedAt explicitly.
+        }
+      : {
+          completedAt: null,
+          result: InspectionResult.PENDING,
+        },
+  });
+}
+
+export interface UpdateInspectionFieldsInput {
+  readonly completed?: boolean;
+  readonly result?: InspectionResult;
+  /** Real city pass/completed date — distinct from completedAt (system stamp). */
+  readonly passedAt?: Date | null;
+  readonly confirmationNumber?: string | null;
+  readonly inspector?: string | null;
+}
+
+export async function updateInspectionFields(
+  organizationId: string,
+  inspectionId: string,
+  input: UpdateInspectionFieldsInput,
+) {
+  const inspection = await db.jobPermitInspection.findFirst({
+    where: { id: inspectionId, permit: { organizationId } },
+  });
+  if (!inspection) throw new InspectionNotFoundError(inspectionId);
+
+  const data: {
+    completedAt?: Date | null;
+    result?: InspectionResult;
+    passedAt?: Date | null;
+    confirmationNumber?: string | null;
+    inspector?: string | null;
+  } = {};
+
+  if (input.result !== undefined) data.result = input.result;
+  if (input.passedAt !== undefined) data.passedAt = input.passedAt;
+  if (input.confirmationNumber !== undefined) {
+    data.confirmationNumber = input.confirmationNumber?.trim() || null;
+  }
+  if (input.inspector !== undefined) data.inspector = input.inspector?.trim() || null;
+
+  if (input.completed === true) {
+    data.completedAt = inspection.completedAt ?? new Date();
+    if (data.result === undefined && inspection.result === InspectionResult.PENDING) {
+      data.result = InspectionResult.PASS;
+    }
+  } else if (input.completed === false) {
+    data.completedAt = null;
+    if (data.result === undefined) data.result = InspectionResult.PENDING;
+  } else if (
+    input.result === InspectionResult.PASS ||
+    input.result === InspectionResult.FAIL ||
+    input.result === InspectionResult.PARTIAL
+  ) {
+    data.completedAt = inspection.completedAt ?? new Date();
+  } else if (input.result === InspectionResult.PENDING) {
+    data.completedAt = null;
+  }
+
+  return db.jobPermitInspection.update({
+    where: { id: inspection.id },
+    data,
   });
 }
 

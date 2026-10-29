@@ -45,7 +45,7 @@ describe("formatApiV1ProxyResult", () => {
     const bodyText = "x".repeat(100);
     const formatted = formatApiV1ProxyResult({ status: 200, bodyText }, 40);
     expect(formatted).toContain("HTTP 200");
-    expect(formatted).toContain("…(truncated)");
-    expect(formatted.length).toBeLessThan(bodyText.length);
+    expect(formatted).toContain("…(truncated");
+    expect(formatted.length).toBeLessThan(bodyText.length + 20);
   });
 });

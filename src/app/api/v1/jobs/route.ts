@@ -19,7 +19,8 @@ export const GET = withApiAuth(["jobs:read"], async (request, auth) => {
   if (!parsed.success) {
     return apiError(400, "invalid_query", "Invalid query parameters.", formatZodIssues(parsed.error));
   }
-  const { status, contractType, jobGroupId, includeTemplates, limit, cursor } = parsed.data;
+  const { status, contractType, jobGroupId, includeTemplates, limit, cursor, q, search } = parsed.data;
+  const query = (q ?? search)?.trim();
 
   const jobs = await db.job.findMany({
     where: {
@@ -28,6 +29,19 @@ export const GET = withApiAuth(["jobs:read"], async (request, auth) => {
       ...(contractType ? { contractType } : {}),
       ...(jobGroupId ? { jobGroupId } : {}),
       ...(includeTemplates ? {} : { isTemplate: false }),
+      ...(query
+        ? {
+            OR: [
+              { name: { contains: query, mode: "insensitive" } },
+              { prefix: { contains: query, mode: "insensitive" } },
+              { addressLine1: { contains: query, mode: "insensitive" } },
+              { addressLine2: { contains: query, mode: "insensitive" } },
+              { city: { contains: query, mode: "insensitive" } },
+              { state: { contains: query, mode: "insensitive" } },
+              { postalCode: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : {}),
     },
     orderBy: { createdAt: "desc" },
     take: limit + 1,

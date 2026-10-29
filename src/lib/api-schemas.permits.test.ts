@@ -15,9 +15,17 @@ describe("permit API schemas", () => {
     expect(updatePermitSchema.safeParse({ vendorId: null }).success).toBe(true);
   });
 
-  it("requires completed on inspection updates", () => {
+  it("requires at least one inspection update field", () => {
     expect(updatePermitInspectionSchema.safeParse({}).success).toBe(false);
     expect(updatePermitInspectionSchema.safeParse({ completed: false }).success).toBe(true);
+    expect(
+      updatePermitInspectionSchema.safeParse({
+        result: "PASS",
+        passedAt: "2026-10-29T00:00:00.000Z",
+        confirmationNumber: "C-1",
+        inspector: "Smith",
+      }).success,
+    ).toBe(true);
   });
 
   it("requires at least one permitting flag", () => {
@@ -26,10 +34,29 @@ describe("permit API schemas", () => {
     expect(updateJobPermittingFlagsSchema.safeParse({ buildingPermitDocsCreated: true }).success).toBe(true);
   });
 
-  it("accepts create permit with trade and optional seed flag", () => {
+  it("accepts create permit with trade, duplicates, and optional fields", () => {
     expect(createJobPermitSchema.safeParse({}).success).toBe(false);
     expect(createJobPermitSchema.safeParse({ trade: "ELECTRICAL" }).success).toBe(true);
     expect(createJobPermitSchema.safeParse({ trade: "ROOFING", seedDefaultInspections: false }).success).toBe(true);
+    expect(createJobPermitSchema.safeParse({ trade: "TEMP_POLE", label: "Temp pole A" }).success).toBe(true);
+    expect(
+      createJobPermitSchema.safeParse({
+        trade: "BUILDING",
+        status: "PENDING_PAYMENT",
+        jurisdiction: "Duval",
+        contractorName: "WCI",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts permit status and dates on update", () => {
+    expect(
+      updatePermitSchema.safeParse({
+        status: "EXPIRED",
+        expiresAt: "2026-01-01T00:00:00.000Z",
+        jurisdiction: "City of Jacksonville",
+      }).success,
+    ).toBe(true);
   });
 
   it("requires inspection name on create", () => {

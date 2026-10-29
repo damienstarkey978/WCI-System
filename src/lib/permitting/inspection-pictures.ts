@@ -124,9 +124,22 @@ export async function createInspectionPictureFolder(input: CreateInspectionPictu
   const guide = guideForInspectionName(name);
   const trade = input.trade ?? (guide?.trade as PermitTrade | undefined) ?? PermitTrade.BUILDING;
 
-  let permit = await db.jobPermit.findUnique({
-    where: { jobId_trade: { jobId: job.id, trade } },
-  });
+  // Prefer a permit of this trade that already has this inspection name; else
+  // the oldest permit of the trade; else create one (multiples per trade OK).
+  let permit =
+    (
+      await db.jobPermitInspection.findFirst({
+        where: {
+          name: { equals: name, mode: "insensitive" },
+          permit: { jobId: job.id, organizationId: input.organizationId, trade },
+        },
+        select: { permit: true },
+      })
+    )?.permit ??
+    (await db.jobPermit.findFirst({
+      where: { jobId: job.id, organizationId: input.organizationId, trade },
+      orderBy: { createdAt: "asc" },
+    }));
   if (!permit) {
     permit = await db.jobPermit.create({
       data: {

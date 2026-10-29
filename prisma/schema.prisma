@@ -3782,11 +3782,29 @@ model ClientUpdateSummary {
 
 enum PermitTrade {
   BUILDING
+  TEMP_POLE
+  SITE
   ELECTRICAL
   PLUMBING
   MECHANICAL
   ROOFING
   OTHER
+}
+
+/// City/lifecycle status for a permit card — drives chips (draft / Pending Payment / expired / active).
+enum PermitStatus {
+  DRAFT
+  PENDING_PAYMENT
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum InspectionResult {
+  PENDING
+  PASS
+  FAIL
+  PARTIAL
 }
 
 model JobPermit {
@@ -3797,10 +3815,18 @@ model JobPermit {
   job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   trade        PermitTrade
+  /// Optional staff label to distinguish duplicates (e.g. "Temp pole", "Site", "Building #2").
+  label        String?
   permitNumber String?
-  /// False until the permit has been pulled for this trade.
-  pulled       Boolean     @default(false)
+  status       PermitStatus @default(DRAFT)
+  /// False until the permit has been pulled / is ACTIVE for this trade.
+  pulled       Boolean      @default(false)
   pulledAt     DateTime?
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  jurisdiction String?
+  /// Free-text contractor on the permit (may differ from assigned Vendor for reminders).
+  contractorName String?
 
   /// Sub/vendor responsible for this trade (target of Send Permit Reminder).
   vendorId String?
@@ -3811,9 +3837,9 @@ model JobPermit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([jobId, trade])
   @@index([organizationId])
   @@index([jobId])
+  @@index([jobId, trade])
 }
 
 model JobPermitInspection {
@@ -3822,7 +3848,14 @@ model JobPermitInspection {
   permit   JobPermit @relation(fields: [permitId], references: [id], onDelete: Cascade)
 
   name        String
+  /// When staff toggled complete in WCI OS (system stamp) — not the city pass date.
   completedAt DateTime?
+  /// City pass/fail/partial outcome.
+  result      InspectionResult @default(PENDING)
+  /// Real pass/completed date from the city (distinct from createdAt / completedAt).
+  passedAt    DateTime?
+  confirmationNumber String?
+  inspector   String?
   sortOrder   Int       @default(0)
 
   /// Files > Inspection Pictures folder for this inspection (created on demand).

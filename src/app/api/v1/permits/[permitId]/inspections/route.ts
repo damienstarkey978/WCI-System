@@ -1,5 +1,6 @@
 /**
  * /api/v1/permits/{permitId}/inspections — add an inspection to a permit.
+ * Idempotent: same name on the same permit returns the existing row (200).
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
@@ -29,14 +30,15 @@ export const POST = withApiAuth<Context>(["permits:write"], async (request, auth
   }
 
   try {
-    const inspection = await addPermitInspection(auth.organizationId, permitId, parsed.data.name);
-    return Response.json({ data: inspection }, { status: 201 });
+    const { inspection, created } = await addPermitInspection(
+      auth.organizationId,
+      permitId,
+      parsed.data.name,
+    );
+    return Response.json({ data: inspection, created }, { status: created ? 201 : 200 });
   } catch (error) {
     if (error instanceof PermitNotFoundError) {
       return apiError(404, "not_found", error.message);
-    }
-    if (error instanceof Error && error.message.includes("already on this permit")) {
-      return apiError(409, "conflict", error.message);
     }
     if (error instanceof Error && error.message === "Inspection name is required.") {
       return apiError(422, "validation_failed", error.message);

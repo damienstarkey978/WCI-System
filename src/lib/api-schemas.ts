@@ -11,10 +11,12 @@ import {
   ContractType,
   CostType,
   FinancialSourceType,
+  InspectionResult,
   InvoiceStatus,
   InvoiceType,
   JobStatus,
   PaymentMethod,
+  PermitStatus,
   PermitTrade,
   PurchaseOrderStatus,
   RateMode,
@@ -54,7 +56,10 @@ export const listJobsQuerySchema = z.object({
   contractType: z.enum(ContractType).optional(),
   jobGroupId: z.string().min(1).max(64).optional(),
   includeTemplates: z.coerce.boolean().optional().default(false),
-  // Default 25 keeps MCP connector responses under its ~11.8KB truncation cliff.
+  /** Case-insensitive match on name, prefix, or address fields. */
+  q: z.string().trim().max(200).optional(),
+  search: z.string().trim().max(200).optional(),
+  // Default 25; max 200 with cursor pagination. Compact list tools should pass fields via select, not shrink this.
   limit: z.coerce.number().int().min(1).max(200).optional().default(25),
   cursor: z.string().min(1).max(64).optional(),
 });
@@ -564,6 +569,9 @@ export const answerRfiSchema = z.object({
   answer: z.string().trim().min(1).max(10_000),
 });
 
+const fileCategorySchema = z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO", "PLAN"]);
+
+/** URL-only registration (caller already hosted the bytes elsewhere). */
 export const registerFileSchema = z.object({
   jobId: z.string().min(1).max(64),
   // Uploader is stamped from the authenticating ApiKey — not a body User id.
@@ -571,11 +579,28 @@ export const registerFileSchema = z.object({
   url: z.string().url().max(2_000),
   mimeType: z.string().trim().max(255).nullish(),
   sizeBytes: z.number().int().positive().max(10_000_000_000).nullish(),
-  category: z.enum(["DOCUMENT", "PHOTO", "VIDEO", "PRESALE_PHOTO", "PLAN"]).optional(),
+  category: fileCategorySchema.optional(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
   dailyLogId: z.string().min(1).max(64).nullish(),
   /** Put the file in a Documents or Inspection Pictures FileFolder on the same job. */
+  folderId: z.string().min(1).max(64).nullish(),
+});
+
+/**
+ * Upload bytes into Supabase job-files storage, then register the File row.
+ * Prefer this (or multipart) for inspection photos — URL-only is the fallback.
+ */
+export const uploadFileJsonSchema = z.object({
+  jobId: z.string().min(1).max(64),
+  fileName: z.string().trim().min(1).max(255),
+  /** Raw file bytes as base64 (no data: URL prefix required). */
+  dataBase64: z.string().min(1).max(30_000_000),
+  mimeType: z.string().trim().max(255).nullish(),
+  category: fileCategorySchema.optional(),
+  clientVisible: z.boolean().optional(),
+  subVisible: z.boolean().optional(),
+  dailyLogId: z.string().min(1).max(64).nullish(),
   folderId: z.string().min(1).max(64).nullish(),
 });
 
@@ -1074,10 +1099,24 @@ export const importScheduleFlagsSchema = z.object({
 // Permitting (Heather / Atlas / field ops)
 // ---------------------------------------------------------------------------
 
+const optionalDateTime = z.union([z.string().datetime({ offset: true }), z.string().datetime(), z.null()]).optional();
+
+function parseOptionalDate(value: string | null | undefined): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  return new Date(value);
+}
+
 export const createJobPermitSchema = z.object({
   trade: z.enum(PermitTrade),
+  label: z.string().trim().max(120).nullish(),
   permitNumber: z.string().trim().max(64).nullish(),
   vendorId: z.string().min(1).max(64).nullish(),
+  status: z.enum(PermitStatus).optional(),
+  issuedAt: optionalDateTime,
+  expiresAt: optionalDateTime,
+  jurisdiction: z.string().trim().max(120).nullish(),
+  contractorName: z.string().trim().max(120).nullish(),
   /** Default true — seed typical inspections for the trade (editable afterward). */
   seedDefaultInspections: z.boolean().optional().default(true),
 });
@@ -1091,14 +1130,52 @@ export const updatePermitSchema = z
     pulled: z.boolean().optional(),
     vendorId: z.string().min(1).max(64).nullish(),
     permitNumber: z.string().trim().max(64).nullish(),
+    label: z.string().trim().max(120).nullish(),
+    status: z.enum(PermitStatus).optional(),
+    issuedAt: optionalDateTime,
+    expiresAt: optionalDateTime,
+    jurisdiction: z.string().trim().max(120).nullish(),
+    contractorName: z.string().trim().max(120).nullish(),
   })
-  .refine((value) => value.pulled !== undefined || value.vendorId !== undefined || value.permitNumber !== undefined, {
-    message: "Provide at least one of pulled, vendorId, or permitNumber.",
-  });
+  .refine(
+    (value) =>
+      value.pulled !== undefined ||
+      value.vendorId !== undefined ||
+      value.permitNumber !== undefined ||
+      value.label !== undefined ||
+      value.status !== undefined ||
+      value.issuedAt !== undefined ||
+      value.expiresAt !== undefined ||
+      value.jurisdiction !== undefined ||
+      value.contractorName !== undefined,
+    {
+      message:
+        "Provide at least one of pulled, vendorId, permitNumber, label, status, issuedAt, expiresAt, jurisdiction, or contractorName.",
+    },
+  );
 
-export const updatePermitInspectionSchema = z.object({
-  completed: z.boolean(),
-});
+export const updatePermitInspectionSchema = z
+  .object({
+    completed: z.boolean().optional(),
+    result: z.enum(InspectionResult).optional(),
+    /** Real city pass/completed date (ISO) — distinct from system completedAt. */
+    passedAt: optionalDateTime,
+    confirmationNumber: z.string().trim().max(120).nullish(),
+    inspector: z.string().trim().max(120).nullish(),
+  })
+  .refine(
+    (value) =>
+      value.completed !== undefined ||
+      value.result !== undefined ||
+      value.passedAt !== undefined ||
+      value.confirmationNumber !== undefined ||
+      value.inspector !== undefined,
+    {
+      message: "Provide at least one of completed, result, passedAt, confirmationNumber, or inspector.",
+    },
+  );
+
+export { parseOptionalDate };
 
 export const updateJobPermittingFlagsSchema = z
   .object({

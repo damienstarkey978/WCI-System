@@ -748,3 +748,11 @@ Record every architectural decision that departs from the above, with the reason
   live allowlist so already-connected assistants unlock files after deploy without
   re-consent. Brief: project store `docs/bot-full-api-access.md` /
   `docs/heather-api-key-auth-fix.md`.
+- **Permit/inspection ops (Damien blockers):** Dropped `@@unique([jobId, trade])` so a
+  job can hold multiple permits per trade (second building, temp-pole, site). Added
+  `TEMP_POLE` / `SITE` trades, `PermitStatus`, and inspection `result` / `passedAt` /
+  confirmation / inspector. Roofing no longer auto-seeds Roof Sheathing (opt-in via
+  catalog). `POST /files` accepts multipart or `dataBase64` into Supabase Storage
+  (URL registration remains as a fallback). `GET /jobs` supports `q`/`search`; MCP
+  `api_v1_request` body cap raised off the ~12KB cliff. Duplicate inspection names
+  return the existing row (200) instead of 409.

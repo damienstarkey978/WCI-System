@@ -5,7 +5,7 @@ import { generateSecureToken, hashSecret } from "@/lib/secure-tokens";
 vi.mock("@/lib/db", () => ({
   db: {
     job: { findFirst: vi.fn() },
-    jobPermit: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    jobPermit: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     jobPermitInspection: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -68,6 +68,8 @@ describe("inspection pictures folders + share links", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(db.jobPermit.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.jobPermit.findFirst).mockReset();
+    vi.mocked(db.jobPermitInspection.findFirst).mockReset();
   });
 
   it("lists folders only for inspections that exist on the job", async () => {
@@ -133,9 +135,11 @@ describe("inspection pictures folders + share links", () => {
 
   it("creates an inspection folder by city name without a Permitting detour", async () => {
     vi.mocked(db.job.findFirst).mockResolvedValue({ id: "job_1", permitNumber: "BP-1" } as never);
-    vi.mocked(db.jobPermit.findUnique).mockResolvedValue(null as never);
+    vi.mocked(db.jobPermit.findFirst).mockResolvedValue(null as never);
     vi.mocked(db.jobPermit.create).mockResolvedValue({ id: "permit_1", trade: "BUILDING" } as never);
+    // 1) no inspection→permit match; 2) no existing inspection by name; 3) last sortOrder
     vi.mocked(db.jobPermitInspection.findFirst)
+      .mockResolvedValueOnce(null as never)
       .mockResolvedValueOnce(null as never)
       .mockResolvedValueOnce({ sortOrder: -1 } as never);
     vi.mocked(db.jobPermitInspection.create).mockResolvedValue({
