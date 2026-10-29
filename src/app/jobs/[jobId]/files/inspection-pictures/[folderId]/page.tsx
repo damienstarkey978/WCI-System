@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { appBaseUrl } from "@/lib/app-url";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { resolveFileUrlSafe } from "@/lib/files/service";
@@ -32,8 +33,14 @@ export default async function InspectionPictureFolderPage({
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const folder = await getInspectionPictureFolder(user.organizationId, job.id, folderId);
+  const [folder, base] = await Promise.all([
+    getInspectionPictureFolder(user.organizationId, job.id, folderId),
+    appBaseUrl(),
+  ]);
   if (!folder) notFound();
+
+  const origin = base.replace(/\/+$/, "");
+  const sharePath = folder.activeShareLink?.sharePath ?? null;
 
   const photos = (
     await Promise.all(
@@ -96,12 +103,14 @@ export default async function InspectionPictureFolderPage({
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="mb-2 text-sm font-semibold text-[var(--bt-text)]">Share with inspector</h2>
         <p className="mb-3 text-xs text-[var(--bt-muted)]">
-          Signed link — view and upload photos with no login. Creating a new link revokes the previous one for this folder.
+          Folder-scoped signed link — view and upload with no login. Copy anytime; rotate only if the URL leaked.
         </p>
         <InspectionShareLinkButton
           jobId={job.id}
           inspectionId={folder.inspectionId}
           inspectionName={folder.name}
+          existingShareUrl={sharePath ? `${origin}${sharePath}` : null}
+          existingExpiresAt={folder.activeShareLink?.expiresAt.toISOString() ?? null}
         />
       </section>
 

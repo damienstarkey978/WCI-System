@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import {
   issueInspectionShareLinkAction,
@@ -13,79 +13,130 @@ export function InspectionShareLinkButton({
   jobId,
   inspectionId,
   inspectionName,
+  existingShareUrl = null,
+  existingExpiresAt = null,
 }: {
   jobId: string;
   inspectionId: string;
   inspectionName: string;
+  /** Absolute URL when an active durable link already exists (re-copyable). */
+  existingShareUrl?: string | null;
+  existingExpiresAt?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(issueInspectionShareLinkAction, INITIAL);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
-  const copied = Boolean(state.shareUrl && copiedUrl === state.shareUrl);
+
+  const shareUrl = state.shareUrl ?? existingShareUrl ?? null;
+  const expiresAt = state.expiresAt ?? existingExpiresAt ?? null;
+  const justCreated = Boolean(state.shareUrl);
+  const copied = Boolean(shareUrl && copiedUrl === shareUrl);
+
+  useEffect(() => {
+    if (!state.shareUrl) return;
+    void navigator.clipboard.writeText(state.shareUrl).then(
+      () => setCopiedUrl(state.shareUrl!),
+      () => {
+        /* clipboard may be blocked; Copy still available */
+      },
+    );
+  }, [state.shareUrl]);
 
   async function copy() {
-    if (!state.shareUrl) return;
+    if (!shareUrl) return;
     try {
-      await navigator.clipboard.writeText(state.shareUrl);
-      setCopiedUrl(state.shareUrl);
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedUrl(shareUrl);
     } catch {
       setCopiedUrl(null);
     }
   }
 
+  const expiresLabel = expiresAt
+    ? new Date(expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : null;
+
   return (
     <div className="flex flex-col gap-2">
-      <form action={formAction} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <input type="hidden" name="jobId" value={jobId} />
-        <input type="hidden" name="inspectionId" value={inspectionId} />
-        <input
-          name="label"
-          placeholder="Inspector name (optional)"
-          className="w-full min-w-0 flex-1 rounded border px-2.5 py-2 text-xs outline-none focus:border-[var(--bt-primary)] sm:max-w-[12rem] sm:py-1.5"
-          style={{ borderColor: "var(--bt-border)" }}
-          aria-label={`Inspector label for ${inspectionName}`}
-        />
-        <button
-          type="submit"
-          disabled={pending}
-          className="w-full rounded px-3 py-2.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 sm:w-auto sm:py-1.5"
-          style={{ background: "var(--bt-primary)" }}
-        >
-          {pending ? "Creating…" : "Create inspector link"}
-        </button>
-      </form>
-      {state.error ? <p className="text-xs text-red-600">{state.error}</p> : null}
-      {state.shareUrl ? (
-        <div className="rounded border bg-[var(--bt-panel-bg)] p-2.5" style={{ borderColor: "var(--bt-border)" }}>
+      {shareUrl ? (
+        <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
           <p className="text-[11px] text-[var(--bt-muted)]">
-            Copy and send to the inspector — no login required. Previous link for this folder was revoked.
+            {justCreated
+              ? "Link created and copied when allowed — send to the inspector (no login)."
+              : "Active inspector link for this folder only — no login."}
+            {expiresLabel ? ` Expires ${expiresLabel}.` : ""}
           </p>
-          <code className="mt-1 block break-all text-[11px] text-[var(--bt-text)] sm:text-xs">{state.shareUrl}</code>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <code className="mt-1.5 block break-all text-[11px] leading-snug text-[var(--bt-text)] sm:text-xs">
+            {shareUrl}
+          </code>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={copy}
-              className="w-full rounded border px-3 py-2 text-xs font-semibold text-[var(--bt-text)] sm:w-auto sm:py-1.5"
-              style={{ borderColor: "var(--bt-border)" }}
+              className="w-full rounded-lg px-3 py-3 text-sm font-semibold text-[var(--bt-on-primary)] sm:py-2.5"
+              style={{ background: "var(--bt-primary)" }}
             >
-              {copied ? "Copied" : "Copy link"}
+              {copied ? "Copied" : "Copy share link"}
             </button>
             <a
-              href={`sms:?&body=${encodeURIComponent(`Inspection photos for ${inspectionName}: ${state.shareUrl}`)}`}
-              className="inline-flex w-full items-center justify-center rounded border px-3 py-2 text-xs font-semibold text-[var(--bt-text)] sm:w-auto sm:py-1.5"
+              href={`sms:?&body=${encodeURIComponent(`Inspection photos for ${inspectionName}: ${shareUrl}`)}`}
+              className="inline-flex w-full items-center justify-center rounded-lg border px-3 py-3 text-sm font-semibold text-[var(--bt-text)] sm:py-2.5"
               style={{ borderColor: "var(--bt-border)" }}
             >
               Text link
             </a>
             <a
-              href={`mailto:?subject=${encodeURIComponent(`${inspectionName} inspection photos`)}&body=${encodeURIComponent(`Please use this link to view and upload photos for ${inspectionName}:\n\n${state.shareUrl}`)}`}
-              className="inline-flex w-full items-center justify-center rounded border px-3 py-2 text-xs font-semibold text-[var(--bt-text)] sm:w-auto sm:py-1.5"
+              href={`mailto:?subject=${encodeURIComponent(`${inspectionName} inspection photos`)}&body=${encodeURIComponent(`Please use this link to view and upload photos for ${inspectionName}:\n\n${shareUrl}`)}`}
+              className="inline-flex w-full items-center justify-center rounded-lg border px-3 py-3 text-sm font-semibold text-[var(--bt-text)] sm:py-2.5"
               style={{ borderColor: "var(--bt-border)" }}
             >
               Email link
             </a>
           </div>
+          <form action={formAction} className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center" style={{ borderColor: "var(--bt-border)" }}>
+            <input type="hidden" name="jobId" value={jobId} />
+            <input type="hidden" name="inspectionId" value={inspectionId} />
+            <input
+              name="label"
+              placeholder="Inspector name (optional)"
+              className="w-full min-w-0 flex-1 rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--bt-primary)] sm:max-w-[14rem] sm:py-2"
+              style={{ borderColor: "var(--bt-border)" }}
+              aria-label={`Inspector label for ${inspectionName}`}
+            />
+            <button
+              type="submit"
+              disabled={pending}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm font-semibold text-[var(--bt-muted)] disabled:opacity-50 sm:w-auto"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
+              {pending ? "Rotating…" : "Rotate link"}
+            </button>
+          </form>
+          <p className="mt-1.5 text-[11px] text-[var(--bt-muted)]">
+            Rotate only if the old link leaked — it revokes the previous URL for this folder.
+          </p>
         </div>
-      ) : null}
+      ) : (
+        <form action={formAction} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <input type="hidden" name="jobId" value={jobId} />
+          <input type="hidden" name="inspectionId" value={inspectionId} />
+          <input
+            name="label"
+            placeholder="Inspector name (optional)"
+            className="w-full min-w-0 flex-1 rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--bt-primary)] sm:max-w-[14rem] sm:py-2"
+            style={{ borderColor: "var(--bt-border)" }}
+            aria-label={`Inspector label for ${inspectionName}`}
+          />
+          <button
+            type="submit"
+            disabled={pending}
+            className="w-full rounded-lg px-3 py-3 text-sm font-semibold text-[var(--bt-on-primary)] disabled:opacity-50 sm:w-auto sm:py-2.5"
+            style={{ background: "var(--bt-primary)" }}
+          >
+            {pending ? "Creating…" : "Share with inspector"}
+          </button>
+        </form>
+      )}
+      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
     </div>
   );
 }
