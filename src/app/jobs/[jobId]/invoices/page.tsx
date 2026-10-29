@@ -175,7 +175,7 @@ function SummaryStrip({
 
 export default async function InvoicesPage({ params, searchParams }: PageProps<"/jobs/[jobId]/invoices">) {
   const { jobId } = await params;
-  const { tab } = await searchParams;
+  const { tab, showVoid } = await searchParams;
 
   let user;
   try {
@@ -212,6 +212,11 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
   const now = new Date();
 
   const live = invoices.filter((invoice) => invoice.status !== "VOID");
+  const voided = invoices.filter((invoice) => invoice.status === "VOID");
+  // Migration left prefix-duplicate VOID rows (J*-INV-* vs JOB_*). Footer totals
+  // already ignored them; the table still listed them and looked like double billing.
+  const showVoided = showVoid === "1" || showVoid === "true";
+  const invoicesForTable = showVoided ? invoices : live;
   const billedCents = live.reduce((total, invoice) => total + invoice.amountCents, 0);
   const paidCents = live.reduce(
     (total, invoice) => total + invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0),
@@ -243,9 +248,11 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
     })
     .map((invoice) => ({ id: invoice.id, label: `${invoice.invoiceNumber} — ${formatMoney(invoice.amountCents)}` }));
 
-  const allPayments = invoices.flatMap((invoice) =>
-    invoice.payments.map((payment) => ({ payment, invoice })),
-  ).sort((a, b) => b.payment.receivedAt.getTime() - a.payment.receivedAt.getTime());
+  // Payments on VOID prefix-duplicates are migration leftovers — exclude from the
+  // Payments tab so cash-in doesn't look double-counted against live invoices.
+  const allPayments = live
+    .flatMap((invoice) => invoice.payments.map((payment) => ({ payment, invoice })))
+    .sort((a, b) => b.payment.receivedAt.getTime() - a.payment.receivedAt.getTime());
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
@@ -299,7 +306,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
 
       {activeTab === "invoices" ? (
         <>
-          {invoices.length === 0 ? (
+          {live.length === 0 && voided.length === 0 ? (
             <EmptyState
               icon={<DocumentIcon className="h-10 w-10" />}
               title="No invoices yet"
@@ -311,10 +318,40 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
               }
             />
           ) : (
+            <>
+            {voided.length > 0 ? (
+              <p className="text-sm text-[var(--bt-muted)]">
+                {showVoided ? (
+                  <>
+                    Showing {voided.length} voided invoice{voided.length === 1 ? "" : "s"} (prefix duplicates from migration).{" "}
+                    <Link href={`/jobs/${job.id}/invoices`} className="font-semibold text-[var(--bt-primary)] hover:underline">
+                      Hide voided
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    Hiding {voided.length} voided invoice{voided.length === 1 ? "" : "s"} (not in billed/paid totals).{" "}
+                    <Link
+                      href={`/jobs/${job.id}/invoices?showVoid=1`}
+                      className="font-semibold text-[var(--bt-primary)] hover:underline"
+                    >
+                      Show voided
+                    </Link>
+                  </>
+                )}
+              </p>
+            ) : null}
+            {invoicesForTable.length === 0 ? (
+              <EmptyState
+                icon={<DocumentIcon className="h-10 w-10" />}
+                title="No active invoices"
+                description="All invoices on this job are voided. Show voided to review migration duplicates."
+              />
+            ) : (
             <Panel>
               <Head columns={["Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Due", "Actions"]} />
               <tbody>
-                {invoices.map((invoice) => {
+                {invoicesForTable.map((invoice) => {
                   const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
                   const credited = invoice.creditMemos.reduce((sum, memo) => sum + memo.amountCents, 0);
                   const balance = invoice.amountCents - paid - credited;
@@ -328,7 +365,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                           {invoice.invoiceNumber}
                         </Link>
                         <div className="mt-0.5 flex flex-col text-[10px] text-[var(--bt-muted)]">
-                          <span>{PAYMENT_TERMS_LABELS[invoice.paymentTerms]}</span>
+                          {invoice.paymentTerms !== "CUSTOM" ? <span>{PAYMENT_TERMS_LABELS[invoice.paymentTerms]}</span> : null}
                           <span>{invoice.clientLastViewedAt ? `Viewed ${formatDate(invoice.clientLastViewedAt)}` : "Not viewed yet"}</span>
                         </div>
                       </td>
@@ -375,6 +412,8 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                 </tr>
               </tfoot>
             </Panel>
+            )}
+            </>
           )}
         </>
       ) : null}
