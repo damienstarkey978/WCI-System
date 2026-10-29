@@ -129,10 +129,47 @@ describe("inspection pictures folders + share links", () => {
 
     expect(issued.sharePath).toMatch(/^\/inspection-pictures\/share\/wciips_/);
     expect(issued.token.startsWith("wciips_")).toBe(true);
+    expect(vi.mocked(db.inspectionPictureShareLink.create).mock.calls[0]?.[0]).toMatchObject({
+      data: expect.objectContaining({
+        bearerToken: issued.token,
+        label: "City inspector",
+      }),
+    });
     expect(emitEvent).toHaveBeenCalledWith(
       "org_1",
       "inspection_pictures.share_link_issued",
       expect.objectContaining({ inspectionId: "insp_1", jobId: "job_1" }),
+    );
+  });
+
+  it("exposes a re-copyable sharePath on the active link when bearerToken is stored", async () => {
+    vi.mocked(db.job.findFirst).mockResolvedValue({ id: "job_1" } as never);
+    vi.mocked(db.jobPermit.findUnique).mockResolvedValue({ id: "permit_1" } as never);
+    vi.mocked(db.jobPermitInspection.findMany)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([
+        {
+          id: "insp_slab",
+          name: "Slab",
+          folderId: "folder_1",
+          completedAt: null,
+          permit: { trade: "BUILDING" },
+          folder: { id: "folder_1", name: "Inspection: Slab", _count: { files: 0 } },
+          shareLinks: [
+            {
+              id: "link_1",
+              label: "Permit Rockstar",
+              expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+              bearerToken: "wciips_abc_secret",
+            },
+          ],
+        },
+      ] as never);
+
+    const folders = await listInspectionPictureFolders("org_1", "job_1");
+    expect(folders[0]?.activeShareLink?.sharePath).toBe(
+      "/inspection-pictures/share/wciips_abc_secret",
     );
   });
 

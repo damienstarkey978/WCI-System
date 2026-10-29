@@ -68,7 +68,7 @@ export async function listInspectionPictureFolders(organizationId: string, jobId
         where: { revokedAt: null, expiresAt: { gt: new Date() } },
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, label: true, expiresAt: true, createdAt: true },
+        select: { id: true, label: true, expiresAt: true, createdAt: true, bearerToken: true },
       },
     },
   });
@@ -77,6 +77,7 @@ export async function listInspectionPictureFolders(organizationId: string, jobId
     .filter((row): row is typeof row & { folder: NonNullable<typeof row.folder> } => row.folder != null)
     .map((row) => {
       const guide = guideForInspectionName(row.name);
+      const active = row.shareLinks[0] ?? null;
       return {
         inspectionId: row.id,
         name: row.name,
@@ -88,7 +89,17 @@ export async function listInspectionPictureFolders(organizationId: string, jobId
         guideUrl: guide?.guideUrl ?? null,
         tips: guide?.tips ?? [],
         requiresTermiteCertNote: isSlabInspection(row.name),
-        activeShareLink: row.shareLinks[0] ?? null,
+        activeShareLink: active
+          ? {
+              id: active.id,
+              label: active.label,
+              expiresAt: active.expiresAt,
+              createdAt: active.createdAt,
+              sharePath: active.bearerToken
+                ? `/inspection-pictures/share/${active.bearerToken}`
+                : null,
+            }
+          : null,
       };
     });
 }
@@ -105,7 +116,7 @@ export async function getInspectionPictureFolder(organizationId: string, jobId: 
         where: { revokedAt: null, expiresAt: { gt: new Date() } },
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, label: true, expiresAt: true, createdAt: true },
+        select: { id: true, label: true, expiresAt: true, createdAt: true, bearerToken: true },
       },
     },
   });
@@ -118,6 +129,7 @@ export async function getInspectionPictureFolder(organizationId: string, jobId: 
   });
 
   const guide = guideForInspectionName(inspection.name);
+  const active = inspection.shareLinks[0] ?? null;
   return {
     inspectionId: inspection.id,
     name: inspection.name,
@@ -128,7 +140,17 @@ export async function getInspectionPictureFolder(organizationId: string, jobId: 
     guideUrl: guide?.guideUrl ?? null,
     tips: guide?.tips ?? [],
     requiresTermiteCertNote: isSlabInspection(inspection.name),
-    activeShareLink: inspection.shareLinks[0] ?? null,
+    activeShareLink: active
+      ? {
+          id: active.id,
+          label: active.label,
+          expiresAt: active.expiresAt,
+          createdAt: active.createdAt,
+          sharePath: active.bearerToken
+            ? `/inspection-pictures/share/${active.bearerToken}`
+            : null,
+        }
+      : null,
     files,
   };
 }
@@ -165,6 +187,7 @@ export async function issueInspectionPictureShareLink(input: IssueInspectionPict
       label: input.label?.trim() || null,
       tokenId: generated.tokenId,
       hashedSecret: generated.hashedSecret,
+      bearerToken: generated.token,
       expiresAt: new Date(Date.now() + SHARE_LINK_TTL_MS),
     },
   });

@@ -39,15 +39,20 @@ export default async function InspectionPictureSharePage({
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col gap-4 p-4 pb-10 sm:p-6">
-      <header className="pt-2">
+    <div className="mx-auto flex min-h-dvh max-w-lg flex-col gap-4 p-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:p-6">
+      <header className="pt-[max(0.5rem,env(safe-area-inset-top))]">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
           {resolved.companyName}
         </p>
-        <h1 className="mt-1 text-xl font-semibold text-[var(--bt-text)]">{resolved.inspectionName}</h1>
+        <h1 className="mt-1 text-xl font-semibold leading-tight text-[var(--bt-text)] sm:text-2xl">
+          {resolved.inspectionName}
+        </h1>
         <p className="mt-1 text-sm text-[var(--bt-muted)]">
           {resolved.jobName}
           {resolved.label ? ` · for ${resolved.label}` : ""}
+        </p>
+        <p className="mt-2 text-xs text-[var(--bt-muted)]">
+          Photos for this inspection folder only. No login required.
         </p>
       </header>
 

@@ -86,11 +86,11 @@ export function InspectorPhotoCapture({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
+      <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-2 border-b bg-[var(--bt-bg,white)] px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
         <button
           type="button"
           onClick={() => cameraRef.current?.click()}
-          className="w-full rounded-lg px-4 py-3.5 text-base font-semibold text-[var(--bt-on-primary)]"
+          className="min-h-12 w-full rounded-xl px-4 py-3.5 text-base font-semibold text-[var(--bt-on-primary)]"
           style={{ background: "var(--bt-primary)" }}
         >
           Take photos
@@ -98,7 +98,7 @@ export function InspectorPhotoCapture({
         <button
           type="button"
           onClick={() => libraryRef.current?.click()}
-          className="w-full rounded-lg border px-4 py-3 text-sm font-semibold text-[var(--bt-text)]"
+          className="min-h-11 w-full rounded-xl border px-4 py-3 text-sm font-semibold text-[var(--bt-text)]"
           style={{ borderColor: "var(--bt-border)" }}
         >
           Choose from library

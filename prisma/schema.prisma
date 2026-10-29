@@ -3757,6 +3757,9 @@ model InspectionPictureShareLink {
 
   tokenId      String   @unique
   hashedSecret String
+  /// Full bearer token kept so staff can re-copy the durable URL without rotating.
+  /// Verification still uses hashedSecret; revoke clears access regardless.
+  bearerToken  String?
   expiresAt    DateTime
   revokedAt    DateTime?
 

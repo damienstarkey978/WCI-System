@@ -700,6 +700,9 @@ Record every architectural decision that departs from the above, with the reason
   [token]`. Uploads set `File.uploadedByUserId` null (nullable for this path).
   Staff UI copies the URL and can open mailto:/sms: — no automated OS email send
   (Email/Send hard rule; Damien did not authorize Resend for this flow).
+  `bearerToken` is stored on the link row so staff can re-copy the durable URL
+  without rotating; verification still uses `hashedSecret`. Legacy rows without
+  `bearerToken` show Share with inspector (mint) until rotated once.
 - **Grokbot agents use API + MCP, not MCP-only (Atlas/Roy/Heather):** `/api/v1` remains
   the source of truth with scoped `ApiKey`s; `/api/mcp` authenticates with the same
   keys and exposes `api_v1_request` plus convenience tools that call the same services
