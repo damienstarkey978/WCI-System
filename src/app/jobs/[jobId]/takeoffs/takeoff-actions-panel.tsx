@@ -23,7 +23,8 @@ export function TakeoffActionsPanel({
   if (queueableLineIds.length === 0 && pushableLineIds.length === 0) {
     return (
       <p className="text-sm text-[var(--bt-muted)]">
-        All lines are already ordered or cancelled. Open Purchasing to track status.
+        No convertible lines yet — attach plans, save measurements, and draft lines first. If every line is
+        already ordered or cancelled, open Purchasing to track status.
       </p>
     );
   }

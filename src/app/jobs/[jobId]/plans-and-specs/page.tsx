@@ -9,7 +9,7 @@ import { DocumentIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { resolveFileUrlSafe } from "@/lib/files/service";
+import { listJobPlanFiles, resolveFileUrlSafe } from "@/lib/files/service";
 
 import { FileCard } from "../files/file-card";
 import { UploadForm } from "../files/upload-form";
@@ -41,11 +41,7 @@ export default async function PlansAndSpecsPage({ params, searchParams }: PagePr
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const planRows = await db.file.findMany({
-    where: { jobId: job.id, category: "PLAN", deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    include: { uploadedByUser: true },
-  });
+  const planRows = await listJobPlanFiles(user.organizationId, job.id);
   const plans = await Promise.all(
     planRows.map(async (file) => ({
       id: file.id,

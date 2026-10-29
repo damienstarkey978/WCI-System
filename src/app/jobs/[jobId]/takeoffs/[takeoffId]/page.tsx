@@ -2,13 +2,22 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CreateModal } from "@/components/shell/CreateModal";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { extendedCostCents } from "@/lib/budget/funnel";
-import { formatMoney } from "@/lib/format";
-import { getTakeoff, TakeoffNotFoundError } from "@/lib/takeoffs/service";
+import { resolveFileUrlSafe } from "@/lib/files/service";
+import { formatDate, formatMoney } from "@/lib/format";
+import {
+  getTakeoff,
+  listAvailablePlanFilesForTakeoff,
+  TakeoffNotFoundError,
+} from "@/lib/takeoffs/service";
 
+import { AiDraftTakeoffForm } from "../ai-draft-form";
 import { TakeoffActionsPanel } from "../takeoff-actions-panel";
+import { TakeoffMeasurementsForm } from "../takeoff-measurements-form";
+import { TakeoffPlansPanel } from "../takeoff-plans-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +45,29 @@ export default async function TakeoffDetailPage({
   }
   if (takeoff.jobId !== jobId) notFound();
 
+  const availablePlanRows = await listAvailablePlanFilesForTakeoff(user.organizationId, takeoff.id);
+  const availablePlans = availablePlanRows.map((file) => ({
+    id: file.id,
+    fileName: file.fileName,
+    sizeBytes: file.sizeBytes,
+    uploadedAt: formatDate(file.createdAt),
+  }));
+
+  const attachedPlans = (
+    await Promise.all(
+      takeoff.planFiles
+        .filter((link) => link.file.deletedAt == null)
+        .map(async (link) => ({
+          id: link.file.id,
+          fileName: link.file.fileName,
+          url: await resolveFileUrlSafe(link.file.url),
+          mimeType: link.file.mimeType,
+          sizeBytes: link.file.sizeBytes,
+          uploadedAt: formatDate(link.file.createdAt),
+        })),
+    )
+  );
+
   const queueableLineIds = takeoff.lines
     .filter((line) => line.status === "DRAFT" || line.status === "READY")
     .map((line) => line.id);
@@ -58,12 +90,28 @@ export default async function TakeoffDetailPage({
               All takeoffs
             </Link>
             <Link
+              href={`/jobs/${jobId}/plans-and-specs`}
+              className="rounded border px-3 py-2 text-sm font-semibold"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
+              Plans &amp; Specs
+            </Link>
+            <Link
               href={`/jobs/${jobId}/purchasing`}
               className="rounded border px-3 py-2 text-sm font-semibold"
               style={{ borderColor: "var(--bt-border)" }}
             >
               Purchasing
             </Link>
+            {takeoff.lines.length === 0 ? (
+              <CreateModal triggerLabel="AI draft from notes" title="Draft takeoff lines from measurements">
+                <AiDraftTakeoffForm
+                  jobId={jobId}
+                  takeoffId={takeoff.id}
+                  defaultNotes={takeoff.notes}
+                />
+              </CreateModal>
+            ) : null}
           </div>
         }
       />
@@ -72,19 +120,19 @@ export default async function TakeoffDetailPage({
         <span>Status: {takeoff.status}</span>
         <span>{takeoff.aiGenerated ? "AI draft" : "Manual"}</span>
         <span>{takeoff.lines.length} lines</span>
+        <span>
+          {attachedPlans.length} plan{attachedPlans.length === 1 ? "" : "s"}
+        </span>
       </div>
 
-      {takeoff.notes ? (
-        <div
-          className="rounded-lg border p-3 text-sm whitespace-pre-wrap text-[var(--bt-text)]"
-          style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg)" }}
-        >
-          <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--bt-muted)]">
-            Source notes
-          </div>
-          {takeoff.notes}
-        </div>
-      ) : null}
+      <TakeoffPlansPanel
+        jobId={jobId}
+        takeoffId={takeoff.id}
+        attachedPlans={attachedPlans}
+        availablePlans={availablePlans}
+      />
+
+      <TakeoffMeasurementsForm jobId={jobId} takeoffId={takeoff.id} notes={takeoff.notes} />
 
       {takeoff.assumptions.length > 0 ? (
         <div className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--bt-border)" }}>
@@ -112,48 +160,57 @@ export default async function TakeoffDetailPage({
             </tr>
           </thead>
           <tbody>
-            {takeoff.lines.map((line) => (
-              <tr key={line.id} className="border-t align-top" style={{ borderColor: "var(--bt-border)" }}>
-                <td className="px-3 py-2.5">
-                  <div className="font-medium text-[var(--bt-text)]">{line.title}</div>
-                  {line.description ? (
-                    <div className="mt-0.5 text-xs text-[var(--bt-muted)]">{line.description}</div>
-                  ) : null}
-                  {line.groupLabel ? (
-                    <div className="mt-0.5 text-xs text-[var(--bt-muted)]">{line.groupLabel}</div>
-                  ) : null}
-                </td>
-                <td className="px-3 py-2.5 text-[var(--bt-text)]">
-                  {line.costCode.code}
-                  <div className="text-xs text-[var(--bt-muted)]">{line.costCode.name}</div>
-                </td>
-                <td className="px-3 py-2.5 whitespace-nowrap text-[var(--bt-text)]">
-                  {(line.quantityMilli / 1_000).toLocaleString()}
-                  {line.unit ? ` ${line.unit}` : ""}
-                </td>
-                <td className="px-3 py-2.5 whitespace-nowrap text-[var(--bt-text)]">
-                  {formatMoney(extendedCostCents(line.quantityMilli, line.unitCostCents))}
-                </td>
-                <td className="px-3 py-2.5 text-[var(--bt-text)]">
-                  {line.status}
-                  {line.purchasingIntent ? (
-                    <div className="text-xs text-[var(--bt-muted)]">Intent {line.purchasingIntent.status}</div>
-                  ) : null}
-                </td>
-                <td className="px-3 py-2.5">
-                  {line.purchaseOrder ? (
-                    <Link
-                      href={`/jobs/${jobId}/purchase-orders/${line.purchaseOrder.id}`}
-                      className="text-[var(--bt-primary)] hover:underline"
-                    >
-                      {line.purchaseOrder.poNumber}
-                    </Link>
-                  ) : (
-                    <span className="text-[var(--bt-muted)]">—</span>
-                  )}
+            {takeoff.lines.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-sm text-[var(--bt-muted)]">
+                  No quantity lines yet. Attach plans, enter measurements above, then use AI draft — or add
+                  lines once Estimating reviews.
                 </td>
               </tr>
-            ))}
+            ) : (
+              takeoff.lines.map((line) => (
+                <tr key={line.id} className="border-t align-top" style={{ borderColor: "var(--bt-border)" }}>
+                  <td className="px-3 py-2.5">
+                    <div className="font-medium text-[var(--bt-text)]">{line.title}</div>
+                    {line.description ? (
+                      <div className="mt-0.5 text-xs text-[var(--bt-muted)]">{line.description}</div>
+                    ) : null}
+                    {line.groupLabel ? (
+                      <div className="mt-0.5 text-xs text-[var(--bt-muted)]">{line.groupLabel}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5 text-[var(--bt-text)]">
+                    {line.costCode.code}
+                    <div className="text-xs text-[var(--bt-muted)]">{line.costCode.name}</div>
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-[var(--bt-text)]">
+                    {(line.quantityMilli / 1_000).toLocaleString()}
+                    {line.unit ? ` ${line.unit}` : ""}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-[var(--bt-text)]">
+                    {formatMoney(extendedCostCents(line.quantityMilli, line.unitCostCents))}
+                  </td>
+                  <td className="px-3 py-2.5 text-[var(--bt-text)]">
+                    {line.status}
+                    {line.purchasingIntent ? (
+                      <div className="text-xs text-[var(--bt-muted)]">Intent {line.purchasingIntent.status}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {line.purchaseOrder ? (
+                      <Link
+                        href={`/jobs/${jobId}/purchase-orders/${line.purchaseOrder.id}`}
+                        className="text-[var(--bt-primary)] hover:underline"
+                      >
+                        {line.purchaseOrder.poNumber}
+                      </Link>
+                    ) : (
+                      <span className="text-[var(--bt-muted)]">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

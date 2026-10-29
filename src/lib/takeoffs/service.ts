@@ -11,6 +11,7 @@ import {
   type CostType,
 } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
+import { listJobPlanFiles } from "@/lib/files/service";
 import { createPurchaseOrder, DuplicatePoNumberError } from "@/lib/purchase-orders/service";
 import { emitEvent } from "@/lib/webhooks";
 
@@ -109,6 +110,21 @@ export async function createTakeoff(input: CreateTakeoffInput) {
   });
 }
 
+const takeoffPlanFileInclude = {
+  file: {
+    select: {
+      id: true,
+      fileName: true,
+      url: true,
+      mimeType: true,
+      sizeBytes: true,
+      category: true,
+      createdAt: true,
+      deletedAt: true,
+    },
+  },
+} as const;
+
 export async function getTakeoff(organizationId: string, takeoffId: string) {
   const takeoff = await db.takeoff.findFirst({
     where: { id: takeoffId, organizationId },
@@ -120,6 +136,10 @@ export async function getTakeoff(organizationId: string, takeoffId: string) {
           purchasingIntent: true,
           purchaseOrder: { select: { id: true, poNumber: true, status: true } },
         },
+      },
+      planFiles: {
+        orderBy: { createdAt: "desc" },
+        include: takeoffPlanFileInclude,
       },
       job: { select: { id: true, name: true, prefix: true } },
     },
@@ -134,7 +154,163 @@ export async function listTakeoffsForJob(organizationId: string, jobId: string) 
     orderBy: { createdAt: "desc" },
     include: {
       lines: { select: { id: true, status: true, unitCostCents: true, quantityMilli: true } },
+      _count: { select: { planFiles: true } },
     },
+  });
+}
+
+export class TakeoffFileNotFoundError extends Error {
+  constructor(message = "Plan file not found on this job.") {
+    super(message);
+    this.name = "TakeoffFileNotFoundError";
+  }
+}
+
+/**
+ * Job PLAN files not yet linked to this takeoff — Import from Plans & Specs picker.
+ * Reads the same source of truth as Plans & Specs (`listJobPlanFiles`: category PLAN).
+ */
+export async function listAvailablePlanFilesForTakeoff(organizationId: string, takeoffId: string) {
+  const takeoff = await db.takeoff.findFirst({
+    where: { id: takeoffId, organizationId },
+    select: { id: true, jobId: true },
+  });
+  if (!takeoff) throw new TakeoffNotFoundError(takeoffId);
+
+  const attached = await db.takeoffFile.findMany({
+    where: { takeoffId: takeoff.id },
+    select: { fileId: true },
+  });
+  const attachedIds = new Set(attached.map((row) => row.fileId));
+
+  // Same catalog Plans & Specs shows — sibling migration moves Documents "Plans"
+  // folder rows into category PLAN; they appear here automatically.
+  const plans = await listJobPlanFiles(organizationId, takeoff.jobId);
+  return plans
+    .filter((file) => !attachedIds.has(file.id))
+    .map((file) => ({
+      id: file.id,
+      fileName: file.fileName,
+      url: file.url,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+      createdAt: file.createdAt,
+    }));
+}
+
+/** Attach existing job plan File(s) to a takeoff (Plans & Specs import). Idempotent per file. */
+export async function attachPlanFilesToTakeoff(input: {
+  readonly organizationId: string;
+  readonly takeoffId: string;
+  readonly fileIds: readonly string[];
+}) {
+  const takeoff = await db.takeoff.findFirst({
+    where: { id: input.takeoffId, organizationId: input.organizationId },
+    select: { id: true, jobId: true },
+  });
+  if (!takeoff) throw new TakeoffNotFoundError(input.takeoffId);
+
+  const uniqueIds = [...new Set(input.fileIds.filter(Boolean))];
+  if (uniqueIds.length === 0) throw new TakeoffFileNotFoundError("Choose at least one plan to import.");
+
+  // Only Plans & Specs PLAN files — same catalog as listJobPlanFiles.
+  const files = await db.file.findMany({
+    where: {
+      id: { in: uniqueIds },
+      organizationId: input.organizationId,
+      jobId: takeoff.jobId,
+      category: "PLAN",
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+  if (files.length !== uniqueIds.length) {
+    throw new TakeoffFileNotFoundError("One or more plans were not found on Plans & Specs for this job.");
+  }
+
+  return db.$transaction(async (tx) => {
+    const created = [];
+    for (const file of files) {
+      const row = await tx.takeoffFile.upsert({
+        where: { takeoffId_fileId: { takeoffId: takeoff.id, fileId: file.id } },
+        create: { takeoffId: takeoff.id, fileId: file.id },
+        update: {},
+        include: takeoffPlanFileInclude,
+      });
+      created.push(row);
+    }
+    return created;
+  });
+}
+
+export async function detachPlanFileFromTakeoff(input: {
+  readonly organizationId: string;
+  readonly takeoffId: string;
+  readonly fileId: string;
+}) {
+  const takeoff = await db.takeoff.findFirst({
+    where: { id: input.takeoffId, organizationId: input.organizationId },
+    select: { id: true },
+  });
+  if (!takeoff) throw new TakeoffNotFoundError(input.takeoffId);
+
+  const link = await db.takeoffFile.findUnique({
+    where: { takeoffId_fileId: { takeoffId: takeoff.id, fileId: input.fileId } },
+  });
+  if (!link) throw new TakeoffFileNotFoundError("That plan is not attached to this takeoff.");
+
+  await db.takeoffFile.delete({ where: { id: link.id } });
+}
+
+/** Persist measurement / plan notes on a takeoff (takeoff-lite measurement entry). */
+export async function updateTakeoffMeasurements(input: {
+  readonly organizationId: string;
+  readonly takeoffId: string;
+  readonly notes: string;
+}) {
+  const takeoff = await db.takeoff.findFirst({
+    where: { id: input.takeoffId, organizationId: input.organizationId },
+    select: { id: true },
+  });
+  if (!takeoff) throw new TakeoffNotFoundError(input.takeoffId);
+
+  const notes = input.notes.trim();
+  return db.takeoff.update({
+    where: { id: takeoff.id },
+    data: { notes: notes.length > 0 ? notes : null },
+  });
+}
+
+export class TakeoffJobNotFoundError extends Error {
+  constructor(jobId: string) {
+    super(`Job ${jobId} not found.`);
+    this.name = "TakeoffJobNotFoundError";
+  }
+}
+
+/** Create an empty DRAFT takeoff so staff can attach plans / enter measurements first. */
+export async function createBlankTakeoff(input: {
+  readonly organizationId: string;
+  readonly jobId: string;
+  readonly title?: string;
+  readonly notes?: string | null;
+}) {
+  const job = await db.job.findFirst({
+    where: { id: input.jobId, organizationId: input.organizationId },
+    select: { id: true },
+  });
+  if (!job) throw new TakeoffJobNotFoundError(input.jobId);
+
+  const title = (input.title ?? "").trim() || "Untitled takeoff";
+  const notes = input.notes?.trim() || null;
+
+  return createTakeoff({
+    organizationId: input.organizationId,
+    jobId: job.id,
+    title,
+    notes,
+    aiGenerated: false,
+    lineItems: [],
   });
 }
 
@@ -426,4 +602,17 @@ export async function convertPurchasingIntentToPo(input: {
   });
 
   return purchaseOrder;
+}
+
+/** After uploadAndRegisterFile — link the new PLAN File to the takeoff. */
+export async function linkUploadedPlanToTakeoff(input: {
+  readonly organizationId: string;
+  readonly takeoffId: string;
+  readonly fileId: string;
+}) {
+  return attachPlanFilesToTakeoff({
+    organizationId: input.organizationId,
+    takeoffId: input.takeoffId,
+    fileIds: [input.fileId],
+  });
 }
