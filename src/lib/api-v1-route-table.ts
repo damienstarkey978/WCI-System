@@ -67,6 +67,7 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/migration/daily-logs": ["POST"],
   "/migration/invoices": ["POST"],
   "/migration/purchase-orders": ["POST"],
+  "/migration/schedule-flags": ["POST"],
   "/migration/schedule-items": ["POST"],
   "/non-working-days": ["GET","POST"],
   "/notifications": ["GET"],
