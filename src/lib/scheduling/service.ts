@@ -163,15 +163,32 @@ export async function updateScheduleItem(input: UpdateScheduleItemInput) {
   });
 }
 
-/** Get a schedule with every item's dates and critical-path status freshly computed. */
-export async function getComputedSchedule(organizationId: string, scheduleId: string) {
+/**
+ * Get a schedule with every item's dates and critical-path status freshly computed.
+ *
+ * Pass `{ includePhases: false }` from surfaces that only need the item list
+ * (job overview agenda) so we skip the phases query. The full schedule page
+ * keeps the default.
+ */
+export async function getComputedSchedule(
+  organizationId: string,
+  scheduleId: string,
+  options?: { readonly includePhases?: boolean },
+) {
+  const includePhases = options?.includePhases !== false;
+
   const schedule = await db.schedule.findFirst({
     where: { id: scheduleId, organizationId },
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
   if (!schedule) throw new ScheduleNotFoundError(scheduleId);
 
-  const nonWorkingDates = await nonWorkingDatesFor(organizationId);
+  const [nonWorkingDates, phases] = await Promise.all([
+    nonWorkingDatesFor(organizationId),
+    includePhases
+      ? db.schedulePhase.findMany({ where: { scheduleId: schedule.id }, orderBy: { sortOrder: "asc" } })
+      : Promise.resolve([]),
+  ]);
 
   const cpmInputs: ScheduleItemInput[] = schedule.items.map((item) => ({
     id: item.id,
@@ -188,7 +205,7 @@ export async function getComputedSchedule(organizationId: string, scheduleId: st
 
   return {
     schedule: { id: schedule.id, jobId: schedule.jobId, name: schedule.name, isOnline: schedule.isOnline, isDraft: schedule.isDraft },
-    phases: await db.schedulePhase.findMany({ where: { scheduleId: schedule.id }, orderBy: { sortOrder: "asc" } }),
+    phases,
     items,
     projectFinishDate: projectFinishDate(computed),
   };

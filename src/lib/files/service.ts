@@ -14,7 +14,13 @@
  */
 
 import { db } from "@/lib/db";
-import { buildStoragePath, deleteJobFile, signedJobFileUrl, uploadJobFile } from "@/lib/storage/supabase-storage";
+import {
+  buildStoragePath,
+  deleteJobFile,
+  signedJobFileUrl,
+  signedJobFileUrls,
+  uploadJobFile,
+} from "@/lib/storage/supabase-storage";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -220,6 +226,36 @@ export async function resolveFileUrlSafe(url: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve many File.url values with one storage round-trip for the non-http
+ * paths. Prefer this over `Promise.all(urls.map(resolveFileUrlSafe))` on any
+ * list page — that pattern is an N+1 against Supabase Storage.
+ */
+export async function resolveFileUrlsSafe(urls: readonly string[]): Promise<(string | null)[]> {
+  const storageIndexes: number[] = [];
+  const storagePaths: string[] = [];
+  const results: (string | null)[] = urls.map((url, index) => {
+    if (/^https?:\/\//i.test(url)) return url;
+    storageIndexes.push(index);
+    storagePaths.push(url);
+    return null;
+  });
+
+  if (storagePaths.length === 0) return results;
+
+  try {
+    const signed = await signedJobFileUrls(storagePaths);
+    for (let i = 0; i < storageIndexes.length; i++) {
+      const index = storageIndexes[i]!;
+      const path = storagePaths[i]!;
+      results[index] = signed.get(path) ?? null;
+    }
+  } catch {
+    // Same soft-fail contract as resolveFileUrlSafe: leave storage paths null.
+  }
+  return results;
 }
 
 /** Moves a file to the job's trash. Nothing is removed from storage until purgeFile(). */

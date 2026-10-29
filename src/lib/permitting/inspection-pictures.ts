@@ -7,7 +7,7 @@
 
 import { db } from "@/lib/db";
 import { createFolder } from "@/lib/files/folders";
-import { resolveFileUrlSafe, uploadAndRegisterFile } from "@/lib/files/service";
+import { resolveFileUrlsSafe, uploadAndRegisterFile } from "@/lib/files/service";
 import {
   ensureDefaultPermits,
   InspectionNotFoundError,
@@ -274,16 +274,15 @@ export async function getInspectionFolderForShareToken(token: string) {
     select: { id: true, fileName: true, url: true, createdAt: true },
   });
 
-  const photos = (
-    await Promise.all(
-      files.map(async (file) => ({
-        id: file.id,
-        fileName: file.fileName,
-        url: await resolveFileUrlSafe(file.url),
-        createdAt: file.createdAt,
-      })),
-    )
-  ).filter((file): file is { id: string; fileName: string; url: string; createdAt: Date } => Boolean(file.url));
+  const signedUrls = await resolveFileUrlsSafe(files.map((file) => file.url));
+  const photos = files
+    .map((file, index) => ({
+      id: file.id,
+      fileName: file.fileName,
+      url: signedUrls[index] ?? null,
+      createdAt: file.createdAt,
+    }))
+    .filter((file): file is { id: string; fileName: string; url: string; createdAt: Date } => Boolean(file.url));
 
   const guide = guideForInspectionName(link.inspection.name);
 

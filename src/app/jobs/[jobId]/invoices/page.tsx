@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 import { computeDrawAmountCents } from "@/lib/invoicing/calc";
 import { PAYMENT_TERMS_LABELS, daysOverdue } from "@/lib/invoicing/terms";
+import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
 import { CreateInvoiceForm } from "./create-invoice-form";
 import {
@@ -186,7 +187,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
 
-  const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
+  const job = await findOrgJobSummary(user.organizationId, jobId);
   if (!job) notFound();
 
   const activeTab: TabKey = isTabKey(typeof tab === "string" ? tab : undefined) ? (tab as TabKey) : "invoices";

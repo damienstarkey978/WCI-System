@@ -14,6 +14,7 @@
 
 import { auth as clerkAuth, currentUser as clerkCurrentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { Prisma } from "@/generated/prisma/client";
 import type { UserModel } from "@/generated/prisma/models";
@@ -31,15 +32,30 @@ export class AuthConfigurationError extends Error {
 }
 
 /**
+ * Clerk session user id for this RSC/request. Deduped so layout → StaffShell →
+ * AppShell → page don't each pay a separate clerkAuth() round-trip (a common
+ * cause of 3–5s staff page loads when Clerk is remote).
+ */
+const clerkSessionUserId = cache(async (): Promise<string | null> => {
+  if (!isClerkConfigured()) return null;
+  const { userId } = await clerkAuth();
+  return userId ?? null;
+});
+
+/**
  * The signed-in staff user, or null. Never throws for an unauthenticated visitor —
  * callers decide whether that is an error.
+ *
+ * Wrapped in React `cache()` so the many staff layouts/pages that each call this
+ * (Job layout, StaffShell, AppShell, the page itself) share one Clerk + User
+ * lookup per request instead of a serial waterfall of identical queries.
  */
-export async function currentAppUser(): Promise<AppUser | null> {
+export const currentAppUser = cache(async (): Promise<AppUser | null> => {
   if (!isClerkConfigured()) {
     return devFallbackUser();
   }
 
-  const { userId } = await clerkAuth();
+  const userId = await clerkSessionUserId();
   if (!userId) return null;
 
   const existing = await db.user.findUnique({ where: { clerkUserId: userId } });
@@ -61,7 +77,7 @@ export async function currentAppUser(): Promise<AppUser | null> {
     where: { id: invited.id },
     data: { clerkUserId: userId },
   });
-}
+});
 
 /**
  * The signed-in staff user for a page, redirecting a signed-out visitor to
@@ -81,7 +97,7 @@ export async function currentAppUser(): Promise<AppUser | null> {
  */
 export async function currentAppUserOrRedirect(): Promise<AppUser> {
   if (isClerkConfigured()) {
-    const { userId } = await clerkAuth();
+    const userId = await clerkSessionUserId();
     if (!userId) {
       redirect("/sign-in");
     }

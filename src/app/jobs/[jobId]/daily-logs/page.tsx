@@ -9,7 +9,8 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
-import { resolveFileUrlSafe } from "@/lib/files/service";
+import { resolveFileUrlsSafe } from "@/lib/files/service";
+import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
 import { toggleDailyLogLikeAction } from "./actions";
 import { DailyLogCreateModal } from "./daily-log-create-modal";
@@ -46,7 +47,7 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
 
-  const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
+  const job = await findOrgJobSummary(user.organizationId, jobId);
   if (!job) notFound();
 
   const where = {
@@ -62,7 +63,16 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * size,
       take: size,
-      include: { authorUser: true, files: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } }, _count: { select: { likes: true } }, likes: { where: { userId: user.id }, select: { userId: true } } },
+      include: {
+        authorUser: { select: { id: true, name: true, email: true } },
+        files: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, fileName: true, category: true, url: true },
+        },
+        _count: { select: { likes: true } },
+        likes: { where: { userId: user.id }, select: { userId: true } },
+      },
     }),
   ]);
 
@@ -71,12 +81,24 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
     : [];
   const commentsByLog = new Map(commentCounts.map((row) => [row.featureId, row._count._all]));
 
-  const cards = await Promise.all(
-    logs.map(async (log) => ({
-      log,
-      files: await Promise.all(log.files.map(async (file) => ({ id: file.id, fileName: file.fileName, category: file.category, url: await resolveFileUrlSafe(file.url) }))),
-    })),
-  );
+  // Flatten every photo on this page into one createSignedUrls call.
+  const flatFiles = logs.flatMap((log) => log.files);
+  const signedUrls = await resolveFileUrlsSafe(flatFiles.map((file) => file.url));
+  const fileOffsets = logs.reduce<number[]>((offsets, _log, index) => {
+    const previous = index === 0 ? 0 : offsets[index - 1]! + logs[index - 1]!.files.length;
+    offsets.push(previous);
+    return offsets;
+  }, []);
+  const cards = logs.map((log, logIndex) => {
+    const start = fileOffsets[logIndex]!;
+    const files = log.files.map((file, fileIndex) => ({
+      id: file.id,
+      fileName: file.fileName,
+      category: file.category,
+      url: signedUrls[start + fileIndex] ?? null,
+    }));
+    return { log, files };
+  });
 
   const pageCount = Math.max(1, Math.ceil(total / size));
   const href = (next: { page?: number; size?: number }) => {

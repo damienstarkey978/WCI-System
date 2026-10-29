@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { appBaseUrl } from "@/lib/app-url";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { resolveFileUrlSafe } from "@/lib/files/service";
+import { resolveFileUrlsSafe } from "@/lib/files/service";
 import { getInspectionPictureFolder } from "@/lib/permitting/inspection-pictures";
 import { tradeLabel } from "@/lib/permitting/service";
 
@@ -42,15 +42,14 @@ export default async function InspectionPictureFolderPage({
   const origin = base.replace(/\/+$/, "");
   const sharePath = folder.activeShareLink?.sharePath ?? null;
 
-  const photos = (
-    await Promise.all(
-      folder.files.map(async (file) => ({
-        id: file.id,
-        fileName: file.fileName,
-        url: await resolveFileUrlSafe(file.url),
-      })),
-    )
-  ).filter((file): file is { id: string; fileName: string; url: string } => Boolean(file.url));
+  const signedUrls = await resolveFileUrlsSafe(folder.files.map((file) => file.url));
+  const photos = folder.files
+    .map((file, index) => ({
+      id: file.id,
+      fileName: file.fileName,
+      url: signedUrls[index] ?? null,
+    }))
+    .filter((file): file is { id: string; fileName: string; url: string } => Boolean(file.url));
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 sm:p-6">

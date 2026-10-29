@@ -1,9 +1,47 @@
+import { cache } from "react";
+
 import { JobStatus, UserRole } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { countUnreadNotifications, listNotificationsForUser } from "@/lib/notifications/service";
 
 import type { SidebarJob } from "./JobSidebar";
 import type { BellNotification } from "./TopNav";
+
+/** Fields the job rail / TopNav jump list actually render — never the full Job row. */
+const SIDEBAR_JOB_SELECT = {
+  id: true,
+  name: true,
+  prefix: true,
+  status: true,
+  addressLine1: true,
+  city: true,
+  qboCustomerId: true,
+  jobGroup: { select: { name: true } },
+  clientAccess: { take: 1, select: { client: { select: { name: true } } } },
+} as const;
+
+function toSidebarJob(job: {
+  id: string;
+  name: string;
+  prefix: string | null;
+  status: string;
+  addressLine1: string | null;
+  city: string | null;
+  qboCustomerId: string | null;
+  jobGroup: { name: string } | null;
+  clientAccess: { client: { name: string } }[];
+}): SidebarJob {
+  return {
+    id: job.id,
+    name: job.name,
+    prefix: job.prefix,
+    status: job.status,
+    groupName: job.jobGroup?.name ?? "General",
+    clientName: job.clientAccess[0]?.client.name ?? null,
+    address: [job.addressLine1, job.city].filter(Boolean).join(", ") || null,
+    qboLinked: job.qboCustomerId !== null,
+  };
+}
 
 /**
  * Every job the given user can actually open, grouped for the sidebar exactly
@@ -20,8 +58,14 @@ import type { BellNotification } from "./TopNav";
  * that path, not the primary mechanism keeping unaccepted leads off this
  * list. The full /jobs list still shows pre-sale jobs, with their own
  * "Pre-sale" badge, for staff managing that pipeline.
+ *
+ * Request-cached: StaffShell and /jobs both need this list; without cache()
+ * every navigation paid for it twice (and AppShell's template fetch on top).
  */
-export async function sidebarJobsForOrg(organizationId: string, user: { readonly id: string; readonly role: UserRole }): Promise<SidebarJob[]> {
+export const sidebarJobsForOrg = cache(async function sidebarJobsForOrg(
+  organizationId: string,
+  user: { readonly id: string; readonly role: UserRole },
+): Promise<SidebarJob[]> {
   const jobs = await db.job.findMany({
     where: {
       organizationId,
@@ -30,43 +74,38 @@ export async function sidebarJobsForOrg(organizationId: string, user: { readonly
       ...(user.role === UserRole.FIELD ? { accessGrants: { some: { userId: user.id } } } : {}),
     },
     orderBy: { createdAt: "desc" },
-    include: { jobGroup: true, clientAccess: { take: 1, include: { client: true } } },
+    select: SIDEBAR_JOB_SELECT,
   });
 
-  return jobs.map((job) => ({
-    id: job.id,
-    name: job.name,
-    prefix: job.prefix,
-    status: job.status,
-    groupName: job.jobGroup?.name ?? "General",
-    clientName: job.clientAccess[0]?.client.name ?? null,
-    address: [job.addressLine1, job.city].filter(Boolean).join(", ") || null,
-    qboLinked: job.qboCustomerId !== null,
-  }));
-}
+  return jobs.map(toSidebarJob);
+});
 
 /** The job sidebar's "Templates" tab (JobSidebar.tsx) — Job.isTemplate rows, same shape as the real-job list above. */
-export async function sidebarTemplateJobsForOrg(organizationId: string): Promise<SidebarJob[]> {
+export const sidebarTemplateJobsForOrg = cache(async function sidebarTemplateJobsForOrg(
+  organizationId: string,
+): Promise<SidebarJob[]> {
   const jobs = await db.job.findMany({
     where: { organizationId, isTemplate: true },
     orderBy: { createdAt: "desc" },
-    include: { jobGroup: true, clientAccess: { take: 1, include: { client: true } } },
+    select: SIDEBAR_JOB_SELECT,
   });
 
-  return jobs.map((job) => ({
-    id: job.id,
-    name: job.name,
-    prefix: job.prefix,
-    status: job.status,
-    groupName: job.jobGroup?.name ?? "General",
-    clientName: job.clientAccess[0]?.client.name ?? null,
-    address: [job.addressLine1, job.city].filter(Boolean).join(", ") || null,
-    qboLinked: job.qboCustomerId !== null,
-  }));
-}
+  return jobs.map(toSidebarJob);
+});
+
+/** Org display name for the BT company strip — cached so AppShell doesn't re-hit on nested renders. */
+export const organizationNameForShell = cache(async function organizationNameForShell(
+  organizationId: string,
+): Promise<string> {
+  const organization = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: { name: true },
+  });
+  return organization?.name ?? "World Construction Inc.";
+});
 
 /** The Bell icon's data: a user's most recent in-app notifications, plus the unread count for the badge. */
-export async function notificationBellDataForUser(
+export const notificationBellDataForUser = cache(async function notificationBellDataForUser(
   organizationId: string,
   userId: string,
 ): Promise<{ notifications: BellNotification[]; unreadCount: number }> {
@@ -84,4 +123,4 @@ export async function notificationBellDataForUser(
     })),
     unreadCount,
   };
-}
+});
