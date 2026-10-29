@@ -9,7 +9,8 @@ import { DocumentIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { listJobPlanFiles, resolveFileUrlSafe } from "@/lib/files/service";
+import { listJobPlanFiles, resolveFileUrlsSafe } from "@/lib/files/service";
+import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
 import { FileCard } from "../files/file-card";
 import { UploadForm } from "../files/upload-form";
@@ -38,26 +39,11 @@ export default async function PlansAndSpecsPage({ params, searchParams }: PagePr
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
 
-  const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
+  const job = await findOrgJobSummary(user.organizationId, jobId);
   if (!job) notFound();
 
-  const planRows = await listJobPlanFiles(user.organizationId, job.id);
-  const plans = await Promise.all(
-    planRows.map(async (file) => ({
-      id: file.id,
-      fileName: file.fileName,
-      category: file.category,
-      url: await resolveFileUrlSafe(file.url),
-      mimeType: file.mimeType,
-      sizeBytes: file.sizeBytes,
-      clientVisible: file.clientVisible,
-      subVisible: file.subVisible,
-      uploaderEmail: file.uploadedByUser?.email ?? "Inspector upload",
-      uploadedAt: formatDate(file.createdAt),
-    })),
-  );
-
-  const [specifications, estimates] = await Promise.all([
+  const [planRows, specifications, estimates] = await Promise.all([
+    listJobPlanFiles(user.organizationId, job.id),
     db.specification.findMany({
       where: { jobId: job.id },
       orderBy: { createdAt: "desc" },
@@ -65,6 +51,19 @@ export default async function PlansAndSpecsPage({ params, searchParams }: PagePr
     }),
     db.estimate.findMany({ where: { jobId: job.id }, orderBy: { createdAt: "desc" }, select: { id: true, title: true } }),
   ]);
+  const signedUrls = await resolveFileUrlsSafe(planRows.map((file) => file.url));
+  const plans = planRows.map((file, index) => ({
+    id: file.id,
+    fileName: file.fileName,
+    category: file.category,
+    url: signedUrls[index] ?? null,
+    mimeType: file.mimeType,
+    sizeBytes: file.sizeBytes,
+    clientVisible: file.clientVisible,
+    subVisible: file.subVisible,
+    uploaderEmail: file.uploadedByUser?.email ?? "Inspector upload",
+    uploadedAt: formatDate(file.createdAt),
+  }));
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">

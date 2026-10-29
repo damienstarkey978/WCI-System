@@ -64,6 +64,33 @@ export async function signedJobFileUrl(path: string, expiresInSeconds = SIGNED_U
   return data.signedUrl;
 }
 
+/**
+ * Batch-sign storage paths in one Supabase round-trip. Files / daily-logs pages
+ * were issuing createSignedUrl once per row (N+1) after the BT photo migration —
+ * hundreds of sequential HTTP calls per page load. Paths that fail to sign map
+ * to null so a single bad object can't blank the whole gallery.
+ */
+export async function signedJobFileUrls(
+  paths: readonly string[],
+  expiresInSeconds = SIGNED_URL_TTL_SECONDS,
+): Promise<Map<string, string | null>> {
+  const unique = [...new Set(paths.filter((path) => path.length > 0))];
+  const out = new Map<string, string | null>();
+  if (unique.length === 0) return out;
+
+  const { data, error } = await client().storage.from(JOB_FILES_BUCKET).createSignedUrls(unique, expiresInSeconds);
+  if (error || !data) {
+    for (const path of unique) out.set(path, null);
+    return out;
+  }
+
+  for (const path of unique) out.set(path, null);
+  for (const row of data) {
+    if (row.path) out.set(row.path, row.error || !row.signedUrl ? null : row.signedUrl);
+  }
+  return out;
+}
+
 export async function deleteJobFile(path: string): Promise<void> {
   const { error } = await client().storage.from(JOB_FILES_BUCKET).remove([path]);
   if (error) throw new Error(`Storage delete failed for ${path}: ${error.message}`);

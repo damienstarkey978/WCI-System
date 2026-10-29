@@ -61,11 +61,27 @@ export interface JobBudgetView {
  * Job × CostCode.
  */
 export async function getJobBudget(jobId: string, organizationId: string): Promise<JobBudgetView> {
+  // Select only the columns the funnel math needs — a full include of every PO /
+  // bill / timesheet row was shipping notes, signatures, OCR blobs, and unused
+  // relation fields into memory on every Budget page load.
   const job = await db.job.findFirst({
     where: { id: jobId, organizationId },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      contractType: true,
+      status: true,
+      projectionReference: true,
+      accountingBasis: true,
       budgetLines: {
-        include: {
+        select: {
+          costCodeId: true,
+          originalBudgetCostCents: true,
+          revisedBudgetCostCents: true,
+          originalClientPriceCents: true,
+          revisedClientPriceCents: true,
+          rateMode: true,
+          rateBasisPoints: true,
           costCode: {
             select: {
               code: true,
@@ -76,12 +92,28 @@ export async function getJobBudget(jobId: string, organizationId: string): Promi
           },
         },
       },
-      purchaseOrders: { include: { lineItems: true } },
-      bills: { include: { lineItems: true } },
+      purchaseOrders: {
+        select: {
+          status: true,
+          lineItems: { select: { costCodeId: true, quantityMilli: true, unitCostCents: true } },
+        },
+      },
+      bills: {
+        select: {
+          approvalStatus: true,
+          lineItems: { select: { costCodeId: true, amountCents: true } },
+        },
+      },
       invoices: { select: { status: true, amountCents: true, taxCents: true } },
       timeClockEntries: {
         where: { approvalStatus: TimeClockApprovalStatus.APPROVED, clockOutAt: { not: null } },
-        include: { breaks: true },
+        select: {
+          costCodeId: true,
+          clockInAt: true,
+          clockOutAt: true,
+          hourlyRateCents: true,
+          breaks: { select: { startAt: true, endAt: true } },
+        },
       },
       estimates: {
         where: { sentToBudgetAt: { not: null } },

@@ -8,8 +8,9 @@ import { currentAppUser } from "@/lib/auth";
 import { listComments } from "@/lib/comments/service";
 import { logHeading, weatherSummary } from "@/lib/daily-logs/display";
 import { db } from "@/lib/db";
-import { resolveFileUrlSafe } from "@/lib/files/service";
+import { resolveFileUrlsSafe } from "@/lib/files/service";
 import { formatDate } from "@/lib/format";
+import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
 import { toggleDailyLogLikeAction } from "../actions";
 import { PrintButton } from "../print-button";
@@ -31,19 +32,34 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
 
-  const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
+  const job = await findOrgJobSummary(user.organizationId, jobId);
   if (!job) notFound();
 
   const log = await db.dailyLog.findFirst({
     where: { id: logId, jobId: job.id },
-    include: { authorUser: true, files: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } }, _count: { select: { likes: true } }, likes: { where: { userId: user.id }, select: { userId: true } } },
+    include: {
+      authorUser: { select: { id: true, name: true, email: true } },
+      files: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, fileName: true, category: true, url: true },
+      },
+      _count: { select: { likes: true } },
+      likes: { where: { userId: user.id }, select: { userId: true } },
+    },
   });
   if (!log) notFound();
 
-  const [comments, files] = await Promise.all([
+  const [comments, signedUrls] = await Promise.all([
     listComments({ organizationId: user.organizationId, featureType: "DailyLog", featureId: log.id }),
-    Promise.all(log.files.map(async (file) => ({ id: file.id, fileName: file.fileName, category: file.category, url: await resolveFileUrlSafe(file.url) }))),
+    resolveFileUrlsSafe(log.files.map((file) => file.url)),
   ]);
+  const files = log.files.map((file, index) => ({
+    id: file.id,
+    fileName: file.fileName,
+    category: file.category,
+    url: signedUrls[index] ?? null,
+  }));
   const authorIds = [...new Set(comments.map((c) => c.authorUserId).filter((id): id is string => id !== null))];
   const authors = authorIds.length ? await db.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, name: true, email: true } }) : [];
   const authorName = new Map(authors.map((a) => [a.id, a.name ?? a.email]));

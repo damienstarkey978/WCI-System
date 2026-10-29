@@ -210,7 +210,7 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
 
   let scheduleItemsByDay: Map<number, AgendaItem[]> = new Map();
   if (scheduleRow) {
-    const computed = await getComputedSchedule(user.organizationId, scheduleRow.id);
+    const computed = await getComputedSchedule(user.organizationId, scheduleRow.id, { includePhases: false });
     scheduleItemsByDay = new Map();
     for (let offset = 0; offset < 7; offset++) {
       const day = new Date(startOfToday.getTime() + offset * MS_PER_DAY);

@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { StaffShell } from "@/components/shell/StaffShell";
 import { currentAppUserOrRedirect } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { getJobAccessLevel } from "@/lib/job-access";
+import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export default async function JobLayout({ children, params }: LayoutProps<"/jobs
     return <SetupNotice detail={error instanceof Error ? error.message : String(error)} />;
   }
 
-  const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
+  const job = await findOrgJobSummary(user.organizationId, jobId);
   if (!job) notFound();
 
   const access = await getJobAccessLevel(user, job.id);

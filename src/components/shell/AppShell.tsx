@@ -3,11 +3,10 @@ import type { ReactNode } from "react";
 import { JarvisLauncher } from "@/components/jarvis/JarvisLauncher";
 import { UserRole } from "@/generated/prisma/enums";
 import { currentAppUser } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { isAnthropicConfigured, isClerkConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
-import { sidebarTemplateJobsForOrg } from "./data";
+import { organizationNameForShell, sidebarTemplateJobsForOrg } from "./data";
 import { JobSidebar, type SidebarJob } from "./JobSidebar";
 import { TopNav, type BellNotification } from "./TopNav";
 
@@ -17,10 +16,9 @@ import { TopNav, type BellNotification } from "./TopNav";
  * shell around it stays server-rendered since the job list (and notification feed)
  * are fetched server-side by the caller, same pattern as `jobs`. Looks up the
  * current user itself (rather than taking `isAdmin` as a prop) so every one of
- * AppShell's many call sites doesn't need to thread it through — every caller has
- * already resolved this same user moments earlier, so this is one more cheap,
- * already-common redundant lookup (currentAppUser() isn't memoized anywhere in this
- * codebase), not a new pattern.
+ * AppShell's many call sites doesn't need to thread it through — `currentAppUser`
+ * is request-cached in src/lib/auth.ts, so this is free when the layout/page
+ * already resolved the same user.
  *
  * `showJobSidebar` defaults true (Jobs / job-scoped views). Sales CRM surfaces
  * (Leads, Activities, Proposals, Materials, …) pass false — Buildertrend has no
@@ -47,11 +45,9 @@ export async function AppShell({
   // themselves, don't all need updating just to add this one tab. Skip the fetch
   // entirely when the rail is hidden (Sales) so we don't pay for unused templates.
   // Org name feeds the BT company strip above the Current Job card.
-  const [templateJobs, organization] = await Promise.all([
+  const [templateJobs, organizationName] = await Promise.all([
     showJobSidebar && user ? sidebarTemplateJobsForOrg(user.organizationId) : Promise.resolve([]),
-    showJobSidebar && user
-      ? db.organization.findUnique({ where: { id: user.organizationId }, select: { name: true } })
-      : Promise.resolve(null),
+    showJobSidebar && user ? organizationNameForShell(user.organizationId) : Promise.resolve("World Construction Inc."),
   ]);
 
   return (
@@ -70,7 +66,7 @@ export async function AppShell({
             jobs={jobs}
             templateJobs={templateJobs}
             activeJobId={activeJobId}
-            organizationName={organization?.name ?? "World Construction Inc."}
+            organizationName={organizationName}
           />
         ) : null}
         <main className="flex-1 overflow-y-auto bg-[var(--bt-page-bg)]">{children}</main>

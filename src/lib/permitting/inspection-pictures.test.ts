@@ -30,6 +30,7 @@ vi.mock("@/lib/files/folders", () => ({
 
 vi.mock("@/lib/files/service", () => ({
   resolveFileUrlSafe: vi.fn(async (url: string) => `https://signed.example/${url}`),
+  resolveFileUrlsSafe: vi.fn(async (urls: readonly string[]) => urls.map((url) => `https://signed.example/${url}`)),
   uploadAndRegisterFile: vi.fn(async (input: { fileName: string }) => ({
     id: "file_1",
     fileName: input.fileName,
