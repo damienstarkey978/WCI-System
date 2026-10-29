@@ -674,22 +674,31 @@ Record every architectural decision that departs from the above, with the reason
 - **Permitting is a first-class module with JobPermit / JobPermitInspection (next
   scope):** job settings already had `Job.permitNumber`; the Permitting page under
   Project Management adds `Job.nocOnFile` / `Job.ntboFiled`, per-trade `JobPermit`
-  rows (Building + MEP), and named inspections. Permit shells are created without
-  auto-attaching every catalog inspection — staff add the ones the job needs from
-  the city-style placeholder catalog (no pools). Production inspection names are
-  expected to come from city permitting software later. Send Permit Reminder uses
-  the existing Resend `sendEmail` path (same EMAIL_* env as client progress reports).
+  rows (Building + MEP + Roofing), and named inspections. Staff **add which permits
+  belong on the job** (not an org-wide multi-job list). Adding a permit seeds
+  typical inspections for that trade (electrical: Rough / Cover-Up / Final) —
+  editable afterward from the city-style catalog (no pools). Production inspection
+  names are expected to come from city permitting software later. Send Permit
+  Reminder uses the existing Resend `sendEmail` path (same EMAIL_* env as client
+  progress reports). `POST /api/v1/jobs/{jobId}/permits` + inspection CRUD let
+  Heather/OM validate which permits should exist. Building permit docs builder
+  lives at `/jobs/{jobId}/permitting/docs` (Duval/Jax first; PDF generators stubbed
+  until Permit Rockstar login).
 - **Inspection Pictures under Files (next scope):** each `JobPermitInspection` links
   to a `FileFolder` (`Inspection: {name}`). Files > Inspection Pictures lists those
   folders, shows Permit Rockstar guide links + universal photo tips, and supports
   camera/library capture with client-side compress + parallel upload. Termite cert
   on Slab is a disabled checkbox stub only; receive/upload/notify Garry waits on Damien.
 - **Inspection folders are job-required only (not a global catalog dump):**
-  `ensureDefaultPermits` creates BUILDING + MEP permit shells without seeding every
-  demo inspection. Staff add/remove inspections on Permitting from the city-style
-  catalog (`DEMO_INSPECTIONS_BY_TRADE`); Inspection Pictures creates a folder only
-  for inspections that exist on that job. Jobs that already had the old full seed
-  keep those rows until staff removes them.
+  Staff/API add permits explicitly (`createJobPermit`); `ensureDefaultPermits` remains
+  an optional bot helper for Building+MEP shells without inspections. Staff
+  add/remove inspections on Permitting from the city-style catalog
+  (`DEMO_INSPECTIONS_BY_TRADE`); Inspection Pictures creates a folder only for
+  inspections that exist on that job — it never seeds permit shells. Jobs that
+  already had older full seeds keep those rows until staff removes them.
+- **Permitting page is single-job scoped:** `/jobs/{jobId}/permitting` loads only
+  that job (`getJobPermitting`). The earlier org-wide multi-job list was wrong for
+  cutover — never reintroduce `listPermittingJobs` into the job route UI.
 - **Inspector share links are a fourth headless token namespace
   (`InspectionPictureShareLink`, prefix `wciips`):** same crypto as
   SubmittalReviewLink / SurveyResponseLink — no Client/Vendor seat. Reusable until

@@ -39,9 +39,12 @@ import { db } from "@/lib/db";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { getJobProgress, JobNotFoundError as ProgressJobNotFoundError } from "@/lib/jobs/progress";
 import { callApiV1, formatApiV1ProxyResult } from "@/lib/mcp/api-proxy";
+import { PermitTrade } from "@/generated/prisma/enums";
 import {
+  createJobPermit,
   ensureDefaultPermits,
   JobNotFoundError as PermitJobNotFoundError,
+  PermitAlreadyExistsError,
   setInspectionCompleted,
   setPermitPulled,
 } from "@/lib/permitting/service";
@@ -230,15 +233,15 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     "list_job_permits",
     {
       description:
-        "List Building + MEP permits and inspections for a job (read-only; does not create rows). " +
-        "If none exist yet, call ensure_job_permit_defaults first.",
+        "List this job's trade permits and inspections (read-only; does not create rows). " +
+        "Also returns NOC/NTBO. To add a permit use create_job_permit; for Building+MEP shells use ensure_job_permit_defaults.",
       inputSchema: { jobId: z.string().describe("The job's id") },
     },
     async (input) => {
       const jobId = (input as { jobId: string }).jobId;
       const job = await db.job.findFirst({
         where: { id: jobId, organizationId },
-        select: { id: true },
+        select: { id: true, nocOnFile: true, ntboFiled: true },
       });
       if (!job) return refusal(`Job ${jobId} not found`);
       const permits = await db.jobPermit.findMany({
@@ -249,22 +252,59 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
           inspections: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, completedAt: true } },
         },
       });
+      const flags = `NOC=${job.nocOnFile ? "on file" : "missing"} NTBO=${job.ntboFiled ? "filed" : "not filed"}`;
       if (permits.length === 0) {
         return text(
-          "No permits on this job. Call ensure_job_permit_defaults (permits:write) to create Building + MEP shells.",
+          `${flags}\nNo permits on this job. Call create_job_permit (one trade) or ensure_job_permit_defaults (Building+MEP shells).`,
         );
       }
       return text(
-        permits
-          .map((permit) => {
-            const vendor = permit.vendor ? ` vendor=${permit.vendor.name}` : "";
-            const inspections = permit.inspections
-              .map((inspection) => `  ${inspection.id} | ${inspection.name} | ${inspection.completedAt ? "DONE" : "open"}`)
-              .join("\n");
-            return `${permit.id} | ${permit.trade} | ${permit.pulled ? "PULLED" : "not pulled"}${vendor}\n${inspections}`;
-          })
-          .join("\n"),
+        `${flags}\n` +
+          permits
+            .map((permit) => {
+              const vendor = permit.vendor ? ` vendor=${permit.vendor.name}` : "";
+              const inspections = permit.inspections
+                .map((inspection) => `  ${inspection.id} | ${inspection.name} | ${inspection.completedAt ? "DONE" : "open"}`)
+                .join("\n");
+              return `${permit.id} | ${permit.trade} | ${permit.pulled ? "PULLED" : "not pulled"}${vendor}\n${inspections}`;
+            })
+            .join("\n"),
       );
+    },
+  );
+
+  registerScoped(
+    server,
+    auth,
+    "permits:write",
+    "create_job_permit",
+    {
+      description:
+        "Add one trade permit to a job (BUILDING, ELECTRICAL, PLUMBING, MECHANICAL, ROOFING, OTHER). " +
+        "Seeds typical inspections by default. Use when validating which permits should exist on a job.",
+      inputSchema: {
+        jobId: z.string().describe("The job's id"),
+        trade: z.enum(["BUILDING", "ELECTRICAL", "PLUMBING", "MECHANICAL", "ROOFING", "OTHER"]),
+        seedDefaultInspections: z.boolean().optional().describe("Default true"),
+      },
+    },
+    async (input) => {
+      const { jobId, trade, seedDefaultInspections } = input as {
+        jobId: string;
+        trade: keyof typeof PermitTrade;
+        seedDefaultInspections?: boolean;
+      };
+      try {
+        const permit = await createJobPermit(organizationId, jobId, PermitTrade[trade], {
+          seedDefaultInspections,
+        });
+        const inspections = permit.inspections.map((i) => `  ${i.id} | ${i.name}`).join("\n");
+        return text(`${permit.id} | ${permit.trade} | inspections:\n${inspections || "  (none)"}`);
+      } catch (error) {
+        if (error instanceof PermitJobNotFoundError) return refusal(error.message);
+        if (error instanceof PermitAlreadyExistsError) return refusal(error.message);
+        throw error;
+      }
     },
   );
 
@@ -275,8 +315,8 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     "ensure_job_permit_defaults",
     {
       description:
-        "Explicit write: create Building + MEP permit shells for a job when missing. " +
-        "Use before list_job_permits when a job has never been set up for permitting.",
+        "Explicit write: create Building + MEP permit shells for a job when missing (no inspections). " +
+        "Prefer create_job_permit when adding a single trade with typical inspections.",
       inputSchema: { jobId: z.string().describe("The job's id") },
     },
     async (input) => {

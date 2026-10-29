@@ -8,11 +8,7 @@
 import { db } from "@/lib/db";
 import { createFolder } from "@/lib/files/folders";
 import { resolveFileUrlsSafe, uploadAndRegisterFile } from "@/lib/files/service";
-import {
-  ensureDefaultPermits,
-  InspectionNotFoundError,
-  JobNotFoundError,
-} from "@/lib/permitting/service";
+import { InspectionNotFoundError, JobNotFoundError } from "@/lib/permitting/service";
 import {
   guideForInspectionName,
   inspectionPictureFolderName,
@@ -28,9 +24,7 @@ export async function ensureInspectionPictureFolders(organizationId: string, job
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
   if (!job) throw new JobNotFoundError(jobId);
 
-  // Permit shells only — does not invent inspections for the job.
-  await ensureDefaultPermits(organizationId, jobId);
-
+  // Folders only for inspections already on this job — never invents permits or inspections.
   const inspections = await db.jobPermitInspection.findMany({
     where: { permit: { jobId, organizationId } },
     orderBy: [{ permit: { trade: "asc" } }, { sortOrder: "asc" }],

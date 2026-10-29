@@ -5,7 +5,7 @@
  */
 
 export interface InspectionGuide {
-  readonly trade: "BUILDING" | "ELECTRICAL" | "PLUMBING" | "MECHANICAL";
+  readonly trade: "BUILDING" | "ELECTRICAL" | "PLUMBING" | "MECHANICAL" | "ROOFING";
   readonly title: string;
   readonly slug: string;
   readonly guideUrl: string;
@@ -52,6 +52,7 @@ export const INSPECTION_GUIDES: readonly InspectionGuide[] = [
   guide("BUILDING", "Windows & Doors", "windows-and-doors", "building/windows-and-doors/"),
   guide("BUILDING", "Building Final", "building-final", "building/building-final/"),
   guide("ELECTRICAL", "Electrical Rough", "electrical-rough", "electrical/electrical-rough/"),
+  guide("ELECTRICAL", "Electrical Cover-Up", "electrical-cover-up", "electrical/electrical-rough/"),
   guide("ELECTRICAL", "Electrical Underground", "electrical-underground", "electrical/electrical-underground/"),
   guide("ELECTRICAL", "Electrical Final", "electrical-final", "electrical/electrical-final/"),
   guide("PLUMBING", "Plumbing Rough", "plumbing-rough", "plumbing/plumbing-rough/"),
@@ -59,6 +60,8 @@ export const INSPECTION_GUIDES: readonly InspectionGuide[] = [
   guide("PLUMBING", "Plumbing Final", "plumbing-final", "plumbing/plumbing-final/"),
   guide("MECHANICAL", "Mechanical Rough", "mechanical-rough", "building/mechanical-rough/"),
   guide("MECHANICAL", "Mechanical Final", "mechanical-final", "mechanical/mechanical-final/"),
+  guide("ROOFING", "Roof Sheathing", "roof-sheathing-roofing", "building/roof-sheathing/"),
+  guide("ROOFING", "Roof Final", "roof-final", "building/dry-in/"),
 ];
 
 const BY_TITLE = new Map(INSPECTION_GUIDES.map((g) => [g.title.toLowerCase(), g]));

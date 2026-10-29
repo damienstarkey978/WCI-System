@@ -1,13 +1,31 @@
 /**
- * /api/v1/permits/{permitId} — update pulled status, vendor, or permit number.
+ * /api/v1/permits/{permitId} — update pulled status, vendor, or permit number; DELETE removes the permit.
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { formatZodIssues, updatePermitSchema } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
-import { assignPermitVendor, PermitNotFoundError, setPermitPulled } from "@/lib/permitting/service";
+import {
+  assignPermitVendor,
+  deleteJobPermit,
+  PermitNotFoundError,
+  setPermitPulled,
+} from "@/lib/permitting/service";
 
 type Context = { params: Promise<{ permitId: string }> };
+
+export const DELETE = withApiAuth<Context>(["permits:write"], async (_request, auth, context) => {
+  const { permitId } = await context.params;
+  try {
+    await deleteJobPermit(auth.organizationId, permitId);
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    if (error instanceof PermitNotFoundError) {
+      return apiError(404, "not_found", error.message);
+    }
+    throw error;
+  }
+});
 
 export const PATCH = withApiAuth<Context>(["permits:write"], async (request, auth, context) => {
   const { permitId } = await context.params;

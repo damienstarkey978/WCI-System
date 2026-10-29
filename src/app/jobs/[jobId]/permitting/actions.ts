@@ -2,14 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 
+import { PermitTrade } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { EmailNotConfiguredError, EmailSendError } from "@/lib/email/send";
 import {
   addPermitInspection,
   assignPermitVendor,
+  createJobPermit,
+  deleteJobPermit,
   InspectionNotFoundError,
   JobNotFoundError,
   NoVendorEmailError,
+  PermitAlreadyExistsError,
   PermitNotFoundError,
   removePermitInspection,
   sendPermitReminder,
@@ -26,7 +30,50 @@ export interface ActionState {
 
 function revalidate(jobId: string) {
   revalidatePath(`/jobs/${jobId}/permitting`);
+  revalidatePath(`/jobs/${jobId}/permitting/docs`);
   revalidatePath(`/jobs/${jobId}/files/inspection-pictures`);
+}
+
+const STAFF_TRADES = new Set<string>([
+  PermitTrade.BUILDING,
+  PermitTrade.ELECTRICAL,
+  PermitTrade.PLUMBING,
+  PermitTrade.MECHANICAL,
+  PermitTrade.ROOFING,
+]);
+
+export async function addJobPermitAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const tradeRaw = String(formData.get("trade") ?? "");
+  if (!STAFF_TRADES.has(tradeRaw)) {
+    return { error: "Select a valid permit type." };
+  }
+  try {
+    await createJobPermit(user.organizationId, jobId, tradeRaw as PermitTrade);
+  } catch (error) {
+    if (
+      error instanceof JobNotFoundError ||
+      error instanceof PermitAlreadyExistsError ||
+      error instanceof Error
+    ) {
+      return { error: error instanceof Error ? error.message : "Could not add permit." };
+    }
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function removeJobPermitAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const permitId = String(formData.get("permitId") ?? "");
+  try {
+    await deleteJobPermit(user.organizationId, permitId);
+  } catch {
+    // Refresh either way.
+  }
+  revalidate(jobId);
 }
 
 export async function setPermitPulledAction(formData: FormData): Promise<void> {

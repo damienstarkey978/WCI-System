@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createJobPermitSchema,
+  createPermitInspectionSchema,
   updateJobPermittingFlagsSchema,
   updatePermitInspectionSchema,
   updatePermitSchema,
@@ -21,5 +23,16 @@ describe("permit API schemas", () => {
   it("requires at least one permitting flag", () => {
     expect(updateJobPermittingFlagsSchema.safeParse({}).success).toBe(false);
     expect(updateJobPermittingFlagsSchema.safeParse({ nocOnFile: true }).success).toBe(true);
+  });
+
+  it("accepts create permit with trade and optional seed flag", () => {
+    expect(createJobPermitSchema.safeParse({}).success).toBe(false);
+    expect(createJobPermitSchema.safeParse({ trade: "ELECTRICAL" }).success).toBe(true);
+    expect(createJobPermitSchema.safeParse({ trade: "ROOFING", seedDefaultInspections: false }).success).toBe(true);
+  });
+
+  it("requires inspection name on create", () => {
+    expect(createPermitInspectionSchema.safeParse({}).success).toBe(false);
+    expect(createPermitInspectionSchema.safeParse({ name: "Electrical Cover-Up" }).success).toBe(true);
   });
 });
