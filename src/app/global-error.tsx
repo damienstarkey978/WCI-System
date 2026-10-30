@@ -29,9 +29,9 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
               <>
                 <h2 style={{ marginBottom: "0.5rem", fontSize: "1rem", fontWeight: 600 }}>This page needs a reload</h2>
                 <p style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
-                  A new version of WCI OS was deployed while this tab was open, so the action it just tried to run doesn&apos;t
-                  exist in the version now running on the server. Reloading picks up the new version — &quot;Try again&quot;
-                  won&apos;t help here, since it re-runs the same stale page instead of loading a fresh one.
+                  The action this tab just tried didn&apos;t match the version of WCI OS running on the server (a deploy landed
+                  while the tab was open, or the server returned an incomplete reply). Reloading picks up a fresh page —
+                  &quot;Try again&quot; won&apos;t help here, since it re-runs the same stale tab instead of loading a new one.
                 </p>
                 <button
                   type="button"

@@ -16,6 +16,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 import type { GpsPoint } from "@/lib/time-clock/geofence";
 import { requireAppUser } from "@/lib/auth";
@@ -129,18 +130,21 @@ export interface SubmitDailyLogActionInput {
 }
 
 export async function submitDailyLogAction(input: SubmitDailyLogActionInput): Promise<FieldActionResult<{ dailyLogId: string }>> {
-  const user = await requireAppUser();
   try {
+    const user = await requireAppUser();
     const dailyLog = await createDailyLog({
       organizationId: user.organizationId,
       jobId: input.jobId,
       authorUserId: user.id,
       note: input.note,
     });
-    revalidatePath("/field/daily-log");
+    // Don't block the action reply on a full field-page RSC refresh.
+    after(() => {
+      revalidatePath("/field/daily-log");
+    });
     return { ok: true, data: { dailyLogId: dailyLog.id } };
   } catch (error) {
     if (error instanceof DailyLogJobNotFoundError) return fail(error);
-    throw error;
+    return fail(error instanceof Error ? error : new Error("Could not save the daily log."));
   }
 }

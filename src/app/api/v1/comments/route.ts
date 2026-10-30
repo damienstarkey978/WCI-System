@@ -34,10 +34,19 @@ export const POST = withApiAuth(["comments:write"], async (request, auth) => {
     return apiError(422, "validation_failed", "The comment could not be created.", formatZodIssues(parsed.error));
   }
 
-  const comment = await createComment({
-    organizationId: auth.organizationId,
-    ...parsed.data,
-    actor: actorFromApiKey(auth.apiKeyId),
-  });
-  return Response.json({ data: comment }, { status: 201 });
+  try {
+    const comment = await createComment({
+      organizationId: auth.organizationId,
+      ...parsed.data,
+      actor: actorFromApiKey(auth.apiKeyId),
+    });
+    return Response.json({ data: comment }, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/v1/comments failed:", error);
+    return apiError(
+      500,
+      "comment_create_failed",
+      error instanceof Error ? error.message : "The comment could not be created.",
+    );
+  }
 });

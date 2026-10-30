@@ -1,13 +1,32 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 import { AiNotConfiguredError, DailyLogDraftError, draftDailyLogNote, type DailyLogImageInput } from "@/lib/ai/daily-log-assistant";
 import { requireAppUser } from "@/lib/auth";
 import { createComment } from "@/lib/comments/service";
-import { createDailyLog, JobNotFoundError, toggleDailyLogLike } from "@/lib/daily-logs/service";
+import { createDailyLog, DailyLogAuthorRequiredError, JobNotFoundError, toggleDailyLogLike } from "@/lib/daily-logs/service";
 import { uploadAndRegisterFile } from "@/lib/files/service";
 import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
+
+/**
+ * Revalidate staff daily-log views *after* the Server Action response is sent.
+ *
+ * Calling `revalidatePath` inline made Next fold a full RSC refresh of the
+ * force-dynamic list page (batch-signing every photo URL) into the action
+ * response. On jobs with a big gallery that refresh can exceed the serverless
+ * function window; the platform then returns HTML/empty and the browser shows
+ * "An unexpected response was received from the server" even though the log
+ * row already committed. The form already calls `router.refresh()` on success.
+ */
+function revalidateDailyLogViews(jobId: string, logId?: string) {
+  after(() => {
+    revalidatePath(`/jobs/${jobId}/daily-logs`);
+    revalidatePath(`/jobs/${jobId}`);
+    if (logId) revalidatePath(`/jobs/${jobId}/daily-logs/${logId}`);
+  });
+}
 
 export interface ActionState {
   readonly error?: string;
@@ -53,8 +72,6 @@ export async function draftDailyLogNoteAction(_previous: DraftDailyLogActionStat
 }
 
 export async function createDailyLogAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireAppUser();
-
   const jobId = String(formData.get("jobId") ?? "");
   const note = String(formData.get("note") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
@@ -68,6 +85,7 @@ export async function createDailyLogAction(_previous: ActionState, formData: For
   const attachments = formData.getAll("attachments").filter((entry): entry is File => entry instanceof File && entry.size > 0);
 
   try {
+    const user = await requireAppUser();
     const log = await createDailyLog({
       organizationId: user.organizationId,
       jobId,
@@ -95,40 +113,54 @@ export async function createDailyLogAction(_previous: ActionState, formData: For
         dailyLogId: log.id,
       });
     }
+
+    revalidateDailyLogViews(jobId);
+    return { ok: true };
   } catch (error) {
-    if (error instanceof JobNotFoundError || error instanceof StorageNotConfiguredError) {
+    if (
+      error instanceof JobNotFoundError ||
+      error instanceof StorageNotConfiguredError ||
+      error instanceof DailyLogAuthorRequiredError
+    ) {
       return { error: error.message };
     }
     // Surface unexpected failures so the client pending state always clears
-    // instead of leaving "Saving…" stuck with no message.
+    // instead of leaving "Saving…" stuck with no message — and instead of
+    // letting an uncaught throw turn into Next's opaque "unexpected response".
     return { error: error instanceof Error ? error.message : "Could not save the daily log." };
   }
-
-  revalidatePath(`/jobs/${jobId}/daily-logs`);
-  revalidatePath(`/jobs/${jobId}`);
-  return { ok: true };
 }
 
 export async function toggleDailyLogLikeAction(formData: FormData): Promise<void> {
-  const user = await requireAppUser();
   const jobId = String(formData.get("jobId") ?? "");
   try {
+    const user = await requireAppUser();
     await toggleDailyLogLike(user.organizationId, String(formData.get("logId") ?? ""), user.id);
   } catch {
     // A log deleted underneath the click just refreshes the page.
   }
-  revalidatePath(`/jobs/${jobId}/daily-logs`);
+  if (jobId) revalidateDailyLogViews(jobId);
 }
 
 export async function addDailyLogCommentAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireAppUser();
   const jobId = String(formData.get("jobId") ?? "");
   const logId = String(formData.get("logId") ?? "");
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return { error: "Write a comment first." };
 
-  await createComment({ organizationId: user.organizationId, featureType: "DailyLog", featureId: logId, authorUserId: user.id, body });
-  revalidatePath(`/jobs/${jobId}/daily-logs`);
-  revalidatePath(`/jobs/${jobId}/daily-logs/${logId}`);
+  try {
+    const user = await requireAppUser();
+    await createComment({
+      organizationId: user.organizationId,
+      featureType: "DailyLog",
+      featureId: logId,
+      authorUserId: user.id,
+      body,
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not post the comment." };
+  }
+
+  revalidateDailyLogViews(jobId, logId);
   return { ok: true };
 }

@@ -3,7 +3,7 @@
 import { actorFromApiKey } from "@/lib/actor";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createDailyLogSchema, formatZodIssues, listDailyLogsQuerySchema } from "@/lib/api-schemas";
-import { createDailyLog, JobNotFoundError } from "@/lib/daily-logs/service";
+import { createDailyLog, DailyLogAuthorRequiredError, JobNotFoundError } from "@/lib/daily-logs/service";
 import { db } from "@/lib/db";
 
 export const GET = withApiAuth(["daily-logs:read"], async (request, auth) => {
@@ -48,6 +48,14 @@ export const POST = withApiAuth(["daily-logs:write"], async (request, auth) => {
     if (error instanceof JobNotFoundError) {
       return apiError(422, "unknown_job", error.message);
     }
-    throw error;
+    if (error instanceof DailyLogAuthorRequiredError) {
+      return apiError(422, "author_required", error.message);
+    }
+    console.error("POST /api/v1/daily-logs failed:", error);
+    return apiError(
+      500,
+      "daily_log_create_failed",
+      error instanceof Error ? error.message : "The daily log could not be created.",
+    );
   }
 });
