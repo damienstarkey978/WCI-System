@@ -3,14 +3,15 @@ import {
   InvalidInspectionShareLinkError,
 } from "@/lib/permitting/inspection-pictures";
 
-import { InspectorPhotoCapture } from "./inspector-capture";
-
 export const dynamic = "force-dynamic";
 
 /**
  * Public, no-login inspector page for one Inspection Pictures folder.
  * Redeemed via InspectionPictureShareLink (same secure-token pattern as
  * SubmittalReviewLink / SurveyResponseLink — no Client/Vendor seat).
+ *
+ * View-only: inspectors see company, folder, job, live Building permit #, and
+ * the photo grid. Upload stays on the staff / bot Files path — not this link.
  */
 export default async function InspectionPictureSharePage({
   params,
@@ -47,48 +48,39 @@ export default async function InspectionPictureSharePage({
         <h1 className="mt-1 text-xl font-semibold leading-tight text-[var(--bt-text)] sm:text-2xl">
           {resolved.inspectionName}
         </h1>
-        <p className="mt-1 text-sm text-[var(--bt-muted)]">
-          {resolved.jobName}
-          {resolved.label ? ` · for ${resolved.label}` : ""}
-        </p>
-        <p className="mt-2 text-xs text-[var(--bt-muted)]">
-          Photos for this inspection folder only. No login required.
-        </p>
+        <p className="mt-1 text-sm text-[var(--bt-muted)]">{resolved.jobName}</p>
+        {resolved.buildingPermitNumber ? (
+          <p className="mt-1 text-sm text-[var(--bt-muted)]">
+            Building permit # {resolved.buildingPermitNumber}
+          </p>
+        ) : null}
       </header>
 
-      {resolved.requiresTermiteCertNote ? (
-        <p className="rounded-lg border px-3 py-2 text-sm text-[var(--bt-hazard)]" style={{ borderColor: "var(--bt-border)" }}>
-          Slab inspections also need a termite certificate before pass (handled by WCI staff).
-        </p>
-      ) : null}
-
-      {(resolved.tips.length > 0 || resolved.guideUrl) && (
-        <aside className="rounded-lg border bg-[var(--bt-panel-bg)] p-3" style={{ borderColor: "var(--bt-border)" }}>
-          <h2 className="text-sm font-semibold text-[var(--bt-text)]">Photo tips</h2>
-          {resolved.tips.length > 0 ? (
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--bt-muted)]">
-              {resolved.tips.map((tip) => (
-                <li key={tip}>{tip}</li>
-              ))}
-            </ul>
-          ) : null}
-          {resolved.guideUrl ? (
-            <a
-              href={resolved.guideUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-block text-sm font-medium text-[var(--bt-primary)] hover:underline"
-            >
-              Open photo guide
-            </a>
-          ) : null}
-        </aside>
-      )}
-
-      <InspectorPhotoCapture
-        token={token}
-        existing={resolved.photos.map((p) => ({ id: p.id, fileName: p.fileName, url: p.url }))}
-      />
+      <div>
+        <h2 className="mb-2 text-sm font-semibold text-[var(--bt-text)]">
+          Photos ({resolved.photos.length})
+        </h2>
+        {resolved.photos.length === 0 ? (
+          <p className="text-sm text-[var(--bt-muted)]">No photos in this folder yet.</p>
+        ) : (
+          <ul className="grid grid-cols-3 gap-2">
+            {resolved.photos.map((file) => (
+              <li
+                key={file.id}
+                className="aspect-square overflow-hidden rounded-lg border"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={file.url}
+                  alt={file.fileName}
+                  className="h-full w-full object-cover"
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

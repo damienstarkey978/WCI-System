@@ -9,7 +9,7 @@
  * name (`POST /folders` kind=inspection) or add inspections on Permitting /
  * `POST .../permits` (with optional seed). Empty Building shells stay empty
  * until something explicitly adds an inspection. Inspectors get a headless
- * signed share link (no seat/login) to view + upload.
+ * signed share link (no seat/login) to view photos only.
  */
 
 import { PermitTrade } from "@/generated/prisma/enums";
@@ -476,6 +476,20 @@ export async function getInspectionFolderForShareToken(token: string) {
 
   const guide = guideForInspectionName(link.inspection.name);
 
+  // Live Building permit # from JobPermit (trade BUILDING) — never baked into the token.
+  // Prefer a row that already has a number; when several exist, prefer pulled then newest.
+  const buildingPermits = await db.jobPermit.findMany({
+    where: {
+      jobId: link.inspection.permit.jobId,
+      organizationId: link.inspection.permit.organizationId,
+      trade: PermitTrade.BUILDING,
+    },
+    select: { permitNumber: true, pulled: true, updatedAt: true },
+    orderBy: [{ pulled: "desc" }, { updatedAt: "desc" }],
+  });
+  const buildingPermitNumber =
+    buildingPermits.map((p) => p.permitNumber?.trim()).find((n) => Boolean(n)) ?? null;
+
   return {
     inspectionId: link.inspection.id,
     inspectionName: link.inspection.name,
@@ -484,6 +498,8 @@ export async function getInspectionFolderForShareToken(token: string) {
     companyName: link.inspection.permit.organization.name,
     organizationId: link.inspection.permit.organizationId,
     jobId: link.inspection.permit.jobId,
+    /** Building JobPermit.permitNumber for this job, or null if not set yet. */
+    buildingPermitNumber,
     guideUrl: guide?.guideUrl ?? null,
     tips: guide?.tips ?? [],
     requiresTermiteCertNote: isSlabInspection(link.inspection.name),
