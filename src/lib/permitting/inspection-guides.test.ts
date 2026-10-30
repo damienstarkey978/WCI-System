@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { guideForInspectionName, INSPECTION_GUIDES, inspectionPictureFolderName, isSlabInspection } from "@/lib/permitting/inspection-guides";
+import {
+  guideForInspectionName,
+  INSPECTION_GUIDES,
+  inspectionPictureFolderName,
+  inspectionPictureFolderNameForTrade,
+  isSlabInspection,
+} from "@/lib/permitting/inspection-guides";
 
 describe("inspection guides catalog", () => {
   it("excludes pools", () => {
@@ -14,6 +20,9 @@ describe("inspection guides catalog", () => {
 
   it("names folders distinctly from Documents folders", () => {
     expect(inspectionPictureFolderName("Slab")).toBe("Inspection: Slab");
+    expect(inspectionPictureFolderNameForTrade("Final", "ELECTRICAL")).toBe(
+      "Inspection: ELECTRICAL — Final",
+    );
     expect(isSlabInspection("Slab")).toBe(true);
   });
 });

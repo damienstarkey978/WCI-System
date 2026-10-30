@@ -1188,11 +1188,24 @@ const ENDPOINTS: readonly EndpointDef[] = [
     description:
       "kind=document (default): create a Documents FileFolder. " +
       "kind=inspection: create/link a city-named inspection folder (ensures permit + JobPermitInspection + FileFolder) " +
-      "without requiring the Permitting UI. Prefer city inspection names (Slab, Electrical Rough), not Permit Rockstar titles.",
+      "without requiring the Permitting UI. Prefer city inspection names (Slab, Electrical Rough), not Permit Rockstar titles. " +
+      "When the same city name exists on multiple trades, folders are disambiguated as `Inspection: {TRADE} — {name}` " +
+      "because each JobPermitInspection owns a unique folderId.",
     tags: ["Files"],
     scopes: ["files:write"],
     requestSchema: createFolderSchema,
     successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/folders/ensure-inspection-pictures",
+    summary: "Ensure inspection picture folders for a job or all active jobs",
+    description:
+      "Links/creates FileFolders for every JobPermitInspection (and seeds typical inspections onto empty permit shells). " +
+      "Body `{ jobId }` for one job, or `{}` for every OPEN/WARRANTY/PRE_SALE job that already has permits. " +
+      "Use after a wipe/deploy; day-to-day prefer GET /folders?kind=inspection which self-heals one job.",
+    tags: ["Files"],
+    scopes: ["files:write"],
   },
   {
     method: "post",

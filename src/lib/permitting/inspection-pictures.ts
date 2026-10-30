@@ -22,6 +22,7 @@ import {
 import {
   guideForInspectionName,
   inspectionPictureFolderName,
+  inspectionPictureFolderNameForTrade,
   isSlabInspection,
 } from "@/lib/permitting/inspection-guides";
 import { generateSecureToken, parseSecureToken, secretMatches } from "@/lib/secure-tokens";
@@ -66,6 +67,62 @@ export async function seedTypicalInspectionsOnEmptyPermits(organizationId: strin
   }
 }
 
+/**
+ * Resolve a FileFolder for one inspection without stealing another inspection's
+ * folder. Preferred name is `Inspection: {name}`; when that name is already
+ * linked to a different inspection (common for short city names like Final /
+ * Rough across trades), fall back to `Inspection: {TRADE} — {name}`.
+ */
+async function linkInspectionToFolder(
+  organizationId: string,
+  jobId: string,
+  inspection: { id: string; name: string; permit: { trade: PermitTrade } },
+): Promise<string> {
+  const candidates = [
+    inspectionPictureFolderName(inspection.name),
+    inspectionPictureFolderNameForTrade(inspection.name, inspection.permit.trade),
+    // Last-resort uniqueness if two inspections share trade+name somehow.
+    inspectionPictureFolderNameForTrade(`${inspection.name} (${inspection.id.slice(-6)})`, inspection.permit.trade),
+  ];
+
+  for (const folderName of candidates) {
+    const existing = await db.fileFolder.findFirst({
+      where: { jobId, organizationId, name: { equals: folderName, mode: "insensitive" } },
+      select: { id: true },
+    });
+
+    if (existing) {
+      const claimedByOther = await db.jobPermitInspection.findFirst({
+        where: { folderId: existing.id, id: { not: inspection.id } },
+        select: { id: true },
+      });
+      if (claimedByOther) continue;
+
+      await db.jobPermitInspection.update({
+        where: { id: inspection.id },
+        data: { folderId: existing.id },
+      });
+      return existing.id;
+    }
+
+    try {
+      const folder = await createFolder(organizationId, jobId, folderName);
+      await db.jobPermitInspection.update({
+        where: { id: inspection.id },
+        data: { folderId: folder.id },
+      });
+      return folder.id;
+    } catch (error) {
+      if (!(error instanceof FolderNameTakenError)) throw error;
+      // Race: another request created the same name — retry the candidate loop.
+    }
+  }
+
+  throw new Error(
+    `Could not create an inspection picture folder for "${inspection.name}" (${inspection.permit.trade}).`,
+  );
+}
+
 export async function ensureInspectionPictureFolders(organizationId: string, jobId: string) {
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
   if (!job) throw new JobNotFoundError(jobId);
@@ -83,18 +140,44 @@ export async function ensureInspectionPictureFolders(organizationId: string, job
 
   for (const inspection of inspections) {
     if (inspection.folderId) continue;
-    const folderName = inspectionPictureFolderName(inspection.name);
-    let folder = await db.fileFolder.findFirst({
-      where: { jobId, organizationId, name: { equals: folderName, mode: "insensitive" } },
-    });
-    if (!folder) {
-      folder = await createFolder(organizationId, jobId, folderName);
-    }
-    await db.jobPermitInspection.update({
-      where: { id: inspection.id },
-      data: { folderId: folder.id },
-    });
+    await linkInspectionToFolder(organizationId, jobId, inspection);
   }
+}
+
+/**
+ * Org-wide restore: ensure inspection picture folders on every OPEN / WARRANTY /
+ * PRE_SALE job that has permits. Self-healing list/create still works per job;
+ * this is the one-shot bots call after a wipe or deploy.
+ */
+export async function ensureInspectionPictureFoldersForActiveJobs(organizationId: string) {
+  const jobs = await db.job.findMany({
+    where: {
+      organizationId,
+      status: { in: ["OPEN", "WARRANTY", "PRE_SALE"] },
+      permits: { some: {} },
+    },
+    select: { id: true },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  const results: { jobId: string; ok: boolean; error?: string }[] = [];
+  for (const job of jobs) {
+    try {
+      await ensureInspectionPictureFolders(organizationId, job.id);
+      results.push({ jobId: job.id, ok: true });
+    } catch (error) {
+      results.push({
+        jobId: job.id,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return {
+    jobCount: jobs.length,
+    okCount: results.filter((row) => row.ok).length,
+    failed: results.filter((row) => !row.ok),
+  };
 }
 
 export interface CreateInspectionPictureFolderInput {
@@ -170,32 +253,12 @@ export async function createInspectionPictureFolder(input: CreateInspectionPictu
   }
 
   if (!inspection.folderId) {
-    const folderName = inspectionPictureFolderName(inspection.name);
-    let folder = await db.fileFolder.findFirst({
-      where: {
-        jobId: job.id,
-        organizationId: input.organizationId,
-        name: { equals: folderName, mode: "insensitive" },
-      },
+    const folderId = await linkInspectionToFolder(input.organizationId, job.id, {
+      id: inspection.id,
+      name: inspection.name,
+      permit: { trade: permit.trade },
     });
-    if (!folder) {
-      try {
-        folder = await createFolder(input.organizationId, job.id, folderName);
-      } catch (error) {
-        if (!(error instanceof FolderNameTakenError)) throw error;
-        folder = await db.fileFolder.findFirstOrThrow({
-          where: {
-            jobId: job.id,
-            organizationId: input.organizationId,
-            name: { equals: folderName, mode: "insensitive" },
-          },
-        });
-      }
-    }
-    inspection = await db.jobPermitInspection.update({
-      where: { id: inspection.id },
-      data: { folderId: folder.id },
-    });
+    inspection = { ...inspection, folderId };
   }
 
   await ensureInspectionPictureFolders(input.organizationId, job.id);

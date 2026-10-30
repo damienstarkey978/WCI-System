@@ -685,7 +685,7 @@ Record every architectural decision that departs from the above, with the reason
   lives at `/jobs/{jobId}/permitting/docs` (Duval/Jax first; PDF generators stubbed
   until Permit Rockstar login).
 - **Inspection Pictures under Files (next scope):** each `JobPermitInspection` links
-  to a `FileFolder` (`Inspection: {name}`). Files > Inspection Pictures lists those
+  to a `FileFolder` (preferred `Inspection: {name}`). Files > Inspection Pictures lists those
   folders, shows Permit Rockstar guide links + universal photo tips, and supports
   camera/library capture with client-side compress + parallel upload. Termite cert
   on Slab is a disabled checkbox stub only; receive/upload/notify Garry waits on Damien.
@@ -701,6 +701,14 @@ Record every architectural decision that departs from the above, with the reason
   `POST /folders` with `kind=inspection` (city name) to create one folder
   without a Permitting detour. Jobs that already had older full seeds keep
   those rows until staff removes them.
+- **Duplicate city inspection names across trades get trade-disambiguated folders
+  (2026-10-30):** `JobPermitInspection.folderId` is `@unique`, so two “Final”
+  (or “Rough” / “Insulation”) rows on the same job cannot share one FileFolder.
+  Ensure prefers `Inspection: {name}` and, when that folder is already linked to
+  another inspection, creates `Inspection: {TRADE} — {name}` instead. Without
+  this, `GET /folders?kind=inspection` 500’d on multi-trade jobs (East 5th,
+  Newcomb, etc.) after #73/#74. Org-wide restore:
+  `POST /folders/ensure-inspection-pictures` (optional `{ jobId }`).
 - **Permitting page is single-job scoped:** `/jobs/{jobId}/permitting` loads only
   that job (`getJobPermitting`). The earlier org-wide multi-job list was wrong for
   cutover — never reintroduce `listPermittingJobs` into the job route UI.

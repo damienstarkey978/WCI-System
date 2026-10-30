@@ -113,6 +113,73 @@ describe("inspection pictures folders + share links", () => {
     });
   });
 
+  it("disambiguates folder names when two trades share an inspection name", async () => {
+    vi.mocked(db.job.findFirst).mockResolvedValue({ id: "job_1" } as never);
+    vi.mocked(db.jobPermit.findMany).mockResolvedValue([] as never);
+    // ensure pass: BUILDING Final already linked; ELECTRICAL Final needs a folder
+    vi.mocked(db.jobPermitInspection.findMany)
+      .mockResolvedValueOnce([
+        {
+          id: "insp_bldg_final",
+          name: "Final",
+          folderId: "folder_bldg",
+          completedAt: null,
+          permit: { trade: "BUILDING" },
+          folder: { id: "folder_bldg", name: "Inspection: Final" },
+        },
+        {
+          id: "insp_elec_final",
+          name: "Final",
+          folderId: null,
+          completedAt: null,
+          permit: { trade: "ELECTRICAL" },
+          folder: null,
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          id: "insp_bldg_final",
+          name: "Final",
+          folderId: "folder_bldg",
+          completedAt: null,
+          permit: { trade: "BUILDING" },
+          folder: { id: "folder_bldg", name: "Inspection: Final", _count: { files: 0 } },
+          shareLinks: [],
+        },
+        {
+          id: "insp_elec_final",
+          name: "Final",
+          folderId: "folder_elec",
+          completedAt: null,
+          permit: { trade: "ELECTRICAL" },
+          folder: { id: "folder_elec", name: "Inspection: ELECTRICAL — Final", _count: { files: 0 } },
+          shareLinks: [],
+        },
+      ] as never);
+
+    // Preferred name "Inspection: Final" already exists…
+    vi.mocked(db.fileFolder.findFirst)
+      .mockResolvedValueOnce({ id: "folder_bldg" } as never)
+      // …trade-disambiguated name is free
+      .mockResolvedValueOnce(null as never);
+    // Claimed by the other inspection → skip preferred name
+    vi.mocked(db.jobPermitInspection.findFirst).mockResolvedValueOnce({ id: "insp_bldg_final" } as never);
+    vi.mocked(createFolder).mockResolvedValue({
+      id: "folder_elec",
+      name: "Inspection: ELECTRICAL — Final",
+    } as never);
+    vi.mocked(db.jobPermitInspection.update).mockResolvedValue({} as never);
+
+    const folders = await listInspectionPictureFolders("org_1", "job_1");
+
+    expect(createFolder).toHaveBeenCalledWith("org_1", "job_1", "Inspection: ELECTRICAL — Final");
+    expect(folders).toHaveLength(2);
+    expect(folders.map((f) => f.folderName).sort()).toEqual([
+      "Inspection: ELECTRICAL — Final",
+      "Inspection: Final",
+    ]);
+  });
+
   it("seeds typical inspections onto empty permit shells before listing folders", async () => {
     vi.mocked(db.job.findFirst).mockResolvedValue({ id: "job_1" } as never);
     vi.mocked(db.jobPermit.findMany).mockResolvedValue([

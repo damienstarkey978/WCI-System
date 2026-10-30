@@ -41,6 +41,7 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/files": ["GET","POST"],
   "/files/{fileId}": ["GET"],
   "/folders": ["GET","POST"],
+  "/folders/ensure-inspection-pictures": ["POST"],
   "/invoices": ["GET","POST"],
   "/invoices/{invoiceId}": ["DELETE"],
   "/invoices/{invoiceId}/payments": ["POST"],
