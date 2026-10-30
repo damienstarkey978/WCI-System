@@ -5,6 +5,7 @@ import {
   createPermitInspectionSchema,
   updateJobPermittingFlagsSchema,
   updatePermitInspectionSchema,
+  updatePermitRockstarLedgerSchema,
   updatePermitSchema,
 } from "@/lib/api-schemas";
 
@@ -32,6 +33,21 @@ describe("permit API schemas", () => {
     expect(updateJobPermittingFlagsSchema.safeParse({}).success).toBe(false);
     expect(updateJobPermittingFlagsSchema.safeParse({ nocOnFile: true }).success).toBe(true);
     expect(updateJobPermittingFlagsSchema.safeParse({ buildingPermitDocsCreated: true }).success).toBe(true);
+  });
+
+  it("requires at least one Permit Rockstar ledger field", () => {
+    expect(updatePermitRockstarLedgerSchema.safeParse({}).success).toBe(false);
+    expect(updatePermitRockstarLedgerSchema.safeParse({ privateProvider: true }).success).toBe(true);
+    expect(
+      updatePermitRockstarLedgerSchema.safeParse({
+        setupType: "FLAT_FEE",
+        invoiced: true,
+        paid: false,
+        feePerInspectionCents: 7500,
+      }).success,
+    ).toBe(true);
+    expect(updatePermitRockstarLedgerSchema.safeParse({ setupType: null }).success).toBe(true);
+    expect(updatePermitRockstarLedgerSchema.safeParse({ feePerInspectionCents: -1 }).success).toBe(false);
   });
 
   it("accepts create permit with trade, duplicates, and optional fields", () => {

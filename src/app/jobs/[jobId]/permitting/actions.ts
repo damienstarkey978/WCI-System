@@ -2,9 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 
-import { InspectionResult, PermitStatus, PermitTrade } from "@/generated/prisma/enums";
+import {
+  InspectionResult,
+  PermitRockstarSetupType,
+  PermitStatus,
+  PermitTrade,
+} from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { EmailNotConfiguredError, EmailSendError } from "@/lib/email/send";
+import { MoneyError, parseDollarsToCents } from "@/lib/money";
 import {
   addPermitInspection,
   assignPermitVendor,
@@ -21,6 +27,7 @@ import {
   setPermitPulled,
   updateInspectionFields,
   updatePermitFields,
+  updatePermitRockstarLedger,
 } from "@/lib/permitting/service";
 
 export interface ActionState {
@@ -38,6 +45,7 @@ function revalidate(jobId: string) {
 const STAFF_TRADES = new Set<string>(Object.values(PermitTrade));
 const PERMIT_STATUSES = new Set<string>(Object.values(PermitStatus));
 const INSPECTION_RESULTS = new Set<string>(Object.values(InspectionResult));
+const ROCKSTAR_SETUPS = new Set<string>(Object.values(PermitRockstarSetupType));
 
 function optionalDate(raw: FormDataEntryValue | null): Date | null | undefined {
   if (raw === null) return undefined;
@@ -149,6 +157,45 @@ export async function setInspectionCompletedAction(formData: FormData): Promise<
     // Refresh either way.
   }
   revalidate(jobId);
+}
+
+export async function updatePermitRockstarLedgerAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const setupRaw = String(formData.get("setupType") ?? "").trim();
+  const feeRaw = String(formData.get("feePerInspectionDollars") ?? "").trim();
+
+  let feePerInspectionCents: number | null | undefined = undefined;
+  if (feeRaw === "") {
+    feePerInspectionCents = null;
+  } else {
+    try {
+      feePerInspectionCents = parseDollarsToCents(feeRaw);
+    } catch (error) {
+      return {
+        error: error instanceof MoneyError ? error.message : "Enter a valid fee amount.",
+      };
+    }
+  }
+
+  try {
+    await updatePermitRockstarLedger(user.organizationId, jobId, {
+      privateProvider: formData.get("privateProvider") === "true",
+      setupType: ROCKSTAR_SETUPS.has(setupRaw)
+        ? (setupRaw as PermitRockstarSetupType)
+        : null,
+      invoiced: formData.get("invoiced") === "true",
+      paid: formData.get("paid") === "true",
+      feePerInspectionCents,
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not update Permit Rockstar ledger." };
+  }
+  revalidate(jobId);
+  return { ok: true };
 }
 
 export async function setNocNtboAction(formData: FormData): Promise<void> {

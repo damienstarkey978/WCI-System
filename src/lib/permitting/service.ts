@@ -4,13 +4,45 @@
  * site, etc.) are allowed — each JobPermit has its own vendor + inspections.
  */
 
-import { InspectionResult, PermitStatus, PermitTrade } from "@/generated/prisma/enums";
+import {
+  InspectionResult,
+  PermitRockstarSetupType,
+  PermitStatus,
+  PermitTrade,
+} from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { EmailNotConfiguredError, sendEmail } from "@/lib/email/send";
 import { isTransactionalEmailConfigured } from "@/lib/env";
+import { assertCents } from "@/lib/money";
 import { tradeLabel } from "@/lib/permitting/labels";
 
 export { permitStatusLabel, tradeLabel } from "@/lib/permitting/labels";
+
+/** Job-level Permit Rockstar ledger (one per job — Duval/Jax private provider). */
+export type PermitRockstarLedger = {
+  readonly privateProvider: boolean;
+  readonly setupType: PermitRockstarSetupType | null;
+  readonly invoiced: boolean;
+  readonly paid: boolean;
+  /** Integer cents; null when unset. */
+  readonly feePerInspectionCents: number | null;
+};
+
+export function permitRockstarLedgerFromJob(job: {
+  readonly permitRockstarPrivateProvider: boolean;
+  readonly permitRockstarSetupType: PermitRockstarSetupType | null;
+  readonly permitRockstarInvoiced: boolean;
+  readonly permitRockstarPaid: boolean;
+  readonly permitRockstarFeePerInspectionCents: number | null;
+}): PermitRockstarLedger {
+  return {
+    privateProvider: job.permitRockstarPrivateProvider,
+    setupType: job.permitRockstarSetupType,
+    invoiced: job.permitRockstarInvoiced,
+    paid: job.permitRockstarPaid,
+    feePerInspectionCents: job.permitRockstarFeePerInspectionCents,
+  };
+}
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -156,6 +188,11 @@ export async function getJobPermitting(organizationId: string, jobId: string) {
       nocOnFile: true,
       ntboFiled: true,
       buildingPermitDocsCreatedAt: true,
+      permitRockstarPrivateProvider: true,
+      permitRockstarSetupType: true,
+      permitRockstarInvoiced: true,
+      permitRockstarPaid: true,
+      permitRockstarFeePerInspectionCents: true,
       permits: {
         orderBy: { trade: "asc" },
         include: permitInclude,
@@ -473,6 +510,62 @@ export async function setJobNocNtbo(
         : {}),
     },
   });
+}
+
+export interface UpdatePermitRockstarLedgerInput {
+  readonly privateProvider?: boolean;
+  readonly setupType?: PermitRockstarSetupType | null;
+  readonly invoiced?: boolean;
+  readonly paid?: boolean;
+  /** Integer cents; null clears. */
+  readonly feePerInspectionCents?: number | null;
+}
+
+/**
+ * Update the job's single Permit Rockstar ledger. Does not touch JobPermit rows.
+ */
+export async function updatePermitRockstarLedger(
+  organizationId: string,
+  jobId: string,
+  input: UpdatePermitRockstarLedgerInput,
+) {
+  const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
+  if (!job) throw new JobNotFoundError(jobId);
+
+  if (input.feePerInspectionCents !== undefined && input.feePerInspectionCents !== null) {
+    assertCents(input.feePerInspectionCents, "feePerInspectionCents");
+    if (input.feePerInspectionCents < 0) {
+      throw new Error("feePerInspectionCents must be >= 0.");
+    }
+  }
+
+  const updated = await db.job.update({
+    where: { id: job.id },
+    data: {
+      ...(input.privateProvider !== undefined
+        ? { permitRockstarPrivateProvider: input.privateProvider }
+        : {}),
+      ...(input.setupType !== undefined ? { permitRockstarSetupType: input.setupType } : {}),
+      ...(input.invoiced !== undefined ? { permitRockstarInvoiced: input.invoiced } : {}),
+      ...(input.paid !== undefined ? { permitRockstarPaid: input.paid } : {}),
+      ...(input.feePerInspectionCents !== undefined
+        ? { permitRockstarFeePerInspectionCents: input.feePerInspectionCents }
+        : {}),
+    },
+    select: {
+      id: true,
+      permitRockstarPrivateProvider: true,
+      permitRockstarSetupType: true,
+      permitRockstarInvoiced: true,
+      permitRockstarPaid: true,
+      permitRockstarFeePerInspectionCents: true,
+    },
+  });
+
+  return {
+    id: updated.id,
+    permitRockstar: permitRockstarLedgerFromJob(updated),
+  };
 }
 
 export async function setInspectionCompleted(organizationId: string, inspectionId: string, completed: boolean) {

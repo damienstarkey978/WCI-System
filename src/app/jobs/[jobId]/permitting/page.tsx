@@ -18,6 +18,7 @@ import {
   hasActiveBuildingPermit,
   hasBuildingPermitDocs,
   JobNotFoundError,
+  permitRockstarLedgerFromJob,
   tradeLabel,
 } from "@/lib/permitting/service";
 
@@ -32,6 +33,7 @@ import { AddPermitForm } from "./add-permit-form";
 import { AssignVendorForm } from "./assign-vendor-form";
 import { EditInspectionForm } from "./edit-inspection-form";
 import { EditPermitForm } from "./edit-permit-form";
+import { PermitRockstarForm } from "./permit-rockstar-form";
 import { PermitReminderButton } from "./permit-reminder-button";
 
 export const dynamic = "force-dynamic";
@@ -126,6 +128,7 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
   const tradesAvailable = availableTradesToAdd(job.permits.map((p) => p.trade));
   const docsCreated = hasBuildingPermitDocs(job.buildingPermitDocsCreatedAt);
   const activePermit = hasActiveBuildingPermit(job.permits);
+  const rockstarLedger = permitRockstarLedgerFromJob(job);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
@@ -165,6 +168,8 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
             <StatusChip ok={activePermit} label={activePermit ? "Active permit" : "No active permit"} />
           </div>
         </div>
+
+        <PermitRockstarForm jobId={job.id} ledger={rockstarLedger} />
 
         <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>
           <p className="mb-2 text-xs font-medium text-[var(--bt-muted)]">Add a permit</p>

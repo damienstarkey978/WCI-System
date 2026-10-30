@@ -264,14 +264,25 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     {
       description:
         "List this job's trade permits and inspections (read-only; does not create rows). " +
-        "Also returns NOC/NTBO. To add a permit use create_job_permit; for Building+MEP shells use ensure_job_permit_defaults.",
+        "Also returns NOC/NTBO and the job Permit Rockstar ledger. " +
+        "To add a permit use create_job_permit; for Building+MEP shells use ensure_job_permit_defaults. " +
+        "To update Rockstar billing use PATCH /api/v1/jobs/{jobId}/permit-rockstar-ledger via api_v1_request.",
       inputSchema: { jobId: z.string().describe("The job's id") },
     },
     async (input) => {
       const jobId = (input as { jobId: string }).jobId;
       const job = await db.job.findFirst({
         where: { id: jobId, organizationId },
-        select: { id: true, nocOnFile: true, ntboFiled: true },
+        select: {
+          id: true,
+          nocOnFile: true,
+          ntboFiled: true,
+          permitRockstarPrivateProvider: true,
+          permitRockstarSetupType: true,
+          permitRockstarInvoiced: true,
+          permitRockstarPaid: true,
+          permitRockstarFeePerInspectionCents: true,
+        },
       });
       if (!job) return refusal(`Job ${jobId} not found`);
       const permits = await db.jobPermit.findMany({
@@ -283,13 +294,14 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
         },
       });
       const flags = `NOC=${job.nocOnFile ? "on file" : "missing"} NTBO=${job.ntboFiled ? "filed" : "not filed"}`;
+      const rockstar = `Permit Rockstar: privateProvider=${job.permitRockstarPrivateProvider} setup=${job.permitRockstarSetupType ?? "unset"} invoiced=${job.permitRockstarInvoiced} paid=${job.permitRockstarPaid} feePerInspectionCents=${job.permitRockstarFeePerInspectionCents ?? "unset"}`;
       if (permits.length === 0) {
         return text(
-          `${flags}\nNo permits on this job. Call create_job_permit (one trade) or ensure_job_permit_defaults (Building+MEP shells).`,
+          `${flags}\n${rockstar}\nNo permits on this job. Call create_job_permit (one trade) or ensure_job_permit_defaults (Building+MEP shells).`,
         );
       }
       return text(
-        `${flags}\n` +
+        `${flags}\n${rockstar}\n` +
           permits
             .map((permit) => {
               const vendor = permit.vendor ? ` vendor=${permit.vendor.name}` : "";

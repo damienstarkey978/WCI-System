@@ -5,10 +5,13 @@
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { createJobPermitSchema, formatZodIssues } from "@/lib/api-schemas";
+import { createJobPermitSchema, formatZodIssues, parseOptionalDate } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
-import { parseOptionalDate } from "@/lib/api-schemas";
-import { createJobPermit, JobNotFoundError } from "@/lib/permitting/service";
+import {
+  createJobPermit,
+  JobNotFoundError,
+  permitRockstarLedgerFromJob,
+} from "@/lib/permitting/service";
 
 type Context = { params: Promise<{ jobId: string }> };
 
@@ -24,6 +27,11 @@ export const GET = withApiAuth<Context>(["permits:read"], async (_request, auth,
       nocOnFile: true,
       ntboFiled: true,
       buildingPermitDocsCreatedAt: true,
+      permitRockstarPrivateProvider: true,
+      permitRockstarSetupType: true,
+      permitRockstarInvoiced: true,
+      permitRockstarPaid: true,
+      permitRockstarFeePerInspectionCents: true,
     },
   });
   if (!job) {
@@ -40,7 +48,7 @@ export const GET = withApiAuth<Context>(["permits:read"], async (_request, auth,
   });
 
   // `data` stays the permit array for backward compatibility with Heather/MCP.
-  // Job flags ride along so bots can validate without a second call.
+  // Job flags + Permit Rockstar ledger ride along so bots can validate without a second call.
   return Response.json({
     data: permits,
     job: {
@@ -50,6 +58,7 @@ export const GET = withApiAuth<Context>(["permits:read"], async (_request, auth,
       nocOnFile: job.nocOnFile,
       ntboFiled: job.ntboFiled,
       buildingPermitDocsCreatedAt: job.buildingPermitDocsCreatedAt,
+      permitRockstar: permitRockstarLedgerFromJob(job),
     },
   });
 });

@@ -8,10 +8,11 @@ import {
   DEMO_INSPECTIONS_BY_TRADE,
   hasActiveBuildingPermit,
   hasBuildingPermitDocs,
+  permitRockstarLedgerFromJob,
   STAFF_PERMIT_TRADES,
   tradeLabel,
 } from "@/lib/permitting/service";
-import { PermitStatus, PermitTrade } from "@/generated/prisma/enums";
+import { PermitRockstarSetupType, PermitStatus, PermitTrade } from "@/generated/prisma/enums";
 
 describe("permitting helpers", () => {
   it("labels trades for display", () => {
@@ -91,5 +92,23 @@ describe("permitting helpers", () => {
         { trade: PermitTrade.BUILDING, pulled: false, permitNumber: "X", status: PermitStatus.EXPIRED },
       ]),
     ).toBe(false);
+  });
+
+  it("maps job columns onto a Permit Rockstar ledger shape", () => {
+    expect(
+      permitRockstarLedgerFromJob({
+        permitRockstarPrivateProvider: true,
+        permitRockstarSetupType: PermitRockstarSetupType.CARD_ON_FILE,
+        permitRockstarInvoiced: true,
+        permitRockstarPaid: false,
+        permitRockstarFeePerInspectionCents: 12_500,
+      }),
+    ).toEqual({
+      privateProvider: true,
+      setupType: PermitRockstarSetupType.CARD_ON_FILE,
+      invoiced: true,
+      paid: false,
+      feePerInspectionCents: 12_500,
+    });
   });
 });
