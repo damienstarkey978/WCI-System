@@ -79,11 +79,11 @@ export function UploadForm({ jobId, folderId, fixedCategory }: { jobId: string; 
           </select>
         </label>
         <label className="flex items-center gap-1.5 text-xs text-[var(--bt-muted)]">
-          <input type="checkbox" name="clientVisible" defaultChecked />
+          <input type="checkbox" name="clientVisible" />
           Visible to client
         </label>
         <label className="flex items-center gap-1.5 text-xs text-[var(--bt-muted)]">
-          <input type="checkbox" name="subVisible" defaultChecked />
+          <input type="checkbox" name="subVisible" />
           Visible to subs
         </label>
         <button

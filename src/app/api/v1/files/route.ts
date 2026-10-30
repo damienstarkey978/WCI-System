@@ -9,6 +9,9 @@
  *
  * List honors limit/cursor/folderId/jobId/category. File.url may be a storage
  * key — use GET /files/{fileId} for a signed downloadUrl.
+ *
+ * Unknown / other-job folderId → 422 JSON (never empty 500). Unexpected errors are
+ * logged server-side and returned as JSON 500 with the message.
  */
 
 import { actorFromApiKey } from "@/lib/actor";
@@ -21,12 +24,14 @@ import {
 } from "@/lib/api-schemas";
 import { toCursorPage } from "@/lib/api-pagination";
 import { db } from "@/lib/db";
+import { FolderNotFoundError, FolderWrongJobError } from "@/lib/files/folders";
 import {
   DailyLogNotFoundError,
   JobNotFoundError,
   registerFile,
   uploadAndRegisterFile,
 } from "@/lib/files/service";
+import { DEFAULT_FILE_VISIBILITY } from "@/lib/files/visibility";
 import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
 
 export const GET = withApiAuth(["files:read"], async (request, auth) => {
@@ -64,6 +69,35 @@ function parseBool(raw: FormDataEntryValue | null | undefined, fallback: boolean
   if (raw === "true" || raw === "1") return true;
   if (raw === "false" || raw === "0") return false;
   return fallback;
+}
+
+/** Strip a data: URL prefix so callers can paste browser-style base64. */
+function normalizeDataBase64(raw: string): string {
+  const trimmed = raw.trim();
+  const match = /^data:[^;]+;base64,(.+)$/i.exec(trimmed);
+  return match?.[1] ?? trimmed;
+}
+
+function mapUploadError(error: unknown): Response | null {
+  if (error instanceof StorageNotConfiguredError) {
+    return apiError(503, "storage_not_configured", error.message);
+  }
+  if (error instanceof JobNotFoundError || error instanceof DailyLogNotFoundError) {
+    return apiError(422, "not_found", error.message);
+  }
+  if (error instanceof FolderNotFoundError || error instanceof FolderWrongJobError) {
+    return apiError(422, "invalid_folder", error.message);
+  }
+  return null;
+}
+
+function unexpectedUploadError(error: unknown, path: string): Response {
+  console.error(`${path} failed:`, error);
+  return apiError(
+    500,
+    "file_upload_failed",
+    error instanceof Error ? error.message : "The file could not be uploaded.",
+  );
 }
 
 async function handleMultipartUpload(request: Request, organizationId: string, apiKeyId: string) {
@@ -113,20 +147,14 @@ async function handleMultipartUpload(request: Request, organizationId: string, a
       mimeType,
       sizeBytes: bytes.byteLength,
       category,
-      clientVisible: parseBool(form.get("clientVisible"), false),
-      subVisible: parseBool(form.get("subVisible"), true),
+      clientVisible: parseBool(form.get("clientVisible"), DEFAULT_FILE_VISIBILITY.clientVisible),
+      subVisible: parseBool(form.get("subVisible"), DEFAULT_FILE_VISIBILITY.subVisible),
       dailyLogId,
       folderId,
     });
     return Response.json({ data: file }, { status: 201 });
   } catch (error) {
-    if (error instanceof StorageNotConfiguredError) {
-      return apiError(503, "storage_not_configured", error.message);
-    }
-    if (error instanceof JobNotFoundError || error instanceof DailyLogNotFoundError) {
-      return apiError(422, "not_found", error.message);
-    }
-    throw error;
+    return mapUploadError(error) ?? unexpectedUploadError(error, "POST /api/v1/files (multipart)");
   }
 }
 
@@ -147,7 +175,11 @@ export const POST = withApiAuth(["files:write"], async (request, auth) => {
 
   // Bytes upload (preferred for inspection photos when multipart isn't convenient).
   if (typeof asRecord.dataBase64 === "string") {
-    const parsed = uploadFileJsonSchema.safeParse(payload);
+    const normalized = {
+      ...asRecord,
+      dataBase64: normalizeDataBase64(asRecord.dataBase64),
+    };
+    const parsed = uploadFileJsonSchema.safeParse(normalized);
     if (!parsed.success) {
       return apiError(422, "validation_failed", "The file could not be uploaded.", formatZodIssues(parsed.error));
     }
@@ -165,20 +197,14 @@ export const POST = withApiAuth(["files:write"], async (request, auth) => {
         mimeType: parsed.data.mimeType ?? null,
         sizeBytes: bytes.byteLength,
         category: parsed.data.category ?? "PHOTO",
-        clientVisible: parsed.data.clientVisible ?? false,
-        subVisible: parsed.data.subVisible ?? true,
+        clientVisible: parsed.data.clientVisible ?? DEFAULT_FILE_VISIBILITY.clientVisible,
+        subVisible: parsed.data.subVisible ?? DEFAULT_FILE_VISIBILITY.subVisible,
         dailyLogId: parsed.data.dailyLogId ?? null,
         folderId: parsed.data.folderId ?? null,
       });
       return Response.json({ data: file }, { status: 201 });
     } catch (error) {
-      if (error instanceof StorageNotConfiguredError) {
-        return apiError(503, "storage_not_configured", error.message);
-      }
-      if (error instanceof JobNotFoundError || error instanceof DailyLogNotFoundError) {
-        return apiError(422, "not_found", error.message);
-      }
-      throw error;
+      return mapUploadError(error) ?? unexpectedUploadError(error, "POST /api/v1/files (dataBase64)");
     }
   }
 
@@ -196,13 +222,12 @@ export const POST = withApiAuth(["files:write"], async (request, auth) => {
     const file = await registerFile({
       organizationId: auth.organizationId,
       ...parsed.data,
+      clientVisible: parsed.data.clientVisible ?? DEFAULT_FILE_VISIBILITY.clientVisible,
+      subVisible: parsed.data.subVisible ?? DEFAULT_FILE_VISIBILITY.subVisible,
       actor: actorFromApiKey(auth.apiKeyId),
     });
     return Response.json({ data: file }, { status: 201 });
   } catch (error) {
-    if (error instanceof JobNotFoundError || error instanceof DailyLogNotFoundError) {
-      return apiError(422, "not_found", error.message);
-    }
-    throw error;
+    return mapUploadError(error) ?? unexpectedUploadError(error, "POST /api/v1/files (url)");
   }
 });

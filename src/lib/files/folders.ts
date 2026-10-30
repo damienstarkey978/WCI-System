@@ -11,11 +11,19 @@
  */
 
 import { db } from "@/lib/db";
+import { defaultFolderVisibility } from "@/lib/files/visibility";
 
 export class FolderNotFoundError extends Error {
   constructor(folderId: string) {
     super(`Folder ${folderId} not found`);
     this.name = "FolderNotFoundError";
+  }
+}
+
+export class FolderWrongJobError extends Error {
+  constructor(folderId: string, jobId: string) {
+    super(`Folder ${folderId} is not on job ${jobId}`);
+    this.name = "FolderWrongJobError";
   }
 }
 
@@ -64,7 +72,16 @@ export async function createFolder(organizationId: string, jobId: string, rawNam
   const taken = await db.fileFolder.findFirst({ where: { jobId, name: { equals: name, mode: "insensitive" } }, select: { id: true } });
   if (taken) throw new FolderNameTakenError(name);
 
-  return db.fileFolder.create({ data: { organizationId, jobId, name } });
+  const visibility = defaultFolderVisibility(name);
+  return db.fileFolder.create({
+    data: {
+      organizationId,
+      jobId,
+      name,
+      clientVisible: visibility.clientVisible,
+      subVisible: visibility.subVisible,
+    },
+  });
 }
 
 export type DeleteFolderResult = {
@@ -125,6 +142,43 @@ export async function setFolderVisibility(organizationId: string, folderId: stri
   return db.fileFolder.update({ where: { id: folder.id }, data: visibility });
 }
 
+export interface UpdateFolderInput {
+  readonly name?: string;
+  readonly clientVisible?: boolean;
+  readonly subVisible?: boolean;
+}
+
+/** Rename and/or change portal visibility on a FileFolder. */
+export async function updateFolder(organizationId: string, folderId: string, input: UpdateFolderInput) {
+  const folder = await db.fileFolder.findFirst({
+    where: { id: folderId, organizationId },
+    select: { id: true, jobId: true, name: true },
+  });
+  if (!folder) throw new FolderNotFoundError(folderId);
+
+  const data: { name?: string; clientVisible?: boolean; subVisible?: boolean } = {};
+  if (input.name !== undefined) {
+    const name = normalizeFolderName(input.name);
+    if (!name) throw new Error("Folder name is required.");
+    if (name.toLowerCase() !== folder.name.toLowerCase()) {
+      const taken = await db.fileFolder.findFirst({
+        where: { jobId: folder.jobId, name: { equals: name, mode: "insensitive" }, id: { not: folder.id } },
+        select: { id: true },
+      });
+      if (taken) throw new FolderNameTakenError(name);
+    }
+    data.name = name;
+  }
+  if (input.clientVisible !== undefined) data.clientVisible = input.clientVisible;
+  if (input.subVisible !== undefined) data.subVisible = input.subVisible;
+
+  if (Object.keys(data).length === 0) {
+    return db.fileFolder.findFirstOrThrow({ where: { id: folder.id } });
+  }
+
+  return db.fileFolder.update({ where: { id: folder.id }, data });
+}
+
 /** Move a file into a folder of the SAME job, or pass null to unfile it. */
 export async function moveFileToFolder(organizationId: string, fileId: string, folderId: string | null) {
   const file = await db.file.findFirst({ where: { id: fileId, organizationId }, select: { id: true, jobId: true } });
@@ -135,4 +189,18 @@ export async function moveFileToFolder(organizationId: string, fileId: string, f
     if (!folder) throw new FolderNotFoundError(folderId);
   }
   return db.file.update({ where: { id: file.id }, data: { folderId } });
+}
+
+/**
+ * Assert folderId belongs to this org+job. Throws FolderNotFoundError when missing,
+ * FolderWrongJobError when it exists on another job in the org.
+ */
+export async function assertFolderOnJob(organizationId: string, jobId: string, folderId: string): Promise<string> {
+  const folder = await db.fileFolder.findFirst({
+    where: { id: folderId, organizationId },
+    select: { id: true, jobId: true },
+  });
+  if (!folder) throw new FolderNotFoundError(folderId);
+  if (folder.jobId !== jobId) throw new FolderWrongJobError(folderId, jobId);
+  return folder.id;
 }
