@@ -32,12 +32,24 @@ export function AssignVendorForm({
           style={{ borderColor: "var(--bt-border)" }}
         >
           <option value="">None</option>
-          {vendors.map((vendor) => (
-            <option key={vendor.id} value={vendor.id}>
-              {vendor.name}
-              {vendor.email ? ` (${vendor.email})` : " (no email)"}
-            </option>
-          ))}
+          {/* Reminder email needs an address — put those first; disable no-email
+              rows so the dropdown stops looking like a broken vendor list (#35). */}
+          {[...vendors]
+            .sort((a, b) => {
+              const aHas = a.email ? 0 : 1;
+              const bHas = b.email ? 0 : 1;
+              if (aHas !== bHas) return aHas - bHas;
+              return a.name.localeCompare(b.name);
+            })
+            .map((vendor) => (
+              <option
+                key={vendor.id}
+                value={vendor.id}
+                disabled={!vendor.email && vendor.id !== vendorId}
+              >
+                {vendor.email ? `${vendor.name} (${vendor.email})` : `${vendor.name} — no email (can't remind)`}
+              </option>
+            ))}
         </select>
       </label>
       <button

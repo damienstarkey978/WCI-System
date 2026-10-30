@@ -126,7 +126,8 @@ export const FINANCIAL_NAV: readonly JobNavLink[] = [
   { label: "Budget", path: "/budget" },
   { label: "Purchase Orders", path: "/purchase-orders" },
   { label: "Bills", path: "/bills" },
-  { label: "Cost Inbox", path: "/cost-inbox" },
+  // Cost Inbox used to live next to Bills and overlapped Heather's workflow (#39).
+  // Receipt intake is now the Bills INBOX tab; /cost-inbox redirects there.
   { label: "Invoices", path: "/invoices" },
   { label: "Online Payment Report", path: "/online-payment-report" },
 ];
@@ -174,7 +175,7 @@ export const QUICK_ADD_NAV: readonly JobsMenuItem[] = [
   { label: "Lead Proposal", kind: "global", href: "/leads/proposals" },
   { label: "Message", kind: "job", jobPath: "/messages" },
   { label: "Purchase Order", kind: "job", jobPath: "/purchase-orders" },
-  { label: "Receipt", kind: "job", jobPath: "/cost-inbox" },
+  { label: "Receipt", kind: "job", jobPath: "/bills?status=INBOX" },
   { label: "RFI", kind: "job", jobPath: "/rfis" },
   { label: "Schedule Item", kind: "job", jobPath: "/schedule" },
   { label: "Selection", kind: "job", jobPath: "/selections" },

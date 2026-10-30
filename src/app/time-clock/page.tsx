@@ -8,6 +8,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDateTime, formatTime } from "@/lib/format";
+import { formatJobLabel } from "@/lib/job-display";
 import { workedHours } from "@/lib/time-clock/hours";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +89,7 @@ export default async function GlobalTimeClockPage({ searchParams }: PageProps<"/
           {openEntries.length === 0
             ? `No users clocked in as of ${asOf}.`
             : `${openEntries.length} user${openEntries.length === 1 ? "" : "s"} clocked in: ${openEntries
-                .map((entry) => `${entry.user.name || entry.user.email} (${entry.job.prefix ? `${entry.job.prefix} ` : ""}${entry.job.name})`)
+                .map((entry) => `${entry.user.name || entry.user.email} (${formatJobLabel(entry.job.name, entry.job.prefix)})`)
                 .join(", ")}.`}
         </div>
 
@@ -117,8 +118,7 @@ export default async function GlobalTimeClockPage({ searchParams }: PageProps<"/
                     <td className="px-4 py-2">{entry.user.name || entry.user.email}</td>
                     <td className="px-4 py-2">
                       <Link href={`/jobs/${entry.job.id}/time-clock`} className="text-[var(--bt-primary)] hover:underline">
-                        {entry.job.prefix ? `${entry.job.prefix} ` : ""}
-                        {entry.job.name}
+                        {formatJobLabel(entry.job.name, entry.job.prefix)}
                       </Link>
                     </td>
                     <td className="px-4 py-2 text-[var(--bt-muted)]">

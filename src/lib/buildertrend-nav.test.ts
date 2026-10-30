@@ -18,6 +18,8 @@ describe("FINANCIAL_NAV", () => {
     expect(byLabel["Purchase Orders"]).toBe("/purchase-orders");
     expect(byLabel.Bills).toBe("/bills");
     expect(byLabel.Invoices).toBe("/invoices");
+    // Cost Inbox collapsed into Bills INBOX (Heather #39) — must not reappear as a peer.
+    expect(byLabel["Cost Inbox"]).toBeUndefined();
   });
 });
 

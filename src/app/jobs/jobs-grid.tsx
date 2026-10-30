@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
 import { formatDate } from "@/lib/format";
+import { shouldShowJobPrefix } from "@/lib/job-display";
 
 const STATUS_LABEL: Record<string, string> = {
   PRE_SALE: "Pre-Construction",
@@ -45,7 +46,9 @@ export function JobsGrid({ rows }: { rows: readonly JobRow[] }) {
       sortable: true,
       render: (row) => (
         <Link href={`/jobs/${row.id}/settings`} className="inline-flex items-center gap-1.5 font-medium text-[var(--bt-primary)] hover:underline">
-          {row.prefix ? <span className="font-mono text-xs text-[var(--bt-muted)]">{row.prefix}</span> : null}
+          {shouldShowJobPrefix(row.name, row.prefix) ? (
+            <span className="font-mono text-xs text-[var(--bt-muted)]">{row.prefix}</span>
+          ) : null}
           <span>{row.name}</span>
           {row.qboLinked ? (
             <span className="rounded bg-[#2ca01c]/15 px-1 py-0.5 text-[9px] font-bold text-[#2ca01c]" title="Linked to QuickBooks">
