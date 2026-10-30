@@ -325,6 +325,15 @@ model Job {
   /// Header shows "Docs created" instead of docs-missing / NOC-TBO-missing copy.
   buildingPermitDocsCreatedAt DateTime?
 
+  /// One Permit Rockstar ledger per job (Duval/Jax private provider billing).
+  /// Not per JobPermit — Damien: track setup/invoiced/paid/fee once for the job.
+  permitRockstarPrivateProvider       Boolean                   @default(false)
+  permitRockstarSetupType             PermitRockstarSetupType?
+  permitRockstarInvoiced              Boolean                   @default(false)
+  permitRockstarPaid                  Boolean                   @default(false)
+  /// Fee charged per inspection, integer cents (never floats — CLAUDE.md §5).
+  permitRockstarFeePerInspectionCents Int?
+
   /// Job Info > Notes (Buildertrend). Plain text, 2500 characters max (enforced in updateJobDetails).
   notesInternal String?
   notesSubs     String?
@@ -3789,6 +3798,12 @@ enum PermitTrade {
   MECHANICAL
   ROOFING
   OTHER
+}
+
+/// How Permit Rockstar is set up for this job (private provider billing).
+enum PermitRockstarSetupType {
+  FLAT_FEE
+  CARD_ON_FILE
 }
 
 /// City/lifecycle status for a permit card — drives chips (draft / Pending Payment / expired / active).

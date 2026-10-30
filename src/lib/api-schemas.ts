@@ -16,6 +16,7 @@ import {
   InvoiceType,
   JobStatus,
   PaymentMethod,
+  PermitRockstarSetupType,
   PermitStatus,
   PermitTrade,
   PurchaseOrderStatus,
@@ -1191,6 +1192,31 @@ export const updateJobPermittingFlagsSchema = z
       value.buildingPermitDocsCreated !== undefined,
     {
       message: "Provide nocOnFile, ntboFiled, and/or buildingPermitDocsCreated.",
+    },
+  );
+
+/**
+ * One Permit Rockstar ledger per job (private provider / setup / invoiced / paid / fee).
+ * feePerInspection is integer cents (null clears).
+ */
+export const updatePermitRockstarLedgerSchema = z
+  .object({
+    privateProvider: z.boolean().optional(),
+    setupType: z.enum(PermitRockstarSetupType).nullish(),
+    invoiced: z.boolean().optional(),
+    paid: z.boolean().optional(),
+    feePerInspectionCents: z.number().int().min(0).nullish(),
+  })
+  .refine(
+    (value) =>
+      value.privateProvider !== undefined ||
+      value.setupType !== undefined ||
+      value.invoiced !== undefined ||
+      value.paid !== undefined ||
+      value.feePerInspectionCents !== undefined,
+    {
+      message:
+        "Provide at least one of privateProvider, setupType, invoiced, paid, or feePerInspectionCents.",
     },
   );
 

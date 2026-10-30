@@ -97,6 +97,7 @@ import {
   updateJobPermittingFlagsSchema,
   updateLeadStageSchema,
   updatePermitInspectionSchema,
+  updatePermitRockstarLedgerSchema,
   updatePermitSchema,
   updateScheduleItemSchema,
   updateTodoStatusSchema,
@@ -260,8 +261,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     path: "/jobs/{jobId}/permits",
     summary: "List permits for a job",
     description:
-      "Job-scoped permits + inspections plus NOC/NTBO flags. Does not create rows — " +
-      "POST /jobs/{jobId}/permits to add one trade, or POST .../ensure-defaults for Building+MEP shells.",
+      "Job-scoped permits + inspections plus NOC/NTBO flags and the job's Permit Rockstar ledger. " +
+      "Does not create rows — POST /jobs/{jobId}/permits to add one trade, or POST .../ensure-defaults for Building+MEP shells.",
     tags: ["Permitting"],
     scopes: ["permits:read"],
     pathParams: ["jobId"],
@@ -302,6 +303,19 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["permits:write"],
     pathParams: ["jobId"],
     requestSchema: updateJobPermittingFlagsSchema,
+  },
+  {
+    method: "patch",
+    path: "/jobs/{jobId}/permit-rockstar-ledger",
+    summary: "Update the job's Permit Rockstar ledger",
+    description:
+      "One ledger per job (Duval/Jax private provider): privateProvider, setupType " +
+      "(FLAT_FEE | CARD_ON_FILE), invoiced, paid, feePerInspectionCents. " +
+      "Does not change JobPermit / inspection rows from the permit-ops fields.",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["jobId"],
+    requestSchema: updatePermitRockstarLedgerSchema,
   },
   {
     method: "patch",
