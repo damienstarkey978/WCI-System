@@ -20,6 +20,9 @@ import {
   aiOcrBillSchema,
   convertPurchasingIntentSchema,
   createFolderSchema,
+  healFileVisibilitySchema,
+  updateFileSchema,
+  updateFolderSchema,
   answerRfiSchema,
   approveChangeOrderSchema,
   bulkClockInSchema,
@@ -1159,6 +1162,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
       "Preferred: multipart/form-data with `file`/`bytes` + jobId (+ optional folderId) — uploads into Supabase job-files storage. " +
       "Also accepts JSON `{ dataBase64, fileName, jobId, folderId? }` for the same storage path. " +
       "Legacy: JSON `{ url, fileName, jobId }` registers an already-hosted URL without uploading bytes. " +
+      "Unknown or other-job folderId → 422 invalid_folder (never empty 500). " +
+      "Default visibility matches the UI: clientVisible=false, subVisible=false. " +
       "Returns 503 storage_not_configured when Supabase credentials are missing.",
     tags: ["Files"],
     scopes: ["files:write"],
@@ -1174,6 +1179,29 @@ const ENDPOINTS: readonly EndpointDef[] = [
       "storageKey echoes the raw key; url remains the stored value.",
     tags: ["Files"],
     scopes: ["files:read"],
+    pathParams: ["fileId"],
+  },
+  {
+    method: "patch",
+    path: "/files/{fileId}",
+    summary: "Update a file (move, rename, visibility)",
+    description:
+      "PATCH { folderId, fileName, clientVisible, subVisible }. " +
+      "folderId null unfiles the file; a folder on another job → 422 invalid_folder. " +
+      "Used to file ~unfiled BT import photos into Inspection Pictures folders.",
+    tags: ["Files"],
+    scopes: ["files:write"],
+    pathParams: ["fileId"],
+    requestSchema: updateFileSchema,
+  },
+  {
+    method: "delete",
+    path: "/files/{fileId}",
+    summary: "Soft-delete a file (trash via deletedAt)",
+    description:
+      "Sets deletedAt. Recoverable from Files → View trash. Does not purge storage until purge.",
+    tags: ["Files"],
+    scopes: ["files:write"],
     pathParams: ["fileId"],
   },
   {
@@ -1212,6 +1240,18 @@ const ENDPOINTS: readonly EndpointDef[] = [
     successStatus: 201,
   },
   {
+    method: "patch",
+    path: "/folders/{folderId}",
+    summary: "Rename a folder or change portal visibility",
+    description:
+      "PATCH { name, clientVisible, subVisible }. Inspection/termite folders default to internal " +
+      "(false/false) on create; use this to rename with trade disambiguation (e.g. Inspection: Plumbing Rough).",
+    tags: ["Files"],
+    scopes: ["files:write"],
+    pathParams: ["folderId"],
+    requestSchema: updateFolderSchema,
+  },
+  {
     method: "delete",
     path: "/folders/{folderId}",
     summary: "Delete a Documents or Inspection Pictures folder",
@@ -1223,6 +1263,18 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Files"],
     scopes: ["files:write"],
     pathParams: ["folderId"],
+  },
+  {
+    method: "post",
+    path: "/folders/heal-visibility",
+    summary: "Heal wrongly-public inspection folders and cost documents",
+    description:
+      "Sets clientVisible=false and subVisible=false on Inspection:/Termite folders, DOCUMENT files that look like " +
+      "bills/receipts/signed POs/proofs, and files already inside internal folders. " +
+      "Default scope: OPEN + WARRANTY jobs. Optional body `{ jobId }` or `{ jobStatuses: [...] }`.",
+    tags: ["Files"],
+    scopes: ["files:write"],
+    requestSchema: healFileVisibilitySchema,
   },
   {
     method: "post",

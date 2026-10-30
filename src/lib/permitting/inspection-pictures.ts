@@ -538,7 +538,7 @@ export async function uploadViaInspectionShareToken(input: {
     sizeBytes: input.sizeBytes ?? null,
     category: "PHOTO",
     clientVisible: false,
-    subVisible: true,
+    subVisible: false,
     folderId: link.inspection.folderId,
   });
 

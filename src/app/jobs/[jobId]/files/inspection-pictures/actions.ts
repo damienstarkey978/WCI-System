@@ -115,7 +115,7 @@ export async function uploadInspectionPhotosAction(_previous: ActionState, formD
         sizeBytes: file.size,
         category: "PHOTO",
         clientVisible: false,
-        subVisible: true,
+        subVisible: false,
         folderId,
       });
     }

@@ -126,6 +126,43 @@ export const createFolderSchema = z
     }
   });
 
+/** PATCH /folders/{folderId} — rename and/or portal visibility. */
+export const updateFolderSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    clientVisible: z.boolean().optional(),
+    subVisible: z.boolean().optional(),
+  })
+  .refine(
+    (value) => value.name !== undefined || value.clientVisible !== undefined || value.subVisible !== undefined,
+    { message: "Provide at least one of name, clientVisible, subVisible." },
+  );
+
+/** PATCH /files/{fileId} — move, rename, visibility. */
+export const updateFileSchema = z
+  .object({
+    folderId: z.string().min(1).max(64).nullish(),
+    fileName: z.string().trim().min(1).max(255).optional(),
+    clientVisible: z.boolean().optional(),
+    subVisible: z.boolean().optional(),
+  })
+  .refine(
+    (value) =>
+      value.folderId !== undefined ||
+      value.fileName !== undefined ||
+      value.clientVisible !== undefined ||
+      value.subVisible !== undefined,
+    { message: "Provide at least one of folderId, fileName, clientVisible, subVisible." },
+  );
+
+const jobStatusForHeal = z.enum(["PRE_SALE", "OPEN", "WARRANTY", "CLOSED"]);
+
+/** POST /folders/heal-visibility — flip wrongly-public folders/cost docs to internal. */
+export const healFileVisibilitySchema = z.object({
+  jobId: z.string().min(1).max(64).optional(),
+  jobStatuses: z.array(jobStatusForHeal).min(1).max(4).optional(),
+});
+
 export const issueInspectionShareLinkSchema = z.object({
   label: z.string().trim().max(120).nullish(),
   revokePrevious: z.boolean().optional(),

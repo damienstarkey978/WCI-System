@@ -16,6 +16,9 @@
 import type { Actor } from "@/lib/actor";
 import { uploaderColumns } from "@/lib/actor";
 import { db } from "@/lib/db";
+import { assertFolderOnJob, FolderNotFoundError, FolderWrongJobError } from "@/lib/files/folders";
+import { DEFAULT_FILE_VISIBILITY } from "@/lib/files/visibility";
+// uploaderColumns still used inside safeUploaderColumns
 import {
   buildStoragePath,
   deleteJobFile,
@@ -23,6 +26,8 @@ import {
   signedJobFileUrls,
   uploadJobFile,
 } from "@/lib/storage/supabase-storage";
+
+export { FolderNotFoundError, FolderWrongJobError };
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -81,9 +86,7 @@ export async function registerFile(input: RegisterFileInput) {
   await assertPurchaseOrder(input.organizationId, input.jobId, input.purchaseOrderId);
   await assertBill(input.organizationId, input.jobId, input.billId);
 
-  const uploaders = input.actor
-    ? uploaderColumns(input.actor)
-    : { uploadedByUserId: input.uploadedByUserId ?? null, uploadedByApiKeyId: null };
+  const uploaders = await safeUploaderColumns(input.actor, input.uploadedByUserId);
 
   return db.file.create({
     data: {
@@ -96,8 +99,8 @@ export async function registerFile(input: RegisterFileInput) {
       mimeType: input.mimeType ?? null,
       sizeBytes: input.sizeBytes ?? null,
       category: input.category ?? "DOCUMENT",
-      clientVisible: input.clientVisible ?? true,
-      subVisible: input.subVisible ?? true,
+      clientVisible: input.clientVisible ?? DEFAULT_FILE_VISIBILITY.clientVisible,
+      subVisible: input.subVisible ?? DEFAULT_FILE_VISIBILITY.subVisible,
       dailyLogId: input.dailyLogId ?? null,
       folderId: await validFolderId(input.organizationId, input.jobId, input.folderId),
       purchaseOrderId: input.purchaseOrderId ?? null,
@@ -144,9 +147,7 @@ export async function uploadAndRegisterFile(input: UploadAndRegisterFileInput) {
 
   await uploadJobFile(path, input.bytes, input.mimeType ?? null);
 
-  const uploaders = input.actor
-    ? uploaderColumns(input.actor)
-    : { uploadedByUserId: input.uploadedByUserId ?? null, uploadedByApiKeyId: null };
+  const uploaders = await safeUploaderColumns(input.actor, input.uploadedByUserId);
 
   return db.file.create({
     data: {
@@ -160,8 +161,8 @@ export async function uploadAndRegisterFile(input: UploadAndRegisterFileInput) {
       mimeType: input.mimeType ?? null,
       sizeBytes: input.sizeBytes ?? input.bytes.byteLength,
       category,
-      clientVisible: input.clientVisible ?? true,
-      subVisible: input.subVisible ?? true,
+      clientVisible: input.clientVisible ?? DEFAULT_FILE_VISIBILITY.clientVisible,
+      subVisible: input.subVisible ?? DEFAULT_FILE_VISIBILITY.subVisible,
       dailyLogId: input.dailyLogId ?? null,
       folderId: await validFolderId(input.organizationId, input.jobId, input.folderId),
       purchaseOrderId: input.purchaseOrderId ?? null,
@@ -208,8 +209,68 @@ async function assertBill(organizationId: string, jobId: string, billId: string 
 
 async function validFolderId(organizationId: string, jobId: string, folderId: string | null | undefined): Promise<string | null> {
   if (!folderId) return null;
-  const folder = await db.fileFolder.findFirst({ where: { id: folderId, organizationId, jobId }, select: { id: true } });
-  return folder?.id ?? null;
+  return assertFolderOnJob(organizationId, jobId, folderId);
+}
+
+/**
+ * Resolve uploadedByApiKeyId safely. OAuth machine tokens put an access-token id
+ * into ApiKeyContext.apiKeyId — that id is not an ApiKey row, so writing it to
+ * File.uploadedByApiKeyId 500s on the FK. Only stamp a real ApiKey id.
+ */
+export async function safeUploaderColumns(actor: Actor | undefined, uploadedByUserId?: string | null) {
+  if (!actor) {
+    return { uploadedByUserId: uploadedByUserId ?? null, uploadedByApiKeyId: null as string | null };
+  }
+  const cols = uploaderColumns(actor);
+  if (!cols.uploadedByApiKeyId) return cols;
+  const key = await db.apiKey.findFirst({
+    where: { id: cols.uploadedByApiKeyId },
+    select: { id: true },
+  });
+  if (!key) {
+    return { uploadedByUserId: cols.uploadedByUserId, uploadedByApiKeyId: null };
+  }
+  return cols;
+}
+
+export interface UpdateFileInput {
+  readonly folderId?: string | null;
+  readonly fileName?: string;
+  readonly clientVisible?: boolean;
+  readonly subVisible?: boolean;
+}
+
+/** Move / rename / change visibility on a non-trashed File. */
+export async function updateFile(organizationId: string, fileId: string, input: UpdateFileInput) {
+  const file = await db.file.findFirst({
+    where: { id: fileId, organizationId, deletedAt: null },
+    select: { id: true, jobId: true },
+  });
+  if (!file) throw new FileNotFoundError(fileId);
+
+  const data: {
+    folderId?: string | null;
+    fileName?: string;
+    clientVisible?: boolean;
+    subVisible?: boolean;
+  } = {};
+
+  if (input.folderId !== undefined) {
+    data.folderId = input.folderId === null ? null : await assertFolderOnJob(organizationId, file.jobId, input.folderId);
+  }
+  if (input.fileName !== undefined) {
+    const name = input.fileName.trim();
+    if (!name) throw new Error("fileName is required.");
+    data.fileName = name.slice(0, 255);
+  }
+  if (input.clientVisible !== undefined) data.clientVisible = input.clientVisible;
+  if (input.subVisible !== undefined) data.subVisible = input.subVisible;
+
+  if (Object.keys(data).length === 0) {
+    return db.file.findFirstOrThrow({ where: { id: file.id } });
+  }
+
+  return db.file.update({ where: { id: file.id }, data });
 }
 
 /** Turns a File.url value into something actually fetchable — see the file-level comment. */
