@@ -319,8 +319,16 @@ model Job {
   lotInfo      String?
   /// Notice of Commencement on file (permitting checklist).
   nocOnFile    Boolean @default(false)
+  /// NOC instrument / recording number (optional detail beyond the yes/no chip).
+  nocNumber    String?
+  /// Calendar day NOC was filed/recorded (date-only, stored UTC noon).
+  nocFiledOn   DateTime?
   /// Notice to Building Official filed (permitting checklist).
   ntboFiled    Boolean @default(false)
+  /// NTBO reference number (optional detail beyond the yes/no chip).
+  ntboNumber   String?
+  /// Calendar day NTBO was filed (date-only, stored UTC noon).
+  ntboFiledOn  DateTime?
   /// When staff mark the building permit doc pack as created (Duval/Jax builder).
   /// Header shows "Docs created" instead of docs-missing / NOC-TBO-missing copy.
   buildingPermitDocsCreatedAt DateTime?
@@ -333,6 +341,11 @@ model Job {
   permitRockstarPaid                  Boolean                   @default(false)
   /// Fee charged per inspection, integer cents (never floats — CLAUDE.md §5).
   permitRockstarFeePerInspectionCents Int?
+  /// Invoice identity + cash timing for the job's Rockstar ledger.
+  permitRockstarInvoiceNumber         String?
+  permitRockstarInvoiceAmountCents    Int?
+  permitRockstarInvoicedAt            DateTime?
+  permitRockstarPaidAt                DateTime?
 
   /// Job Info > Notes (Buildertrend). Plain text, 2500 characters max (enforced in updateJobDetails).
   notesInternal String?
@@ -3812,11 +3825,14 @@ enum PermitRockstarSetupType {
   CARD_ON_FILE
 }
 
-/// City/lifecycle status for a permit card — drives chips (draft / Pending Payment / expired / active).
+/// City/lifecycle status for a permit card — drives chips (draft / Pending Payment /
+/// active / finalized / returned for corrections / expired / cancelled).
 enum PermitStatus {
   DRAFT
   PENDING_PAYMENT
   ACTIVE
+  FINALIZED
+  RETURNED_FOR_CORRECTIONS
   EXPIRED
   CANCELLED
 }

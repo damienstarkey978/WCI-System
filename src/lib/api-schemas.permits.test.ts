@@ -27,12 +27,23 @@ describe("permit API schemas", () => {
         inspector: "Smith",
       }).success,
     ).toBe(true);
+    expect(updatePermitInspectionSchema.safeParse({ passedAt: "2025-07-14" }).success).toBe(true);
+    expect(updatePermitInspectionSchema.safeParse({ name: "Electrical Rough" }).success).toBe(true);
+    expect(updatePermitInspectionSchema.safeParse({ permitId: "cm_permit_1" }).success).toBe(true);
   });
 
   it("requires at least one permitting flag", () => {
     expect(updateJobPermittingFlagsSchema.safeParse({}).success).toBe(false);
     expect(updateJobPermittingFlagsSchema.safeParse({ nocOnFile: true }).success).toBe(true);
     expect(updateJobPermittingFlagsSchema.safeParse({ buildingPermitDocsCreated: true }).success).toBe(true);
+    expect(
+      updateJobPermittingFlagsSchema.safeParse({
+        nocNumber: "NOC-1",
+        nocFiledOn: "2026-09-01",
+        ntboNumber: "NTBO-2",
+        ntboFiledOn: "2026-09-02",
+      }).success,
+    ).toBe(true);
   });
 
   it("requires at least one Permit Rockstar ledger field", () => {
@@ -48,6 +59,14 @@ describe("permit API schemas", () => {
     ).toBe(true);
     expect(updatePermitRockstarLedgerSchema.safeParse({ setupType: null }).success).toBe(true);
     expect(updatePermitRockstarLedgerSchema.safeParse({ feePerInspectionCents: -1 }).success).toBe(false);
+    expect(
+      updatePermitRockstarLedgerSchema.safeParse({
+        invoiceNumber: "INV-9",
+        invoiceAmountCents: 45_000,
+        invoicedAt: "2026-10-01",
+        paidAt: "2026-10-15",
+      }).success,
+    ).toBe(true);
   });
 
   it("accepts create permit with trade, duplicates, and optional fields", () => {
@@ -73,6 +92,9 @@ describe("permit API schemas", () => {
         jurisdiction: "City of Jacksonville",
       }).success,
     ).toBe(true);
+    expect(updatePermitSchema.safeParse({ status: "FINALIZED" }).success).toBe(true);
+    expect(updatePermitSchema.safeParse({ status: "RETURNED_FOR_CORRECTIONS" }).success).toBe(true);
+    expect(updatePermitSchema.safeParse({ trade: "BUILDING" }).success).toBe(true);
   });
 
   it("requires inspection name on create", () => {

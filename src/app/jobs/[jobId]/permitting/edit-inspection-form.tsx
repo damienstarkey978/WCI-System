@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 
 import { InspectionResult } from "@/generated/prisma/enums";
-import { inspectionResultLabel } from "@/lib/permitting/labels";
+import { inspectionResultLabel, permitDisplayTitle, tradeLabel } from "@/lib/permitting/labels";
+import type { PermitTrade } from "@/generated/prisma/enums";
 
 import { updateInspectionFieldsAction, type ActionState } from "./actions";
 
@@ -19,16 +20,23 @@ function dateInputValue(value: Date | string | null | undefined): string {
 export function EditInspectionForm({
   jobId,
   inspection,
+  permits,
 }: {
   jobId: string;
   inspection: {
     id: string;
     name: string;
+    permitId: string;
     result: InspectionResult;
     passedAt: Date | string | null;
     confirmationNumber: string | null;
     inspector: string | null;
   };
+  permits: readonly {
+    id: string;
+    trade: PermitTrade;
+    label: string | null;
+  }[];
 }) {
   const [state, formAction, pending] = useActionState(updateInspectionFieldsAction, INITIAL);
 
@@ -37,6 +45,31 @@ export function EditInspectionForm({
       <input type="hidden" name="jobId" value={jobId} />
       <input type="hidden" name="inspectionId" value={inspection.id} />
       <div className="grid gap-1.5 sm:grid-cols-2">
+        <label className="grid gap-0.5 text-[10px] text-[var(--bt-muted)] sm:col-span-2">
+          Name
+          <input
+            name="name"
+            type="text"
+            defaultValue={inspection.name}
+            className="rounded border bg-white px-2 py-1 text-xs text-[var(--bt-text)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
+        <label className="grid gap-0.5 text-[10px] text-[var(--bt-muted)] sm:col-span-2">
+          Permit (move across trades)
+          <select
+            name="permitId"
+            defaultValue={inspection.permitId}
+            className="rounded border bg-white px-2 py-1 text-xs text-[var(--bt-text)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          >
+            {permits.map((permit) => (
+              <option key={permit.id} value={permit.id}>
+                {permitDisplayTitle(permit)} ({tradeLabel(permit.trade)})
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="grid gap-0.5 text-[10px] text-[var(--bt-muted)]">
           Result
           <select

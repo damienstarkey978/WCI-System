@@ -699,10 +699,12 @@ Record every architectural decision that departs from the above, with the reason
   (Damien 2026-10-30: only folders for inspections needed on that job). Empty
   Building shells stay empty until staff/bots add an inspection or
   `POST /folders` with `kind=inspection` (city name) — that path creates one
-  folder without a Permitting detour. `DELETE /folders/{id}` removes an
-  inspection folder (trashes photos in it, deletes the linked
-  `JobPermitInspection` so ensure will not recreate it). Document folders still
-  only unfile their files on delete.
+  folder without a Permitting detour. `DELETE /folders/{id}` on an inspection
+  folder: **empty** (no live photos) → delete the folder and unlink
+  `folderId`, keep the `JobPermitInspection` (so empty-folder cleanup cannot
+  wipe city pass rows — Heather 2pm B.9); **has photos** → trash photos and
+  delete the linked inspection. Document folders still only unfile their files
+  on delete.
 - **Duplicate city inspection names across trades get trade-disambiguated folders
   (2026-10-30):** `JobPermitInspection.folderId` is `@unique`, so two “Final”
   (or “Rough” / “Insulation”) rows on the same job cannot share one FileFolder.

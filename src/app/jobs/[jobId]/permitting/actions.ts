@@ -82,10 +82,12 @@ export async function updatePermitFieldsAction(_previous: ActionState, formData:
   const jobId = String(formData.get("jobId") ?? "");
   const permitId = String(formData.get("permitId") ?? "");
   const statusRaw = String(formData.get("status") ?? "");
+  const tradeRaw = String(formData.get("trade") ?? "");
   try {
     await updatePermitFields(user.organizationId, permitId, {
       permitNumber: String(formData.get("permitNumber") ?? "").trim() || null,
       label: String(formData.get("label") ?? "").trim() || null,
+      trade: STAFF_TRADES.has(tradeRaw) ? (tradeRaw as PermitTrade) : undefined,
       status: PERMIT_STATUSES.has(statusRaw) ? (statusRaw as PermitStatus) : undefined,
       issuedAt: optionalDate(formData.get("issuedAt")),
       expiresAt: optionalDate(formData.get("expiresAt")),
@@ -107,12 +109,16 @@ export async function updateInspectionFieldsAction(
   const jobId = String(formData.get("jobId") ?? "");
   const inspectionId = String(formData.get("inspectionId") ?? "");
   const resultRaw = String(formData.get("result") ?? "");
+  const nameRaw = String(formData.get("name") ?? "").trim();
+  const permitIdRaw = String(formData.get("permitId") ?? "").trim();
   try {
     await updateInspectionFields(user.organizationId, inspectionId, {
       result: INSPECTION_RESULTS.has(resultRaw) ? (resultRaw as InspectionResult) : undefined,
       passedAt: optionalDate(formData.get("passedAt")),
       confirmationNumber: String(formData.get("confirmationNumber") ?? "").trim() || null,
       inspector: String(formData.get("inspector") ?? "").trim() || null,
+      name: nameRaw || undefined,
+      permitId: permitIdRaw || undefined,
     });
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not update inspection." };
@@ -167,6 +173,7 @@ export async function updatePermitRockstarLedgerAction(
   const jobId = String(formData.get("jobId") ?? "");
   const setupRaw = String(formData.get("setupType") ?? "").trim();
   const feeRaw = String(formData.get("feePerInspectionDollars") ?? "").trim();
+  const invoiceAmountRaw = String(formData.get("invoiceAmountDollars") ?? "").trim();
 
   let feePerInspectionCents: number | null | undefined = undefined;
   if (feeRaw === "") {
@@ -181,6 +188,19 @@ export async function updatePermitRockstarLedgerAction(
     }
   }
 
+  let invoiceAmountCents: number | null | undefined = undefined;
+  if (invoiceAmountRaw === "") {
+    invoiceAmountCents = null;
+  } else {
+    try {
+      invoiceAmountCents = parseDollarsToCents(invoiceAmountRaw);
+    } catch (error) {
+      return {
+        error: error instanceof MoneyError ? error.message : "Enter a valid invoice amount.",
+      };
+    }
+  }
+
   try {
     await updatePermitRockstarLedger(user.organizationId, jobId, {
       privateProvider: formData.get("privateProvider") === "true",
@@ -190,6 +210,10 @@ export async function updatePermitRockstarLedgerAction(
       invoiced: formData.get("invoiced") === "true",
       paid: formData.get("paid") === "true",
       feePerInspectionCents,
+      invoiceNumber: String(formData.get("invoiceNumber") ?? "").trim() || null,
+      invoiceAmountCents,
+      invoicedAt: optionalDate(formData.get("invoicedAt")),
+      paidAt: optionalDate(formData.get("paidAt")),
     });
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not update Permit Rockstar ledger." };
@@ -210,6 +234,29 @@ export async function setNocNtboAction(formData: FormData): Promise<void> {
     // Refresh either way.
   }
   revalidate(jobId);
+}
+
+/** Update NOC/NTBO number + filed date (and optional boolean) from the docs builder. */
+export async function updateNocNtboDetailsAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  try {
+    await setJobNocNtbo(user.organizationId, jobId, {
+      nocOnFile: formData.get("nocOnFile") === "true",
+      ntboFiled: formData.get("ntboFiled") === "true",
+      nocNumber: String(formData.get("nocNumber") ?? "").trim() || null,
+      ntboNumber: String(formData.get("ntboNumber") ?? "").trim() || null,
+      nocFiledOn: optionalDate(formData.get("nocFiledOn")),
+      ntboFiledOn: optionalDate(formData.get("ntboFiledOn")),
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not update NOC/NTBO." };
+  }
+  revalidate(jobId);
+  return { ok: true };
 }
 
 /** Mark / clear building permit doc pack created — drives header "Docs created". */

@@ -26,6 +26,11 @@ export type PermitRockstarLedger = {
   readonly paid: boolean;
   /** Integer cents; null when unset. */
   readonly feePerInspectionCents: number | null;
+  readonly invoiceNumber: string | null;
+  /** Invoice total, integer cents; null when unset. */
+  readonly invoiceAmountCents: number | null;
+  readonly invoicedAt: Date | null;
+  readonly paidAt: Date | null;
 };
 
 export function permitRockstarLedgerFromJob(job: {
@@ -34,6 +39,10 @@ export function permitRockstarLedgerFromJob(job: {
   readonly permitRockstarInvoiced: boolean;
   readonly permitRockstarPaid: boolean;
   readonly permitRockstarFeePerInspectionCents: number | null;
+  readonly permitRockstarInvoiceNumber?: string | null;
+  readonly permitRockstarInvoiceAmountCents?: number | null;
+  readonly permitRockstarInvoicedAt?: Date | null;
+  readonly permitRockstarPaidAt?: Date | null;
 }): PermitRockstarLedger {
   return {
     privateProvider: job.permitRockstarPrivateProvider,
@@ -41,6 +50,10 @@ export function permitRockstarLedgerFromJob(job: {
     invoiced: job.permitRockstarInvoiced,
     paid: job.permitRockstarPaid,
     feePerInspectionCents: job.permitRockstarFeePerInspectionCents,
+    invoiceNumber: job.permitRockstarInvoiceNumber ?? null,
+    invoiceAmountCents: job.permitRockstarInvoiceAmountCents ?? null,
+    invoicedAt: job.permitRockstarInvoicedAt ?? null,
+    paidAt: job.permitRockstarPaidAt ?? null,
   };
 }
 
@@ -161,7 +174,17 @@ export function hasBuildingPermitDocs(docsCreatedAt: Date | null | undefined): b
 
 function permitIsActive(permit: JobPermitSummary): boolean {
   if (permit.status === PermitStatus.ACTIVE) return true;
-  if (permit.status === PermitStatus.EXPIRED || permit.status === PermitStatus.CANCELLED) return false;
+  if (
+    permit.status === PermitStatus.EXPIRED ||
+    permit.status === PermitStatus.CANCELLED ||
+    permit.status === PermitStatus.FINALIZED ||
+    permit.status === PermitStatus.RETURNED_FOR_CORRECTIONS ||
+    permit.status === PermitStatus.DRAFT ||
+    permit.status === PermitStatus.PENDING_PAYMENT
+  ) {
+    return false;
+  }
+  // Legacy rows without status: fall back to pulled.
   return permit.pulled === true;
 }
 
@@ -186,13 +209,21 @@ export async function getJobPermitting(organizationId: string, jobId: string) {
       status: true,
       permitNumber: true,
       nocOnFile: true,
+      nocNumber: true,
+      nocFiledOn: true,
       ntboFiled: true,
+      ntboNumber: true,
+      ntboFiledOn: true,
       buildingPermitDocsCreatedAt: true,
       permitRockstarPrivateProvider: true,
       permitRockstarSetupType: true,
       permitRockstarInvoiced: true,
       permitRockstarPaid: true,
       permitRockstarFeePerInspectionCents: true,
+      permitRockstarInvoiceNumber: true,
+      permitRockstarInvoiceAmountCents: true,
+      permitRockstarInvoicedAt: true,
+      permitRockstarPaidAt: true,
       permits: {
         orderBy: { trade: "asc" },
         include: permitInclude,
@@ -443,6 +474,8 @@ export interface UpdatePermitFieldsInput {
   readonly vendorId?: string | null;
   readonly permitNumber?: string | null;
   readonly label?: string | null;
+  /** Reclassify trade (e.g. OTHER → BUILDING when a second building permit was mis-filed). */
+  readonly trade?: PermitTrade;
   readonly status?: PermitStatus;
   readonly issuedAt?: Date | null;
   readonly expiresAt?: Date | null;
@@ -477,12 +510,14 @@ export async function updatePermitFields(
 
   const nextPermitNumber =
     input.permitNumber !== undefined ? input.permitNumber?.trim() || null : undefined;
+  const nextTrade = input.trade;
 
   const updated = await db.jobPermit.update({
     where: { id: permit.id },
     data: {
       ...(nextPermitNumber !== undefined ? { permitNumber: nextPermitNumber } : {}),
       ...(input.label !== undefined ? { label: input.label?.trim() || null } : {}),
+      ...(nextTrade !== undefined ? { trade: nextTrade } : {}),
       ...(input.vendorId !== undefined ? { vendorId: input.vendorId } : {}),
       ...(input.jurisdiction !== undefined ? { jurisdiction: input.jurisdiction?.trim() || null } : {}),
       ...(input.contractorName !== undefined
@@ -498,8 +533,9 @@ export async function updatePermitFields(
     include: permitInclude,
   });
 
-  // Keep Job.permitNumber in sync with the Building permit number (Heather #11 / New #7).
-  if (permit.trade === PermitTrade.BUILDING && nextPermitNumber !== undefined && nextPermitNumber) {
+  // Keep Job.permitNumber in sync with a Building permit number (Heather #11 / New #7).
+  const effectiveTrade = nextTrade ?? permit.trade;
+  if (effectiveTrade === PermitTrade.BUILDING && nextPermitNumber !== undefined && nextPermitNumber) {
     await db.job.update({
       where: { id: permit.jobId },
       data: { permitNumber: nextPermitNumber },
@@ -515,16 +551,42 @@ export async function setJobNocNtbo(
   data: {
     nocOnFile?: boolean;
     ntboFiled?: boolean;
+    nocNumber?: string | null;
+    ntboNumber?: string | null;
+    nocFiledOn?: Date | null;
+    ntboFiledOn?: Date | null;
     buildingPermitDocsCreated?: boolean;
   },
 ) {
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
   if (!job) throw new JobNotFoundError(jobId);
+
+  const nocNumber =
+    data.nocNumber !== undefined ? data.nocNumber?.trim() || null : undefined;
+  const ntboNumber =
+    data.ntboNumber !== undefined ? data.ntboNumber?.trim() || null : undefined;
+
+  // Setting a number or filed-on date implies the boolean chip is true unless explicitly cleared.
+  let nocOnFile = data.nocOnFile;
+  if (nocOnFile === undefined) {
+    if (nocNumber) nocOnFile = true;
+    else if (data.nocFiledOn) nocOnFile = true;
+  }
+  let ntboFiled = data.ntboFiled;
+  if (ntboFiled === undefined) {
+    if (ntboNumber) ntboFiled = true;
+    else if (data.ntboFiledOn) ntboFiled = true;
+  }
+
   return db.job.update({
     where: { id: job.id },
     data: {
-      ...(data.nocOnFile !== undefined ? { nocOnFile: data.nocOnFile } : {}),
-      ...(data.ntboFiled !== undefined ? { ntboFiled: data.ntboFiled } : {}),
+      ...(nocOnFile !== undefined ? { nocOnFile } : {}),
+      ...(ntboFiled !== undefined ? { ntboFiled } : {}),
+      ...(nocNumber !== undefined ? { nocNumber } : {}),
+      ...(ntboNumber !== undefined ? { ntboNumber } : {}),
+      ...(data.nocFiledOn !== undefined ? { nocFiledOn: data.nocFiledOn } : {}),
+      ...(data.ntboFiledOn !== undefined ? { ntboFiledOn: data.ntboFiledOn } : {}),
       ...(data.buildingPermitDocsCreated !== undefined
         ? { buildingPermitDocsCreatedAt: data.buildingPermitDocsCreated ? new Date() : null }
         : {}),
@@ -539,6 +601,11 @@ export interface UpdatePermitRockstarLedgerInput {
   readonly paid?: boolean;
   /** Integer cents; null clears. */
   readonly feePerInspectionCents?: number | null;
+  readonly invoiceNumber?: string | null;
+  /** Invoice total, integer cents; null clears. */
+  readonly invoiceAmountCents?: number | null;
+  readonly invoicedAt?: Date | null;
+  readonly paidAt?: Date | null;
 }
 
 /**
@@ -558,6 +625,23 @@ export async function updatePermitRockstarLedger(
       throw new Error("feePerInspectionCents must be >= 0.");
     }
   }
+  if (input.invoiceAmountCents !== undefined && input.invoiceAmountCents !== null) {
+    assertCents(input.invoiceAmountCents, "invoiceAmountCents");
+    if (input.invoiceAmountCents < 0) {
+      throw new Error("invoiceAmountCents must be >= 0.");
+    }
+  }
+
+  let invoiced = input.invoiced;
+  if (invoiced === undefined) {
+    if (input.invoiceNumber?.trim() || input.invoicedAt || input.invoiceAmountCents) {
+      invoiced = true;
+    }
+  }
+  let paid = input.paid;
+  if (paid === undefined && input.paidAt) {
+    paid = true;
+  }
 
   const updated = await db.job.update({
     where: { id: job.id },
@@ -566,11 +650,19 @@ export async function updatePermitRockstarLedger(
         ? { permitRockstarPrivateProvider: input.privateProvider }
         : {}),
       ...(input.setupType !== undefined ? { permitRockstarSetupType: input.setupType } : {}),
-      ...(input.invoiced !== undefined ? { permitRockstarInvoiced: input.invoiced } : {}),
-      ...(input.paid !== undefined ? { permitRockstarPaid: input.paid } : {}),
+      ...(invoiced !== undefined ? { permitRockstarInvoiced: invoiced } : {}),
+      ...(paid !== undefined ? { permitRockstarPaid: paid } : {}),
       ...(input.feePerInspectionCents !== undefined
         ? { permitRockstarFeePerInspectionCents: input.feePerInspectionCents }
         : {}),
+      ...(input.invoiceNumber !== undefined
+        ? { permitRockstarInvoiceNumber: input.invoiceNumber?.trim() || null }
+        : {}),
+      ...(input.invoiceAmountCents !== undefined
+        ? { permitRockstarInvoiceAmountCents: input.invoiceAmountCents }
+        : {}),
+      ...(input.invoicedAt !== undefined ? { permitRockstarInvoicedAt: input.invoicedAt } : {}),
+      ...(input.paidAt !== undefined ? { permitRockstarPaidAt: input.paidAt } : {}),
     },
     select: {
       id: true,
@@ -579,6 +671,10 @@ export async function updatePermitRockstarLedger(
       permitRockstarInvoiced: true,
       permitRockstarPaid: true,
       permitRockstarFeePerInspectionCents: true,
+      permitRockstarInvoiceNumber: true,
+      permitRockstarInvoiceAmountCents: true,
+      permitRockstarInvoicedAt: true,
+      permitRockstarPaidAt: true,
     },
   });
 
@@ -615,6 +711,10 @@ export interface UpdateInspectionFieldsInput {
   readonly passedAt?: Date | null;
   readonly confirmationNumber?: string | null;
   readonly inspector?: string | null;
+  /** Rename the inspection. */
+  readonly name?: string;
+  /** Move to another JobPermit on the same job (cross-trade). */
+  readonly permitId?: string;
 }
 
 export async function updateInspectionFields(
@@ -624,6 +724,10 @@ export async function updateInspectionFields(
 ) {
   const inspection = await db.jobPermitInspection.findFirst({
     where: { id: inspectionId, permit: { organizationId } },
+    include: {
+      permit: { select: { id: true, jobId: true, trade: true, organizationId: true } },
+      folder: { select: { id: true, name: true } },
+    },
   });
   if (!inspection) throw new InspectionNotFoundError(inspectionId);
 
@@ -633,6 +737,8 @@ export async function updateInspectionFields(
     passedAt?: Date | null;
     confirmationNumber?: string | null;
     inspector?: string | null;
+    name?: string;
+    permitId?: string;
   } = {};
 
   if (input.result !== undefined) data.result = input.result;
@@ -641,6 +747,44 @@ export async function updateInspectionFields(
     data.confirmationNumber = input.confirmationNumber?.trim() || null;
   }
   if (input.inspector !== undefined) data.inspector = input.inspector?.trim() || null;
+
+  let nextName = inspection.name;
+  if (input.name !== undefined) {
+    const trimmed = input.name.trim();
+    if (!trimmed) throw new Error("Inspection name is required.");
+    data.name = trimmed;
+    nextName = trimmed;
+  }
+
+  let nextTrade = inspection.permit.trade;
+  if (input.permitId !== undefined && input.permitId !== inspection.permitId) {
+    const target = await db.jobPermit.findFirst({
+      where: {
+        id: input.permitId,
+        organizationId,
+        jobId: inspection.permit.jobId,
+      },
+      select: { id: true, trade: true },
+    });
+    if (!target) {
+      throw new PermitNotFoundError(input.permitId);
+    }
+    const nameClash = await db.jobPermitInspection.findFirst({
+      where: {
+        permitId: target.id,
+        name: { equals: nextName, mode: "insensitive" },
+        id: { not: inspection.id },
+      },
+      select: { id: true },
+    });
+    if (nameClash) {
+      throw new Error(
+        `An inspection named "${nextName}" already exists on the target permit.`,
+      );
+    }
+    data.permitId = target.id;
+    nextTrade = target.trade;
+  }
 
   if (input.completed === true) {
     data.completedAt = inspection.completedAt ?? new Date();
@@ -660,10 +804,44 @@ export async function updateInspectionFields(
     data.completedAt = null;
   }
 
-  return db.jobPermitInspection.update({
+  const updated = await db.jobPermitInspection.update({
     where: { id: inspection.id },
     data,
+    include: {
+      permit: { select: { id: true, trade: true, jobId: true } },
+      folder: { select: { id: true, name: true } },
+    },
   });
+
+  // Keep the picture folder name aligned when renaming/moving (best-effort).
+  if (updated.folder && (input.name !== undefined || input.permitId !== undefined)) {
+    const { inspectionPictureFolderName, inspectionPictureFolderNameForTrade } = await import(
+      "@/lib/permitting/inspection-guides"
+    );
+    const preferred = inspectionPictureFolderName(nextName);
+    const tradeScoped = inspectionPictureFolderNameForTrade(nextName, nextTrade);
+    const candidates = [preferred, tradeScoped];
+    for (const candidate of candidates) {
+      if (candidate.toLowerCase() === updated.folder.name.toLowerCase()) break;
+      const taken = await db.fileFolder.findFirst({
+        where: {
+          jobId: updated.permit.jobId,
+          organizationId,
+          name: { equals: candidate, mode: "insensitive" },
+          id: { not: updated.folder.id },
+        },
+        select: { id: true },
+      });
+      if (taken) continue;
+      await db.fileFolder.update({
+        where: { id: updated.folder.id },
+        data: { name: candidate },
+      });
+      break;
+    }
+  }
+
+  return updated;
 }
 
 export async function assignPermitVendor(organizationId: string, permitId: string, vendorId: string | null) {

@@ -10,7 +10,7 @@ vi.mock("@/lib/db", () => ({
       update: vi.fn(),
       findFirstOrThrow: vi.fn(),
     },
-    jobPermitInspection: { deleteMany: vi.fn() },
+    jobPermitInspection: { deleteMany: vi.fn(), updateMany: vi.fn() },
     file: { updateMany: vi.fn() },
     job: { findFirst: vi.fn() },
   },
@@ -42,6 +42,7 @@ describe("deleteFolder", () => {
       id: "folder_1",
       name: "Plans",
       inspections: [],
+      _count: { files: 0 },
     } as never);
     vi.mocked(db.fileFolder.delete).mockResolvedValue({} as never);
 
@@ -59,11 +60,39 @@ describe("deleteFolder", () => {
     expect(db.fileFolder.delete).toHaveBeenCalledWith({ where: { id: "folder_1" } });
   });
 
-  it("trashes photos and removes the linked inspection for inspection folders", async () => {
+  it("unlinks but keeps the inspection when deleting an empty inspection folder", async () => {
+    vi.mocked(db.fileFolder.findFirst).mockResolvedValue({
+      id: "folder_empty",
+      name: "Inspection: Rough",
+      inspections: [{ id: "insp_rough" }],
+      _count: { files: 0 },
+    } as never);
+    vi.mocked(db.jobPermitInspection.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(db.fileFolder.delete).mockResolvedValue({} as never);
+
+    const result = await deleteFolder("org_1", "folder_empty");
+
+    expect(result).toEqual({
+      id: "folder_empty",
+      name: "Inspection: Rough",
+      kind: "inspection",
+      trashedFileCount: 0,
+      removedInspectionIds: [],
+    });
+    expect(db.jobPermitInspection.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["insp_rough"] } },
+      data: { folderId: null },
+    });
+    expect(db.file.updateMany).not.toHaveBeenCalled();
+    expect(db.jobPermitInspection.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("trashes photos and removes the linked inspection when the folder has photos", async () => {
     vi.mocked(db.fileFolder.findFirst).mockResolvedValue({
       id: "folder_slab",
       name: "Inspection: Slab",
       inspections: [{ id: "insp_slab" }],
+      _count: { files: 3 },
     } as never);
     vi.mocked(db.file.updateMany).mockResolvedValue({ count: 3 } as never);
     vi.mocked(db.jobPermitInspection.deleteMany).mockResolvedValue({ count: 1 } as never);

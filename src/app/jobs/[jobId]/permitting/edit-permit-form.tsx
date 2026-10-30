@@ -2,10 +2,21 @@
 
 import { useActionState } from "react";
 
-import { PermitStatus } from "@/generated/prisma/enums";
-import { permitStatusLabel } from "@/lib/permitting/labels";
+import { PermitStatus, PermitTrade } from "@/generated/prisma/enums";
+import { permitStatusLabel, tradeLabel } from "@/lib/permitting/labels";
 
 import { updatePermitFieldsAction, type ActionState } from "./actions";
+
+const STAFF_TRADES = [
+  PermitTrade.BUILDING,
+  PermitTrade.TEMP_POLE,
+  PermitTrade.SITE,
+  PermitTrade.ELECTRICAL,
+  PermitTrade.PLUMBING,
+  PermitTrade.MECHANICAL,
+  PermitTrade.ROOFING,
+  PermitTrade.OTHER,
+] as const;
 
 const INITIAL: ActionState = {};
 
@@ -23,6 +34,7 @@ export function EditPermitForm({
   jobId: string;
   permit: {
     id: string;
+    trade: PermitTrade;
     permitNumber: string | null;
     label: string | null;
     status: PermitStatus;
@@ -57,6 +69,21 @@ export function EditPermitForm({
             {Object.values(PermitStatus).map((status) => (
               <option key={status} value={status}>
                 {permitStatusLabel(status)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-0.5 text-[11px] text-[var(--bt-muted)]">
+          Trade
+          <select
+            name="trade"
+            defaultValue={permit.trade}
+            className="rounded border bg-white px-2 py-1.5 text-xs text-[var(--bt-text)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          >
+            {STAFF_TRADES.map((trade) => (
+              <option key={trade} value={trade}>
+                {tradeLabel(trade)}
               </option>
             ))}
           </select>

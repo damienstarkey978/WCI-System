@@ -80,7 +80,10 @@ function permitChipTone(status: string): "ok" | "warn" | "bad" | "neutral" {
   switch (status) {
     case "ACTIVE":
       return "ok";
+    case "FINALIZED":
+      return "ok";
     case "PENDING_PAYMENT":
+    case "RETURNED_FOR_CORRECTIONS":
       return "warn";
     case "EXPIRED":
     case "CANCELLED":
@@ -353,7 +356,15 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
                                   </button>
                                 </form>
                               </div>
-                              <EditInspectionForm jobId={job.id} inspection={inspection} />
+                              <EditInspectionForm
+                                jobId={job.id}
+                                inspection={inspection}
+                                permits={job.permits.map((p) => ({
+                                  id: p.id,
+                                  trade: p.trade,
+                                  label: p.label,
+                                }))}
+                              />
                             </li>
                           );
                         })}

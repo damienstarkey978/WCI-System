@@ -6,6 +6,7 @@
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createJobPermitSchema, formatZodIssues, parseOptionalDate } from "@/lib/api-schemas";
+import { formatDateOnly } from "@/lib/date-only";
 import { db } from "@/lib/db";
 import {
   createJobPermit,
@@ -25,13 +26,21 @@ export const GET = withApiAuth<Context>(["permits:read"], async (_request, auth,
       name: true,
       permitNumber: true,
       nocOnFile: true,
+      nocNumber: true,
+      nocFiledOn: true,
       ntboFiled: true,
+      ntboNumber: true,
+      ntboFiledOn: true,
       buildingPermitDocsCreatedAt: true,
       permitRockstarPrivateProvider: true,
       permitRockstarSetupType: true,
       permitRockstarInvoiced: true,
       permitRockstarPaid: true,
       permitRockstarFeePerInspectionCents: true,
+      permitRockstarInvoiceNumber: true,
+      permitRockstarInvoiceAmountCents: true,
+      permitRockstarInvoicedAt: true,
+      permitRockstarPaidAt: true,
     },
   });
   if (!job) {
@@ -56,9 +65,17 @@ export const GET = withApiAuth<Context>(["permits:read"], async (_request, auth,
       name: job.name,
       permitNumber: job.permitNumber,
       nocOnFile: job.nocOnFile,
+      nocNumber: job.nocNumber,
+      nocFiledOn: formatDateOnly(job.nocFiledOn),
       ntboFiled: job.ntboFiled,
+      ntboNumber: job.ntboNumber,
+      ntboFiledOn: formatDateOnly(job.ntboFiledOn),
       buildingPermitDocsCreatedAt: job.buildingPermitDocsCreatedAt,
-      permitRockstar: permitRockstarLedgerFromJob(job),
+      permitRockstar: {
+        ...permitRockstarLedgerFromJob(job),
+        invoicedAt: formatDateOnly(job.permitRockstarInvoicedAt),
+        paidAt: formatDateOnly(job.permitRockstarPaidAt),
+      },
     },
   });
 });

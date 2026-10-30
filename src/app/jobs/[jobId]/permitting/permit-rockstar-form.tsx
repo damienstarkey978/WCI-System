@@ -21,6 +21,13 @@ function setupLabel(value: PermitRockstarSetupType): string {
   }
 }
 
+function dateInputValue(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
 export function PermitRockstarForm({
   jobId,
   ledger,
@@ -31,6 +38,8 @@ export function PermitRockstarForm({
   const [state, formAction, pending] = useActionState(updatePermitRockstarLedgerAction, INITIAL);
   const feeDefault =
     ledger.feePerInspectionCents != null ? (ledger.feePerInspectionCents / 100).toFixed(2) : "";
+  const invoiceAmountDefault =
+    ledger.invoiceAmountCents != null ? (ledger.invoiceAmountCents / 100).toFixed(2) : "";
 
   return (
     <form
@@ -82,6 +91,48 @@ export function PermitRockstarForm({
               </option>
             ))}
           </select>
+        </label>
+        <label className="grid gap-0.5 text-[11px] text-[var(--bt-muted)]">
+          Invoice #
+          <input
+            name="invoiceNumber"
+            type="text"
+            defaultValue={ledger.invoiceNumber ?? ""}
+            className="rounded border bg-white px-2 py-1.5 text-xs text-[var(--bt-text)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
+        <label className="grid gap-0.5 text-[11px] text-[var(--bt-muted)]">
+          Invoice amount (USD)
+          <input
+            name="invoiceAmountDollars"
+            type="text"
+            inputMode="decimal"
+            defaultValue={invoiceAmountDefault}
+            placeholder="e.g. 450.00"
+            className="rounded border bg-white px-2 py-1.5 text-xs text-[var(--bt-text)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
+        <label className="grid gap-0.5 text-[11px] text-[var(--bt-muted)]">
+          Invoiced date
+          <input
+            name="invoicedAt"
+            type="date"
+            defaultValue={dateInputValue(ledger.invoicedAt)}
+            className="rounded border bg-white px-2 py-1.5 text-xs text-[var(--bt-text)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
+        <label className="grid gap-0.5 text-[11px] text-[var(--bt-muted)]">
+          Paid date
+          <input
+            name="paidAt"
+            type="date"
+            defaultValue={dateInputValue(ledger.paidAt)}
+            className="rounded border bg-white px-2 py-1.5 text-xs text-[var(--bt-text)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
         </label>
         <label className="flex items-center gap-2 text-xs text-[var(--bt-text)]">
           <input

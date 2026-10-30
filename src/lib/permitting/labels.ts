@@ -33,6 +33,10 @@ export function permitStatusLabel(status: PermitStatus): string {
       return "Pending Payment";
     case PermitStatus.ACTIVE:
       return "Active";
+    case PermitStatus.FINALIZED:
+      return "Finalized";
+    case PermitStatus.RETURNED_FOR_CORRECTIONS:
+      return "Returned for corrections";
     case PermitStatus.EXPIRED:
       return "Expired";
     case PermitStatus.CANCELLED:

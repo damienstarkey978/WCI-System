@@ -93,8 +93,17 @@ export type DeleteFolderResult = {
 };
 
 /**
- * Delete a FileFolder. Inspection-linked folders trash their photos and remove the
- * linked JobPermitInspection row(s) so list/ensure will not rematerialize them.
+ * Delete a FileFolder.
+ *
+ * Inspection-linked folders:
+ * - **Empty** (no live photos): delete the folder only and unlink `folderId` —
+ *   keep the JobPermitInspection so city pass metadata is not wiped by an empty-
+ *   folder cleanup (Heather 2pm B.9 — #80 deleted 340 inspections this way).
+ *   `ensure-inspection-pictures` can recreate the folder later.
+ * - **Has photos**: soft-delete (trash) photos, remove the linked
+ *   JobPermitInspection row(s), then delete the FileFolder (staff intentionally
+ *   removing an inspection from Inspection Pictures).
+ *
  * Document folders only delete the folder row (files stay on the job, unfiled).
  */
 export async function deleteFolder(organizationId: string, folderId: string): Promise<DeleteFolderResult> {
@@ -104,6 +113,7 @@ export async function deleteFolder(organizationId: string, folderId: string): Pr
       id: true,
       name: true,
       inspections: { select: { id: true } },
+      _count: { select: { files: { where: { deletedAt: null } } } },
     },
   });
   if (!folder) throw new FolderNotFoundError(folderId);
@@ -111,18 +121,29 @@ export async function deleteFolder(organizationId: string, folderId: string): Pr
   const inspectionIds = folder.inspections.map((row) => row.id);
   const isInspection = inspectionIds.length > 0;
   let trashedFileCount = 0;
+  let removedInspectionIds: string[] = [];
 
   if (isInspection) {
-    const trashed = await db.file.updateMany({
-      where: { folderId: folder.id, organizationId, deletedAt: null },
-      data: { deletedAt: new Date() },
-    });
-    trashedFileCount = trashed.count;
+    const livePhotoCount = folder._count.files;
+    if (livePhotoCount === 0) {
+      // Preserve inspections — only drop the empty folder shell.
+      await db.jobPermitInspection.updateMany({
+        where: { id: { in: inspectionIds } },
+        data: { folderId: null },
+      });
+    } else {
+      const trashed = await db.file.updateMany({
+        where: { folderId: folder.id, organizationId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+      trashedFileCount = trashed.count;
 
-    // Remove inspections first so folderId uniqueness / ensure cannot race a recreate.
-    await db.jobPermitInspection.deleteMany({
-      where: { id: { in: inspectionIds } },
-    });
+      // Remove inspections first so folderId uniqueness / ensure cannot race a recreate.
+      await db.jobPermitInspection.deleteMany({
+        where: { id: { in: inspectionIds } },
+      });
+      removedInspectionIds = inspectionIds;
+    }
   }
 
   await db.fileFolder.delete({ where: { id: folder.id } });
@@ -132,7 +153,7 @@ export async function deleteFolder(organizationId: string, folderId: string): Pr
     name: folder.name,
     kind: isInspection ? "inspection" : "document",
     trashedFileCount,
-    removedInspectionIds: inspectionIds,
+    removedInspectionIds,
   };
 }
 

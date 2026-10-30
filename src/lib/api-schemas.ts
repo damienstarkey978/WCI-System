@@ -22,6 +22,7 @@ import {
   PurchaseOrderStatus,
   RateMode,
 } from "@/generated/prisma/enums";
+import { parseDateOnly } from "@/lib/date-only";
 
 const nullableTrimmed = z.string().trim().min(1).max(255).nullish();
 
@@ -1160,11 +1161,21 @@ export const importScheduleFlagsSchema = z.object({
 // Permitting (Heather / Atlas / field ops)
 // ---------------------------------------------------------------------------
 
-const optionalDateTime = z.union([z.string().datetime({ offset: true }), z.string().datetime(), z.null()]).optional();
+/** ISO datetime OR calendar `YYYY-MM-DD` (Heather backfills pass dates as date-only). */
+const optionalDateTime = z
+  .union([
+    z.string().datetime({ offset: true }),
+    z.string().datetime(),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD or ISO datetime"),
+    z.null(),
+  ])
+  .optional();
 
 function parseOptionalDate(value: string | null | undefined): Date | null | undefined {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
+  // Date-only → UTC noon so Eastern display does not shift a day earlier.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return parseDateOnly(value);
   return new Date(value);
 }
 
@@ -1192,6 +1203,8 @@ export const updatePermitSchema = z
     vendorId: z.string().min(1).max(64).nullish(),
     permitNumber: z.string().trim().max(64).nullish(),
     label: z.string().trim().max(120).nullish(),
+    /** Change trade (e.g. OTHER → BUILDING for a second building permit). */
+    trade: z.enum(PermitTrade).optional(),
     status: z.enum(PermitStatus).optional(),
     issuedAt: optionalDateTime,
     expiresAt: optionalDateTime,
@@ -1204,6 +1217,7 @@ export const updatePermitSchema = z
       value.vendorId !== undefined ||
       value.permitNumber !== undefined ||
       value.label !== undefined ||
+      value.trade !== undefined ||
       value.status !== undefined ||
       value.issuedAt !== undefined ||
       value.expiresAt !== undefined ||
@@ -1211,7 +1225,7 @@ export const updatePermitSchema = z
       value.contractorName !== undefined,
     {
       message:
-        "Provide at least one of pulled, vendorId, permitNumber, label, status, issuedAt, expiresAt, jurisdiction, or contractorName.",
+        "Provide at least one of pulled, vendorId, permitNumber, label, trade, status, issuedAt, expiresAt, jurisdiction, or contractorName.",
     },
   );
 
@@ -1219,10 +1233,14 @@ export const updatePermitInspectionSchema = z
   .object({
     completed: z.boolean().optional(),
     result: z.enum(InspectionResult).optional(),
-    /** Real city pass/completed date (ISO) — distinct from system completedAt. */
+    /** Real city pass/completed date (ISO or YYYY-MM-DD) — distinct from system completedAt. */
     passedAt: optionalDateTime,
     confirmationNumber: z.string().trim().max(120).nullish(),
     inspector: z.string().trim().max(120).nullish(),
+    /** Rename the inspection (and preferably its picture folder). */
+    name: z.string().trim().min(1).max(120).optional(),
+    /** Move to another JobPermit on the same job (cross-trade). */
+    permitId: z.string().min(1).max(64).optional(),
   })
   .refine(
     (value) =>
@@ -1230,9 +1248,12 @@ export const updatePermitInspectionSchema = z
       value.result !== undefined ||
       value.passedAt !== undefined ||
       value.confirmationNumber !== undefined ||
-      value.inspector !== undefined,
+      value.inspector !== undefined ||
+      value.name !== undefined ||
+      value.permitId !== undefined,
     {
-      message: "Provide at least one of completed, result, passedAt, confirmationNumber, or inspector.",
+      message:
+        "Provide at least one of completed, result, passedAt, confirmationNumber, inspector, name, or permitId.",
     },
   );
 
@@ -1242,6 +1263,10 @@ export const updateJobPermittingFlagsSchema = z
   .object({
     nocOnFile: z.boolean().optional(),
     ntboFiled: z.boolean().optional(),
+    nocNumber: z.string().trim().max(120).nullish(),
+    ntboNumber: z.string().trim().max(120).nullish(),
+    nocFiledOn: optionalDateTime,
+    ntboFiledOn: optionalDateTime,
     /** Mark / clear building permit doc pack created (header "Docs created"). */
     buildingPermitDocsCreated: z.boolean().optional(),
   })
@@ -1249,15 +1274,20 @@ export const updateJobPermittingFlagsSchema = z
     (value) =>
       value.nocOnFile !== undefined ||
       value.ntboFiled !== undefined ||
+      value.nocNumber !== undefined ||
+      value.ntboNumber !== undefined ||
+      value.nocFiledOn !== undefined ||
+      value.ntboFiledOn !== undefined ||
       value.buildingPermitDocsCreated !== undefined,
     {
-      message: "Provide nocOnFile, ntboFiled, and/or buildingPermitDocsCreated.",
+      message:
+        "Provide at least one of nocOnFile, ntboFiled, nocNumber, ntboNumber, nocFiledOn, ntboFiledOn, or buildingPermitDocsCreated.",
     },
   );
 
 /**
- * One Permit Rockstar ledger per job (private provider / setup / invoiced / paid / fee).
- * feePerInspection is integer cents (null clears).
+ * One Permit Rockstar ledger per job (private provider / setup / invoiced / paid / fee /
+ * invoice # / amount / invoiced+paid dates). feePerInspection and invoiceAmount are integer cents.
  */
 export const updatePermitRockstarLedgerSchema = z
   .object({
@@ -1266,6 +1296,10 @@ export const updatePermitRockstarLedgerSchema = z
     invoiced: z.boolean().optional(),
     paid: z.boolean().optional(),
     feePerInspectionCents: z.number().int().min(0).nullish(),
+    invoiceNumber: z.string().trim().max(120).nullish(),
+    invoiceAmountCents: z.number().int().min(0).nullish(),
+    invoicedAt: optionalDateTime,
+    paidAt: optionalDateTime,
   })
   .refine(
     (value) =>
@@ -1273,10 +1307,14 @@ export const updatePermitRockstarLedgerSchema = z
       value.setupType !== undefined ||
       value.invoiced !== undefined ||
       value.paid !== undefined ||
-      value.feePerInspectionCents !== undefined,
+      value.feePerInspectionCents !== undefined ||
+      value.invoiceNumber !== undefined ||
+      value.invoiceAmountCents !== undefined ||
+      value.invoicedAt !== undefined ||
+      value.paidAt !== undefined,
     {
       message:
-        "Provide at least one of privateProvider, setupType, invoiced, paid, or feePerInspectionCents.",
+        "Provide at least one of privateProvider, setupType, invoiced, paid, feePerInspectionCents, invoiceNumber, invoiceAmountCents, invoicedAt, or paidAt.",
     },
   );
 

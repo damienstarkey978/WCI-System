@@ -276,12 +276,16 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
         select: {
           id: true,
           nocOnFile: true,
+          nocNumber: true,
           ntboFiled: true,
+          ntboNumber: true,
           permitRockstarPrivateProvider: true,
           permitRockstarSetupType: true,
           permitRockstarInvoiced: true,
           permitRockstarPaid: true,
           permitRockstarFeePerInspectionCents: true,
+          permitRockstarInvoiceNumber: true,
+          permitRockstarInvoiceAmountCents: true,
         },
       });
       if (!job) return refusal(`Job ${jobId} not found`);
@@ -290,11 +294,21 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
         orderBy: { trade: "asc" },
         include: {
           vendor: { select: { name: true, email: true } },
-          inspections: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, completedAt: true } },
+          inspections: {
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, name: true, completedAt: true, passedAt: true, result: true },
+          },
         },
       });
-      const flags = `NOC=${job.nocOnFile ? "on file" : "missing"} NTBO=${job.ntboFiled ? "filed" : "not filed"}`;
-      const rockstar = `Permit Rockstar: privateProvider=${job.permitRockstarPrivateProvider} setup=${job.permitRockstarSetupType ?? "unset"} invoiced=${job.permitRockstarInvoiced} paid=${job.permitRockstarPaid} feePerInspectionCents=${job.permitRockstarFeePerInspectionCents ?? "unset"}`;
+      const flags =
+        `NOC=${job.nocOnFile ? "on file" : "missing"}${job.nocNumber ? ` #${job.nocNumber}` : ""}` +
+        ` NTBO=${job.ntboFiled ? "filed" : "not filed"}${job.ntboNumber ? ` #${job.ntboNumber}` : ""}`;
+      const rockstar =
+        `Permit Rockstar: privateProvider=${job.permitRockstarPrivateProvider} setup=${job.permitRockstarSetupType ?? "unset"}` +
+        ` invoiced=${job.permitRockstarInvoiced} paid=${job.permitRockstarPaid}` +
+        ` feePerInspectionCents=${job.permitRockstarFeePerInspectionCents ?? "unset"}` +
+        ` invoiceNumber=${job.permitRockstarInvoiceNumber ?? "unset"}` +
+        ` invoiceAmountCents=${job.permitRockstarInvoiceAmountCents ?? "unset"}`;
       if (permits.length === 0) {
         return text(
           `${flags}\n${rockstar}\nNo permits on this job. Call create_job_permit (one trade) or ensure_job_permit_defaults (Building+MEP shells).`,
@@ -425,39 +439,69 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
     {
       description:
         "Update a permit inspection: completed flag, result (PASS/FAIL/PARTIAL/PENDING), " +
-        "real city pass date (passedAt ISO), confirmation number, and/or inspector name.",
+        "real city pass date (passedAt as ISO or YYYY-MM-DD), confirmation number, inspector, " +
+        "rename (name), and/or move to another permit on the same job (permitId).",
       inputSchema: {
         inspectionId: z.string().describe("Inspection id from list_job_permits"),
         completed: z.boolean().optional(),
         result: z.enum(["PENDING", "PASS", "FAIL", "PARTIAL"]).optional(),
-        passedAt: z.string().optional().describe("Real city pass/completed date (ISO), not entry time"),
+        passedAt: z
+          .string()
+          .optional()
+          .describe("Real city pass/completed date (YYYY-MM-DD or ISO), not entry time"),
         confirmationNumber: z.string().optional(),
         inspector: z.string().optional(),
+        name: z.string().optional().describe("Rename the inspection"),
+        permitId: z.string().optional().describe("Move to another JobPermit on the same job"),
       },
     },
     async (input) => {
-      const { inspectionId, completed, result, passedAt, confirmationNumber, inspector } = input as {
+      const {
+        inspectionId,
+        completed,
+        result,
+        passedAt,
+        confirmationNumber,
+        inspector,
+        name,
+        permitId,
+      } = input as {
         inspectionId: string;
         completed?: boolean;
         result?: "PENDING" | "PASS" | "FAIL" | "PARTIAL";
         passedAt?: string;
         confirmationNumber?: string;
         inspector?: string;
+        name?: string;
+        permitId?: string;
       };
       try {
+        const { parseDateOnly } = await import("@/lib/date-only");
+        const parsedPassedAt =
+          passedAt === undefined
+            ? undefined
+            : passedAt === ""
+              ? null
+              : /^\d{4}-\d{2}-\d{2}$/.test(passedAt)
+                ? parseDateOnly(passedAt)
+                : new Date(passedAt);
         const inspection =
           completed !== undefined &&
           result === undefined &&
           passedAt === undefined &&
           confirmationNumber === undefined &&
-          inspector === undefined
+          inspector === undefined &&
+          name === undefined &&
+          permitId === undefined
             ? await setInspectionCompleted(organizationId, inspectionId, completed)
             : await updateInspectionFields(organizationId, inspectionId, {
                 completed,
                 result,
-                passedAt: passedAt === undefined ? undefined : passedAt ? new Date(passedAt) : null,
+                passedAt: parsedPassedAt,
                 confirmationNumber: confirmationNumber ?? undefined,
                 inspector: inspector ?? undefined,
+                name,
+                permitId,
               });
         return text(
           `${inspection.id} | ${inspection.name} | result=${inspection.result}` +

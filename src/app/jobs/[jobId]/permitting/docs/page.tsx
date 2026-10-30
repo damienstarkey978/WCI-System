@@ -12,7 +12,8 @@ import {
   tradeLabel,
 } from "@/lib/permitting/service";
 
-import { setBuildingPermitDocsCreatedAction, setNocNtboAction } from "../actions";
+import { setBuildingPermitDocsCreatedAction } from "../actions";
+import { NocNtboForm } from "./noc-ntbo-form";
 import { PermitDocsForm } from "./permit-docs-form";
 
 export const dynamic = "force-dynamic";
@@ -120,34 +121,6 @@ export default async function PermitDocsPage({
             <dt className="font-medium">Municipality</dt>
             <dd className="text-[var(--bt-text)]">Duval / City of Jacksonville</dd>
           </div>
-          <div>
-            <dt className="font-medium">NOC</dt>
-            <dd className="flex items-center gap-2 text-[var(--bt-text)]">
-              {job.nocOnFile ? "On file" : "Missing"}
-              <form action={setNocNtboAction}>
-                <input type="hidden" name="jobId" value={job.id} />
-                <input type="hidden" name="field" value="nocOnFile" />
-                <input type="hidden" name="value" value={job.nocOnFile ? "false" : "true"} />
-                <button type="submit" className="text-[10px] font-semibold text-[var(--bt-primary)] hover:underline">
-                  Toggle
-                </button>
-              </form>
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium">NTBO</dt>
-            <dd className="flex items-center gap-2 text-[var(--bt-text)]">
-              {job.ntboFiled ? "Filed" : "Not filed"}
-              <form action={setNocNtboAction}>
-                <input type="hidden" name="jobId" value={job.id} />
-                <input type="hidden" name="field" value="ntboFiled" />
-                <input type="hidden" name="value" value={job.ntboFiled ? "false" : "true"} />
-                <button type="submit" className="text-[10px] font-semibold text-[var(--bt-primary)] hover:underline">
-                  Toggle
-                </button>
-              </form>
-            </dd>
-          </div>
           <div className="sm:col-span-2">
             <dt className="font-medium">Permits on this job</dt>
             <dd className="text-[var(--bt-text)]">
@@ -157,6 +130,15 @@ export default async function PermitDocsPage({
             </dd>
           </div>
         </dl>
+        <NocNtboForm
+          jobId={job.id}
+          nocOnFile={job.nocOnFile}
+          ntboFiled={job.ntboFiled}
+          nocNumber={job.nocNumber}
+          ntboNumber={job.ntboNumber}
+          nocFiledOn={job.nocFiledOn}
+          ntboFiledOn={job.ntboFiledOn}
+        />
       </section>
 
       <section
