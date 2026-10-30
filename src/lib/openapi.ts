@@ -654,6 +654,17 @@ const ENDPOINTS: readonly EndpointDef[] = [
     pathParams: ["purchaseOrderId"],
   },
   {
+    method: "post",
+    path: "/purchase-orders/{purchaseOrderId}/recall",
+    summary: "Recall (cancel) a purchase order",
+    description:
+      "Buildertrend Recall — sets status CANCELLED so the funnel drops the PO from committedCost. " +
+      "Idempotent if already cancelled. Optional JSON body `{ reason }` for the audit event.",
+    tags: ["Purchase Orders"],
+    scopes: ["purchase-orders:write"],
+    pathParams: ["purchaseOrderId"],
+  },
+  {
     method: "delete",
     path: "/purchase-orders/{purchaseOrderId}",
     summary: "Delete a draft purchase order",

@@ -132,6 +132,17 @@ describe("computeInvoicingRow", () => {
     });
     expect(row.outstandingCents).toBe(40_000);
   });
+
+  it("never reports negative outstanding when paid exceeds invoiced", () => {
+    const row = computeInvoicingRow({
+      ...JOB,
+      revisedClientPriceCents: 200_000,
+      amountInvoicedCents: 100_000,
+      remainingToInvoiceCents: 100_000,
+      totalPaidCents: 250_000,
+    });
+    expect(row.outstandingCents).toBe(0);
+  });
 });
 
 describe("computeLaborRow", () => {
