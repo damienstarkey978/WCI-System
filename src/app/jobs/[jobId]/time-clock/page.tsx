@@ -8,7 +8,7 @@ import { CalendarIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate, formatTime } from "@/lib/format";
+import { formatDate, formatTime, startOfWeekEastern } from "@/lib/format";
 import { workedHours } from "@/lib/time-clock/hours";
 
 import { ClockInForm } from "./clock-in-form";
@@ -40,9 +40,7 @@ export default async function TimeClockPage({ params, searchParams }: PageProps<
   const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
   if (!job) notFound();
 
-  const weekStart = new Date();
-  weekStart.setUTCHours(0, 0, 0, 0);
-  weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay());
+  const weekStart = startOfWeekEastern();
 
   const [entries, users, costCodes, openOnJob, myWeekCount] = await Promise.all([
     db.timeClockEntry.findMany({

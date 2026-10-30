@@ -104,11 +104,17 @@ export default async function JobsIndexPage({ searchParams }: PageProps<"/jobs">
   return (
     <AppShell jobs={sidebarJobs} notifications={bell.notifications} unreadCount={bell.unreadCount}>
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-[var(--bt-text)]">Jobs</h1>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-[var(--bt-text)]">Jobs</h1>
+            <p className="mt-0.5 text-xs text-[var(--bt-muted)]">
+              Tabs count every non-template job. Dashboard “Active” is open + warranty only; the
+              sidebar defaults to open (excludes pre-sale).
+            </p>
+          </div>
           <Link
             href="/jobs/new"
-            className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
+            className="shrink-0 rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
             style={{ background: "var(--bt-primary)" }}
           >
             + Job

@@ -22,6 +22,7 @@ import {
   type CashEvent,
 } from "@/lib/reports/calc";
 import { db } from "@/lib/db";
+import { calendarDateEastern } from "@/lib/format";
 import { ACTIVE_JOB_STATUSES } from "@/lib/job-status";
 import { weightedPercentComplete } from "@/lib/scheduling/progress";
 import { baseLaborCostCents, workedHours } from "@/lib/time-clock/hours";
@@ -165,7 +166,9 @@ export interface CashFlowReportOptions {
 export async function getCashFlowReport(organizationId: string, options: CashFlowReportOptions = {}) {
   const windowDays = options.windowDays ?? 30;
   const windowStart = new Date(Date.now() - (windowDays - 1) * 86_400_000);
-  const windowStartDate = windowStart.toISOString().slice(0, 10);
+  // Bucket by Eastern calendar day so evening Jacksonville receipts don't land on
+  // the next UTC date (and disagree with the dashboard "last 30 days" tile).
+  const windowStartDate = calendarDateEastern(windowStart);
 
   const [payments, paidBills, jobFunnels] = await Promise.all([
     db.payment.findMany({
@@ -180,12 +183,12 @@ export async function getCashFlowReport(organizationId: string, options: CashFlo
   ]);
 
   const cashIn: CashEvent[] = payments.map((payment) => ({
-    date: payment.receivedAt.toISOString().slice(0, 10),
+    date: calendarDateEastern(payment.receivedAt),
     amountCents: payment.amountCents,
   }));
 
   const cashOut: CashEvent[] = paidBills.map((bill) => ({
-    date: bill.paidAt!.toISOString().slice(0, 10),
+    date: calendarDateEastern(bill.paidAt!),
     amountCents: bill.lineItems.reduce((total, item) => total + item.amountCents, 0),
   }));
 

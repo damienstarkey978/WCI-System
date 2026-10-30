@@ -9,6 +9,7 @@ import {
   setQueuedTimeClockAction,
   type QueuedTimeClockAction,
 } from "@/lib/field-offline-queue";
+import { formatTime } from "@/lib/format";
 
 import { clockInAction, clockOutAction, endBreakAction, startBreakAction } from "../actions";
 
@@ -134,7 +135,7 @@ export function TimeClockClient({
         <div className="rounded-lg border border-black/10 p-4 dark:border-white/15">
           <div className="text-sm font-medium">{initialEntry.jobName}</div>
           <p className="mt-1 text-xs text-black/55 dark:text-white/55">
-            Clocked in since {new Date(initialEntry.clockInAt).toLocaleTimeString()}
+            Clocked in since {formatTime(new Date(initialEntry.clockInAt))}
             {initialEntry.openBreak ? " — on break" : ""}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
