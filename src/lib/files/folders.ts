@@ -1,7 +1,13 @@
 /**
  * Documents folders for a job (Buildertrend's Files > Documents). Flat, one level.
- * Deleting a folder unfiles its files rather than deleting them (File.folderId is
- * SetNull), so a mis-click never destroys documents.
+ *
+ * Delete behavior:
+ * - Document folders: files are unfiled (File.folderId SetNull) — a mis-click never
+ *   destroys documents.
+ * - Inspection picture folders (linked via JobPermitInspection.folderId): soft-delete
+ *   (trash) every non-deleted photo in the folder, remove the JobPermitInspection row
+ *   (so ensure will not recreate the folder), then delete the FileFolder. Share links
+ *   cascade with the inspection. Photos remain recoverable from Files → View trash.
  */
 
 import { db } from "@/lib/db";
@@ -61,10 +67,56 @@ export async function createFolder(organizationId: string, jobId: string, rawNam
   return db.fileFolder.create({ data: { organizationId, jobId, name } });
 }
 
-export async function deleteFolder(organizationId: string, folderId: string) {
-  const folder = await db.fileFolder.findFirst({ where: { id: folderId, organizationId }, select: { id: true } });
+export type DeleteFolderResult = {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: "document" | "inspection";
+  readonly trashedFileCount: number;
+  readonly removedInspectionIds: readonly string[];
+};
+
+/**
+ * Delete a FileFolder. Inspection-linked folders trash their photos and remove the
+ * linked JobPermitInspection row(s) so list/ensure will not rematerialize them.
+ * Document folders only delete the folder row (files stay on the job, unfiled).
+ */
+export async function deleteFolder(organizationId: string, folderId: string): Promise<DeleteFolderResult> {
+  const folder = await db.fileFolder.findFirst({
+    where: { id: folderId, organizationId },
+    select: {
+      id: true,
+      name: true,
+      inspections: { select: { id: true } },
+    },
+  });
   if (!folder) throw new FolderNotFoundError(folderId);
+
+  const inspectionIds = folder.inspections.map((row) => row.id);
+  const isInspection = inspectionIds.length > 0;
+  let trashedFileCount = 0;
+
+  if (isInspection) {
+    const trashed = await db.file.updateMany({
+      where: { folderId: folder.id, organizationId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    trashedFileCount = trashed.count;
+
+    // Remove inspections first so folderId uniqueness / ensure cannot race a recreate.
+    await db.jobPermitInspection.deleteMany({
+      where: { id: { in: inspectionIds } },
+    });
+  }
+
   await db.fileFolder.delete({ where: { id: folder.id } });
+
+  return {
+    id: folder.id,
+    name: folder.name,
+    kind: isInspection ? "inspection" : "document",
+    trashedFileCount,
+    removedInspectionIds: inspectionIds,
+  };
 }
 
 export async function setFolderVisibility(organizationId: string, folderId: string, visibility: { clientVisible?: boolean; subVisible?: boolean }) {

@@ -115,6 +115,9 @@ export default async function FilesPage({
     }),
   ]);
   const inspectionPhotoCount = inspectionFolders.reduce((sum, folder) => sum + folder.photoCount, 0);
+  const inspectionFolderIds = new Set(inspectionFolders.map((folder) => folder.folderId));
+  // Keep Inspection: * rows under Inspection Pictures only — not duplicated in Documents.
+  const documentFolders = folders.filter((folder) => !inspectionFolderIds.has(folder.id));
   const pageCount = paginateFiles ? Math.max(1, Math.ceil(totalFiles / FILES_PAGE_SIZE)) : 1;
 
   // One Supabase createSignedUrls call for the whole grid — not N createSignedUrl.
@@ -291,7 +294,7 @@ export default async function FilesPage({
                   <td className="px-4 py-3" />
                 </tr>
               ) : null}
-              {folders.map((folder) => (
+              {documentFolders.map((folder) => (
                 <tr key={folder.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
                   <td className="px-4 py-3">
                     <Link
@@ -339,7 +342,7 @@ export default async function FilesPage({
                   </td>
                 </tr>
               ))}
-              {folders.length === 0 ? (
+              {documentFolders.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-[var(--bt-muted)]">
                     No document folders yet. Use + Folder to add one — Inspection Pictures lives under Files → Inspection Pictures.

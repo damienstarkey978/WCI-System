@@ -1,13 +1,15 @@
 /**
  * Inspection Pictures: one FileFolder per JobPermitInspection on the job.
- * Folders are created for inspections on that job's permitting list — never a
- * global dump of every city/demo inspection type.
+ * Folders are created for inspections that **already exist** on that job —
+ * never a global dump of every city/demo inspection type, and never invent
+ * typical inspections onto empty permit shells (Damien 2026-10-30).
  *
- * Ops rule (Damien 2026-10-29): never gate folder create / photo upload behind
- * "open permitting." Staff and bots may create an inspection folder by city
- * inspection name; empty permit shells (Building-only default from #67) get
- * typical inspections seeded so folders can materialize.
- * Inspectors get a headless signed share link (no seat/login) to view + upload.
+ * Ops rule (Damien 2026-10-29/30): never gate folder create / photo upload
+ * behind "open permitting." Staff and bots create an inspection folder by city
+ * name (`POST /folders` kind=inspection) or add inspections on Permitting /
+ * `POST .../permits` (with optional seed). Empty Building shells stay empty
+ * until something explicitly adds an inspection. Inspectors get a headless
+ * signed share link (no seat/login) to view + upload.
  */
 
 import { PermitTrade } from "@/generated/prisma/enums";
@@ -15,7 +17,6 @@ import { db } from "@/lib/db";
 import { createFolder, FolderNameTakenError } from "@/lib/files/folders";
 import { resolveFileUrlsSafe, uploadAndRegisterFile } from "@/lib/files/service";
 import {
-  DEFAULT_INSPECTIONS_ON_ADD,
   InspectionNotFoundError,
   JobNotFoundError,
 } from "@/lib/permitting/service";
@@ -35,35 +36,6 @@ export class InspectionFolderNameRequiredError extends Error {
   constructor() {
     super("Inspection name is required.");
     this.name = "InspectionFolderNameRequiredError";
-  }
-}
-
-/**
- * Recover #67 empty permit shells: permits that exist with zero inspections
- * get that trade's typical city-style defaults so Inspection Pictures can
- * operate. Does not invent permits. Idempotent when inspections already exist.
- */
-export async function seedTypicalInspectionsOnEmptyPermits(organizationId: string, jobId: string) {
-  const permits = await db.jobPermit.findMany({
-    where: { jobId, organizationId },
-    select: {
-      id: true,
-      trade: true,
-      _count: { select: { inspections: true } },
-    },
-  });
-
-  for (const permit of permits) {
-    if (permit._count.inspections > 0) continue;
-    const defaults = DEFAULT_INSPECTIONS_ON_ADD[permit.trade] ?? [];
-    if (defaults.length === 0) continue;
-    await db.jobPermitInspection.createMany({
-      data: defaults.map((name, index) => ({
-        permitId: permit.id,
-        name,
-        sortOrder: index,
-      })),
-    });
   }
 }
 
@@ -123,15 +95,15 @@ async function linkInspectionToFolder(
   );
 }
 
+/**
+ * Link/create FileFolders for JobPermitInspection rows already on this job.
+ * Does **not** invent inspections on empty permit shells — staff/bots add those
+ * explicitly (createJobPermit seed, addPermitInspection, or POST /folders).
+ */
 export async function ensureInspectionPictureFolders(organizationId: string, jobId: string) {
   const job = await db.job.findFirst({ where: { id: jobId, organizationId }, select: { id: true } });
   if (!job) throw new JobNotFoundError(jobId);
 
-  // Empty Building/MEP shells (ensureBuildingPermit / ensure-defaults) blocked
-  // photo ops after #67 — seed typical inspections so folders can appear.
-  await seedTypicalInspectionsOnEmptyPermits(organizationId, jobId);
-
-  // Folders only for inspections already on this job — never invents a catalog dump.
   const inspections = await db.jobPermitInspection.findMany({
     where: { permit: { jobId, organizationId } },
     orderBy: [{ permit: { trade: "asc" } }, { sortOrder: "asc" }],

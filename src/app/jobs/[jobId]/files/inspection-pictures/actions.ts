@@ -2,9 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 
+import { redirect } from "next/navigation";
+
 import { PermitTrade } from "@/generated/prisma/enums";
 import { appBaseUrl } from "@/lib/app-url";
 import { requireAppUser } from "@/lib/auth";
+import { deleteFolder, FolderNotFoundError } from "@/lib/files/folders";
 import { JobNotFoundError, purgeFile, trashFile, uploadAndRegisterFile } from "@/lib/files/service";
 import {
   createInspectionPictureFolder,
@@ -150,4 +153,21 @@ export async function purgeInspectionPhotoAction(formData: FormData): Promise<vo
     // ignore
   }
   revalidate(jobId, folderId);
+}
+
+/**
+ * Delete an inspection picture folder: trash photos in it, remove the linked
+ * JobPermitInspection (so ensure will not recreate it), delete the FileFolder.
+ */
+export async function deleteInspectionFolderAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const folderId = String(formData.get("folderId") ?? "");
+  try {
+    await deleteFolder(user.organizationId, folderId);
+  } catch (error) {
+    if (!(error instanceof FolderNotFoundError)) throw error;
+  }
+  revalidate(jobId);
+  redirect(`/jobs/${jobId}/files/inspection-pictures`);
 }

@@ -2,8 +2,10 @@
  * POST /api/v1/folders/ensure-inspection-pictures
  *
  * Org-wide (or single-job) restore of Inspection Pictures folders from
- * JobPermitInspection rows. Prefer GET /folders?kind=inspection for one job
- * (self-heals on read); use this after a wipe/deploy to backfill every active job.
+ * JobPermitInspection rows already on each job. Does NOT invent typical
+ * inspections on empty permit shells. Prefer GET /folders?kind=inspection for
+ * one job (self-heals folders for existing inspections); use this after a
+ * wipe/deploy to backfill every active job.
  *
  * Body: `{ "jobId"?: string }` — omit jobId to ensure all OPEN/WARRANTY/PRE_SALE
  * jobs that already have permits.

@@ -1182,7 +1182,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     summary: "List file folders for a job",
     description:
       "Documents and/or Inspection Pictures folders. jobId is required. " +
-      "kind=inspection returns inspection folders (and seeds typical inspections onto empty permit shells so photo ops are not blocked). " +
+      "kind=inspection returns folders for JobPermitInspection rows already on that job " +
+      "(links/creates FileFolders for those inspections only — does NOT invent typical inspections on empty permit shells). " +
       "kind=document excludes inspection-linked folders. kind=all (default) returns raw FileFolder rows.",
     tags: ["Files"],
     scopes: ["files:read"],
@@ -1211,13 +1212,27 @@ const ENDPOINTS: readonly EndpointDef[] = [
     successStatus: 201,
   },
   {
+    method: "delete",
+    path: "/folders/{folderId}",
+    summary: "Delete a Documents or Inspection Pictures folder",
+    description:
+      "Inspection folders: soft-delete (trash) photos in the folder, remove the linked JobPermitInspection " +
+      "(so ensure will not recreate the folder), then delete the FileFolder. Share links cascade with the inspection. " +
+      "Document folders: delete the folder only; files stay on the job unfiled. " +
+      "Requires files:write (Heather `*` key covers this).",
+    tags: ["Files"],
+    scopes: ["files:write"],
+    pathParams: ["folderId"],
+  },
+  {
     method: "post",
     path: "/folders/ensure-inspection-pictures",
     summary: "Ensure inspection picture folders for a job or all active jobs",
     description:
-      "Links/creates FileFolders for every JobPermitInspection (and seeds typical inspections onto empty permit shells). " +
+      "Links/creates FileFolders for every JobPermitInspection already on the job. " +
+      "Does NOT seed typical inspections onto empty permit shells — only folders for inspections that belong on that job. " +
       "Body `{ jobId }` for one job, or `{}` for every OPEN/WARRANTY/PRE_SALE job that already has permits. " +
-      "Use after a wipe/deploy; day-to-day prefer GET /folders?kind=inspection which self-heals one job.",
+      "Use after a wipe/deploy; day-to-day prefer GET /folders?kind=inspection which self-heals one job's existing inspections.",
     tags: ["Files"],
     scopes: ["files:write"],
   },
