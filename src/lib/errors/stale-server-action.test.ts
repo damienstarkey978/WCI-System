@@ -15,6 +15,11 @@ describe("isStaleServerActionError", () => {
     expect(isStaleServerActionError(error)).toBe(true);
   });
 
+  it("detects React's unexpected-response wrap (timeout / HTML action reply)", () => {
+    const error = new Error("An unexpected response was received from the server.");
+    expect(isStaleServerActionError(error)).toBe(true);
+  });
+
   it("returns false for an unrelated error", () => {
     expect(isStaleServerActionError(new Error("Connection error"))).toBe(false);
   });

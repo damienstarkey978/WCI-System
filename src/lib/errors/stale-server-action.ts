@@ -17,5 +17,15 @@
  */
 export function isStaleServerActionError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  return /failed to find server action/i.test(error.message) || /failed-to-find-server-action/i.test(error.message);
+  // Next's explicit stale-hash errors.
+  if (/failed to find server action/i.test(error.message) || /failed-to-find-server-action/i.test(error.message)) {
+    return true;
+  }
+  // React's client-side wrap when the action POST got HTML/empty (deploy cutover,
+  // serverless kill mid-revalidate, middleware redirect). "Try again" re-posts the
+  // same stale flight; a full reload is what actually helps — same as stale hash.
+  if (/unexpected response was received from the server/i.test(error.message)) {
+    return true;
+  }
+  return false;
 }

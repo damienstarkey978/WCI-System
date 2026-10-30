@@ -70,6 +70,10 @@ export async function signedJobFileUrl(path: string, expiresInSeconds = SIGNED_U
  * hundreds of sequential HTTP calls per page load. Paths that fail to sign map
  * to null so a single bad object can't blank the whole gallery.
  */
+/** Cap how long a gallery page waits on Supabase signing — a hung sign must not
+ *  take down Server Action responses that revalidate the daily-logs list. */
+const SIGNED_URLS_TIMEOUT_MS = 8_000;
+
 export async function signedJobFileUrls(
   paths: readonly string[],
   expiresInSeconds = SIGNED_URL_TTL_SECONDS,
@@ -78,17 +82,26 @@ export async function signedJobFileUrls(
   const out = new Map<string, string | null>();
   if (unique.length === 0) return out;
 
-  const { data, error } = await client().storage.from(JOB_FILES_BUCKET).createSignedUrls(unique, expiresInSeconds);
-  if (error || !data) {
+  try {
+    const result = await Promise.race([
+      client().storage.from(JOB_FILES_BUCKET).createSignedUrls(unique, expiresInSeconds),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("signedJobFileUrls timed out")), SIGNED_URLS_TIMEOUT_MS);
+      }),
+    ]);
+    if (result.error || !result.data) {
+      for (const path of unique) out.set(path, null);
+      return out;
+    }
+    for (const path of unique) out.set(path, null);
+    for (const row of result.data) {
+      if (row.path) out.set(row.path, row.error || !row.signedUrl ? null : row.signedUrl);
+    }
+    return out;
+  } catch {
     for (const path of unique) out.set(path, null);
     return out;
   }
-
-  for (const path of unique) out.set(path, null);
-  for (const row of data) {
-    if (row.path) out.set(row.path, row.error || !row.signedUrl ? null : row.signedUrl);
-  }
-  return out;
 }
 
 export async function deleteJobFile(path: string): Promise<void> {
