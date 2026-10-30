@@ -150,6 +150,8 @@ export async function deleteFolderAction(formData: FormData): Promise<void> {
     if (!(error instanceof FolderNotFoundError)) throw error;
   }
   revalidatePath(`/jobs/${jobId}/files`);
+  revalidatePath(`/jobs/${jobId}/files/inspection-pictures`);
+  revalidatePath(`/jobs/${jobId}/permitting`);
 }
 
 export async function updateFolderVisibilityAction(formData: FormData): Promise<void> {

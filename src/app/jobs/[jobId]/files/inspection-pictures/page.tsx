@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { tradeLabel } from "@/lib/permitting/service";
 import { listInspectionPictureFolders } from "@/lib/permitting/inspection-pictures";
 
+import { deleteInspectionFolderAction } from "./actions";
 import { CreateInspectionFolderForm } from "./create-folder-form";
 import { InspectionShareLinkButton } from "./share-link-button";
 
@@ -44,11 +45,12 @@ export default async function InspectionPicturesPage({
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 sm:p-6">
       <PageHeader jobName={job.name} title="Inspection Pictures" />
       <p className="-mt-2 text-sm text-[var(--bt-muted)]">
-        Folders use city inspection names for this job. Create one below, or manage permits/inspections on{" "}
+        Only folders for inspections on this job. Create one below, or manage permits/inspections on{" "}
         <Link href={`/jobs/${job.id}/permitting`} className="font-medium text-[var(--bt-primary)] hover:underline">
           Permitting
         </Link>
-        . Copy each folder’s share link and text it to the inspector yourself (no login).
+        . Delete removes the folder and soft-deletes its photos (recoverable in Files trash). Copy each
+        folder’s share link and text it to the inspector yourself (no login).
       </p>
 
       <CreateInspectionFolderForm jobId={job.id} />
@@ -86,13 +88,27 @@ export default async function InspectionPicturesPage({
                       </span>
                     ) : null}
                   </Link>
-                  <Link
-                    href={`/jobs/${job.id}/files/inspection-pictures/${folder.folderId}`}
-                    className="inline-flex w-full items-center justify-center rounded-lg border px-3 py-2.5 text-sm font-semibold text-[var(--bt-text)] sm:w-auto"
-                    style={{ borderColor: "var(--bt-border)" }}
-                  >
-                    Open folder
-                  </Link>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <Link
+                      href={`/jobs/${job.id}/files/inspection-pictures/${folder.folderId}`}
+                      className="inline-flex w-full items-center justify-center rounded-lg border px-3 py-2.5 text-sm font-semibold text-[var(--bt-text)] sm:w-auto"
+                      style={{ borderColor: "var(--bt-border)" }}
+                    >
+                      Open folder
+                    </Link>
+                    <form action={deleteInspectionFolderAction}>
+                      <input type="hidden" name="jobId" value={job.id} />
+                      <input type="hidden" name="folderId" value={folder.folderId} />
+                      <button
+                        type="submit"
+                        className="inline-flex w-full items-center justify-center rounded-lg border px-3 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 sm:w-auto"
+                        style={{ borderColor: "var(--bt-border)" }}
+                        title="Soft-deletes photos in this folder and removes the inspection from Permitting"
+                      >
+                        Delete folder
+                      </button>
+                    </form>
+                  </div>
                 </div>
                 <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>
                   <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--bt-muted)]">

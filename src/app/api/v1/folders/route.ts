@@ -1,13 +1,15 @@
 /**
  * GET /api/v1/folders?jobId= — list FileFolders for a job.
  *   kind=all (default) — Documents + inspection picture folders (raw FileFolder rows).
- *   kind=inspection — Inspection Pictures view (ensures empty permit shells get
- *     typical inspections + linked folders; includes share-link + inspection metadata).
+ *   kind=inspection — Inspection Pictures view (folders for JobPermitInspection rows
+ *     already on the job; does NOT invent typical inspections on empty shells).
  *   kind=document — FileFolders that are not linked as inspection picture folders.
  *
  * POST /api/v1/folders — create a Documents folder or an Inspection Pictures folder.
  *   Inspection kind creates/links JobPermitInspection + FileFolder without requiring
  *   a Permitting UI detour (ops must not be gated behind "open permitting").
+ *
+ * DELETE /api/v1/folders/{folderId} — see ./[folderId]/route.ts.
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";

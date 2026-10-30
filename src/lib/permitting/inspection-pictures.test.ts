@@ -13,6 +13,7 @@ vi.mock("@/lib/db", () => ({
       update: vi.fn(),
       create: vi.fn(),
       createMany: vi.fn(),
+      deleteMany: vi.fn(),
     },
     fileFolder: { findFirst: vi.fn(), findFirstOrThrow: vi.fn() },
     file: { findMany: vi.fn(), create: vi.fn() },
@@ -180,24 +181,18 @@ describe("inspection pictures folders + share links", () => {
     ]);
   });
 
-  it("seeds typical inspections onto empty permit shells before listing folders", async () => {
+  it("does not invent typical inspections on empty permit shells when listing folders", async () => {
     vi.mocked(db.job.findFirst).mockResolvedValue({ id: "job_1" } as never);
-    vi.mocked(db.jobPermit.findMany).mockResolvedValue([
-      { id: "permit_building", trade: "BUILDING", _count: { inspections: 0 } },
-    ] as never);
-    vi.mocked(db.jobPermitInspection.createMany).mockResolvedValue({ count: 4 } as never);
     vi.mocked(db.jobPermitInspection.findMany).mockResolvedValue([] as never);
 
-    await listInspectionPictureFolders("org_1", "job_1");
+    const folders = await listInspectionPictureFolders("org_1", "job_1");
 
-    expect(db.jobPermitInspection.createMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.arrayContaining([
-          expect.objectContaining({ permitId: "permit_building", name: "Slab" }),
-          expect.objectContaining({ permitId: "permit_building", name: "Footer" }),
-        ]),
-      }),
-    );
+    expect(folders).toEqual([]);
+    expect(db.jobPermitInspection.createMany).not.toHaveBeenCalled();
+    // Only inspections already on the job are considered — no empty-shell seed.
+    expect(vi.mocked(db.jobPermitInspection.findMany).mock.calls[0]?.[0]).toMatchObject({
+      where: { permit: { jobId: "job_1", organizationId: "org_1" } },
+    });
   });
 
   it("creates an inspection folder by city name without a Permitting detour", async () => {

@@ -10,6 +10,7 @@ import { resolveFileUrlsSafe } from "@/lib/files/service";
 import { getInspectionPictureFolder } from "@/lib/permitting/inspection-pictures";
 import { tradeLabel } from "@/lib/permitting/service";
 
+import { deleteInspectionFolderAction } from "../actions";
 import { InspectionPhotoCapture } from "../photo-capture";
 import { InspectionShareLinkButton } from "../share-link-button";
 
@@ -60,7 +61,24 @@ export default async function InspectionPictureFolderPage({
         >
           All inspection folders
         </Link>
-        <PageHeader jobName={job.name} title={folder.name} />
+        <PageHeader
+          jobName={job.name}
+          title={folder.name}
+          action={
+            <form action={deleteInspectionFolderAction}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <input type="hidden" name="folderId" value={folder.folderId} />
+              <button
+                type="submit"
+                className="rounded border px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                style={{ borderColor: "var(--bt-border)" }}
+                title="Soft-deletes photos in this folder and removes the inspection from Permitting"
+              >
+                Delete folder
+              </button>
+            </form>
+          }
+        />
         <p className="-mt-2 text-sm text-[var(--bt-muted)]">{tradeLabel(folder.trade)} inspection photos</p>
       </div>
 
