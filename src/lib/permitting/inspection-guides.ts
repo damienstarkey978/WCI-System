@@ -70,8 +70,21 @@ export function guideForInspectionName(name: string): InspectionGuide | null {
   return BY_TITLE.get(name.trim().toLowerCase()) ?? null;
 }
 
+/** Preferred folder label when the city inspection name is unique on the job. */
 export function inspectionPictureFolderName(inspectionName: string): string {
   return `Inspection: ${inspectionName.trim()}`;
+}
+
+/**
+ * Disambiguated folder label when two permits on the same job share an inspection
+ * name (e.g. BUILDING Final + ELECTRICAL Final). folderId is @unique on
+ * JobPermitInspection, so each inspection needs its own FileFolder.
+ */
+export function inspectionPictureFolderNameForTrade(
+  inspectionName: string,
+  trade: string,
+): string {
+  return `Inspection: ${trade} — ${inspectionName.trim()}`;
 }
 
 export function isSlabInspection(name: string): boolean {
