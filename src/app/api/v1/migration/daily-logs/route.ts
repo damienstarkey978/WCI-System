@@ -44,10 +44,11 @@ export const POST = withApiAuth(["migration:write"], async (request, auth) => {
     try {
       // Zod's Record<string, unknown> is wider than Prisma.InputJsonValue — cast the
       // BT weather blob at the boundary (same pattern as live daily-logs/service).
-      const { weather, ...rest } = input;
+      const { weather, logDate, ...rest } = input;
       const { record, created } = await importDailyLog({
         organizationId: auth.organizationId,
         ...rest,
+        logDate: logDate ?? null,
         weather:
           weather === undefined || weather === null
             ? weather

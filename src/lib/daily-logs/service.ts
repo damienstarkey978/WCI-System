@@ -3,6 +3,7 @@ import type { Actor } from "@/lib/actor";
 import { authorColumns } from "@/lib/actor";
 import { db } from "@/lib/db";
 import { fetchWeatherForJob } from "@/lib/daily-logs/weather";
+import { formatDateOnly, parseDateOnly, todayDateOnlyEastern } from "@/lib/date-only";
 import { emitEvent } from "@/lib/webhooks";
 
 export class JobNotFoundError extends Error {
@@ -27,8 +28,21 @@ export interface CreateDailyLogInput {
   readonly actor?: Actor;
   readonly note: string;
   readonly title?: string | null;
+  /** Calendar day of the log (YYYY-MM-DD or Date). Defaults to today Eastern. */
+  readonly logDate?: Date | string | null;
   readonly clientVisible?: boolean;
   readonly subVisible?: boolean;
+}
+
+/** API/UI shape: logDate as YYYY-MM-DD; files omitted unless the caller included them. */
+export function serializeDailyLog<T extends {
+  logDate?: Date | null;
+  createdAt: Date;
+  [key: string]: unknown;
+}>(row: T): T & { logDate: string } {
+  const logDate =
+    formatDateOnly(row.logDate ?? null) ?? formatDateOnly(row.createdAt) ?? formatDateOnly(todayDateOnlyEastern())!;
+  return { ...row, logDate };
 }
 
 export async function createDailyLog(input: CreateDailyLogInput) {
@@ -49,6 +63,11 @@ export async function createDailyLog(input: CreateDailyLogInput) {
   // already swallows its own failures and returns null.
   const weather = await fetchWeatherForJob(job);
 
+  const logDate =
+    input.logDate === undefined || input.logDate === null
+      ? todayDateOnlyEastern()
+      : parseDateOnly(input.logDate);
+
   const dailyLog = await db.dailyLog.create({
     data: {
       organizationId: input.organizationId,
@@ -57,6 +76,7 @@ export async function createDailyLog(input: CreateDailyLogInput) {
       authorApiKeyId: authors.authorApiKeyId,
       title: input.title?.trim() ? input.title.trim().slice(0, 200) : null,
       note: input.note,
+      logDate,
       weather: (weather ?? undefined) as Prisma.InputJsonValue | undefined,
       clientVisible: input.clientVisible ?? true,
       subVisible: input.subVisible ?? true,

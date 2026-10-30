@@ -309,7 +309,7 @@ export async function createJobPermit(
   const status = options?.status ?? PermitStatus.DRAFT;
   const pulled = status === PermitStatus.ACTIVE;
 
-  return db.jobPermit.create({
+  const created = await db.jobPermit.create({
     data: {
       organizationId,
       jobId,
@@ -330,6 +330,13 @@ export async function createJobPermit(
     },
     include: permitInclude,
   });
+
+  const syncedNumber = typeof permitNumber === "string" ? permitNumber.trim() : "";
+  if (trade === PermitTrade.BUILDING && syncedNumber && !job.permitNumber?.trim()) {
+    await db.job.update({ where: { id: jobId }, data: { permitNumber: syncedNumber } });
+  }
+
+  return created;
 }
 
 export async function deleteJobPermit(organizationId: string, permitId: string) {
@@ -468,10 +475,13 @@ export async function updatePermitFields(
     status = pulled ? PermitStatus.ACTIVE : PermitStatus.DRAFT;
   }
 
-  return db.jobPermit.update({
+  const nextPermitNumber =
+    input.permitNumber !== undefined ? input.permitNumber?.trim() || null : undefined;
+
+  const updated = await db.jobPermit.update({
     where: { id: permit.id },
     data: {
-      ...(input.permitNumber !== undefined ? { permitNumber: input.permitNumber } : {}),
+      ...(nextPermitNumber !== undefined ? { permitNumber: nextPermitNumber } : {}),
       ...(input.label !== undefined ? { label: input.label?.trim() || null } : {}),
       ...(input.vendorId !== undefined ? { vendorId: input.vendorId } : {}),
       ...(input.jurisdiction !== undefined ? { jurisdiction: input.jurisdiction?.trim() || null } : {}),
@@ -487,6 +497,16 @@ export async function updatePermitFields(
     },
     include: permitInclude,
   });
+
+  // Keep Job.permitNumber in sync with the Building permit number (Heather #11 / New #7).
+  if (permit.trade === PermitTrade.BUILDING && nextPermitNumber !== undefined && nextPermitNumber) {
+    await db.job.update({
+      where: { id: permit.jobId },
+      data: { permitNumber: nextPermitNumber },
+    });
+  }
+
+  return updated;
 }
 
 export async function setJobNocNtbo(
