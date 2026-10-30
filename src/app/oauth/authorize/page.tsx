@@ -132,6 +132,15 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
     select: { name: true },
   });
 
+  // Bot keys the grant can attribute as. Prefer heather/atlas/roy so Cursor MCP
+  // writes show that name instead of the OAuth client label ("Cursor").
+  const botKeys = await db.apiKey.findMany({
+    where: { organizationId: user.organizationId, revokedAt: null, agentKind: { not: null } },
+    select: { id: true, name: true, agentKind: true, tokenId: true },
+    orderBy: { name: "asc" },
+  });
+  const preferredHeather = botKeys.find((key) => key.name === "heather") ?? null;
+
   const formFields = (
     <>
       <input type="hidden" name="client_id" value={clientId} />
@@ -151,9 +160,9 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
           {client.name} wants to connect to WCI OS
         </h1>
         <p className="text-sm text-[var(--bt-muted)]">
-          It will act as <strong className="text-[var(--bt-text)]">{user.name || user.email}</strong>
-          {organization ? <> in <strong className="text-[var(--bt-text)]">{organization.name}</strong></> : null}. Anything
-          it does is recorded against you.
+          Approved by <strong className="text-[var(--bt-text)]">{user.name || user.email}</strong>
+          {organization ? <> for <strong className="text-[var(--bt-text)]">{organization.name}</strong></> : null}.
+          Choose which bot API key API writes should attribute as (required for Heather / Atlas / Roy MCP).
         </p>
       </div>
 
@@ -182,8 +191,29 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
       </p>
 
       <div className="flex gap-3">
-        <form action={approveAuthorization} className="flex-1">
+        <form action={approveAuthorization} className="flex flex-1 flex-col gap-3">
           {formFields}
+          {botKeys.length > 0 ? (
+            <label className="flex flex-col gap-1 text-sm text-[var(--bt-text)]">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+                Attribute API writes as
+              </span>
+              <select
+                name="acting_api_key_id"
+                defaultValue={preferredHeather?.id ?? botKeys[0]?.id ?? ""}
+                className="rounded border bg-transparent px-3 py-2 text-sm"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                {botKeys.map((key) => (
+                  <option key={key.id} value={key.id}>
+                    {key.name}
+                    {key.agentKind ? ` (${key.agentKind})` : ""}
+                  </option>
+                ))}
+                <option value="">No bot key — use “{client.name}” only</option>
+              </select>
+            </label>
+          ) : null}
           <button
             type="submit"
             className="w-full rounded px-4 py-2 text-sm font-semibold text-white"
@@ -192,7 +222,7 @@ export default async function AuthorizePage({ searchParams }: PageProps) {
             Connect {client.name}
           </button>
         </form>
-        <form action={denyAuthorization} className="flex-1">
+        <form action={denyAuthorization} className="flex flex-1 flex-col justify-end">
           {formFields}
           <button
             type="submit"

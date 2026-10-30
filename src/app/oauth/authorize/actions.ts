@@ -21,6 +21,7 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
   const redirectUri = field("redirect_uri");
   const state = field("state");
   const scopes = field("scope").split(/\s+/).filter(Boolean) as Scope[];
+  const actingApiKeyId = field("acting_api_key_id").trim() || null;
 
   const { client, grantedScopes } = await validateAuthorizationRequest({
     clientId,
@@ -38,6 +39,7 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
     redirectUri,
     codeChallenge: field("code_challenge"),
     codeChallengeMethod: field("code_challenge_method"),
+    actingApiKeyId,
   });
 
   const target = new URL(redirectUri);

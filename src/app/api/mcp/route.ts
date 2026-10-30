@@ -15,7 +15,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
 import type { ApiKeyContext } from "@/lib/api-auth";
-import { authenticateApiKey, extractToken } from "@/lib/api-auth";
+import {
+  apiKeyContextFromOAuth,
+  authenticateApiKey,
+  extractToken,
+  parseApiKeyToken,
+} from "@/lib/api-auth";
 import { buildMcpServer } from "@/lib/mcp/tools";
 import { corsHeaders, preflight } from "@/lib/oauth/cors";
 import { originOf } from "@/lib/oauth/metadata";
@@ -46,26 +51,27 @@ function unauthorizedWithDiscovery(request: Request): Response {
 /**
  * Two ways in, one context out. An API key is a shared machine credential; an OAuth
  * token belongs to a person who approved a named application. Both end up as the same
- * scoped organization context, so the tool registry never has to care which was used —
- * but the OAuth path carries a user, which is what makes an action attributable.
+ * scoped organization context, so the tool registry never has to care which was used.
+ *
+ * When the OAuth grant is bound to a bot ApiKey (`actingApiKeyId`, e.g. heather),
+ * attribution uses that key's name/agentKind — not the OAuth client display name
+ * ("Cursor"). Prefer configuring MCP with the bot API key bearer directly when the
+ * client supports it; binding covers Cursor's OAuth reconnect path.
  */
 async function authenticate(request: Request): Promise<ApiKeyContext | null> {
   const token = extractToken(request);
   if (!token) return null;
 
-  const oauth = await authenticateOAuthAccessToken(token);
-  if (oauth) {
-    return {
-      apiKeyId: oauth.accessTokenId,
-      organizationId: oauth.organizationId,
-      name: oauth.clientName,
-      agentKind: null,
-      scopes: oauth.scopes,
-    };
+  // Same order as authenticateMachineRequest: wci_* before wcia_*.
+  if (parseApiKeyToken(token)) {
+    const apiKey = await authenticateApiKey(request);
+    return apiKey.ok ? apiKey.context : null;
   }
 
-  const apiKey = await authenticateApiKey(request);
-  return apiKey.ok ? apiKey.context : null;
+  const oauth = await authenticateOAuthAccessToken(token);
+  if (oauth) return apiKeyContextFromOAuth(oauth);
+
+  return null;
 }
 
 const CORS = corsHeaders("POST, GET, DELETE");

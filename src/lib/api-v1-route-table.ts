@@ -68,6 +68,7 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/leads/{leadId}/convert-to-job": ["POST"],
   "/leads/{leadId}/stage": ["POST"],
   "/me": ["GET"],
+  "/me/acting-api-key": ["POST"],
   "/migration/bills": ["POST"],
   "/migration/daily-logs": ["POST"],
   "/migration/invoices": ["POST"],

@@ -578,6 +578,11 @@ model ApiKey {
   authoredComments         Comment[]      @relation("CommentAuthorApiKey")
   leadActivities           LeadActivity[] @relation("LeadActivityCreatedByApiKey")
 
+  /// OAuth grants that attribute machine writes as this key (Heather MCP, etc.).
+  oauthAuthorizationCodes OAuthAuthorizationCode[] @relation("OAuthActingApiKey")
+  oauthAccessTokens       OAuthAccessToken[]       @relation("OAuthActingApiKey")
+  oauthRefreshTokens      OAuthRefreshToken[]      @relation("OAuthActingApiKey")
+
   @@index([organizationId])
 }
 
@@ -647,6 +652,12 @@ model OAuthAuthorizationCode {
   /// redirect it was issued against.
   redirectUri String
 
+  /// When set, MCP/`/api/v1` attribute writes as this org ApiKey (e.g. `heather`)
+  /// instead of the OAuth client's display name ("Cursor"). Null = human-approved
+  /// connector with no bot identity (ChatGPT/Claude personal use).
+  actingApiKeyId String?
+  actingApiKey   ApiKey? @relation("OAuthActingApiKey", fields: [actingApiKeyId], references: [id], onDelete: SetNull)
+
   /// PKCE (RFC 7636), required of every client here including confidential ones.
   codeChallenge       String
   codeChallengeMethod String
@@ -657,6 +668,7 @@ model OAuthAuthorizationCode {
 
   @@index([oauthClientId])
   @@index([expiresAt])
+  @@index([actingApiKeyId])
 }
 
 /// A bearer token an MCP client presents on every request. Scoped to one person acting
@@ -677,6 +689,11 @@ model OAuthAccessToken {
 
   scopes String[]
 
+  /// Copied from the authorization code (and preserved across refresh). See
+  /// OAuthAuthorizationCode.actingApiKeyId.
+  actingApiKeyId String?
+  actingApiKey   ApiKey? @relation("OAuthActingApiKey", fields: [actingApiKeyId], references: [id], onDelete: SetNull)
+
   expiresAt  DateTime
   revokedAt  DateTime?
   lastUsedAt DateTime?
@@ -685,6 +702,7 @@ model OAuthAccessToken {
   @@index([oauthClientId])
   @@index([userId])
   @@index([expiresAt])
+  @@index([actingApiKeyId])
 }
 
 /// Exchanged for a fresh access token once the short-lived one expires. Rotated on
@@ -705,6 +723,11 @@ model OAuthRefreshToken {
 
   scopes String[]
 
+  /// Copied from the authorization code (and preserved across refresh). See
+  /// OAuthAuthorizationCode.actingApiKeyId.
+  actingApiKeyId String?
+  actingApiKey   ApiKey? @relation("OAuthActingApiKey", fields: [actingApiKeyId], references: [id], onDelete: SetNull)
+
   expiresAt   DateTime?
   revokedAt   DateTime?
   rotatedToId String?
@@ -712,6 +735,7 @@ model OAuthRefreshToken {
 
   @@index([oauthClientId])
   @@index([userId])
+  @@index([actingApiKeyId])
 }
 
 // ---------------------------------------------------------------------------

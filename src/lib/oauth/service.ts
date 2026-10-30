@@ -223,10 +223,37 @@ export interface IssueCodeInput {
   readonly redirectUri: string;
   readonly codeChallenge: string;
   readonly codeChallengeMethod: string;
+  /**
+   * Optional org ApiKey this grant should attribute as (heather / atlas / roy).
+   * Validated against the organization before the code is minted.
+   */
+  readonly actingApiKeyId?: string | null;
+}
+
+/**
+ * Confirms an acting ApiKey belongs to the organization and is usable. Returns the
+ * id unchanged, or null when the caller passed nothing. Throws OAuthError when the
+ * id is present but not a live key in this org — better to refuse consent than to
+ * silently drop the bot identity and attribute writes as "Cursor".
+ */
+export async function resolveActingApiKeyId(
+  organizationId: string,
+  actingApiKeyId: string | null | undefined,
+): Promise<string | null> {
+  if (!actingApiKeyId) return null;
+  const key = await db.apiKey.findFirst({
+    where: { id: actingApiKeyId, organizationId, revokedAt: null },
+    select: { id: true, expiresAt: true },
+  });
+  if (!key || (key.expiresAt !== null && key.expiresAt.getTime() <= Date.now())) {
+    throw new OAuthError("invalid_request", "acting_api_key_id is not a live API key in this organization.");
+  }
+  return key.id;
 }
 
 /** Mints a single-use authorization code for a person who just approved a client. */
 export async function issueAuthorizationCode(input: IssueCodeInput): Promise<string> {
+  const actingApiKeyId = await resolveActingApiKeyId(input.organizationId, input.actingApiKeyId);
   const generated = generateSecureToken(CODE_PREFIX);
   await db.oAuthAuthorizationCode.create({
     data: {
@@ -239,6 +266,7 @@ export async function issueAuthorizationCode(input: IssueCodeInput): Promise<str
       redirectUri: input.redirectUri,
       codeChallenge: input.codeChallenge,
       codeChallengeMethod: input.codeChallengeMethod,
+      actingApiKeyId,
       expiresAt: new Date(Date.now() + CODE_TTL_MS),
     },
   });
@@ -286,6 +314,7 @@ async function mintTokens(grant: {
   userId: string;
   organizationId: string;
   scopes: string[];
+  actingApiKeyId: string | null;
 }): Promise<TokenResponse> {
   const access = generateSecureToken(ACCESS_PREFIX);
   const refresh = generateSecureToken(REFRESH_PREFIX);
@@ -351,6 +380,7 @@ export async function exchangeAuthorizationCode(input: ExchangeCodeInput): Promi
     userId: record.userId,
     organizationId: record.organizationId,
     scopes: record.scopes,
+    actingApiKeyId: record.actingApiKeyId,
   });
 }
 
@@ -390,6 +420,9 @@ export async function refreshAccessToken(input: RefreshInput): Promise<TokenResp
     userId: record.userId,
     organizationId: record.organizationId,
     scopes: record.scopes,
+    // Preserve bot attribution across refresh — otherwise Heather MCP would
+    // silently fall back to attributing as "Cursor" after the first hour.
+    actingApiKeyId: record.actingApiKeyId,
   });
 
   const replacement = parseSecureToken(REFRESH_PREFIX, issued.refreshToken);
@@ -418,6 +451,9 @@ export interface OAuthTokenContext {
   readonly userId: string;
   readonly clientName: string;
   readonly scopes: readonly string[];
+  /** When set, `/api/v1` + MCP attribute as this ApiKey instead of clientName. */
+  readonly actingApiKeyId: string | null;
+  readonly oauthClientId: string;
 }
 
 /**
@@ -446,12 +482,62 @@ export async function authenticateOAuthAccessToken(token: string): Promise<OAuth
     organizationId: record.organizationId,
     userId: record.userId,
     clientName: record.client.name,
+    actingApiKeyId: record.actingApiKeyId,
+    oauthClientId: record.oauthClientId,
     // Live MCP allowlist — not the scopes frozen on the token row — so expanding
     // MCP_GRANTABLE_SCOPES unblocks already-connected assistants (api_v1_request →
     // /files, etc.) without forcing every connector to re-consent. The row still
-    // stores the original grant for audit.
+    // stores the original grant for audit. When actingApiKeyId is set,
+    // authenticateMachineRequest may substitute the ApiKey's own scopes (e.g. `*`).
     scopes: MCP_GRANTABLE_SCOPES,
   };
+}
+
+/**
+ * Rebinds every live token for one (client, user) grant to attribute as `actingApiKeyId`.
+ * Used by Settings → Connected applications so Heather MCP can switch from "Cursor"
+ * to `heather` without Damien reconnecting Cursor.
+ */
+export async function setGrantActingApiKey(input: {
+  readonly organizationId: string;
+  readonly oauthClientId: string;
+  readonly userId: string;
+  readonly actingApiKeyId: string | null;
+}): Promise<void> {
+  const actingApiKeyId = await resolveActingApiKeyId(input.organizationId, input.actingApiKeyId);
+  const held = await db.oAuthAccessToken.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      oauthClientId: input.oauthClientId,
+      userId: input.userId,
+      revokedAt: null,
+    },
+    select: { id: true },
+  });
+  if (!held) {
+    throw new OAuthError("invalid_request", "No live connection found for that application.", 404);
+  }
+
+  await db.$transaction([
+    db.oAuthAccessToken.updateMany({
+      where: {
+        organizationId: input.organizationId,
+        oauthClientId: input.oauthClientId,
+        userId: input.userId,
+        revokedAt: null,
+      },
+      data: { actingApiKeyId },
+    }),
+    db.oAuthRefreshToken.updateMany({
+      where: {
+        organizationId: input.organizationId,
+        oauthClientId: input.oauthClientId,
+        userId: input.userId,
+        revokedAt: null,
+      },
+      data: { actingApiKeyId },
+    }),
+  ]);
 }
 
 /** Every scope this server knows how to name in metadata. */
