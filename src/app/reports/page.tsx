@@ -258,7 +258,13 @@ async function BudgetVarianceTable({ organizationId }: { organizationId: string 
             <Td right>{formatMoney(row.originalBudgetCostCents)}</Td>
             <Td right>{formatMoney(row.revisedBudgetCostCents)}</Td>
             <Td right>{formatMoney(row.projectedCostCents)}</Td>
-            <Td right warn={row.isOverBudget}>{formatMoney(row.varianceCents)}</Td>
+            <Td right warn={row.isOverBudget}>
+              {row.isOverBudget
+                ? `${formatMoney(Math.abs(row.varianceCents))} over`
+                : row.varianceCents === 0
+                  ? formatMoney(0)
+                  : `${formatMoney(row.varianceCents)} under`}
+            </Td>
           </tr>
         ))}
         {rows.length === 0 ? <EmptyRow colSpan={5} /> : null}
@@ -345,7 +351,13 @@ async function LaborTable({ organizationId }: { organizationId: string }) {
             <Td>{row.jobName}</Td>
             <Td right>{formatMoney(row.budgetedLaborCostCents)}</Td>
             <Td right>{formatMoney(row.approvedLaborCostCents)}</Td>
-            <Td right warn={row.isOverBudget}>{formatMoney(row.varianceCents)}</Td>
+            <Td right warn={row.isOverBudget}>
+              {row.isOverBudget
+                ? `${formatMoney(Math.abs(row.varianceCents))} over`
+                : row.varianceCents === 0
+                  ? formatMoney(0)
+                  : `${formatMoney(row.varianceCents)} under`}
+            </Td>
           </tr>
         ))}
         {rows.length === 0 ? <EmptyRow colSpan={4} /> : null}

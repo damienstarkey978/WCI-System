@@ -865,11 +865,26 @@ export async function importApprovedProposal(
         options: { some: { estimateId: existingEstimate.id } },
       },
     });
+    // Re-imports used to return budgetLinesWritten: 0 forever — so a first run that
+    // created the estimate but skipped/failed send-to-budget never healed. If the job
+    // still has no BudgetLines, send now (allowResend when already locked).
+    let budgetLinesWritten = 0;
+    if (input.sendToBudget !== false && existingEstimate.lineItems.length > 0) {
+      const existingBudgetLines = await db.budgetLine.count({ where: { jobId: input.jobId } });
+      if (existingBudgetLines === 0) {
+        const budget = await sendEstimateToBudget({
+          estimateId: existingEstimate.id,
+          organizationId: input.organizationId,
+          allowResend: existingEstimate.sentToBudgetAt !== null,
+        });
+        budgetLinesWritten = budget.budgetLinesWritten;
+      }
+    }
     return {
       estimateId: existingEstimate.id,
       proposalId: existingProposal?.id ?? "",
       created: false,
-      budgetLinesWritten: 0,
+      budgetLinesWritten,
     };
   }
 

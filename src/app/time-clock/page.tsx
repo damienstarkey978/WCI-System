@@ -7,7 +7,7 @@ import { CalendarIcon } from "@/components/shell/icons";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate } from "@/lib/format";
+import { formatDateTime, formatTime } from "@/lib/format";
 import { workedHours } from "@/lib/time-clock/hours";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +51,7 @@ export default async function GlobalTimeClockPage({ searchParams }: PageProps<"/
     }),
   ]);
 
-  const asOf = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const asOf = formatTime(new Date());
   const tabs = [
     { key: "all", label: "All shifts", href: "/time-clock" },
     { key: "open", label: "Clocked in", href: "/time-clock?tab=open" },
@@ -124,7 +124,7 @@ export default async function GlobalTimeClockPage({ searchParams }: PageProps<"/
                     <td className="px-4 py-2 text-[var(--bt-muted)]">
                       {entry.costCode.code} {entry.costCode.name}
                     </td>
-                    <td className="px-4 py-2 text-[var(--bt-muted)]">{formatDate(entry.clockInAt)}</td>
+                    <td className="px-4 py-2 text-[var(--bt-muted)]">{formatDateTime(entry.clockInAt)}</td>
                     <td className="px-4 py-2">
                       {entry.clockOutAt ? workedHours(entry.clockInAt, entry.clockOutAt, entry.breaks).toFixed(2) : <span className="text-[var(--bt-muted)]">In progress</span>}
                     </td>

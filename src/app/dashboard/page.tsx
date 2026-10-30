@@ -207,10 +207,10 @@ export default async function DashboardPage() {
         </section>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <Tile label="Active jobs" value={String(activeJobCount)} href="/jobs" />
+          <Tile label="Active jobs (open + warranty)" value={String(activeJobCount)} href="/jobs?status=OPEN" />
           <Tile label="Total contract value" value={formatMoney(totalContractValueCents)} href="/reports?report=wip" />
           <Tile label="Projected profit" value={formatMoney(totalProjectedProfitCents)} href="/reports?report=profitability" />
-          <Tile label="Avg. projected margin" value={formatPercent(avgMarginBasisPoints)} href="/reports?report=profitability" />
+          <Tile label="Portfolio projected margin" value={formatPercent(avgMarginBasisPoints)} href="/reports?report=profitability" />
           <Tile
             label="Jobs over budget"
             value={String(jobsOverBudgetCount)}

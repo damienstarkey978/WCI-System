@@ -28,6 +28,7 @@ const {
   estimateCreate,
   proposalFindFirst,
   proposalCreate,
+  budgetLineCount,
   sendEstimateToBudget,
 } = vi.hoisted(() => ({
   dailyLogFindFirst: vi.fn(),
@@ -57,6 +58,7 @@ const {
   estimateCreate: vi.fn(),
   proposalFindFirst: vi.fn(),
   proposalCreate: vi.fn(),
+  budgetLineCount: vi.fn(),
   sendEstimateToBudget: vi.fn(),
 }));
 
@@ -69,6 +71,7 @@ vi.mock("@/lib/db", () => ({
     client: { findFirst: clientFindFirst },
     estimate: { findFirst: estimateFindFirst, create: estimateCreate },
     proposal: { findFirst: proposalFindFirst, create: proposalCreate },
+    budgetLine: { count: budgetLineCount },
     dailyLog: { findFirst: dailyLogFindFirst, create: dailyLogCreate },
     purchaseOrder: { findFirst: purchaseOrderFindFirst, create: purchaseOrderCreate },
     bill: { findFirst: billFindFirst, create: billCreate },
@@ -118,6 +121,7 @@ beforeEach(() => {
   vendorFindFirst.mockResolvedValue({ id: "vendor_1" });
   costCodeFindMany.mockResolvedValue([{ id: "cc_1", defaultCostType: "MATERIAL" }]);
   clientFindFirst.mockResolvedValue({ id: "cli_1" });
+  budgetLineCount.mockResolvedValue(0);
   sendEstimateToBudget.mockResolvedValue({ budgetLinesWritten: 1 });
 });
 
@@ -404,6 +408,7 @@ describe("migration import idempotency", () => {
       id: "est_1",
       aiPromptNotes: "bt-proposal:pine-st",
       lineItems: [],
+      sentToBudgetAt: null,
     });
     proposalFindFirst.mockResolvedValue({ id: "prop_1" });
 
@@ -430,5 +435,42 @@ describe("migration import idempotency", () => {
     expect(estimateCreate).not.toHaveBeenCalled();
     expect(proposalCreate).not.toHaveBeenCalled();
     expect(sendEstimateToBudget).not.toHaveBeenCalled();
+  });
+
+  it("heals send-to-budget when the estimate already exists but the job has no BudgetLines", async () => {
+    estimateFindFirst.mockResolvedValue({
+      id: "est_1",
+      aiPromptNotes: "bt-proposal:pine-st",
+      sentToBudgetAt: null,
+      lineItems: [{ id: "eli_1", costCodeId: "cc_1" }],
+    });
+    proposalFindFirst.mockResolvedValue({ id: "prop_1" });
+    budgetLineCount.mockResolvedValue(0);
+    sendEstimateToBudget.mockResolvedValue({ budgetLinesWritten: 3 });
+
+    const result = await importApprovedProposal({
+      organizationId: "org_1",
+      jobId: "job_1",
+      clientId: "cli_1",
+      title: "Proposal for Pine St",
+      externalKey: "pine-st",
+      lineItems: [
+        {
+          costCodeId: "cc_1",
+          title: "Plans",
+          quantityMilli: 1000,
+          unitCostCents: 350000,
+          markupBasisPoints: 2100,
+        },
+      ],
+    });
+
+    expect(result.created).toBe(false);
+    expect(result.budgetLinesWritten).toBe(3);
+    expect(sendEstimateToBudget).toHaveBeenCalledWith({
+      estimateId: "est_1",
+      organizationId: "org_1",
+      allowResend: false,
+    });
   });
 });
