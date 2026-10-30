@@ -5,7 +5,14 @@
  * computes projected cost, and every report reads from it.
  */
 
-import { ChangeOrderMode, ChangeOrderStatus, CostType, LeadStage, TimeClockApprovalStatus } from "@/generated/prisma/enums";
+import {
+  ChangeOrderMode,
+  ChangeOrderStatus,
+  CostType,
+  InvoiceStatus,
+  LeadStage,
+  TimeClockApprovalStatus,
+} from "@/generated/prisma/enums";
 import { computeJobFunnel, contractRevenueOnly, extendedCostCents } from "@/lib/budget/funnel";
 import { rollUpEstimateLines } from "@/lib/budget/send-to-budget";
 import {
@@ -38,8 +45,16 @@ async function loadActiveJobFunnels(organizationId: string, jobGroupId?: string)
     where: { organizationId, isTemplate: false, status: { in: [...ACTIVE_JOB_STATUSES] }, ...(jobGroupId ? { jobGroupId } : {}) },
     include: {
       budgetLines: { include: { costCode: { select: { defaultCostType: true } } } },
-      purchaseOrders: { include: { lineItems: true } },
-      bills: { include: { lineItems: true } },
+      purchaseOrders: {
+        include: {
+          lineItems: { include: { costCode: { select: { defaultCostType: true } } } },
+        },
+      },
+      bills: {
+        include: {
+          lineItems: { include: { costCode: { select: { defaultCostType: true } } } },
+        },
+      },
       invoices: { select: { status: true, amountCents: true, taxCents: true } },
       timeClockEntries: {
         where: { approvalStatus: TimeClockApprovalStatus.APPROVED, clockOutAt: { not: null } },
@@ -81,7 +96,37 @@ async function loadActiveJobFunnels(organizationId: string, jobGroupId?: string)
       .filter((line) => line.costCode.defaultCostType === CostType.LABOR)
       .reduce((total, line) => total + line.revisedBudgetCostCents, 0);
 
-    const approvedLaborCostCents = unapprovedLabor.reduce((total, entry) => total + entry.amountCents, 0);
+    // Time-clock is the preferred actual; until Gusto sync / clock entries exist,
+    // LABOR bills (and PO lines tagged LABOR) are the only real spend signal —
+    // Heather #10: report was always $0 because clock was empty and bills ignored.
+    const clockLaborCents = unapprovedLabor.reduce((total, entry) => total + entry.amountCents, 0);
+    const billLaborCents = job.bills.reduce((total, bill) => {
+      if (bill.approvalStatus === "VOID" || bill.approvalStatus === "INBOX") return total;
+      return (
+        total +
+        bill.lineItems.reduce((lineTotal, item) => {
+          const labor =
+            item.costType === CostType.LABOR || item.costCode?.defaultCostType === CostType.LABOR;
+          return labor ? lineTotal + item.amountCents : lineTotal;
+        }, 0)
+      );
+    }, 0);
+    const poLaborCents = job.purchaseOrders.reduce((total, po) => {
+      if (po.status !== "APPROVED" && po.status !== "COMPLETED") return total;
+      return (
+        total +
+        po.lineItems.reduce((lineTotal, item) => {
+          const labor =
+            item.costType === CostType.LABOR || item.costCode?.defaultCostType === CostType.LABOR;
+          return labor
+            ? lineTotal + extendedCostCents(item.quantityMilli, item.unitCostCents)
+            : lineTotal;
+        }, 0)
+      );
+    }, 0);
+    // Take the strongest single signal — summing bill+PO would double-count once
+    // a labor PO is billed; clock + bill would double-count the same hours.
+    const approvedLaborCostCents = Math.max(clockLaborCents, billLaborCents, poLaborCents);
 
     return { job, funnel, budgetedLaborCostCents, approvedLaborCostCents };
   });
@@ -131,8 +176,14 @@ export async function getInvoicingReport(organizationId: string) {
   const jobFunnels = await loadActiveJobFunnels(organizationId);
 
   const jobIds = jobFunnels.map(({ job }) => job.id);
+  // VOID invoices (and migration prefix twins voided after a later import) must
+  // not inflate paid — amountInvoiced already skips VOID via contractRevenueOnly.
+  // Counting their leftover Payment rows produced negative outstanding (Heather #9).
   const payments = await db.payment.findMany({
-    where: { organizationId, invoice: { jobId: { in: jobIds } } },
+    where: {
+      organizationId,
+      invoice: { jobId: { in: jobIds }, status: { not: InvoiceStatus.VOID } },
+    },
     select: { amountCents: true, invoice: { select: { jobId: true } } },
   });
   const paidByJob = new Map<string, number>();
@@ -172,7 +223,11 @@ export async function getCashFlowReport(organizationId: string, options: CashFlo
 
   const [payments, paidBills, jobFunnels] = await Promise.all([
     db.payment.findMany({
-      where: { organizationId, receivedAt: { gte: windowStart } },
+      where: {
+        organizationId,
+        receivedAt: { gte: windowStart },
+        invoice: { status: { not: InvoiceStatus.VOID } },
+      },
       select: { amountCents: true, receivedAt: true },
     }),
     db.bill.findMany({

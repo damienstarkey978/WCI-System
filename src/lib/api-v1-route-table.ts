@@ -109,6 +109,7 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/purchase-orders/{purchaseOrderId}": ["DELETE"],
   "/purchase-orders/{purchaseOrderId}/approval-link": ["POST"],
   "/purchase-orders/{purchaseOrderId}/approve": ["POST"],
+  "/purchase-orders/{purchaseOrderId}/recall": ["POST"],
   "/purchase-orders/match-by-road-name": ["POST"],
   "/purchasing-intents": ["GET"],
   "/purchasing-intents/{intentId}/claim": ["POST"],

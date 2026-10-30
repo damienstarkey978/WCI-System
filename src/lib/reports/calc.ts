@@ -120,7 +120,14 @@ export interface InvoicingRow extends InvoicingInput {
 }
 
 export function computeInvoicingRow(input: InvoicingInput): InvoicingRow {
-  return { ...input, outstandingCents: input.amountInvoicedCents - input.totalPaidCents };
+  // Floor at zero: VOID/duplicate-import payments must never drive a negative
+  // outstanding after amountInvoiced already excludes VOID invoices. Real
+  // overpayments (paid > invoiced on live rows) still surface as $0 here rather
+  // than a nonsense credit the office cannot collect.
+  return {
+    ...input,
+    outstandingCents: Math.max(0, input.amountInvoicedCents - input.totalPaidCents),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -129,9 +136,9 @@ export function computeInvoicingRow(input: InvoicingInput): InvoicingRow {
 
 export interface LaborInput extends JobSummary {
   readonly budgetedLaborCostCents: Cents;
-  /** Approved timesheet cost to date — the best available proxy for "actual" until
-   * payroll/Gusto sync exists. Base pay only; no overtime premium (see
-   * src/lib/time-clock/hours.ts for why that's computed separately). */
+  /** Labor actuals to date — approved time-clock when present, else LABOR bills /
+   * POs (costType or cost-code default). Base pay only; no overtime premium (see
+   * src/lib/time-clock/hours.ts). */
   readonly approvedLaborCostCents: Cents;
 }
 
