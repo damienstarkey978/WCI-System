@@ -330,6 +330,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     path: "/jobs/{jobId}/permitting-flags",
     summary: "Update NOC / NTBO / building-permit-docs-created flags",
     description:
+      "Booleans plus optional nocNumber/nocFiledOn and ntboNumber/ntboFiledOn (YYYY-MM-DD). " +
+      "Setting a number or filed-on date implies the matching boolean true. " +
       "buildingPermitDocsCreated drives the Permitting header Docs missing → Docs created chip.",
     tags: ["Permitting"],
     scopes: ["permits:write"],
@@ -342,7 +344,8 @@ const ENDPOINTS: readonly EndpointDef[] = [
     summary: "Update the job's Permit Rockstar ledger",
     description:
       "One ledger per job (Duval/Jax private provider): privateProvider, setupType " +
-      "(FLAT_FEE | CARD_ON_FILE), invoiced, paid, feePerInspectionCents. " +
+      "(FLAT_FEE | CARD_ON_FILE), invoiced, paid, feePerInspectionCents, invoiceNumber, " +
+      "invoiceAmountCents, invoicedAt, paidAt. " +
       "Does not change JobPermit / inspection rows from the permit-ops fields.",
     tags: ["Permitting"],
     scopes: ["permits:write"],
@@ -394,7 +397,9 @@ const ENDPOINTS: readonly EndpointDef[] = [
     path: "/permit-inspections/{inspectionId}",
     summary: "Update inspection result, pass date, confirmation #, inspector, or completed",
     description:
-      "passedAt is the real city pass/completed date (distinct from createdAt / completedAt system stamps).",
+      "passedAt is the real city pass/completed date (ISO or YYYY-MM-DD; distinct from createdAt / " +
+      "completedAt system stamps). Optional name renames; optional permitId moves the inspection " +
+      "(and renames its picture folder when possible) onto another permit on the same job.",
     tags: ["Permitting"],
     scopes: ["permits:write"],
     pathParams: ["inspectionId"],

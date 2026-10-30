@@ -1,10 +1,15 @@
 /**
  * /api/v1/jobs/{jobId}/permit-rockstar-ledger — one Permit Rockstar ledger per job
- * (private provider, flat fee / card on file, invoiced, paid, fee per inspection).
+ * (private provider, flat fee / card on file, invoiced, paid, fee, invoice #/amount/dates).
  */
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
-import { formatZodIssues, updatePermitRockstarLedgerSchema } from "@/lib/api-schemas";
+import {
+  formatZodIssues,
+  parseOptionalDate,
+  updatePermitRockstarLedgerSchema,
+} from "@/lib/api-schemas";
+import { formatDateOnly } from "@/lib/date-only";
 import {
   JobNotFoundError,
   updatePermitRockstarLedger,
@@ -42,13 +47,33 @@ export const PATCH = withApiAuth<Context>(["permits:write"], async (request, aut
         parsed.data.feePerInspectionCents === undefined
           ? undefined
           : parsed.data.feePerInspectionCents,
+      invoiceNumber: parsed.data.invoiceNumber,
+      invoiceAmountCents:
+        parsed.data.invoiceAmountCents === undefined
+          ? undefined
+          : parsed.data.invoiceAmountCents,
+      invoicedAt: parseOptionalDate(parsed.data.invoicedAt),
+      paidAt: parseOptionalDate(parsed.data.paidAt),
     });
-    return Response.json({ data: result });
+    return Response.json({
+      data: {
+        ...result,
+        permitRockstar: {
+          ...result.permitRockstar,
+          invoicedAt: formatDateOnly(result.permitRockstar.invoicedAt),
+          paidAt: formatDateOnly(result.permitRockstar.paidAt),
+        },
+      },
+    });
   } catch (error) {
     if (error instanceof JobNotFoundError) {
       return apiError(404, "not_found", error.message);
     }
-    if (error instanceof Error && error.message.includes("feePerInspectionCents")) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("feePerInspectionCents") ||
+        error.message.includes("invoiceAmountCents"))
+    ) {
       return apiError(422, "validation_failed", error.message);
     }
     throw error;

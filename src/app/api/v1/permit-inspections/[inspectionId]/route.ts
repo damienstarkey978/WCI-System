@@ -6,6 +6,7 @@ import { apiError, withApiAuth } from "@/lib/api-auth";
 import { formatZodIssues, parseOptionalDate, updatePermitInspectionSchema } from "@/lib/api-schemas";
 import {
   InspectionNotFoundError,
+  PermitNotFoundError,
   removePermitInspection,
   updateInspectionFields,
 } from "@/lib/permitting/service";
@@ -47,11 +48,22 @@ export const PATCH = withApiAuth<Context>(["permits:write"], async (request, aut
       passedAt: parseOptionalDate(parsed.data.passedAt),
       confirmationNumber: parsed.data.confirmationNumber,
       inspector: parsed.data.inspector,
+      name: parsed.data.name,
+      permitId: parsed.data.permitId,
     });
     return Response.json({ data: inspection });
   } catch (error) {
     if (error instanceof InspectionNotFoundError) {
       return apiError(404, "not_found", error.message);
+    }
+    if (error instanceof PermitNotFoundError) {
+      return apiError(404, "not_found", error.message);
+    }
+    if (error instanceof Error && error.message.includes("already exists on the target permit")) {
+      return apiError(409, "conflict", error.message);
+    }
+    if (error instanceof Error && error.message === "Inspection name is required.") {
+      return apiError(422, "validation_failed", error.message);
     }
     throw error;
   }

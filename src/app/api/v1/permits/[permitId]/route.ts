@@ -46,6 +46,7 @@ export const PATCH = withApiAuth<Context>(["permits:write"], async (request, aut
       vendorId: parsed.data.vendorId,
       permitNumber: parsed.data.permitNumber,
       label: parsed.data.label,
+      trade: parsed.data.trade,
       status: parsed.data.status,
       issuedAt: parseOptionalDate(parsed.data.issuedAt),
       expiresAt: parseOptionalDate(parsed.data.expiresAt),

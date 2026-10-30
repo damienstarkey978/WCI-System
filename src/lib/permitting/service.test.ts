@@ -92,9 +92,30 @@ describe("permitting helpers", () => {
         { trade: PermitTrade.BUILDING, pulled: false, permitNumber: "X", status: PermitStatus.EXPIRED },
       ]),
     ).toBe(false);
+    expect(
+      hasActiveBuildingPermit([
+        {
+          trade: PermitTrade.BUILDING,
+          pulled: true,
+          permitNumber: "X",
+          status: PermitStatus.FINALIZED,
+        },
+      ]),
+    ).toBe(false);
+    expect(
+      hasActiveBuildingPermit([
+        {
+          trade: PermitTrade.BUILDING,
+          pulled: false,
+          permitNumber: "X",
+          status: PermitStatus.RETURNED_FOR_CORRECTIONS,
+        },
+      ]),
+    ).toBe(false);
   });
 
   it("maps job columns onto a Permit Rockstar ledger shape", () => {
+    const invoicedAt = new Date("2026-10-01T12:00:00.000Z");
     expect(
       permitRockstarLedgerFromJob({
         permitRockstarPrivateProvider: true,
@@ -102,6 +123,10 @@ describe("permitting helpers", () => {
         permitRockstarInvoiced: true,
         permitRockstarPaid: false,
         permitRockstarFeePerInspectionCents: 12_500,
+        permitRockstarInvoiceNumber: "PR-100",
+        permitRockstarInvoiceAmountCents: 45_000,
+        permitRockstarInvoicedAt: invoicedAt,
+        permitRockstarPaidAt: null,
       }),
     ).toEqual({
       privateProvider: true,
@@ -109,6 +134,10 @@ describe("permitting helpers", () => {
       invoiced: true,
       paid: false,
       feePerInspectionCents: 12_500,
+      invoiceNumber: "PR-100",
+      invoiceAmountCents: 45_000,
+      invoicedAt,
+      paidAt: null,
     });
   });
 });
