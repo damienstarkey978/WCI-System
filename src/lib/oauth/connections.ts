@@ -22,6 +22,10 @@ export interface Connection {
   readonly connectedAt: Date;
   /** Null until the assistant has actually called something. */
   readonly lastUsedAt: Date | null;
+  /** Bot ApiKey this grant attributes as, when bound (heather / atlas / roy). */
+  readonly actingApiKeyId: string | null;
+  readonly actingApiKeyName: string | null;
+  readonly actingAgentKind: string | null;
 }
 
 /**
@@ -40,15 +44,18 @@ export async function listConnections(organizationId: string): Promise<Connectio
       scopes: true,
       createdAt: true,
       lastUsedAt: true,
+      actingApiKeyId: true,
       client: { select: { name: true, clientUri: true } },
       user: { select: { name: true, email: true } },
+      actingApiKey: { select: { name: true, agentKind: true } },
     },
     orderBy: { createdAt: "desc" },
   });
 
   // A refresh rotates the access token, so one connection accumulates rows. The
   // earliest is when the person actually approved it; the latest use across all of
-  // them is when it was last active.
+  // them is when it was last active. Prefer a row that already has actingApiKeyId
+  // so a partial rebind still surfaces the bot name.
   const byGrant = new Map<string, Connection>();
   for (const token of tokens) {
     const key = `${token.oauthClientId}:${token.userId}`;
@@ -57,6 +64,12 @@ export async function listConnections(organizationId: string): Promise<Connectio
       existing?.lastUsedAt && token.lastUsedAt
         ? new Date(Math.max(existing.lastUsedAt.getTime(), token.lastUsedAt.getTime()))
         : (existing?.lastUsedAt ?? token.lastUsedAt);
+
+    const actingApiKeyId = token.actingApiKeyId ?? existing?.actingApiKeyId ?? null;
+    const actingApiKeyName =
+      token.actingApiKey?.name ?? (token.actingApiKeyId ? null : existing?.actingApiKeyName) ?? null;
+    const actingAgentKind =
+      token.actingApiKey?.agentKind ?? (token.actingApiKeyId ? null : existing?.actingAgentKind) ?? null;
 
     byGrant.set(key, {
       oauthClientId: token.oauthClientId,
@@ -67,6 +80,9 @@ export async function listConnections(organizationId: string): Promise<Connectio
       scopes: token.scopes,
       connectedAt: existing ? (existing.connectedAt < token.createdAt ? existing.connectedAt : token.createdAt) : token.createdAt,
       lastUsedAt,
+      actingApiKeyId,
+      actingApiKeyName,
+      actingAgentKind,
     });
   }
 

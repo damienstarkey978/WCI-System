@@ -174,7 +174,20 @@ const ENDPOINTS: readonly EndpointDef[] = [
     summary: "Inspect the authenticated API key",
     description:
       "Returns apiKeyId, name, agentKind, organizationId, and granted scopes. " +
-      "Requires a valid API key only (no module scope) so every consumer can verify what it was issued.",
+      "Requires a valid API key only (no module scope) so every consumer can verify what it was issued. " +
+      "OAuth MCP grants bound via POST /me/acting-api-key return the bot key's name (e.g. heather).",
+    tags: ["Auth"],
+    scopes: [],
+  },
+  {
+    method: "post",
+    path: "/me/acting-api-key",
+    summary: "Bind OAuth MCP grant to a bot API key",
+    description:
+      "OAuth-only. Present a live org ApiKey bearer (apiKeyToken) to attribute this OAuth grant as that key " +
+      "(heather / atlas / roy). Empty/null clears the binding. Does not remint or revoke the bot key. " +
+      "Also available under Settings → Connected applications. Prefer configuring MCP with the bot API key " +
+      "Authorization header when the client supports it.",
     tags: ["Auth"],
     scopes: [],
   },

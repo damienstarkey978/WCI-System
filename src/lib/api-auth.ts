@@ -123,6 +123,52 @@ export async function authenticateApiKey(request: Request): Promise<AuthResult> 
 }
 
 /**
+ * Turn an OAuth access-token context into the same `ApiKeyContext` shape `/api/v1`
+ * handlers already expect. When the grant is bound to an org ApiKey (`actingApiKeyId`
+ * — Heather MCP → `heather`), attribution and scopes come from that key so writes
+ * stamp a real ApiKey FK and `GET /me` returns `name: "heather"`. Unbound grants
+ * (ChatGPT/Claude personal connectors) keep the previous fallback: client display
+ * name + access-token id (not an ApiKey FK — callers that need a real key must bind).
+ */
+export async function apiKeyContextFromOAuth(
+  oauth: Awaited<ReturnType<typeof authenticateOAuthAccessToken>>,
+): Promise<ApiKeyContext | null> {
+  if (!oauth) return null;
+
+  if (oauth.actingApiKeyId) {
+    const apiKey = await db.apiKey.findFirst({
+      where: {
+        id: oauth.actingApiKeyId,
+        organizationId: oauth.organizationId,
+        revokedAt: null,
+      },
+    });
+    if (apiKey && (apiKey.expiresAt === null || apiKey.expiresAt.getTime() > Date.now())) {
+      void db.apiKey
+        .update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } })
+        .catch(() => undefined);
+      return {
+        apiKeyId: apiKey.id,
+        organizationId: apiKey.organizationId,
+        name: apiKey.name,
+        agentKind: apiKey.agentKind,
+        // Prefer the bot key's scopes (`*` for heather/atlas/roy) so an OAuth-connected
+        // MCP assistant matches the downloadable key Damien already issued.
+        scopes: apiKey.scopes,
+      };
+    }
+  }
+
+  return {
+    apiKeyId: oauth.accessTokenId,
+    organizationId: oauth.organizationId,
+    name: oauth.clientName,
+    agentKind: null,
+    scopes: oauth.scopes,
+  };
+}
+
+/**
  * Authenticate a machine caller the same way `/api/mcp` does: API key first, then
  * OAuth access token. Both resolve to `ApiKeyContext` so route handlers stay identical.
  */
@@ -138,18 +184,8 @@ export async function authenticateMachineRequest(request: Request): Promise<Auth
 
   const oauth = await authenticateOAuthAccessToken(token);
   if (oauth) {
-    return {
-      ok: true,
-      context: {
-        // OAuth access-token id fills the audit slot ApiKeyContext expects; there is
-        // no ApiKey row for a person-approved connector (same mapping as /api/mcp).
-        apiKeyId: oauth.accessTokenId,
-        organizationId: oauth.organizationId,
-        name: oauth.clientName,
-        agentKind: null,
-        scopes: oauth.scopes,
-      },
-    };
+    const context = await apiKeyContextFromOAuth(oauth);
+    if (context) return { ok: true, context };
   }
 
   return { ok: false, reason: "MALFORMED_TOKEN" };
