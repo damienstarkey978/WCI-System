@@ -527,13 +527,31 @@ export const createDailyLogSchema = z.object({
   // from the body (that would misattribute a bot write as a human).
   note: z.string().trim().min(1).max(10_000),
   title: z.string().trim().max(200).nullish(),
+  /** Calendar day of the log (`YYYY-MM-DD`). Defaults to today Eastern when omitted. */
+  logDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "logDate must be YYYY-MM-DD")
+    .nullish(),
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
 });
 
 export const listDailyLogsQuerySchema = z.object({
   jobId: z.string().min(1).max(64).optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(25),
+  cursor: z.string().min(1).max(64).optional(),
+  /** Opt-in: embed file rows. Default is fileCount only (keeps MCP under size caps). */
+  include: z.enum(["files"]).optional(),
+});
+
+export const listLeadsQuerySchema = listPagingQuerySchema.extend({
+  stage: z.string().min(1).max(64).optional(),
+  assignedUserId: z.string().min(1).max(64).optional(),
+});
+
+export const listUsersQuerySchema = listPagingQuerySchema.extend({
+  role: z.string().min(1).max(64).optional(),
+  isActive: z.coerce.boolean().optional(),
 });
 
 export const createTodoSchema = z.object({
@@ -972,6 +990,11 @@ export const importDailyLogSchema = z.object({
   clientVisible: z.boolean().optional(),
   subVisible: z.boolean().optional(),
   createdAt: z.coerce.date(),
+  /** Buildertrend logDate (`YYYY-MM-DD` preferred). Falls back to createdAt's UTC day. */
+  logDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "logDate must be YYYY-MM-DD")
+    .nullish(),
   /** Buildertrend weatherInformation JSON when present — never fabricate. */
   weather: z.record(z.string(), z.unknown()).nullish(),
   attachments: z.array(migrationAttachmentSchema).max(200).optional(),

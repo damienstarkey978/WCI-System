@@ -18,7 +18,31 @@ import {
   UnknownPurchaseOrderError,
   UnknownVendorError,
 } from "@/lib/bills/service";
+import { formatDateOnly } from "@/lib/date-only";
 import { db } from "@/lib/db";
+
+/** Date-only bill fields as YYYY-MM-DD; paidAt stays ISO unless it was a midnight import. */
+function serializeBill<T extends {
+  id: string;
+  issuedOn: Date | null;
+  dueOn: Date | null;
+  paidAt: Date | null;
+}>(bill: T) {
+  return {
+    ...bill,
+    issuedOn: formatDateOnly(bill.issuedOn),
+    dueOn: formatDateOnly(bill.dueOn),
+    // Imported PAID stamps are often UTC midnight of the pay day — emit date-only then.
+    paidAt:
+      bill.paidAt &&
+      bill.paidAt.getUTCHours() === 0 &&
+      bill.paidAt.getUTCMinutes() === 0 &&
+      bill.paidAt.getUTCSeconds() === 0 &&
+      bill.paidAt.getUTCMilliseconds() === 0
+        ? formatDateOnly(bill.paidAt)
+        : bill.paidAt,
+  };
+}
 
 export const GET = withApiAuth(["bills:read"], async (request, auth) => {
   const url = new URL(request.url);
@@ -41,7 +65,11 @@ export const GET = withApiAuth(["bills:read"], async (request, auth) => {
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
 
-  return Response.json(toCursorPage(bills, limit));
+  const page = toCursorPage(bills, limit);
+  return Response.json({
+    data: page.data.map(serializeBill),
+    pagination: page.pagination,
+  });
 });
 
 export const POST = withApiAuth(["bills:write"], async (request, auth) => {

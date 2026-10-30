@@ -97,6 +97,7 @@ async function main() {
     clientVisible: boolean;
     subVisible: boolean;
     createdAt: string;
+    logDate: string;
     weather?: Record<string, unknown>;
     _btId: number;
     _jobName: string;
@@ -114,13 +115,21 @@ async function main() {
       continue;
     }
     const weather = weatherPayload(log);
+    // logDate is the calendar day (YYYY-MM-DD). createdAt keeps a full timestamp for
+    // idempotency; when BT only gives a date, pin createdAt to UTC noon so Eastern
+    // does not see the previous calendar day.
+    const logDateYmd = String(log.logDate).slice(0, 10);
+    const createdAtIso = /^\d{4}-\d{2}-\d{2}$/.test(logDateYmd)
+      ? `${logDateYmd}T12:00:00.000Z`
+      : new Date(log.logDate).toISOString();
     payload.push({
       jobId,
       authorUserId,
       note,
       clientVisible: !!log.viewableBy?.owner,
       subVisible: !!log.viewableBy?.subs,
-      createdAt: new Date(log.logDate).toISOString(),
+      createdAt: createdAtIso,
+      logDate: logDateYmd,
       ...(weather ? { weather } : {}),
       _btId: log.dailyLogId,
       _jobName: log.jobsiteName,

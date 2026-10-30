@@ -2239,6 +2239,11 @@ model DailyLog {
   title String?
   note  String
 
+  /// Calendar day of the log (Buildertrend's logDate). Date-only: stored as UTC noon
+  /// for that Y-M-D so API `YYYY-MM-DD` does not shift a day early in Eastern.
+  /// Null only on rows created before this column existed; list/UI fall back to createdAt.
+  logDate DateTime?
+
   /// Populated only when a weather provider is configured — see
   /// src/lib/daily-logs/weather.ts. Null otherwise, never a fabricated value.
   weather Json?
@@ -2253,6 +2258,7 @@ model DailyLog {
   likes DailyLogLike[]
 
   @@index([jobId, createdAt])
+  @@index([jobId, logDate])
 }
 
 /// A heart on a daily log; one per user per log.

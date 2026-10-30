@@ -162,6 +162,7 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/vendor-portal/login": ["POST"],
   "/vendor-portal/purchase-orders/{purchaseOrderId}/accept": ["POST"],
   "/vendor-portal/warranty-claims/{claimId}/accept-trade": ["POST"],
+  "/users": ["GET"],
   "/vendors": ["GET","POST"],
   "/vendors/{vendorId}/certifications": ["GET","POST"],
   "/vendors/{vendorId}/job-access": ["POST"],

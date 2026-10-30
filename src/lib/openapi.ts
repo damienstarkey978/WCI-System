@@ -175,6 +175,22 @@ const ENDPOINTS: readonly EndpointDef[] = [
     tags: ["Auth"],
     scopes: [],
   },
+  {
+    method: "get",
+    path: "/users",
+    summary: "List staff users",
+    description:
+      "Staff directory (id, name, email, role, agentKind, isActive) for bots that need a userId " +
+      "(notifications, time-clock overtime summary). Requires users:read (included in *).",
+    tags: ["Users"],
+    scopes: ["users:read"],
+    queryParams: [
+      { name: "role", description: "Filter by UserRole" },
+      { name: "isActive", description: "true/false" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+    ],
+  },
   // --- Admin / one-shot cutover helpers ------------------------------------
   {
     method: "get",
@@ -1033,18 +1049,24 @@ const ENDPOINTS: readonly EndpointDef[] = [
     method: "get",
     path: "/daily-logs",
     summary: "List daily logs",
+    description:
+      "Returns logDate as YYYY-MM-DD. Files are omitted by default (fileCount only); " +
+      "pass include=files to embed file rows. Cursor-paginated.",
     tags: ["Daily Logs"],
     scopes: ["daily-logs:read"],
     queryParams: [
       { name: "jobId", description: "Filter to one job" },
-      { name: "limit", description: "Page size, 1-200 (default 50)" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
+      { name: "include", description: "Opt-in embed: files" },
     ],
   },
   {
     method: "post",
     path: "/daily-logs",
     summary: "Create a daily log",
-    description: "Heather's core surface: notes, media, auto-weather.",
+    description:
+      "Heather's core surface: notes, media, auto-weather. Optional logDate (YYYY-MM-DD) defaults to today Eastern.",
     tags: ["Daily Logs"],
     scopes: ["daily-logs:write"],
     requestSchema: createDailyLogSchema,
@@ -1893,11 +1915,14 @@ const ENDPOINTS: readonly EndpointDef[] = [
     method: "get",
     path: "/leads",
     summary: "List leads",
+    description: "Cursor-paginated; default sort createdAt desc.",
     tags: ["CRM"],
     scopes: ["leads:read"],
     queryParams: [
       { name: "stage", description: "Filter by LeadStage" },
       { name: "assignedUserId", description: "Filter to one assignee" },
+      { name: "limit", description: "Page size, 1-200 (default 25)" },
+      { name: "cursor", description: "Opaque pagination cursor from pagination.nextCursor" },
     ],
   },
   {
@@ -2499,30 +2524,28 @@ function jsonContent(schema: Record<string, unknown>) {
   return { "application/json": { schema } };
 }
 
-/** OpenAPI path templates use {param}; Next.js route folders use [param] — same string either way here. */
-function buildPaths(): Record<string, Record<string, unknown>> {
-  const paths: Record<string, Record<string, unknown>> = {};
-  for (const endpoint of ENDPOINTS) {
-    paths[endpoint.path] ??= {};
-    paths[endpoint.path][endpoint.method] = toOperation(endpoint);
-  }
-  return paths;
+/** Unique OpenAPI tags used by ENDPOINTS (for ?tag= filtering). */
+export function listOpenApiTags(): readonly string[] {
+  return [...new Set(ENDPOINTS.flatMap((e) => e.tags))].sort((a, b) => a.localeCompare(b));
 }
 
 /** Compact path→methods→scopes map for MCP clients that truncate large JSON (~11.8KB). */
-export function buildOpenApiPathIndex(): Record<string, unknown> {
+export function buildOpenApiPathIndex(tag?: string | null): Record<string, unknown> {
+  const tagFilter = tag?.trim().toLowerCase() || null;
   const paths: Record<string, Record<string, { scopes: readonly string[] }>> = {};
   for (const endpoint of ENDPOINTS) {
+    if (tagFilter && !endpoint.tags.some((t) => t.toLowerCase() === tagFilter)) continue;
     paths[endpoint.path] ??= {};
     paths[endpoint.path][endpoint.method] = { scopes: endpoint.scopes };
   }
   return {
     openapi: "3.1.0",
     info: {
-      title: "WCI OS API (path index)",
+      title: tagFilter ? `WCI OS API (path index · tag=${tag})` : "WCI OS API (path index)",
       version: "1.0.0",
       description:
         "Compact path index. Full schemas: GET /api/v1/openapi.json. " +
+        "Filter: ?tag=Permitting (or Bills, CRM, …). List tags: ?format=tags. " +
         "List endpoints accept limit (default 25, max 200) and cursor; follow pagination.nextCursor.",
     },
     servers: [{ url: "/api/v1" }],
@@ -2530,18 +2553,29 @@ export function buildOpenApiPathIndex(): Record<string, unknown> {
   };
 }
 
-export function buildOpenApiDocument(): Record<string, unknown> {
+export function buildOpenApiDocument(tag?: string | null): Record<string, unknown> {
+  const tagFilter = tag?.trim().toLowerCase() || null;
+  const endpoints = tagFilter
+    ? ENDPOINTS.filter((e) => e.tags.some((t) => t.toLowerCase() === tagFilter))
+    : ENDPOINTS;
+  const paths: Record<string, Record<string, unknown>> = {};
+  for (const endpoint of endpoints) {
+    paths[endpoint.path] ??= {};
+    paths[endpoint.path][endpoint.method] = toOperation(endpoint);
+  }
+
   return {
     openapi: "3.1.0",
     info: {
-      title: "WCI OS API",
+      title: tagFilter ? `WCI OS API (tag=${tag})` : "WCI OS API",
       version: "1.0.0",
       description:
         "Public/agent-facing API for WCI OS (CLAUDE.md 2.5). Every route under /api/v1, except this document itself, " +
         "requires a scoped API key. Issue one with `npm run issue-api-key -- --name <consumer>`. " +
         `Every response body follows one of two envelopes: {"data": ...} on success, or {"error": {"code", "message", "details?"}} on failure. ` +
         "List endpoints return { data, pagination: { nextCursor, hasMore, limit } }; pass cursor= nextCursor to page. " +
-        "Default limit is 25 (max 200) so MCP clients stay under ~11.8KB truncation — use GET /openapi.json?format=paths for a compact path index. " +
+        "Default limit is 25 (max 200). MCP truncates ~250KB — use GET /openapi.json?format=paths, " +
+        "GET /openapi.json?tag=Permitting (one tag), or GET /openapi.json?format=tags. " +
         "GET /me returns the calling key's scopes. " +
         "Scopes: " +
         SCOPES.join(", ") +
@@ -2593,6 +2627,6 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         },
       },
     },
-    paths: buildPaths(),
+    paths,
   };
 }

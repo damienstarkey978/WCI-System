@@ -16,6 +16,8 @@ export const SCOPES = [
   "jobs:write",
   "cost-codes:read",
   "cost-codes:write",
+  // Staff directory (id/name/role for notifications + time-clock lookups)
+  "users:read",
   // Phase 1 — financial core
   "estimates:read",
   "estimates:write",

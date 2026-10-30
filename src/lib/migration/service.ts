@@ -55,6 +55,7 @@ import type {
 } from "@/generated/prisma/enums";
 import { EstimateStatus, ProposalStatus, RateMode } from "@/generated/prisma/enums";
 import { sendEstimateToBudget } from "@/lib/budget/send-to-budget";
+import { parseDateOnly } from "@/lib/date-only";
 import { db } from "@/lib/db";
 import type { BasisPoints, Cents } from "@/lib/money";
 
@@ -193,6 +194,11 @@ export interface ImportDailyLogInput {
   /** The date this log actually documents in Buildertrend — becomes createdAt/updatedAt. */
   readonly createdAt: Date;
   /**
+   * Buildertrend logDate (`YYYY-MM-DD` preferred). When omitted, derived from
+   * createdAt's UTC calendar day (UTC noon) so API date-only serialization stays stable.
+   */
+  readonly logDate?: string | Date | null;
+  /**
    * Buildertrend's weatherInformation blob when present. Pass through as-is —
    * never fabricate. Null/omitted leaves DailyLog.weather unset (same as live
    * creates without WEATHER_API_KEY). Explicit `null` writes SQL NULL via DbNull.
@@ -224,12 +230,18 @@ export async function importDailyLog(input: ImportDailyLogInput) {
         ? Prisma.DbNull
         : input.weather;
 
+  const logDate =
+    input.logDate !== undefined && input.logDate !== null
+      ? parseDateOnly(input.logDate)
+      : parseDateOnly(input.createdAt);
+
   const record = await db.dailyLog.create({
     data: {
       organizationId: input.organizationId,
       jobId: input.jobId,
       authorUserId: input.authorUserId,
       note: input.note,
+      logDate,
       clientVisible: input.clientVisible ?? true,
       subVisible: input.subVisible ?? true,
       ...(weatherData !== undefined ? { weather: weatherData } : {}),

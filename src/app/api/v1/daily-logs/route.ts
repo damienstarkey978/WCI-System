@@ -3,7 +3,13 @@
 import { actorFromApiKey } from "@/lib/actor";
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createDailyLogSchema, formatZodIssues, listDailyLogsQuerySchema } from "@/lib/api-schemas";
-import { createDailyLog, DailyLogAuthorRequiredError, JobNotFoundError } from "@/lib/daily-logs/service";
+import { toCursorPage } from "@/lib/api-pagination";
+import {
+  createDailyLog,
+  DailyLogAuthorRequiredError,
+  JobNotFoundError,
+  serializeDailyLog,
+} from "@/lib/daily-logs/service";
 import { db } from "@/lib/db";
 
 export const GET = withApiAuth(["daily-logs:read"], async (request, auth) => {
@@ -12,16 +18,31 @@ export const GET = withApiAuth(["daily-logs:read"], async (request, auth) => {
   if (!parsed.success) {
     return apiError(400, "invalid_query", "Invalid query parameters.", formatZodIssues(parsed.error));
   }
-  const { jobId, limit } = parsed.data;
+  const { jobId, limit, cursor, include } = parsed.data;
+  const includeFiles = include === "files";
 
   const dailyLogs = await db.dailyLog.findMany({
     where: { organizationId: auth.organizationId, ...(jobId ? { jobId } : {}) },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    include: { files: { where: { deletedAt: null } } },
+    orderBy: [{ logDate: "desc" }, { createdAt: "desc" }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    include: includeFiles
+      ? { files: { where: { deletedAt: null } } }
+      : { _count: { select: { files: { where: { deletedAt: null } } } } },
   });
 
-  return Response.json({ data: dailyLogs });
+  const page = toCursorPage(dailyLogs, limit);
+  return Response.json({
+    data: page.data.map((row) => {
+      const serialized = serializeDailyLog(row);
+      if (includeFiles) return serialized;
+      const { _count, ...rest } = serialized as typeof serialized & {
+        _count?: { files: number };
+      };
+      return { ...rest, fileCount: _count?.files ?? 0 };
+    }),
+    pagination: page.pagination,
+  });
 });
 
 export const POST = withApiAuth(["daily-logs:write"], async (request, auth) => {
@@ -43,7 +64,7 @@ export const POST = withApiAuth(["daily-logs:write"], async (request, auth) => {
       ...parsed.data,
       actor: actorFromApiKey(auth.apiKeyId),
     });
-    return Response.json({ data: dailyLog }, { status: 201 });
+    return Response.json({ data: serializeDailyLog(dailyLog) }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) {
       return apiError(422, "unknown_job", error.message);

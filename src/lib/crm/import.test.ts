@@ -39,4 +39,10 @@ describe("normalizeLeadKey", () => {
   it("ignores case and spacing so a re-import matches", () => {
     expect(normalizeLeadKey("  Beach  House ", "x", "A@B.com")).toBe(normalizeLeadKey("beach house", "y", "a@b.com"));
   });
+
+  it("dedupes by name+address when email is missing", () => {
+    expect(normalizeLeadKey("Suzanne Singleton — 1747 Debbie Ln", "Suzanne Singleton", null, "1747 Debbie Ln")).toBe(
+      normalizeLeadKey("Suzanne Singleton — 1747 Debbie Ln (copy)", "Suzanne  Singleton", null, "1747  Debbie Ln"),
+    );
+  });
 });

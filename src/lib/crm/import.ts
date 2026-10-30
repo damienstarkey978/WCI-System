@@ -98,8 +98,30 @@ function parseMoneyCell(value: string | undefined): number | null {
   }
 }
 
-export function normalizeLeadKey(title: string | null, name: string, email: string | null): string {
-  return `${(title ?? name).toLowerCase().replace(/\s+/g, " ").trim()}|${(email ?? "").toLowerCase().trim()}`;
+function normalizeSpace(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Dedup key for import. Prefer title|email when an email exists; otherwise
+ * fall back to name|address so re-imports of the same street don't multiply
+ * (Suzanne Singleton × Debbie Ln was created 4× with null emails).
+ */
+export function normalizeLeadKey(
+  title: string | null,
+  name: string,
+  email: string | null,
+  addressLine1?: string | null,
+): string {
+  const emailKey = (email ?? "").toLowerCase().trim();
+  if (emailKey) {
+    return `${normalizeSpace(title ?? name)}|${emailKey}`;
+  }
+  const addr = normalizeSpace(addressLine1 ?? "");
+  if (addr) {
+    return `${normalizeSpace(name)}|addr:${addr}`;
+  }
+  return `${normalizeSpace(title ?? name)}|`;
 }
 
 export function parseLeadSheet(csvText: string): LeadImportRow[] {
@@ -168,20 +190,28 @@ export function parseLeadSheet(csvText: string): LeadImportRow[] {
 }
 
 export async function importLeads(organizationId: string, incoming: readonly LeadImportRow[]): Promise<LeadImportSummary> {
-  const existing = await db.lead.findMany({ where: { organizationId }, select: { title: true, name: true, email: true } });
-  const seen = new Set(existing.map((lead) => normalizeLeadKey(lead.title, lead.name, lead.email)));
+  const existing = await db.lead.findMany({
+    where: { organizationId },
+    select: { title: true, name: true, email: true, addressLine1: true },
+  });
+  const seen = new Set(
+    existing.map((lead) => normalizeLeadKey(lead.title, lead.name, lead.email, lead.addressLine1)),
+  );
 
   let created = 0;
   let skippedExisting = 0;
   let statusUnrecognized = 0;
 
   for (const row of incoming) {
-    const key = normalizeLeadKey(row.title, row.name, row.email);
-    if (seen.has(key)) {
+    const key = normalizeLeadKey(row.title, row.name, row.email, row.addressLine1);
+    // Also skip when title|email already exists (legacy key) so prior imports stay stable.
+    const legacyKey = normalizeLeadKey(row.title, row.name, row.email);
+    if (seen.has(key) || seen.has(legacyKey)) {
       skippedExisting += 1;
       continue;
     }
     seen.add(key);
+    seen.add(legacyKey);
 
     const lead = await createLead({
       organizationId,
