@@ -123,6 +123,12 @@ export default async function ClientContactsPage({ searchParams }: PageProps<"/c
         ]}
       />
 
+      <p className="-mt-2 text-xs text-[var(--bt-muted)]">
+        Activation is portal invite state, not whether they are a real client:{" "}
+        <span className="font-medium text-[var(--bt-text)]">Inactive</span> means they have an email
+        but have never been invited; Pending = invite sent; Active = they have logged in.
+      </p>
+
       <DirectoryTable
         basePath={BASE_PATH}
         params={params}

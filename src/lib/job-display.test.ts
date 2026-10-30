@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { jobNameAlreadyIncludesPrefix, shouldShowJobPrefix } from "./job-display";
+import { formatJobLabel, jobNameAlreadyIncludesPrefix, shouldShowJobPrefix } from "./job-display";
 
 describe("jobNameAlreadyIncludesPrefix", () => {
   it("detects street-number prefixes already in the BT-style name", () => {
@@ -29,5 +29,17 @@ describe("shouldShowJobPrefix", () => {
   it("shows prefix when it adds information", () => {
     expect(shouldShowJobPrefix("Candlebark Addition", "932")).toBe(true);
     expect(shouldShowJobPrefix("Seminole remodel", null)).toBe(false);
+  });
+});
+
+describe("formatJobLabel", () => {
+  it("does not double a street-number prefix already in the name", () => {
+    expect(formatJobLabel("7935 Parramore Rd.-Slate Medical-Concrete", "7935")).toBe(
+      "7935 Parramore Rd.-Slate Medical-Concrete",
+    );
+  });
+
+  it("keeps a useful prefix when the name lacks it", () => {
+    expect(formatJobLabel("Candlebark Addition", "932")).toBe("932 Candlebark Addition");
   });
 });

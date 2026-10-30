@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { CalendarIcon } from "@/components/shell/icons";
 import { currentAppUserOrRedirect } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { formatJobLabel } from "@/lib/job-display";
 import { getComputedSchedule } from "@/lib/scheduling/service";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,7 @@ export default async function GlobalCalendarPage({ searchParams }: PageProps<"/c
   // calendar; keeping concurrency low avoids a thundering herd on a cold page.
   for (const schedule of schedules) {
     const { items } = await getComputedSchedule(user.organizationId, schedule.id, { includePhases: false });
-    const jobLabel = `${schedule.job.prefix ? `${schedule.job.prefix} ` : ""}${schedule.job.name}`;
+    const jobLabel = formatJobLabel(schedule.job.name, schedule.job.prefix);
     for (const item of items) {
       if (item.startDate >= rangeEnd || item.endDate < rangeStart) continue;
       chips.push({

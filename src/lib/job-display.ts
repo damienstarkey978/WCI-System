@@ -34,3 +34,16 @@ export function shouldShowJobPrefix(
   if (!trimmed) return false;
   return !jobNameAlreadyIncludesPrefix(name, trimmed);
 }
+
+/**
+ * Single display string for lists that concatenate prefix + name
+ * (calendar, time clock, etc.). Avoids "7935 7935 Parramore…".
+ */
+export function formatJobLabel(
+  name: string,
+  prefix: string | null | undefined,
+): string {
+  const trimmedName = name.trim();
+  if (!shouldShowJobPrefix(trimmedName, prefix)) return trimmedName || name;
+  return `${prefix!.trim()} ${trimmedName}`;
+}
