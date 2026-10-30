@@ -307,7 +307,7 @@ describe("inspection pictures folders + share links", () => {
     );
   });
 
-  it("resolves a valid share token for view + upload", async () => {
+  it("resolves a valid share token for view-only (live Building permit #)", async () => {
     const generated = generateSecureToken("wciips");
     vi.mocked(db.inspectionPictureShareLink.findUnique).mockResolvedValue({
       id: "link_1",
@@ -331,11 +331,54 @@ describe("inspection pictures folders + share links", () => {
     vi.mocked(db.file.findMany).mockResolvedValue([
       { id: "file_1", fileName: "a.jpg", url: "org/job/a.jpg", createdAt: new Date() },
     ] as never);
+    vi.mocked(db.jobPermit.findMany).mockResolvedValue([
+      { permitNumber: "  BLD-99  ", pulled: true, updatedAt: new Date() },
+    ] as never);
 
     const resolved = await getInspectionFolderForShareToken(generated.token);
     expect(resolved.inspectionName).toBe("Framing");
+    expect(resolved.buildingPermitNumber).toBe("BLD-99");
     expect(resolved.photos).toHaveLength(1);
     expect(resolved.photos[0]?.url).toContain("https://signed.example/");
+    expect(vi.mocked(db.jobPermit.findMany).mock.calls.at(-1)?.[0]).toMatchObject({
+      where: {
+        jobId: "job_1",
+        organizationId: "org_1",
+        trade: "BUILDING",
+      },
+    });
+  });
+
+  it("omits buildingPermitNumber when the Building permit has none yet", async () => {
+    const generated = generateSecureToken("wciips");
+    vi.mocked(db.inspectionPictureShareLink.findUnique).mockResolvedValue({
+      id: "link_1",
+      hashedSecret: generated.hashedSecret,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      label: null,
+      inspection: {
+        id: "insp_1",
+        name: "Final",
+        folderId: "folder_1",
+        folder: { id: "folder_1", name: "Inspection: Final" },
+        permit: {
+          jobId: "job_1",
+          organizationId: "org_1",
+          job: { id: "job_1", name: "Cannington", organizationId: "org_1" },
+          organization: { id: "org_1", name: "World Construction Inc" },
+        },
+      },
+    } as never);
+    vi.mocked(db.file.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.jobPermit.findMany).mockResolvedValue([
+      { permitNumber: null, pulled: false, updatedAt: new Date() },
+      { permitNumber: "   ", pulled: true, updatedAt: new Date() },
+    ] as never);
+
+    const resolved = await getInspectionFolderForShareToken(generated.token);
+    expect(resolved.buildingPermitNumber).toBeNull();
+    expect(resolved.photos).toHaveLength(0);
   });
 
   it("rejects revoked or bad share tokens", async () => {
