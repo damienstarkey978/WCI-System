@@ -41,14 +41,20 @@ async function main() {
     if (!statSync(dir).isDirectory()) continue;
     summary.folders += 1;
 
-    // match lead by slug tokens vs title
+    // match lead by slug tokens vs title/name (street# + street often enough;
+    // contact-name tokens in the slug may not appear in Lead.title)
     const slugNorm = norm(slug);
+    const parts = slugNorm.split(" ").filter((p) => p.length > 2);
     const lead =
       leads.find((l) => norm(l.title ?? "").includes(slugNorm.slice(0, 20))) ||
       leads.find((l) => {
-        const t = norm(l.title ?? l.name);
-        const parts = slugNorm.split(" ").filter((p) => p.length > 3);
+        const t = norm(`${l.title ?? ""} ${l.name ?? ""}`);
         return parts.slice(0, 3).every((p) => t.includes(p));
+      }) ||
+      leads.find((l) => {
+        const t = norm(l.title ?? "");
+        // house number + first street token (e.g. "9535 wagner")
+        return parts.length >= 2 && t.includes(parts[0]) && t.includes(parts[1]);
       });
 
     if (!lead) {
