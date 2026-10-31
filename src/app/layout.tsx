@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Fredoka, Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
+import { Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 
 import { AuthProvider } from "@/components/auth-provider";
 import { ServiceWorkerCleanup } from "@/components/service-worker-cleanup";
@@ -30,15 +31,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-/** Only used for the Jarvis-mascot fun-UI theme (src/components/settings/
- *  FunUiToggle.tsx) — a rounder, friendlier display face for its headings, kept
- *  off the rest of the app's plain Arial body copy. Loading it site-wide (rather
- *  than only when the toggle is on) is cheap — next/font subsets and self-hosts it
- *  at build time, so it's zero extra network requests either way. */
-const fredoka = Fredoka({
+/** Fun-UI display face (Jarvis mascot theme). Vendored as next/font/local so CI
+ *  builds never hit Google Fonts' intermittent /l/font?kit= responses that break
+ *  Turbopack with "next/font/google queries have exactly one entry"
+ *  (vercel/next.js#99114). Source: Google Fonts Fredoka v17 latin woff2 for
+ *  weights 500–700 (variable font file). */
+const fredoka = localFont({
+  src: "../fonts/Fredoka-latin.woff2",
   variable: "--font-fredoka",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: "500 700",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
