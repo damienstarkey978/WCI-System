@@ -178,6 +178,13 @@ model Organization {
   oauthAccessTokens       OAuthAccessToken[]
   oauthRefreshTokens      OAuthRefreshToken[]
   jobPermits              JobPermit[]
+  contractorLicenses      ContractorLicense[]
+  nocPresets              NocPreset[]
+  designProfessionals     DesignProfessional[]
+  permitFormSetTemplates  PermitFormSetTemplate[]
+  paisProductTemplates    PaisProductTemplate[]
+  cityPortalCredentials   CityPortalCredential[]
+  permitPackages          PermitPackage[]
 }
 
 model User {
@@ -422,6 +429,7 @@ model Job {
   deposits              Deposit[]
   inboundEmails         InboundEmail[]
   permits               JobPermit[]
+  permitPackages        PermitPackage[]
   takeoffs              Takeoff[]
   purchasingIntents     PurchasingIntent[]
 
@@ -3894,6 +3902,8 @@ model JobPermit {
   vendor   Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
   inspections JobPermitInspection[]
+  /// Permit Rockstar–style packages that target this JobPermit (optional link).
+  packages    PermitPackage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4149,4 +4159,283 @@ model InboundEmail {
 
   @@index([status, receivedAt])
   @@index([organizationId, receivedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Permit packages (Permit Rockstar–style) — org settings + package aggregate.
+// Hard rule: never submit to JAX EPICS / clerk / notary / email without an
+// explicit staff button press for that package. Portal passwords encrypted at
+// rest (CityPortalCredential) — never log or return plaintext.
+// ---------------------------------------------------------------------------
+
+/// Core wizard permit types (parity notes: live app also has Mobile Home /
+/// Plumbing / ROW / Roofing / Sign / Sitework / Generator — extend later).
+enum PackagePermitType {
+  BUILDING
+  ELECTRICAL
+  FIRE
+  MECHANICAL
+  PLUMBING
+  ROOFING
+  OTHER
+}
+
+enum PermitPackageStatus {
+  ACTIVE
+  SENT_TO_CONTRACTORS
+  ARCHIVED
+}
+
+enum PermitPackageFormStatus {
+  DRAFT
+  CREATED
+  NOTARIZED
+  RECORDED
+  DOWNLOADED
+}
+
+enum DesignProfessionalKind {
+  ARCHITECT
+  ENGINEER
+  OTHER
+}
+
+enum CityPortalKind {
+  JAX_EPICS
+  DUVAL_CLERK
+}
+
+/// Org-level contractor license that can sign a package (spec §A).
+model ContractorLicense {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  companyName   String
+  qualifierName String
+  /// e.g. "Certified General Contractor"
+  licenseType   String
+  licenseNumber String
+  expiresAt     DateTime?
+  active        Boolean  @default(true)
+
+  addressLine1 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  /// County label for license jurisdiction (e.g. "DUVAL").
+  county       String?
+  email        String?
+  phone        String?
+
+  sortOrder Int @default(0)
+
+  packages PermitPackage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@unique([organizationId, licenseNumber])
+}
+
+/// County-scoped NOC default text (spec §B).
+model NocPreset {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// e.g. "DUVAL"
+  county String
+
+  descriptionOfImprovement  String? @db.Text
+  /// Default "Fee Simple" when unset at package create time.
+  ownersInterest            String?
+  designatedPersonForNotices String? @db.Text
+  lienorsNoticeRecipient    String? @db.Text
+  /// Default "1 year after recording".
+  expirationRule            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, county])
+  @@index([organizationId])
+}
+
+/// Architects / engineers selectable on a building permit (spec §B).
+model DesignProfessional {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  kind          DesignProfessionalKind @default(ENGINEER)
+  name          String
+  firm          String?
+  licenseNumber String?
+  addressLine1  String?
+  city          String?
+  state         String?
+  postalCode    String?
+  phone         String?
+  email         String?
+
+  packages PermitPackage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+/// Named form-set templates (e.g. Roof, Siding) — formKeys are catalog keys.
+model PermitFormSetTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name         String
+  county       String
+  municipality String?
+  permitType   PackagePermitType
+  /// string[] of form catalog keys (see src/lib/permitting/form-catalog.ts).
+  formKeys     Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@unique([organizationId, name, county, permitType])
+}
+
+/// Reusable PAIS product rows (Florida product approval templates).
+model PaisProductTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name           String
+  manufacturer   String?
+  model          String?
+  approvalNumber String?
+  category       String?
+  notes          String? @db.Text
+
+  products PermitPackageProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+/// Encrypted city-portal login (JAX EPICS / clerk). Never return plaintext.
+model CityPortalCredential {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  portal   CityPortalKind
+  username String
+  /// AES-256-GCM ciphertext — see src/lib/permitting/portal-crypto.ts.
+  encryptedPassword String
+
+  connectedAt    DateTime  @default(now())
+  disconnectedAt DateTime?
+  lastVerifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, portal])
+}
+
+/// Job-level permit package (spec §C–E). Submissions are never automatic.
+model PermitPackage {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  jobPermitId String?
+  jobPermit   JobPermit? @relation(fields: [jobPermitId], references: [id], onDelete: SetNull)
+
+  /// Package / EPICS project name.
+  name         String
+  county       String
+  municipality String?
+  permitType   PackagePermitType @default(BUILDING)
+  propertyAddress String?
+  status       PermitPackageStatus @default(ACTIVE)
+
+  contractorLicenseId String?
+  contractorLicense   ContractorLicense? @relation(fields: [contractorLicenseId], references: [id], onDelete: SetNull)
+
+  designProfessionalId String?
+  designProfessional   DesignProfessional? @relation(fields: [designProfessionalId], references: [id], onDelete: SetNull)
+
+  /// UI toggle only — never triggers a city submit by itself.
+  automateWithCity Boolean @default(false)
+
+  nocCreatedAt     DateTime?
+  packageCreatedAt DateTime?
+  notarizedAt      DateTime?
+  recordedAt       DateTime?
+  initiatedAt      DateTime?
+
+  /// Shared package-level field bag (owner, parcel, improvement description, …).
+  fieldValues Json @default("{}")
+
+  forms    PermitPackageForm[]
+  products PermitPackageProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([jobId, status])
+  @@index([jobPermitId])
+}
+
+model PermitPackageForm {
+  id        String         @id @default(cuid())
+  packageId String
+  package   PermitPackage  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  /// Catalog key (e.g. "noc", "permission_by_owner", "pais").
+  formKey   String
+  title     String
+  sortOrder Int @default(0)
+  status    PermitPackageFormStatus @default(DRAFT)
+  fieldValues Json @default("{}")
+  /// Generated PDF registered as a job File (optional until batch 2).
+  pdfFileId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([packageId])
+  @@unique([packageId, formKey])
+}
+
+model PermitPackageProduct {
+  id        String        @id @default(cuid())
+  packageId String
+  package   PermitPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  templateId String?
+  template   PaisProductTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  manufacturer   String?
+  model          String?
+  approvalNumber String?
+  category       String?
+  notes          String? @db.Text
+  sortOrder      Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([packageId])
 }
