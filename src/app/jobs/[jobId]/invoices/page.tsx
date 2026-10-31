@@ -99,34 +99,53 @@ function Head({ columns }: { columns: readonly string[] }) {
  */
 function ContractEquation({ contractPriceCents, paidCents }: { contractPriceCents: number; paidCents: number }) {
   const remainingCents = contractPriceCents - paidCents;
+  // Negative remaining means cash received exceeds the budgeted/proposal+CO
+  // revised price — usually a missing proposal (e.g. Stockton roof on a separate
+  // BT proposal) or a $0 contract job, not double-counted payments (those are
+  // excluded via VOID filtering). Do not invent budget lines to zero this out.
+  const overpaid = remainingCents < 0;
   return (
-    <div
-      className="flex flex-wrap items-center gap-4 rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3 sm:gap-6"
-      style={{ borderColor: "var(--bt-border)" }}
-    >
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Total revised price</div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(contractPriceCents)}</div>
-      </div>
-      <span className="text-lg text-[var(--bt-muted)]">−</span>
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Payments</div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(paidCents)}</div>
-      </div>
-      <span className="text-lg text-[var(--bt-muted)]">=</span>
-      <div>
-        <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
-          Remaining balance
-          <span
-            title="The job's revised contract price minus every payment received so far. This is what the client still owes overall — it isn't the same as what has been invoiced yet, below."
-            className="cursor-help rounded-full border text-[10px] leading-3"
-            style={{ borderColor: "var(--bt-border)", width: "14px", height: "14px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-          >
-            i
-          </span>
+    <div className="flex flex-col gap-2">
+      <div
+        className="flex flex-wrap items-center gap-4 rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3 sm:gap-6"
+        style={{ borderColor: "var(--bt-border)" }}
+      >
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Total revised price</div>
+          <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(contractPriceCents)}</div>
         </div>
-        <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(remainingCents)}</div>
+        <span className="text-lg text-[var(--bt-muted)]">−</span>
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Payments</div>
+          <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(paidCents)}</div>
+        </div>
+        <span className="text-lg text-[var(--bt-muted)]">=</span>
+        <div>
+          <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+            Remaining balance
+            <span
+              title="The job's revised contract price minus every payment received so far. This is what the client still owes overall — it isn't the same as what has been invoiced yet, below."
+              className="cursor-help rounded-full border text-[10px] leading-3"
+              style={{ borderColor: "var(--bt-border)", width: "14px", height: "14px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+            >
+              i
+            </span>
+          </div>
+          <div
+            className="mt-1 text-lg font-semibold"
+            style={{ color: overpaid ? "var(--bt-danger)" : "var(--bt-text)" }}
+          >
+            {formatMoney(remainingCents)}
+          </div>
+        </div>
       </div>
+      {overpaid ? (
+        <p className="text-xs text-[var(--bt-muted)]">
+          Payments exceed the job&apos;s revised client price by {formatMoney(-remainingCents)}. Invoice billed/received
+          still matches Buildertrend; the budget/proposal is understating contract (missing proposal, CO, or selection) —
+          not a double-counted payment.
+        </p>
+      ) : null}
     </div>
   );
 }
