@@ -768,3 +768,12 @@ Record every architectural decision that departs from the above, with the reason
   (URL registration remains as a fallback). `GET /jobs` supports `q`/`search`; MCP
   `api_v1_request` body cap raised off the ~12KB cliff. Duplicate inspection names
   return the existing row (200) instead of 409.
+- **JAX EPICS submit is queue-only in the Netlify web app (permit package batch 5):**
+  City Permit → Get Started creates an `EpicsSubmitRequest` (`QUEUED`) and stamps
+  `PermitPackage.initiatedAt` after an explicit staff click, only when encrypted
+  `CityPortalCredential` (JAX_EPICS) is connected. The web process never decrypts
+  the password for the client, never opens Playwright, and never auto-submits.
+  Claiming a row requires `EPICS_WORKER_ENABLED=true` on a dedicated out-of-band
+  worker (office Mac mini / long-running process outside Netlify's ~60s limit).
+  Ambiguous worker failures must land in `NEEDS_REVIEW` — never silent auto-retry
+  of a step that may already have succeeded. See `src/lib/permitting/epics-seam.ts`.

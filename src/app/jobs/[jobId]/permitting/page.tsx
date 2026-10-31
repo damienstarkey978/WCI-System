@@ -40,6 +40,7 @@ import { PermitReminderButton } from "./permit-reminder-button";
 import { JACKSONVILLE_BUILDING_FORMS } from "@/lib/permitting/form-catalog";
 import { loadDuvalJaxManifest } from "@/lib/permitting/form-manifest";
 import { ensureDefaultWciContractorLicense, listContractorLicenses } from "@/lib/permitting/package-settings";
+import { isJaxEpicsConnected, latestEpicsSubmitForPackage } from "@/lib/permitting/epics-seam";
 import { listPermitPackagesForJob, packageGridFlags } from "@/lib/permitting/packages";
 
 export const dynamic = "force-dynamic";
@@ -159,10 +160,21 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
   });
 
   await ensureDefaultWciContractorLicense(user.organizationId);
-  const [packages, licenses] = await Promise.all([
+  const [packages, licenses, epicsConnected] = await Promise.all([
     listPermitPackagesForJob(user.organizationId, jobId),
     listContractorLicenses(user.organizationId),
+    isJaxEpicsConnected(user.organizationId),
   ]);
+  const epicsByPackageId = new Map(
+    (
+      await Promise.all(
+        packages.map(async (pkg) => {
+          const latest = await latestEpicsSubmitForPackage(user.organizationId, pkg.id);
+          return [pkg.id, latest] as const;
+        }),
+      )
+    ),
+  );
 
   const tradesAvailable = availableTradesToAdd(job.permits.map((p) => p.trade));
   const docsCreated = hasBuildingPermitDocs(job.buildingPermitDocsCreatedAt);
@@ -232,6 +244,17 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
             email: license.email ?? "",
           }
         : null,
+      epicsRequest: (() => {
+        const latest = epicsByPackageId.get(pkg.id) ?? null;
+        if (!latest) return null;
+        return {
+          id: latest.id,
+          status: latest.status,
+          requestedAt: latest.requestedAt.toISOString(),
+          lastError: latest.lastError,
+          resultPermitNumber: latest.resultPermitNumber,
+        };
+      })(),
     };
   });
 
@@ -278,6 +301,7 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
                 id: p.id,
                 label: permitDisplayTitle(p),
               }))}
+              epicsConnected={epicsConnected}
             />
           </div>
         ) : (

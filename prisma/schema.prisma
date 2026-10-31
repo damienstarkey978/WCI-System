@@ -185,6 +185,7 @@ model Organization {
   paisProductTemplates    PaisProductTemplate[]
   cityPortalCredentials   CityPortalCredential[]
   permitPackages          PermitPackage[]
+  epicsSubmitRequests     EpicsSubmitRequest[]
 }
 
 model User {
@@ -4389,6 +4390,7 @@ model PermitPackage {
 
   forms    PermitPackageForm[]
   products PermitPackageProduct[]
+  epicsSubmitRequests EpicsSubmitRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4396,6 +4398,48 @@ model PermitPackage {
   @@index([organizationId])
   @@index([jobId, status])
   @@index([jobPermitId])
+}
+
+/// Explicit staff-queued JAX EPICS submit (batch 5 seam).
+/// Rows are created only by an explicit City Permit "Get Started" click.
+/// A Playwright worker OUTSIDE Netlify's 60s limit claims QUEUED rows —
+/// this app never auto-runs the browser or auto-retries a step that may
+/// have already succeeded (ambiguous failures → NEEDS_REVIEW).
+enum EpicsSubmitStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  NEEDS_REVIEW
+}
+
+model EpicsSubmitRequest {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  packageId      String
+  package        PermitPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  status EpicsSubmitStatus @default(QUEUED)
+
+  /// Staff user who clicked Get Started (nullable for agent/API later).
+  requestedByUserId String?
+  requestedAt       DateTime @default(now())
+  claimedAt         DateTime?
+  finishedAt        DateTime?
+
+  /// Worker step log (idempotent step ids). Never stores passwords.
+  steps Json @default("[]")
+  lastError String? @db.Text
+  failureScreenshotUrl String?
+  /// Permit number returned by EPICS when the worker succeeds.
+  resultPermitNumber String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([packageId, status])
 }
 
 model PermitPackageForm {

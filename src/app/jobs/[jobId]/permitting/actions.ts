@@ -25,6 +25,7 @@ import {
   setPermitPackageStatus,
   updatePermitPackageFields,
 } from "@/lib/permitting/packages";
+import { EpicsSeamError, requestEpicsCityPermitSubmit } from "@/lib/permitting/epics-seam";
 import { listContractorLicenses } from "@/lib/permitting/package-settings";
 import {
   addPermitInspection,
@@ -575,4 +576,29 @@ export async function markPackageFormDownloadedAction(formData: FormData): Promi
     // refresh either way
   }
   revalidate(jobId);
+}
+
+/**
+ * Explicit City Permit → Get Started. Queues an out-of-band EPICS worker job only —
+ * never opens a browser or submits to JAX EPICS from this web process.
+ */
+export async function requestEpicsCityPermitAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  try {
+    await requestEpicsCityPermitSubmit(user.organizationId, packageId, {
+      requestedByUserId: user.id,
+    });
+  } catch (error) {
+    if (error instanceof EpicsSeamError) return { error: error.message };
+    return {
+      error: error instanceof Error ? error.message : "Could not queue city permit request.",
+    };
+  }
+  revalidate(jobId);
+  return { ok: true };
 }

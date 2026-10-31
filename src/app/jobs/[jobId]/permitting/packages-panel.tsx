@@ -10,6 +10,7 @@ import {
   regeneratePackageFormAction,
   removePermitPackageAction,
   renamePermitPackageAction,
+  requestEpicsCityPermitAction,
   setPermitPackageStatusAction,
   updatePermitPackageFieldsAction,
   type ActionState,
@@ -64,6 +65,13 @@ type PackageRow = {
     addressLine: string;
     phone: string;
     email: string;
+  } | null;
+  epicsRequest: {
+    id: string;
+    status: string;
+    requestedAt: string;
+    lastError: string | null;
+    resultPermitNumber: string | null;
   } | null;
 };
 
@@ -132,10 +140,13 @@ export function PackagesPanel({
   jobId,
   packages,
   jobPermits,
+  epicsConnected,
 }: {
   jobId: string;
   packages: readonly PackageRow[];
   jobPermits: readonly JobPermitOption[];
+  /** Org has connected (non-disconnected) JAX EPICS credentials. */
+  epicsConnected: boolean;
 }) {
   const [tab, setTab] = useState<PackageTab>("ACTIVE");
   const [filter, setFilter] = useState("");
@@ -159,6 +170,10 @@ export function PackagesPanel({
   );
   const [regenState, regenAction, regenPending] = useActionState(
     regeneratePackageFormAction,
+    INITIAL,
+  );
+  const [epicsState, epicsAction, epicsPending] = useActionState(
+    requestEpicsCityPermitAction,
     INITIAL,
   );
 
@@ -651,10 +666,72 @@ export function PackagesPanel({
               {sidePanel === "city_permit" ? (
                 <div className="space-y-2 text-xs">
                   <p className="font-semibold text-[var(--bt-text)]">City Permitting</p>
-                  <p className="text-[var(--bt-muted)]">
-                    Permit creation requests have not yet been initiated. JAX EPICS submit is an
-                    explicit staff action (batch 5 seam) — never automatic from this screen.
-                  </p>
+                  {selected.epicsRequest ? (
+                    <div className="space-y-1 text-[var(--bt-muted)]">
+                      <p>
+                        Latest request:{" "}
+                        <span className="font-semibold text-[var(--bt-text)]">
+                          {selected.epicsRequest.status.replaceAll("_", " ")}
+                        </span>{" "}
+                        · {formatDate(selected.epicsRequest.requestedAt)}
+                      </p>
+                      {selected.epicsRequest.resultPermitNumber ? (
+                        <p>Permit # {selected.epicsRequest.resultPermitNumber}</p>
+                      ) : null}
+                      {selected.epicsRequest.lastError ? (
+                        <p className="text-[var(--bt-hazard)]">{selected.epicsRequest.lastError}</p>
+                      ) : null}
+                      {selected.epicsRequest.status === "QUEUED" ? (
+                        <p>
+                          Queued for the out-of-band Playwright worker (outside Netlify 60s). This web
+                          app will not open a browser or auto-submit.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-[var(--bt-muted)]">
+                      Permit creation requests have not yet been initiated.
+                    </p>
+                  )}
+                  {!epicsConnected ? (
+                    <p className="text-[var(--bt-muted)]">
+                      Connect JAX EPICS under{" "}
+                      <a href="/settings/permitting" className="text-[var(--bt-primary)] hover:underline">
+                        Permitting settings
+                      </a>{" "}
+                      before Get Started.
+                    </p>
+                  ) : null}
+                  <form action={epicsAction}>
+                    <input type="hidden" name="jobId" value={jobId} />
+                    <input type="hidden" name="packageId" value={selected.id} />
+                    <button
+                      type="submit"
+                      disabled={
+                        epicsPending ||
+                        !epicsConnected ||
+                        selected.epicsRequest?.status === "QUEUED" ||
+                        selected.epicsRequest?.status === "RUNNING"
+                      }
+                      className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
+                      style={{ background: "var(--bt-primary)" }}
+                      title={
+                        epicsConnected
+                          ? "Queue an explicit city permit request for the out-of-band worker — does not submit from this browser."
+                          : "Connect JAX EPICS credentials first."
+                      }
+                    >
+                      {epicsPending ? "Queuing…" : "Get Started"}
+                    </button>
+                  </form>
+                  {epicsState.error ? (
+                    <p className="text-[11px] text-[var(--bt-hazard)]">{epicsState.error}</p>
+                  ) : null}
+                  {epicsState.ok ? (
+                    <p className="text-[11px] text-[var(--bt-status-open-text)]">
+                      Queued. No automatic city submit from this app.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
