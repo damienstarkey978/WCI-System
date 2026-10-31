@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import {
   InspectionResult,
   PackagePermitType,
+  PermitPackageStatus,
   PermitRockstarSetupType,
   PermitStatus,
   PermitTrade,
@@ -16,6 +17,13 @@ import {
   PermitPackageError,
   archivePermitPackage,
   createPermitPackage,
+  linkPackageJobPermit,
+  markPackageFormDownloaded,
+  regeneratePackageForm,
+  removePermitPackage,
+  renamePermitPackage,
+  setPermitPackageStatus,
+  updatePermitPackageFields,
 } from "@/lib/permitting/packages";
 import { listContractorLicenses } from "@/lib/permitting/package-settings";
 import {
@@ -421,6 +429,148 @@ export async function archivePermitPackageAction(formData: FormData): Promise<vo
   const packageId = String(formData.get("packageId") ?? "");
   try {
     await archivePermitPackage(user.organizationId, packageId);
+  } catch {
+    // refresh either way
+  }
+  revalidate(jobId);
+}
+
+export async function setPermitPackageStatusAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const statusRaw = String(formData.get("status") ?? "");
+  const allowed = new Set<string>(Object.values(PermitPackageStatus));
+  if (!allowed.has(statusRaw)) {
+    revalidate(jobId);
+    return;
+  }
+  try {
+    await setPermitPackageStatus(
+      user.organizationId,
+      packageId,
+      statusRaw as PermitPackageStatus,
+    );
+  } catch {
+    // refresh either way
+  }
+  revalidate(jobId);
+}
+
+export async function renamePermitPackageAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  try {
+    await renamePermitPackage(
+      user.organizationId,
+      packageId,
+      String(formData.get("name") ?? ""),
+    );
+  } catch (error) {
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not rename package." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function removePermitPackageAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  try {
+    await removePermitPackage(user.organizationId, packageId);
+  } catch {
+    // refresh either way
+  }
+  revalidate(jobId);
+}
+
+export async function updatePermitPackageFieldsAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const fields: Record<string, string> = {};
+  for (const key of [
+    "ownerName",
+    "ownerMailingAddress",
+    "ownerCityStateZip",
+    "ownerPhone",
+    "ownerCellPhone",
+    "ownerEmail",
+    "legalDescription",
+    "taxFolio",
+    "permitNumber",
+    "descriptionOfImprovement",
+    "descriptionOfWork",
+    "ownersInterest",
+    "designatedPersonForNotices",
+    "lienorsNoticeRecipient",
+    "expirationRule",
+  ] as const) {
+    const value = optionalTrimmed(formData, key);
+    if (value) fields[key] = value;
+  }
+  try {
+    await updatePermitPackageFields(user.organizationId, packageId, fields);
+  } catch (error) {
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not update package fields." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function linkPackageJobPermitAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const jobPermitId = String(formData.get("jobPermitId") ?? "").trim() || null;
+  try {
+    await linkPackageJobPermit(user.organizationId, packageId, jobPermitId);
+  } catch (error) {
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not link permit." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function regeneratePackageFormAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const formKey = String(formData.get("formKey") ?? "");
+  try {
+    await regeneratePackageForm(user.organizationId, packageId, formKey);
+  } catch (error) {
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not update document." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function markPackageFormDownloadedAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const formKey = String(formData.get("formKey") ?? "");
+  try {
+    await markPackageFormDownloaded(user.organizationId, packageId, formKey);
   } catch {
     // refresh either way
   }

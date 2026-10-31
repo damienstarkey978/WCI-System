@@ -23,7 +23,6 @@ import {
 } from "@/lib/permitting/service";
 
 import {
-  archivePermitPackageAction,
   removeJobPermitAction,
   removePermitInspectionAction,
   setInspectionCompletedAction,
@@ -35,14 +34,39 @@ import { AssignVendorForm } from "./assign-vendor-form";
 import { CreatePackageForm } from "./create-package-form";
 import { EditInspectionForm } from "./edit-inspection-form";
 import { EditPermitForm } from "./edit-permit-form";
+import { PackagesPanel } from "./packages-panel";
 import { PermitRockstarForm } from "./permit-rockstar-form";
 import { PermitReminderButton } from "./permit-reminder-button";
 import { JACKSONVILLE_BUILDING_FORMS } from "@/lib/permitting/form-catalog";
 import { loadDuvalJaxManifest } from "@/lib/permitting/form-manifest";
 import { ensureDefaultWciContractorLicense, listContractorLicenses } from "@/lib/permitting/package-settings";
-import { listPermitPackagesForJob } from "@/lib/permitting/packages";
+import { listPermitPackagesForJob, packageGridFlags } from "@/lib/permitting/packages";
 
 export const dynamic = "force-dynamic";
+
+function fieldBag(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function fieldStr(bag: Record<string, unknown>, key: string): string {
+  const v = bag[key];
+  return typeof v === "string" ? v : "";
+}
+
+function licenseAddressLine(license: {
+  addressLine1: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+} | null): string {
+  if (!license) return "";
+  const line1 = license.addressLine1?.trim() ?? "";
+  const cityLine = [license.city, license.state, license.postalCode].filter(Boolean).join(", ");
+  return [line1, cityLine].filter(Boolean).join(", ");
+}
 
 function StatusChip({
   ok,
@@ -159,8 +183,60 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
     };
   });
 
+  const packageRows = packages.map((pkg) => {
+    const flags = packageGridFlags(pkg);
+    const bag = fieldBag(pkg.fieldValues);
+    const license = pkg.contractorLicense;
+    return {
+      id: pkg.id,
+      name: pkg.name,
+      status: pkg.status as "ACTIVE" | "SENT_TO_CONTRACTORS" | "ARCHIVED",
+      county: pkg.county,
+      municipality: pkg.municipality,
+      permitType: pkg.permitType,
+      propertyAddress: pkg.propertyAddress,
+      nocCreated: flags.nocCreated,
+      packageCreated: flags.packageCreated,
+      notarized: flags.notarized,
+      recorded: flags.recorded,
+      initiatedAt: flags.initiatedAt.toISOString(),
+      jobPermitId: pkg.jobPermitId,
+      jobPermitLabel: pkg.jobPermitId
+        ? (job.permits.find((p) => p.id === pkg.jobPermitId)
+            ? permitDisplayTitle(job.permits.find((p) => p.id === pkg.jobPermitId)!)
+            : "Linked permit")
+        : null,
+      forms: pkg.forms.map((f) => ({
+        id: f.id,
+        formKey: f.formKey,
+        title: f.title,
+        status: f.status,
+        available: formAvailability.some((m) => m.key === f.formKey && m.available),
+      })),
+      owner: {
+        name: fieldStr(bag, "ownerName"),
+        mailingAddress: fieldStr(bag, "ownerMailingAddress"),
+        cityStateZip: fieldStr(bag, "ownerCityStateZip"),
+        phone: fieldStr(bag, "ownerPhone"),
+        cellPhone: fieldStr(bag, "ownerCellPhone"),
+        email: fieldStr(bag, "ownerEmail"),
+      },
+      contractor: license
+        ? {
+            companyName: license.companyName,
+            qualifierName: license.qualifierName,
+            licenseNumber: license.licenseNumber,
+            licenseType: license.licenseType,
+            addressLine: licenseAddressLine(license),
+            phone: license.phone ?? "",
+            email: license.email ?? "",
+          }
+        : null,
+    };
+  });
+
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <PageHeader jobName={job.name} title="Permitting" />
       <p className="-mt-2 text-sm text-[var(--bt-muted)]">
         Building stays on the job by default. Add temp pole, site, MEP, or roofing as needed — duplicates
@@ -188,73 +264,24 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
         style={{ borderColor: "var(--bt-border)" }}
         aria-label="Permit packages"
       >
-        <h2 className="text-base font-semibold text-[var(--bt-text)]">Permit packages</h2>
+        <h2 className="text-base font-semibold text-[var(--bt-text)]">My Permit Packages</h2>
         <p className="mb-3 text-xs text-[var(--bt-muted)]">
-          Rockstar-style packages for this job. Wizard fills official Jacksonville PDFs when sourced
-          (NOC, Owner Authorization, PAIS). Never submits externally.
+          Rockstar-style packages for this job. Official Jacksonville PDFs only when sourced. Download /
+          update documents never submit to the city, clerk, or notary.
         </p>
-        {packages.length === 0 ? (
-          <p className="mb-3 text-sm text-[var(--bt-muted)]">No packages yet.</p>
+        {packageRows.length > 0 ? (
+          <div className="mb-4">
+            <PackagesPanel
+              jobId={job.id}
+              packages={packageRows}
+              jobPermits={job.permits.map((p) => ({
+                id: p.id,
+                label: permitDisplayTitle(p),
+              }))}
+            />
+          </div>
         ) : (
-          <ul className="mb-4 divide-y text-sm" style={{ borderColor: "var(--bt-border)" }}>
-            {packages.map((pkg) => (
-              <li key={pkg.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
-                <div>
-                  <div className="font-medium text-[var(--bt-text)]">{pkg.name}</div>
-                  <div className="text-xs text-[var(--bt-muted)]">
-                    {pkg.status.replaceAll("_", " ")} · {pkg.municipality ?? pkg.county} ·{" "}
-                    {pkg.permitType} · {pkg.forms.length} forms
-                    {pkg.propertyAddress ? ` · ${pkg.propertyAddress}` : ""}
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {pkg.forms.map((f) => {
-                      const sourced = formAvailability.some(
-                        (m) => m.key === f.formKey && m.available,
-                      );
-                      return (
-                        <span key={f.id} className="inline-flex items-center gap-1">
-                          {sourced ? (
-                            <a
-                              href={`/jobs/${job.id}/permitting/packages/${pkg.id}/forms/${f.formKey}/pdf`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold hover:underline"
-                              style={{
-                                background: "color-mix(in srgb, var(--bt-status-open-bg) 80%, transparent)",
-                                color: "var(--bt-status-open-text)",
-                              }}
-                              title={`Download filled ${f.title}`}
-                            >
-                              {f.title} · {f.status.replaceAll("_", " ")}
-                            </a>
-                          ) : (
-                            <span
-                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                              style={{
-                                background: "color-mix(in srgb, var(--bt-border) 55%, transparent)",
-                                color: "var(--bt-muted)",
-                              }}
-                            >
-                              {f.title}
-                            </span>
-                          )}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-                {pkg.status !== "ARCHIVED" ? (
-                  <form action={archivePermitPackageAction}>
-                    <input type="hidden" name="jobId" value={job.id} />
-                    <input type="hidden" name="packageId" value={pkg.id} />
-                    <button type="submit" className="text-xs text-[var(--bt-hazard)] hover:underline">
-                      Archive
-                    </button>
-                  </form>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <p className="mb-3 text-sm text-[var(--bt-muted)]">No packages yet.</p>
         )}
         <CreatePackageForm
           jobId={job.id}

@@ -181,4 +181,19 @@ describe("duval-jax official form blanks", () => {
       expect(doc.getPageCount()).toBeGreaterThanOrEqual(1);
     }
   });
+
+  it("can merge filled NOC + Owner Auth + PAIS into one download package PDF", async () => {
+    const merged = await PDFDocument.create();
+    for (const key of ["noc", "permission_by_owner", "pais"] as const) {
+      const writes = fieldWritesForFormKey(key, sampleCtx);
+      expect(writes).not.toBeNull();
+      const filled = await fillOfficialPermitPdf(key, writes!);
+      const src = await PDFDocument.load(filled);
+      const pages = await merged.copyPages(src, src.getPageIndices());
+      for (const page of pages) merged.addPage(page);
+    }
+    const bytes = await merged.save();
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBeGreaterThanOrEqual(3);
+  });
 });

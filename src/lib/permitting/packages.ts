@@ -1,7 +1,8 @@
 /**
  * Permit package aggregate (job-level).
- * Batch 2–3: wizard creates packages + fills sourced Jacksonville official PDFs
- * (NOC / Owner Auth / PAIS + remaining available blanks). Never submits externally.
+ * Batch 2–3: wizard creates packages + fills sourced Jacksonville official PDFs.
+ * Batch 4: package detail panel helpers (status tabs, rename/remove, merged PDF).
+ * Never submits externally.
  */
 
 import type { Prisma } from "@/generated/prisma/client";
@@ -10,6 +11,7 @@ import {
   PermitPackageFormStatus,
   PermitPackageStatus,
 } from "@/generated/prisma/enums";
+import { PDFDocument } from "pdf-lib";
 import { db } from "@/lib/db";
 import { fillOfficialPermitPdf, PermitPdfFillError } from "@/lib/permitting/fill-pdf";
 import { isOfficialFormAvailable } from "@/lib/permitting/form-manifest";
@@ -410,4 +412,191 @@ export async function archivePermitPackage(organizationId: string, packageId: st
     where: { id: packageId },
     data: { status: PermitPackageStatus.ARCHIVED },
   });
+}
+
+export async function setPermitPackageStatus(
+  organizationId: string,
+  packageId: string,
+  status: PermitPackageStatus,
+) {
+  await getPermitPackage(organizationId, packageId);
+  return db.permitPackage.update({
+    where: { id: packageId },
+    data: { status },
+    include: { forms: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+export async function renamePermitPackage(
+  organizationId: string,
+  packageId: string,
+  name: string,
+) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new PermitPackageError("Package name is required.");
+  await getPermitPackage(organizationId, packageId);
+  return db.permitPackage.update({
+    where: { id: packageId },
+    data: { name: trimmed },
+    include: { forms: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+export async function removePermitPackage(organizationId: string, packageId: string) {
+  await getPermitPackage(organizationId, packageId);
+  await db.permitPackage.delete({ where: { id: packageId } });
+}
+
+export async function linkPackageJobPermit(
+  organizationId: string,
+  packageId: string,
+  jobPermitId: string | null,
+) {
+  const pkg = await getPermitPackage(organizationId, packageId);
+  if (jobPermitId) {
+    const permit = await db.jobPermit.findFirst({
+      where: { id: jobPermitId, jobId: pkg.jobId, organizationId },
+      select: { id: true },
+    });
+    if (!permit) throw new PermitPackageError("Job permit not found.", "not_found");
+  }
+  return db.permitPackage.update({
+    where: { id: packageId },
+    data: { jobPermitId },
+    include: {
+      forms: { orderBy: { sortOrder: "asc" } },
+      jobPermit: true,
+      contractorLicense: true,
+    },
+  });
+}
+
+/** Mark a form Downloaded after staff opens/downloads it (local status only). */
+export async function markPackageFormDownloaded(
+  organizationId: string,
+  packageId: string,
+  formKey: string,
+) {
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const form = pkg.forms.find((f) => f.formKey === formKey);
+  if (!form) throw new PermitPackageError(`Form "${formKey}" is not on this package.`, "not_found");
+  // Don't downgrade notarized/recorded — only promote draft/created → downloaded.
+  if (
+    form.status === PermitPackageFormStatus.NOTARIZED ||
+    form.status === PermitPackageFormStatus.RECORDED ||
+    form.status === PermitPackageFormStatus.DOWNLOADED
+  ) {
+    return form;
+  }
+  return db.permitPackageForm.update({
+    where: { id: form.id },
+    data: { status: PermitPackageFormStatus.DOWNLOADED },
+  });
+}
+
+/** Re-fill one sourced form from current package fields (no external submit). */
+export async function regeneratePackageForm(
+  organizationId: string,
+  packageId: string,
+  formKey: string,
+) {
+  const filled = await generateFilledFormPdf(organizationId, packageId, formKey);
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const form = pkg.forms.find((f) => f.formKey === formKey);
+  if (!form) throw new PermitPackageError(`Form "${formKey}" is not on this package.`, "not_found");
+
+  const nextStatus =
+    form.status === PermitPackageFormStatus.DRAFT
+      ? PermitPackageFormStatus.CREATED
+      : form.status;
+
+  await db.permitPackageForm.update({
+    where: { id: form.id },
+    data: {
+      status: nextStatus,
+      fieldValues: asRecord(pkg.fieldValues) as Prisma.InputJsonValue,
+    },
+  });
+
+  if (formKey === "noc" && !pkg.nocCreatedAt) {
+    await db.permitPackage.update({
+      where: { id: packageId },
+      data: { nocCreatedAt: new Date() },
+    });
+  }
+
+  return filled;
+}
+
+/**
+ * Merge filled official form PDFs in package form order.
+ * Skips unavailable / unmapped forms. Never submits externally.
+ */
+export async function generateMergedPackagePdf(
+  organizationId: string,
+  packageId: string,
+): Promise<{ bytes: Uint8Array; fileName: string; formCount: number }> {
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const ctx = await buildPackageFillContext(organizationId, packageId);
+  const merged = await PDFDocument.create();
+  let formCount = 0;
+
+  for (const form of pkg.forms) {
+    if (!isOfficialFormAvailable(form.formKey)) continue;
+    const writes = fieldWritesForFormKey(form.formKey, ctx);
+    if (!writes) continue;
+    try {
+      const filled = await fillOfficialPermitPdf(form.formKey, writes);
+      const src = await PDFDocument.load(filled, { ignoreEncryption: true });
+      const pages = await merged.copyPages(src, src.getPageIndices());
+      for (const page of pages) merged.addPage(page);
+      formCount += 1;
+    } catch (error) {
+      if (error instanceof PermitPdfFillError && error.code === "unavailable") continue;
+      throw error;
+    }
+  }
+
+  if (formCount === 0) {
+    throw new PermitPackageError(
+      "No sourced official forms are available to download for this package.",
+      "unavailable",
+    );
+  }
+
+  const bytes = await merged.save();
+  const safeName = pkg.name.replace(/[^\w.-]+/g, "_").slice(0, 40);
+  return {
+    bytes,
+    fileName: `${safeName}-permit-package.pdf`,
+    formCount,
+  };
+}
+
+export function packageGridFlags(pkg: {
+  nocCreatedAt: Date | null;
+  packageCreatedAt: Date | null;
+  notarizedAt: Date | null;
+  recordedAt: Date | null;
+  initiatedAt: Date | null;
+  createdAt: Date;
+  forms: readonly { formKey: string; status: PermitPackageFormStatus }[];
+}) {
+  const nocCreated =
+    pkg.nocCreatedAt != null ||
+    pkg.forms.some(
+      (f) =>
+        f.formKey === "noc" &&
+        f.status !== PermitPackageFormStatus.DRAFT,
+    );
+  const packageCreated =
+    pkg.packageCreatedAt != null ||
+    pkg.forms.some((f) => f.status !== PermitPackageFormStatus.DRAFT);
+  return {
+    nocCreated,
+    packageCreated,
+    notarized: pkg.notarizedAt != null,
+    recorded: pkg.recordedAt != null,
+    initiatedAt: pkg.initiatedAt ?? pkg.packageCreatedAt ?? pkg.createdAt,
+  };
 }

@@ -21,8 +21,12 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { PackagePermitType } from "@/generated/prisma/enums";
-import { PermitPackageError, createPermitPackage } from "@/lib/permitting/packages";
+import { PackagePermitType, PermitPackageFormStatus } from "@/generated/prisma/enums";
+import {
+  PermitPackageError,
+  createPermitPackage,
+  packageGridFlags,
+} from "@/lib/permitting/packages";
 
 describe("createPermitPackage", () => {
   beforeEach(() => {
@@ -77,5 +81,44 @@ describe("createPermitPackage", () => {
     expect(arg.data.forms.create).toEqual([
       expect.objectContaining({ formKey: "noc", sortOrder: 0 }),
     ]);
+  });
+});
+
+describe("packageGridFlags", () => {
+  it("derives NOC / package created from form statuses when timestamps are null", () => {
+    const flags = packageGridFlags({
+      nocCreatedAt: null,
+      packageCreatedAt: null,
+      notarizedAt: null,
+      recordedAt: null,
+      initiatedAt: null,
+      createdAt: new Date("2026-10-31T12:00:00Z"),
+      forms: [
+        { formKey: "noc", status: PermitPackageFormStatus.CREATED },
+        { formKey: "pais", status: PermitPackageFormStatus.DRAFT },
+      ],
+    });
+    expect(flags.nocCreated).toBe(true);
+    expect(flags.packageCreated).toBe(true);
+    expect(flags.notarized).toBe(false);
+    expect(flags.recorded).toBe(false);
+    expect(flags.initiatedAt.toISOString()).toBe("2026-10-31T12:00:00.000Z");
+  });
+
+  it("prefers explicit notarized/recorded timestamps", () => {
+    const flags = packageGridFlags({
+      nocCreatedAt: new Date("2026-09-01T00:00:00Z"),
+      packageCreatedAt: new Date("2026-09-02T00:00:00Z"),
+      notarizedAt: new Date("2026-09-03T00:00:00Z"),
+      recordedAt: null,
+      initiatedAt: new Date("2026-09-10T00:00:00Z"),
+      createdAt: new Date("2026-08-01T00:00:00Z"),
+      forms: [],
+    });
+    expect(flags.nocCreated).toBe(true);
+    expect(flags.packageCreated).toBe(true);
+    expect(flags.notarized).toBe(true);
+    expect(flags.recorded).toBe(false);
+    expect(flags.initiatedAt.toISOString()).toBe("2026-09-10T00:00:00.000Z");
   });
 });
