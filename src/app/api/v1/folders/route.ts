@@ -58,9 +58,8 @@ export const GET = withApiAuth(["files:read"], async (request, auth) => {
   }
 
   // Self-heal: every job should have BT's Pre-Sale Documents folder (empty is fine).
-  if (parsed.data.kind !== "inspection") {
-    await ensurePresaleDocumentsFolder(auth.organizationId, job.id);
-  }
+  // (Inspection kind already returned above.)
+  await ensurePresaleDocumentsFolder(auth.organizationId, job.id);
 
   const folders = await listFolders(auth.organizationId, job.id);
 
