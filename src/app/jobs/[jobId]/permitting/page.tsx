@@ -23,6 +23,7 @@ import {
 } from "@/lib/permitting/service";
 
 import {
+  archivePermitPackageAction,
   removeJobPermitAction,
   removePermitInspectionAction,
   setInspectionCompletedAction,
@@ -31,10 +32,13 @@ import {
 import { AddInspectionForm } from "./add-inspection-form";
 import { AddPermitForm } from "./add-permit-form";
 import { AssignVendorForm } from "./assign-vendor-form";
+import { CreatePackageForm } from "./create-package-form";
 import { EditInspectionForm } from "./edit-inspection-form";
 import { EditPermitForm } from "./edit-permit-form";
 import { PermitRockstarForm } from "./permit-rockstar-form";
 import { PermitReminderButton } from "./permit-reminder-button";
+import { ensureDefaultWciContractorLicense, listContractorLicenses } from "@/lib/permitting/package-settings";
+import { listPermitPackagesForJob } from "@/lib/permitting/packages";
 
 export const dynamic = "force-dynamic";
 
@@ -128,10 +132,20 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
     select: { id: true, name: true, email: true, tradeType: true },
   });
 
+  await ensureDefaultWciContractorLicense(user.organizationId);
+  const [packages, licenses] = await Promise.all([
+    listPermitPackagesForJob(user.organizationId, jobId),
+    listContractorLicenses(user.organizationId),
+  ]);
+
   const tradesAvailable = availableTradesToAdd(job.permits.map((p) => p.trade));
   const docsCreated = hasBuildingPermitDocs(job.buildingPermitDocsCreatedAt);
   const activePermit = hasActiveBuildingPermit(job.permits);
   const rockstarLedger = permitRockstarLedgerFromJob(job);
+  const buildingPermitId = job.permits.find((p) => p.trade === "BUILDING")?.id ?? null;
+  const propertyAddress = [job.addressLine1, job.city, job.state, job.postalCode]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
@@ -149,10 +163,76 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
         >
           {docsCreated ? "View building permit docs" : "Create building permit docs"}
         </Link>
+        <Link href="/settings/permitting" className="text-xs text-[var(--bt-primary)] hover:underline">
+          Permitting settings
+        </Link>
         <span className="text-xs text-[var(--bt-muted)]">
           Duval / City of Jacksonville pack (NOC, NTBO, applications…)
         </span>
       </div>
+
+      <section
+        className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4"
+        style={{ borderColor: "var(--bt-border)" }}
+        aria-label="Permit packages"
+      >
+        <h2 className="text-base font-semibold text-[var(--bt-text)]">Permit packages</h2>
+        <p className="mb-3 text-xs text-[var(--bt-muted)]">
+          Rockstar-style packages for this job. Batch 1 = data model + draft create; wizard / PDF fill
+          come next. Never submits externally.
+        </p>
+        {packages.length === 0 ? (
+          <p className="mb-3 text-sm text-[var(--bt-muted)]">No packages yet.</p>
+        ) : (
+          <ul className="mb-4 divide-y text-sm" style={{ borderColor: "var(--bt-border)" }}>
+            {packages.map((pkg) => (
+              <li key={pkg.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
+                <div>
+                  <div className="font-medium text-[var(--bt-text)]">{pkg.name}</div>
+                  <div className="text-xs text-[var(--bt-muted)]">
+                    {pkg.status.replaceAll("_", " ")} · {pkg.municipality ?? pkg.county} ·{" "}
+                    {pkg.permitType} · {pkg.forms.length} forms
+                    {pkg.propertyAddress ? ` · ${pkg.propertyAddress}` : ""}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {pkg.forms.map((f) => (
+                      <span
+                        key={f.id}
+                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                        style={{
+                          background: "color-mix(in srgb, var(--bt-border) 55%, transparent)",
+                          color: "var(--bt-muted)",
+                        }}
+                      >
+                        {f.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {pkg.status !== "ARCHIVED" ? (
+                  <form action={archivePermitPackageAction}>
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input type="hidden" name="packageId" value={pkg.id} />
+                    <button type="submit" className="text-xs text-[var(--bt-hazard)] hover:underline">
+                      Archive
+                    </button>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        <CreatePackageForm
+          jobId={job.id}
+          defaultAddress={propertyAddress}
+          buildingPermitId={buildingPermitId}
+          licenses={licenses.map((l) => ({
+            id: l.id,
+            qualifierName: l.qualifierName,
+            licenseNumber: l.licenseNumber,
+          }))}
+        />
+      </section>
 
       <section
         className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4"

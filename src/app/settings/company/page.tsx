@@ -114,6 +114,7 @@ export default async function CompanySettingsPage() {
         </SettingsGroup>
 
         <SettingsGroup title="Project management">
+          <SettingsLink href="/settings/permitting" label="Permitting" />
           <ComingSoon label="Schedule" />
           <ComingSoon label="Daily Logs" />
           <ComingSoon label="Change Orders" />

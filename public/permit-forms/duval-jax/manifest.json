@@ -1,0 +1,183 @@
+{
+  "county": "DUVAL",
+  "municipality": "JACKSONVILLE",
+  "revisionNote": "Official PDF blanks only — sourced from public coj.net / floridabuilding.org URLs. Unsourced forms stay unavailable; never invent wording.",
+  "forms": [
+    {
+      "key": "noc",
+      "title": "Notice of Commencement",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "affidavit_attaching_new_structure",
+      "title": "Affidavit For Attaching A New Structure To An Existing Structure",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "asbestos_requirements",
+      "title": "Asbestos Requirements",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "affidavit_aluminum_structure",
+      "title": "Attaching an Aluminum Structure to an Existing Structure Affidavit",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "change_of_contractor",
+      "title": "Change of Contractor Form Letter",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "contractor_asbestos_notification",
+      "title": "Contractor Asbestos Notification Statement",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "demolition_grassing_letter",
+      "title": "Demolition Grassing Letter",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "emergency_reconnect_letter",
+      "title": "Emergency Reconnect Letter (ERL)",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "existing_slab_affidavit",
+      "title": "Existing Slab Affidavit",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "hvac_inspection_exemption",
+      "title": "HVAC Inspection Exemption",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "homeowner_sunroom_enclosure",
+      "title": "Homeowner Sunroom Enclosure Affidavit",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "jaxepics_contractor_registration",
+      "title": "JaxEPICS Contractor Registration Form",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "mobile_home_egress",
+      "title": "Mobile Home Egress Requirements",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "permission_by_owner",
+      "title": "Permission By Owner to Obtain Permits (Property Owner Authorization Form)",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "private_pool_safety",
+      "title": "Private Swimming Pool Safety Affirmation",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "pais",
+      "title": "Product Approval Information Sheet (PAIS)",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "affidavit_noc_filing",
+      "title": "Affidavit of Notice of Commencement Filing",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "septic_construction_permit",
+      "title": "Application for Septic System Construction Permit",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "ntbo",
+      "title": "Notice to Building Official of Use of Private Provider (NTBO)",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "reviewed_documents_sheet",
+      "title": "Reviewed Documents Sheet",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "septic_site_plan_worksheet",
+      "title": "Septic System Site Plan Worksheet",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    },
+    {
+      "key": "energy_form_r402",
+      "title": "Energy Form R402",
+      "file": null,
+      "sourceUrl": null,
+      "revisionDate": null,
+      "status": "unavailable"
+    }
+  ]
+}

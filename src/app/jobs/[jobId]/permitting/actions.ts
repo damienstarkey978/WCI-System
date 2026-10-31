@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   InspectionResult,
+  PackagePermitType,
   PermitRockstarSetupType,
   PermitStatus,
   PermitTrade,
@@ -11,6 +12,12 @@ import {
 import { requireAppUser } from "@/lib/auth";
 import { EmailNotConfiguredError, EmailSendError } from "@/lib/email/send";
 import { MoneyError, parseDollarsToCents } from "@/lib/money";
+import {
+  PermitPackageError,
+  archivePermitPackage,
+  createPermitPackage,
+} from "@/lib/permitting/packages";
+import { listContractorLicenses } from "@/lib/permitting/package-settings";
 import {
   addPermitInspection,
   assignPermitVendor,
@@ -333,6 +340,60 @@ export async function removePermitInspectionAction(formData: FormData): Promise<
     if (!(error instanceof InspectionNotFoundError)) {
       // Refresh either way for missing rows; leave other errors silent on this form.
     }
+  }
+  revalidate(jobId);
+}
+
+/** Batch 1: create a draft package (no external submit). Wizard UI lands in batch 2. */
+export async function createPermitPackageAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const formKeys = formData
+    .getAll("formKeys")
+    .map((v) => String(v))
+    .filter(Boolean);
+  const permitTypeRaw = String(formData.get("permitType") ?? "BUILDING");
+  const permitType = Object.values(PackagePermitType).includes(permitTypeRaw as PackagePermitType)
+    ? (permitTypeRaw as PackagePermitType)
+    : PackagePermitType.BUILDING;
+
+  let contractorLicenseId = String(formData.get("contractorLicenseId") ?? "").trim() || null;
+  if (!contractorLicenseId) {
+    const licenses = await listContractorLicenses(user.organizationId);
+    contractorLicenseId = licenses.find((l) => l.active)?.id ?? licenses[0]?.id ?? null;
+  }
+
+  try {
+    await createPermitPackage(user.organizationId, jobId, {
+      name: String(formData.get("name") ?? ""),
+      county: String(formData.get("county") ?? "DUVAL"),
+      municipality: String(formData.get("municipality") ?? "JACKSONVILLE"),
+      permitType,
+      propertyAddress: String(formData.get("propertyAddress") ?? "") || null,
+      jobPermitId: String(formData.get("jobPermitId") ?? "").trim() || null,
+      contractorLicenseId,
+      formKeys: formKeys.length > 0 ? formKeys : ["noc", "permission_by_owner", "pais"],
+      automateWithCity: false,
+    });
+  } catch (error) {
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not create package." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function archivePermitPackageAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  try {
+    await archivePermitPackage(user.organizationId, packageId);
+  } catch {
+    // refresh either way
   }
   revalidate(jobId);
 }
