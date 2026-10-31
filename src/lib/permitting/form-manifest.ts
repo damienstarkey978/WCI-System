@@ -16,6 +16,8 @@ export type PermitFormManifestEntry = {
   readonly sourceUrl: string | null;
   readonly revisionDate: string | null;
   readonly status: PermitFormManifestStatus;
+  /** Why a form stays unavailable, or provenance notes for sourced blanks. */
+  readonly notes?: string;
 };
 
 export type PermitFormManifest = {
