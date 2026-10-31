@@ -37,6 +37,8 @@ import { EditInspectionForm } from "./edit-inspection-form";
 import { EditPermitForm } from "./edit-permit-form";
 import { PermitRockstarForm } from "./permit-rockstar-form";
 import { PermitReminderButton } from "./permit-reminder-button";
+import { JACKSONVILLE_BUILDING_FORMS } from "@/lib/permitting/form-catalog";
+import { loadDuvalJaxManifest } from "@/lib/permitting/form-manifest";
 import { ensureDefaultWciContractorLicense, listContractorLicenses } from "@/lib/permitting/package-settings";
 import { listPermitPackagesForJob } from "@/lib/permitting/packages";
 
@@ -146,6 +148,16 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
   const propertyAddress = [job.addressLine1, job.city, job.state, job.postalCode]
     .filter(Boolean)
     .join(", ");
+  const manifestByKey = new Map(loadDuvalJaxManifest().forms.map((f) => [f.key, f]));
+  const formAvailability = JACKSONVILLE_BUILDING_FORMS.map((f) => {
+    const m = manifestByKey.get(f.key);
+    return {
+      key: f.key,
+      title: f.title,
+      available: m?.status === "available" && Boolean(m.file),
+      revisionDate: m?.revisionDate ?? null,
+    };
+  });
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
@@ -178,8 +190,8 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
       >
         <h2 className="text-base font-semibold text-[var(--bt-text)]">Permit packages</h2>
         <p className="mb-3 text-xs text-[var(--bt-muted)]">
-          Rockstar-style packages for this job. Batch 1 = data model + draft create; wizard / PDF fill
-          come next. Never submits externally.
+          Rockstar-style packages for this job. Wizard fills official Jacksonville PDFs when sourced
+          (NOC, Owner Authorization, PAIS). Never submits externally.
         </p>
         {packages.length === 0 ? (
           <p className="mb-3 text-sm text-[var(--bt-muted)]">No packages yet.</p>
@@ -195,18 +207,40 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
                     {pkg.propertyAddress ? ` · ${pkg.propertyAddress}` : ""}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {pkg.forms.map((f) => (
-                      <span
-                        key={f.id}
-                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                        style={{
-                          background: "color-mix(in srgb, var(--bt-border) 55%, transparent)",
-                          color: "var(--bt-muted)",
-                        }}
-                      >
-                        {f.title}
-                      </span>
-                    ))}
+                    {pkg.forms.map((f) => {
+                      const sourced = formAvailability.some(
+                        (m) => m.key === f.formKey && m.available,
+                      );
+                      return (
+                        <span key={f.id} className="inline-flex items-center gap-1">
+                          {sourced ? (
+                            <a
+                              href={`/jobs/${job.id}/permitting/packages/${pkg.id}/forms/${f.formKey}/pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold hover:underline"
+                              style={{
+                                background: "color-mix(in srgb, var(--bt-status-open-bg) 80%, transparent)",
+                                color: "var(--bt-status-open-text)",
+                              }}
+                              title={`Download filled ${f.title}`}
+                            >
+                              {f.title} · {f.status.replaceAll("_", " ")}
+                            </a>
+                          ) : (
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                              style={{
+                                background: "color-mix(in srgb, var(--bt-border) 55%, transparent)",
+                                color: "var(--bt-muted)",
+                              }}
+                            >
+                              {f.title}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
                 {pkg.status !== "ARCHIVED" ? (
@@ -225,12 +259,14 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
         <CreatePackageForm
           jobId={job.id}
           defaultAddress={propertyAddress}
+          defaultPackageName={`${job.name} — permit package`}
           buildingPermitId={buildingPermitId}
           licenses={licenses.map((l) => ({
             id: l.id,
             qualifierName: l.qualifierName,
             licenseNumber: l.licenseNumber,
           }))}
+          formAvailability={formAvailability}
         />
       </section>
 

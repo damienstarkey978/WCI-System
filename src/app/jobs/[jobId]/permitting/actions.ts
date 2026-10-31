@@ -344,7 +344,12 @@ export async function removePermitInspectionAction(formData: FormData): Promise<
   revalidate(jobId);
 }
 
-/** Batch 1: create a draft package (no external submit). Wizard UI lands in batch 2. */
+function optionalTrimmed(formData: FormData, key: string): string | undefined {
+  const value = String(formData.get(key) ?? "").trim();
+  return value || undefined;
+}
+
+/** Batch 2: wizard creates a package and fills sourced official PDFs (no external submit). */
 export async function createPermitPackageAction(
   _previous: ActionState,
   formData: FormData,
@@ -366,6 +371,28 @@ export async function createPermitPackageAction(
     contractorLicenseId = licenses.find((l) => l.active)?.id ?? licenses[0]?.id ?? null;
   }
 
+  const fieldValues: Record<string, string> = {};
+  for (const key of [
+    "ownerName",
+    "ownerMailingAddress",
+    "ownerCityStateZip",
+    "ownerPhone",
+    "ownerCellPhone",
+    "ownerEmail",
+    "legalDescription",
+    "taxFolio",
+    "permitNumber",
+    "descriptionOfImprovement",
+    "descriptionOfWork",
+    "ownersInterest",
+    "designatedPersonForNotices",
+    "lienorsNoticeRecipient",
+    "expirationRule",
+  ] as const) {
+    const value = optionalTrimmed(formData, key);
+    if (value) fieldValues[key] = value;
+  }
+
   try {
     await createPermitPackage(user.organizationId, jobId, {
       name: String(formData.get("name") ?? ""),
@@ -376,7 +403,9 @@ export async function createPermitPackageAction(
       jobPermitId: String(formData.get("jobPermitId") ?? "").trim() || null,
       contractorLicenseId,
       formKeys: formKeys.length > 0 ? formKeys : ["noc", "permission_by_owner", "pais"],
+      // EPICS toggle is UI-only until batch 5; force false regardless of form.
       automateWithCity: false,
+      fieldValues,
     });
   } catch (error) {
     if (error instanceof PermitPackageError) return { error: error.message };
