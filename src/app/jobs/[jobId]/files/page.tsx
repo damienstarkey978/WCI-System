@@ -14,6 +14,7 @@ import { findOrgJobSummary } from "@/lib/jobs/request-job";
 import { listInspectionPictureFolders } from "@/lib/permitting/inspection-pictures";
 
 import { listFolders } from "@/lib/files/folders";
+import { ensurePresaleDocumentsFolder } from "@/lib/files/presale-documents";
 
 import { deleteFolderAction, purgeFileAction, restoreFileAction, updateFolderVisibilityAction } from "./actions";
 import { FileCard } from "./file-card";
@@ -61,6 +62,9 @@ export default async function FilesPage({
   // Buildertrend's "Attached Documents": files that belong to another record (a bill, PO,
   // invoice, selection option or daily log) rather than sitting loose in the job's documents.
   const attachedWhere = { OR: [{ billId: { not: null } }, { purchaseOrderId: { not: null } }, { invoiceId: { not: null } }, { selectionOptionId: { not: null } }, { dailyLogId: { not: null } }] };
+
+  // BT Documents always includes Pre-Sale Documents — self-heal before listing.
+  await ensurePresaleDocumentsFolder(user.organizationId, job.id);
 
   // Folders needed before we know openFolder — then fan out the rest in parallel.
   const folders = await listFolders(user.organizationId, job.id);

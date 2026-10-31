@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { ContractType, JobStatus } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { ensurePresaleDocumentsFolderOnJobCreate } from "@/lib/files/presale-documents";
 import { JobStatusTransitionError } from "@/lib/job-status";
 import { JobNotFoundError, transitionJobStatus } from "@/lib/jobs";
 import { emitEvent } from "@/lib/webhooks";
@@ -52,6 +53,7 @@ export async function createJobAction(_previous: ActionState, formData: FormData
       data: { jobId: job.id, from: null, to: JobStatus.PRE_SALE, actorUserId: user.id },
     });
 
+    await ensurePresaleDocumentsFolderOnJobCreate(user.organizationId, job.id);
     await emitEvent(user.organizationId, "job.created", { jobId: job.id, prefix: job.prefix, name: job.name });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

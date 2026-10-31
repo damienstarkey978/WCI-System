@@ -14,6 +14,7 @@ import { creatorColumns } from "@/lib/actor";
 import type { CreateJobInput } from "@/lib/api-schemas";
 import { moveLeadAttachmentsToJob } from "@/lib/crm/attachments";
 import { db } from "@/lib/db";
+import { ensurePresaleDocumentsFolderOnJobCreate } from "@/lib/files/presale-documents";
 import { emitEvent } from "@/lib/webhooks";
 
 export class LeadNotFoundError extends Error {
@@ -199,6 +200,9 @@ export async function convertLeadToJob(
 
     return { job, lead: updatedLead };
   });
+
+  // BT Documents always has Pre-Sale Documents — create the empty folder once the Job exists.
+  await ensurePresaleDocumentsFolderOnJobCreate(organizationId, result.job.id);
 
   await emitEvent(organizationId, "lead.converted", { leadId, jobId: result.job.id });
 

@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { ContractType, JobStatus, UserRole } from "@/generated/prisma/enums";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { ensurePresaleDocumentsFolderOnJobCreate } from "@/lib/files/presale-documents";
 import { emitEvent } from "@/lib/webhooks";
 
 export interface ActionState {
@@ -48,6 +49,7 @@ export async function createJobFromScratchAction(_previous: ActionState, formDat
     jobId = job.id;
 
     await db.jobStatusEvent.create({ data: { jobId: job.id, from: null, to: JobStatus.PRE_SALE, actorUserId: user.id } });
+    await ensurePresaleDocumentsFolderOnJobCreate(user.organizationId, job.id);
     await emitEvent(user.organizationId, "job.created", { jobId: job.id, prefix: job.prefix, name: job.name });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

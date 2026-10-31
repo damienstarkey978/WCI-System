@@ -11,6 +11,7 @@ import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createJobSchema, formatZodIssues, listJobsQuerySchema } from "@/lib/api-schemas";
 import { toCursorPage } from "@/lib/api-pagination";
 import { db } from "@/lib/db";
+import { ensurePresaleDocumentsFolderOnJobCreate } from "@/lib/files/presale-documents";
 import { emitEvent } from "@/lib/webhooks";
 
 export const GET = withApiAuth(["jobs:read"], async (request, auth) => {
@@ -92,6 +93,9 @@ export const POST = withApiAuth(["jobs:write"], async (request, auth) => {
     await db.jobStatusEvent.create({
       data: { jobId: job.id, from: null, to: JobStatus.PRE_SALE, actorApiKeyId: auth.apiKeyId },
     });
+
+    // BT Documents always has Pre-Sale Documents — create the empty folder on day one.
+    await ensurePresaleDocumentsFolderOnJobCreate(auth.organizationId, job.id);
 
     await emitEvent(auth.organizationId, "job.created", { jobId: job.id, prefix: job.prefix, name: job.name });
     return Response.json({ data: job }, { status: 201 });
