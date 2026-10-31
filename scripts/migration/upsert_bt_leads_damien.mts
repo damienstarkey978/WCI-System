@@ -4,15 +4,15 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { LeadStage } from "../../src/generated/prisma/enums.ts";
-import { PrismaClient } from "../../src/generated/prisma/client.ts";
-import { createLead } from "../../src/lib/crm/service.ts";
-import { normalizeLeadKey } from "../../src/lib/crm/import.ts";
+import { LeadStage } from "../../src/generated/prisma/enums";
+import { PrismaClient } from "../../src/generated/prisma/client";
+import { createLead } from "../../src/lib/crm/service";
+import { normalizeLeadKey } from "../../src/lib/crm/import";
 import {
   normalizePersonName,
   resolveLeadSalespersonUserId,
-} from "../../src/lib/crm/salesperson.ts";
-import { parseDollarsToCents } from "../../src/lib/money.ts";
+} from "../../src/lib/crm/salesperson";
+import { parseDollarsToCents } from "../../src/lib/money";
 
 const ORG = "0a3188e6-e257-49bb-994c-f5d15618608a";
 
