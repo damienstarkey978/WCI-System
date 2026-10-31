@@ -1,7 +1,7 @@
 {
   "county": "DUVAL",
   "municipality": "JACKSONVILLE",
-  "revisionNote": "Official PDF blanks only — sourced from public jacksonville.gov / coj.net / floridabuilding.org URLs. Unsourced forms stay unavailable; never invent wording.",
+  "revisionNote": "Official PDF blanks only — sourced from public jacksonville.gov / floridabuilding.org URLs. Unsourced forms stay unavailable; never invent wording.",
   "forms": [
     {
       "key": "noc",
@@ -17,31 +17,32 @@
       "file": null,
       "sourceUrl": null,
       "revisionDate": null,
-      "status": "unavailable"
+      "status": "unavailable",
+      "notes": "Current BID forms page publishes the aluminum-structure affidavit separately; no distinct public PDF for this generic title found (2026-10-31)."
     },
     {
       "key": "asbestos_requirements",
       "title": "Asbestos Requirements",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "asbestos_requirements.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/652ae0ce-2bfa-4ded-968e-8f9093e2dd42/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Asbestos-contractor-agreement-ADA-Comp-Mar-2026.pdf?language=en",
+      "revisionDate": "2026-03-01",
+      "status": "available"
     },
     {
       "key": "affidavit_aluminum_structure",
       "title": "Attaching an Aluminum Structure to an Existing Structure Affidavit",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "affidavit_aluminum_structure.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/3c877fbf-6b27-418e-bbc4-fdf0a37a26f0/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Attaching-an-Aluminum-Structure-to-an-Existing-Structure-Affidavit-Rev-4-13-2026.pdf?language=en",
+      "revisionDate": "2026-04-13",
+      "status": "available"
     },
     {
       "key": "change_of_contractor",
       "title": "Change of Contractor Form Letter",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "change_of_contractor.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/3d2948e9-3580-42f2-b658-b36784031409/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Change-of-Contractor-Form-Letter-Rev-4-15-2026.pdf?language=en",
+      "revisionDate": "2026-04-15",
+      "status": "available"
     },
     {
       "key": "contractor_asbestos_notification",
@@ -49,63 +50,64 @@
       "file": null,
       "sourceUrl": null,
       "revisionDate": null,
-      "status": "unavailable"
+      "status": "unavailable",
+      "notes": "BID publishes a single Asbestos Requirements / contractor agreement form (mapped to asbestos_requirements); no separate notification-statement PDF found."
     },
     {
       "key": "demolition_grassing_letter",
       "title": "Demolition Grassing Letter",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "demolition_grassing_letter.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/fe5dfb75-6b55-4324-ae77-295a1a92d996/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Demolition-Grassing-Letter-Rev-4-1-2025.pdf?language=en",
+      "revisionDate": "2025-04-01",
+      "status": "available"
     },
     {
       "key": "emergency_reconnect_letter",
       "title": "Emergency Reconnect Letter (ERL)",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "emergency_reconnect_letter.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/dd558122-c2f4-4b4d-9c06-c3e7cdcef5a9/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Emergency-Reconnect-Letter-(ERL)-Rev-3-31-2026.pdf?language=en",
+      "revisionDate": "2026-03-31",
+      "status": "available"
     },
     {
       "key": "existing_slab_affidavit",
       "title": "Existing Slab Affidavit",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "existing_slab_affidavit.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/764193f1-4c7f-4110-a3bc-3b7281c7a6da/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Existing-Slab-Affidavit-Rev-4-20-2026.pdf?language=en",
+      "revisionDate": "2026-04-20",
+      "status": "available"
     },
     {
       "key": "hvac_inspection_exemption",
       "title": "HVAC Inspection Exemption",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "hvac_inspection_exemption.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/d97ea2a5-d235-43ef-9bec-da834d2d8c9e/135b97c9-84fa-4e82-b956-0fbccec4aa1f/PROPERTY-OWNER-REQUEST-FOR-INSPECTION-EXEMPTION-Rev-3-26-2026.pdf?language=en",
+      "revisionDate": "2026-03-26",
+      "status": "available"
     },
     {
       "key": "homeowner_sunroom_enclosure",
       "title": "Homeowner Sunroom Enclosure Affidavit",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "homeowner_sunroom_enclosure.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/771b446d-4fa2-4a9e-ae2c-49233ff5d3be/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Homeowner-Sunroom-Enclosure-Affidavit-Rev-7-30-2026.pdf?language=en",
+      "revisionDate": "2026-07-30",
+      "status": "available"
     },
     {
       "key": "jaxepics_contractor_registration",
       "title": "JaxEPICS Contractor Registration Form",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "jaxepics_contractor_registration.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/79c78815-cd86-4801-be57-8694d2714b5b/135b97c9-84fa-4e82-b956-0fbccec4aa1f/JaxEPICS-Contractor-Registration-Form-Rev-3-27-2026.pdf?language=en",
+      "revisionDate": "2026-03-27",
+      "status": "available"
     },
     {
       "key": "mobile_home_egress",
       "title": "Mobile Home Egress Requirements",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "mobile_home_egress.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/4f1463b3-e7cf-4801-911b-aefeb3dac835/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Mobile-Home-Egress-Requirements-Rev-3-30-2026.pdf?language=en",
+      "revisionDate": "2026-03-30",
+      "status": "available"
     },
     {
       "key": "permission_by_owner",
@@ -118,10 +120,10 @@
     {
       "key": "private_pool_safety",
       "title": "Private Swimming Pool Safety Affirmation",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "private_pool_safety.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/7c48027e-c3c8-4fe0-b55a-5dd944b1ebb4/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Private-Swimming-Pool-Safety-Affirmation-Rev-6-2-2026.pdf?language=en",
+      "revisionDate": "2026-06-02",
+      "status": "available"
     },
     {
       "key": "pais",
@@ -137,23 +139,25 @@
       "file": null,
       "sourceUrl": null,
       "revisionDate": null,
-      "status": "unavailable"
+      "status": "unavailable",
+      "notes": "No public getContentAsset PDF located on jacksonville.gov (2026-10-31); leave unavailable."
     },
     {
       "key": "septic_construction_permit",
       "title": "Application for Septic System Construction Permit",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "septic_construction_permit.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/95153881-a727-49e3-957b-c2caa65e7ecd/135b97c9-84fa-4e82-b956-0fbccec4aa1f/DH-4015.pdf?language=en",
+      "revisionDate": "2018-04-04",
+      "status": "available"
     },
     {
       "key": "ntbo",
       "title": "Notice to Building Official of Use of Private Provider (NTBO)",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "ntbo.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/07f1ffe5-f398-45f1-af07-b89af9e7cb0e/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Notice-to-Building-Official.pdf?language=en",
+      "revisionDate": "2026-03-30",
+      "status": "available",
+      "notes": "Filename has no Rev date; revisionDate from PDF creation metadata (Acrobat PDFMaker)."
     },
     {
       "key": "reviewed_documents_sheet",
@@ -161,7 +165,8 @@
       "file": null,
       "sourceUrl": null,
       "revisionDate": null,
-      "status": "unavailable"
+      "status": "unavailable",
+      "notes": "No public Jacksonville.gov PDF located (2026-10-31)."
     },
     {
       "key": "septic_site_plan_worksheet",
@@ -169,15 +174,16 @@
       "file": null,
       "sourceUrl": null,
       "revisionDate": null,
-      "status": "unavailable"
+      "status": "unavailable",
+      "notes": "DOH DH-4015 construction application sourced separately; no distinct public site-plan worksheet PDF found."
     },
     {
       "key": "energy_form_r402",
       "title": "Energy Form R402",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "energy_form_r402.pdf",
+      "sourceUrl": "https://www.floridabuilding.org/fbc/committees/energy/energy_forms/2023_Energy_Forms/Form_R402-2023.pdf",
+      "revisionDate": "2023-01-01",
+      "status": "available"
     }
   ]
 }

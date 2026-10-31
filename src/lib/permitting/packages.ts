@@ -1,7 +1,7 @@
 /**
  * Permit package aggregate (job-level).
- * Batch 2: wizard creates packages + fills sourced NOC / Owner Auth / PAIS PDFs.
- * Never submits externally.
+ * Batch 2–3: wizard creates packages + fills sourced Jacksonville official PDFs
+ * (NOC / Owner Auth / PAIS + remaining available blanks). Never submits externally.
  */
 
 import type { Prisma } from "@/generated/prisma/client";
