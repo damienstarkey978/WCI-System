@@ -1,26 +1,33 @@
 /**
- * Permit package aggregate (job-level). Batch 1 creates DRAFT packages with
- * selected form rows — PDF fill / wizard UI land in later batches.
+ * Permit package aggregate (job-level).
+ * Batch 2: wizard creates packages + fills sourced NOC / Owner Auth / PAIS PDFs.
  * Never submits externally.
  */
 
+import type { Prisma } from "@/generated/prisma/client";
 import {
   PackagePermitType,
   PermitPackageFormStatus,
   PermitPackageStatus,
 } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
+import { fillOfficialPermitPdf, PermitPdfFillError } from "@/lib/permitting/fill-pdf";
+import { isOfficialFormAvailable } from "@/lib/permitting/form-manifest";
 import {
   formTitleForKey,
   formsForCatalog,
   type PermitCatalogMunicipality,
   type PermitCatalogPermitType,
 } from "@/lib/permitting/form-catalog";
+import {
+  fieldWritesForFormKey,
+  type PackageFillContext,
+} from "@/lib/permitting/package-form-fill";
 
 export class PermitPackageError extends Error {
   constructor(
     message: string,
-    readonly code: "not_found" | "validation" = "validation",
+    readonly code: "not_found" | "validation" | "unavailable" = "validation",
   ) {
     super(message);
     this.name = "PermitPackageError";
@@ -38,6 +45,25 @@ export type CreatePermitPackageInput = {
   readonly designProfessionalId?: string | null;
   readonly formKeys?: readonly string[];
   readonly automateWithCity?: boolean;
+  readonly fieldValues?: Prisma.InputJsonValue;
+};
+
+export type PackageFieldValues = {
+  readonly ownerName?: string;
+  readonly ownerMailingAddress?: string;
+  readonly ownerCityStateZip?: string;
+  readonly ownerPhone?: string;
+  readonly ownerCellPhone?: string;
+  readonly ownerEmail?: string;
+  readonly legalDescription?: string;
+  readonly taxFolio?: string;
+  readonly permitNumber?: string;
+  readonly descriptionOfImprovement?: string;
+  readonly descriptionOfWork?: string;
+  readonly ownersInterest?: string;
+  readonly designatedPersonForNotices?: string;
+  readonly lienorsNoticeRecipient?: string;
+  readonly expirationRule?: string;
 };
 
 function toCatalogPermitType(t: PackagePermitType): PermitCatalogPermitType {
@@ -57,6 +83,18 @@ function toCatalogPermitType(t: PackagePermitType): PermitCatalogPermitType {
     default:
       return "OTHER";
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function strField(bag: Record<string, unknown>, key: string): string {
+  const v = bag[key];
+  return typeof v === "string" ? v.trim() : "";
 }
 
 export async function listPermitPackagesForJob(organizationId: string, jobId: string) {
@@ -85,6 +123,195 @@ export async function getPermitPackage(organizationId: string, packageId: string
   return row;
 }
 
+function formatLicenseAddress(license: {
+  addressLine1: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+}): string {
+  const line1 = license.addressLine1?.trim() ?? "";
+  const cityLine = [license.city, license.state, license.postalCode].filter(Boolean).join(", ");
+  return [line1, cityLine].filter(Boolean).join(", ");
+}
+
+export async function buildPackageFillContext(
+  organizationId: string,
+  packageId: string,
+): Promise<PackageFillContext> {
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const bag = asRecord(pkg.fieldValues);
+  const license = pkg.contractorLicense;
+
+  const nocPreset = await db.nocPreset.findFirst({
+    where: { organizationId, county: pkg.county },
+  });
+
+  const job = await db.job.findFirst({
+    where: { id: pkg.jobId, organizationId },
+    select: {
+      name: true,
+      permitNumber: true,
+      lotInfo: true,
+      addressLine1: true,
+      city: true,
+      state: true,
+      postalCode: true,
+    },
+  });
+
+  const clientAccess = await db.clientJobAccess.findFirst({
+    where: { jobId: pkg.jobId },
+    include: { client: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const client = clientAccess?.client;
+
+  const propertyAddress =
+    pkg.propertyAddress?.trim() ||
+    [job?.addressLine1, job?.city, job?.state, job?.postalCode].filter(Boolean).join(", ") ||
+    "";
+
+  const ownerCityStateZip =
+    strField(bag, "ownerCityStateZip") ||
+    [client?.city, client?.state, client?.postalCode].filter(Boolean).join(", ");
+
+  return {
+    packageName: pkg.name,
+    propertyAddress,
+    legalDescription: strField(bag, "legalDescription") || job?.lotInfo || "",
+    taxFolio: strField(bag, "taxFolio"),
+    permitNumber:
+      strField(bag, "permitNumber") ||
+      pkg.jobPermit?.permitNumber ||
+      job?.permitNumber ||
+      "",
+    descriptionOfImprovement:
+      strField(bag, "descriptionOfImprovement") ||
+      nocPreset?.descriptionOfImprovement ||
+      job?.name ||
+      pkg.name,
+    descriptionOfWork: strField(bag, "descriptionOfWork"),
+    ownersInterest:
+      strField(bag, "ownersInterest") || nocPreset?.ownersInterest || "Fee Simple",
+    designatedPersonForNotices:
+      strField(bag, "designatedPersonForNotices") ||
+      nocPreset?.designatedPersonForNotices ||
+      "",
+    lienorsNoticeRecipient:
+      strField(bag, "lienorsNoticeRecipient") || nocPreset?.lienorsNoticeRecipient || "",
+    expirationRule:
+      strField(bag, "expirationRule") ||
+      nocPreset?.expirationRule ||
+      "1 year after recording",
+    owner: {
+      name: strField(bag, "ownerName") || client?.name || "",
+      mailingAddress: strField(bag, "ownerMailingAddress") || client?.addressLine1 || "",
+      cityStateZip: ownerCityStateZip,
+      phone: strField(bag, "ownerPhone") || client?.phone || "",
+      cellPhone: strField(bag, "ownerCellPhone") || client?.cellPhone || "",
+      email: strField(bag, "ownerEmail") || client?.email || "",
+    },
+    contractor: {
+      companyName: license?.companyName ?? "",
+      qualifierName: license?.qualifierName ?? "",
+      licenseNumber: license?.licenseNumber ?? "",
+      addressLine: license ? formatLicenseAddress(license) : "",
+      phone: license?.phone ?? "",
+      email: license?.email ?? "",
+    },
+    paisProducts: pkg.products.map((p, index) => ({
+      // Uncategorized exterior product rows on the official PAIS blank (Manufacturer1…).
+      categorySlot: String(index + 1),
+      manufacturer: p.manufacturer,
+      productDescription: [p.model, p.notes].filter(Boolean).join(" — ") || p.category,
+      flNumber: p.approvalNumber,
+    })),
+  };
+}
+
+export async function generateFilledFormPdf(
+  organizationId: string,
+  packageId: string,
+  formKey: string,
+): Promise<{ bytes: Uint8Array; title: string; fileName: string }> {
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const formRow = pkg.forms.find((f) => f.formKey === formKey);
+  if (!formRow) {
+    throw new PermitPackageError(`Form "${formKey}" is not on this package.`, "not_found");
+  }
+  if (!isOfficialFormAvailable(formKey)) {
+    throw new PermitPackageError(
+      `Official PDF for "${formKey}" is not sourced yet.`,
+      "unavailable",
+    );
+  }
+
+  const ctx = await buildPackageFillContext(organizationId, packageId);
+  const writes = fieldWritesForFormKey(formKey, ctx);
+  if (!writes) {
+    throw new PermitPackageError(`No fill mapping for "${formKey}".`, "unavailable");
+  }
+
+  try {
+    const bytes = await fillOfficialPermitPdf(formKey, writes);
+    const safeName = pkg.name.replace(/[^\w.-]+/g, "_").slice(0, 40);
+    return {
+      bytes,
+      title: formRow.title,
+      fileName: `${safeName}-${formKey}.pdf`,
+    };
+  } catch (error) {
+    if (error instanceof PermitPdfFillError) {
+      throw new PermitPackageError(error.message, error.code === "unavailable" ? "unavailable" : "validation");
+    }
+    throw error;
+  }
+}
+
+/** Mark sourced forms CREATED after a successful fill smoke (no external submit). */
+export async function markPackageFormsCreated(organizationId: string, packageId: string) {
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const fillable = pkg.forms.filter((f) => isOfficialFormAvailable(f.formKey));
+  for (const form of fillable) {
+    // Ensure fill succeeds before flipping status.
+    await generateFilledFormPdf(organizationId, packageId, form.formKey);
+    await db.permitPackageForm.update({
+      where: { id: form.id },
+      data: {
+        status: PermitPackageFormStatus.CREATED,
+        fieldValues: asRecord(pkg.fieldValues) as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  const hasNoc = fillable.some((f) => f.formKey === "noc");
+  return db.permitPackage.update({
+    where: { id: packageId },
+    data: {
+      nocCreatedAt: hasNoc ? new Date() : pkg.nocCreatedAt,
+      packageCreatedAt: pkg.packageCreatedAt ?? new Date(),
+    },
+    include: { forms: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+export async function updatePermitPackageFields(
+  organizationId: string,
+  packageId: string,
+  fields: PackageFieldValues,
+) {
+  await getPermitPackage(organizationId, packageId);
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value === "string" && value.trim()) next[key] = value.trim();
+  }
+  return db.permitPackage.update({
+    where: { id: packageId },
+    data: { fieldValues: next },
+    include: { forms: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
 export async function createPermitPackage(
   organizationId: string,
   jobId: string,
@@ -101,7 +328,7 @@ export async function createPermitPackage(
   const permitType = input.permitType ?? PackagePermitType.BUILDING;
 
   if (input.automateWithCity) {
-    // Toggle may be stored, but batch 1 never initiates city work.
+    // Toggle may be stored, but never initiates city work without an explicit later click.
   }
 
   const catalog = formsForCatalog({
@@ -142,7 +369,7 @@ export async function createPermitPackage(
     status: PermitPackageFormStatus.DRAFT,
   }));
 
-  return db.permitPackage.create({
+  const created = await db.permitPackage.create({
     data: {
       organizationId,
       jobId,
@@ -157,10 +384,24 @@ export async function createPermitPackage(
       designProfessionalId: input.designProfessionalId ?? null,
       automateWithCity: Boolean(input.automateWithCity),
       packageCreatedAt: new Date(),
+      fieldValues: input.fieldValues ?? {},
       forms: { create: formRows },
     },
     include: { forms: { orderBy: { sortOrder: "asc" } } },
   });
+
+  // Auto-fill any sourced blanks so staff can download immediately (no external submit).
+  const sourced = selectedKeys.filter((k) => isOfficialFormAvailable(k));
+  if (sourced.length > 0) {
+    try {
+      return await markPackageFormsCreated(organizationId, created.id);
+    } catch {
+      // Keep the draft package even if fill fails (e.g. missing blank on disk).
+      return created;
+    }
+  }
+
+  return created;
 }
 
 export async function archivePermitPackage(organizationId: string, packageId: string) {

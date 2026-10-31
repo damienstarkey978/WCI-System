@@ -1,15 +1,15 @@
 {
   "county": "DUVAL",
   "municipality": "JACKSONVILLE",
-  "revisionNote": "Official PDF blanks only — sourced from public coj.net / floridabuilding.org URLs. Unsourced forms stay unavailable; never invent wording.",
+  "revisionNote": "Official PDF blanks only — sourced from public jacksonville.gov / coj.net / floridabuilding.org URLs. Unsourced forms stay unavailable; never invent wording.",
   "forms": [
     {
       "key": "noc",
       "title": "Notice of Commencement",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "noc.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/36e7bec6-265a-4c1a-b153-7c8ede7d2d1c/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Notice-of-Commencement-Rev-4-14-2026.pdf?language=en",
+      "revisionDate": "2026-04-14",
+      "status": "available"
     },
     {
       "key": "affidavit_attaching_new_structure",
@@ -110,10 +110,10 @@
     {
       "key": "permission_by_owner",
       "title": "Permission By Owner to Obtain Permits (Property Owner Authorization Form)",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "permission_by_owner.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/fa99a293-1f0d-4c44-b598-b86b3cbafaaf/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Property-Owner-Authorization-Form-Rev-8-6-2026.pdf?language=en",
+      "revisionDate": "2026-08-06",
+      "status": "available"
     },
     {
       "key": "private_pool_safety",
@@ -126,10 +126,10 @@
     {
       "key": "pais",
       "title": "Product Approval Information Sheet (PAIS)",
-      "file": null,
-      "sourceUrl": null,
-      "revisionDate": null,
-      "status": "unavailable"
+      "file": "pais.pdf",
+      "sourceUrl": "https://www.jacksonville.gov/getContentAsset/324eb976-f5f2-418a-a55a-4e8f15134727/135b97c9-84fa-4e82-b956-0fbccec4aa1f/Product-Approval-Information-Sheet-Rev-4-9-2026.pdf?language=en",
+      "revisionDate": "2026-04-09",
+      "status": "available"
     },
     {
       "key": "affidavit_noc_filing",
