@@ -96,6 +96,7 @@ import {
   updateProposalSectionTitle,
 } from "@/lib/proposals/service";
 import { createDailyLog } from "@/lib/daily-logs/service";
+import { ensurePresaleDocumentsFolderOnJobCreate } from "@/lib/files/presale-documents";
 import { resolveFileUrlSafe } from "@/lib/files/service";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { transitionJobStatus } from "@/lib/jobs";
@@ -1670,6 +1671,7 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
       }
 
       await db.jobStatusEvent.create({ data: { jobId: job.id, from: null, to: JobStatus.PRE_SALE, actorUserId: ctx.userId } });
+      await ensurePresaleDocumentsFolderOnJobCreate(ctx.organizationId, job.id);
       await emitEvent(ctx.organizationId, "job.created", { jobId: job.id, prefix: job.prefix, name: job.name });
       return `Created job "${job.name}" (${job.id}), status PRE_SALE.`;
     },

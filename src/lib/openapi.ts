@@ -1341,6 +1341,18 @@ const ENDPOINTS: readonly EndpointDef[] = [
   },
   {
     method: "post",
+    path: "/folders/ensure-presale-documents",
+    summary: "Ensure Pre-Sale Documents folder (BT parity) for a job or all jobs",
+    description:
+      "Creates Buildertrend's exact \"Pre-Sale Documents\" folder when missing (idempotent). " +
+      "Also moves already-uploaded approved/signed proposal PDFs and ProposalReport.xls into that folder when found — " +
+      "never invents proposal files. Body `{ jobId }` for one job, or `{}` for every non-template job. " +
+      "Optional `jobStatuses` and `fileIntoFolder` (default true). New jobs also get the empty folder on create.",
+    tags: ["Files"],
+    scopes: ["files:write"],
+  },
+  {
+    method: "post",
     path: "/permit-inspections/{inspectionId}/share-link",
     summary: "Issue an inspector share link for an inspection picture folder",
     description:

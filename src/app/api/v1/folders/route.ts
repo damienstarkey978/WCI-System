@@ -25,6 +25,7 @@ import {
   FolderNameTakenError,
   listFolders,
 } from "@/lib/files/folders";
+import { ensurePresaleDocumentsFolder } from "@/lib/files/presale-documents";
 import {
   createInspectionPictureFolder,
   InspectionFolderNameRequiredError,
@@ -54,6 +55,11 @@ export const GET = withApiAuth(["files:read"], async (request, auth) => {
       }
       throw error;
     }
+  }
+
+  // Self-heal: every job should have BT's Pre-Sale Documents folder (empty is fine).
+  if (parsed.data.kind !== "inspection") {
+    await ensurePresaleDocumentsFolder(auth.organizationId, job.id);
   }
 
   const folders = await listFolders(auth.organizationId, job.id);
