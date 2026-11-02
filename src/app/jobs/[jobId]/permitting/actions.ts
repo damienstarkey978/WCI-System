@@ -25,6 +25,16 @@ import {
   setPermitPackageStatus,
   updatePermitPackageFields,
 } from "@/lib/permitting/packages";
+import {
+  DuvalParcelLookupError,
+  lookupDuvalParcels,
+  type DuvalParcelResult,
+} from "@/lib/permitting/duval-parcel";
+import {
+  assertParcelResult,
+  confirmParcelOnJob,
+  JobParcelCacheError,
+} from "@/lib/permitting/parcel-cache";
 import { EpicsSeamError, requestEpicsCityPermitSubmit } from "@/lib/permitting/epics-seam";
 import { listContractorLicenses } from "@/lib/permitting/package-settings";
 import {
@@ -356,6 +366,58 @@ export async function removePermitInspectionAction(formData: FormData): Promise<
 function optionalTrimmed(formData: FormData, key: string): string | undefined {
   const value = String(formData.get(key) ?? "").trim();
   return value || undefined;
+}
+
+/** Address lock: look up Duval parcels (ArcGIS). Never invents owner/folio. */
+export async function lookupDuvalParcelsAction(input: {
+  readonly address?: string;
+  readonly re?: string;
+}): Promise<{ ok: true; parcels: DuvalParcelResult[] } | { ok: false; error: string }> {
+  await requireAppUser();
+  try {
+    const parcels = await lookupDuvalParcels({
+      address: input.address,
+      re: input.re,
+    });
+    return { ok: true, parcels };
+  } catch (error) {
+    if (error instanceof DuvalParcelLookupError) return { ok: false, error: error.message };
+    return { ok: false, error: error instanceof Error ? error.message : "Parcel lookup failed." };
+  }
+}
+
+/** Confirm parcel onto job cache after staff picks a lookup result. */
+export async function confirmJobParcelAction(
+  jobId: string,
+  parcelRaw: unknown,
+): Promise<
+  | {
+      ok: true;
+      packageFields: Record<string, string>;
+      parcelId: string;
+      ownerOfRecord: string | null;
+      legalDescription: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  const user = await requireAppUser();
+  try {
+    const parcel = assertParcelResult(parcelRaw);
+    const { job, packageFields } = await confirmParcelOnJob(user.organizationId, jobId, parcel);
+    revalidate(jobId);
+    return {
+      ok: true,
+      packageFields,
+      parcelId: job.parcelId ?? parcel.parcelId,
+      ownerOfRecord: job.ownerOfRecord,
+      legalDescription: job.legalDescription,
+    };
+  } catch (error) {
+    if (error instanceof JobParcelCacheError || error instanceof DuvalParcelLookupError) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: false, error: error instanceof Error ? error.message : "Could not confirm parcel." };
+  }
 }
 
 /** Batch 2: wizard creates a package and fills sourced official PDFs (no external submit). */
