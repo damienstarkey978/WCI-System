@@ -343,6 +343,8 @@ export type PaisProductTemplateInput = {
   readonly model?: string | null;
   readonly approvalNumber?: string | null;
   readonly category?: string | null;
+  readonly codeVersion?: string | null;
+  readonly qaExpiration?: string | null;
   readonly notes?: string | null;
 };
 
@@ -367,6 +369,8 @@ export async function createPaisProductTemplate(
       model: trimOrNull(input.model),
       approvalNumber: trimOrNull(input.approvalNumber),
       category: trimOrNull(input.category),
+      codeVersion: trimOrNull(input.codeVersion),
+      qaExpiration: trimOrNull(input.qaExpiration),
       notes: trimOrNull(input.notes),
     },
   });

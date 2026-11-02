@@ -17,6 +17,7 @@ import { isSupabaseStorageConfigured } from "@/lib/env";
 import { createFolder, FolderNameTakenError } from "@/lib/files/folders";
 import { uploadAndRegisterFile } from "@/lib/files/service";
 import { fillOfficialPermitPdf, PermitPdfFillError } from "@/lib/permitting/fill-pdf";
+import { filterActivePaisProducts } from "@/lib/permitting/package-products";
 import {
   composeR402PackagePdf,
   r402FieldsFromContext,
@@ -125,6 +126,7 @@ export async function listPermitPackagesForJob(organizationId: string, jobId: st
     where: { organizationId, jobId },
     include: {
       forms: { orderBy: { sortOrder: "asc" } },
+      products: { orderBy: { sortOrder: "asc" } },
       contractorLicense: true,
     },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
@@ -286,12 +288,14 @@ export async function buildPackageFillContext(
       phone: license?.phone ?? "",
       email: license?.email ?? "",
     },
-    paisProducts: pkg.products.map((p, index) => ({
+    paisProducts: filterActivePaisProducts(pkg.products).map((p, index) => ({
       // Uncategorized exterior product rows on the official PAIS blank (Manufacturer1…).
       categorySlot: String(index + 1),
       manufacturer: p.manufacturer,
       productDescription: [p.model, p.notes].filter(Boolean).join(" — ") || p.category,
+      codeVersion: p.codeVersion,
       flNumber: p.approvalNumber,
+      qaExpiration: p.qaExpiration,
     })),
   };
 }

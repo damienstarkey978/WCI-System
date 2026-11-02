@@ -4355,6 +4355,8 @@ model PaisProductTemplate {
   model          String?
   approvalNumber String?
   category       String?
+  codeVersion    String?
+  qaExpiration   String?
   notes          String? @db.Text
 
   products PermitPackageProduct[]
@@ -4512,6 +4514,10 @@ model PermitPackageProduct {
   model          String?
   approvalNumber String?
   category       String?
+  codeVersion    String?
+  qaExpiration   String?
+  /// When set and in the past, product is hidden from PAIS fill by default.
+  expiresAt      DateTime?
   notes          String? @db.Text
   sortOrder      Int @default(0)
 

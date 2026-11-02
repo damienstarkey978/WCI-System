@@ -361,6 +361,46 @@ const ENDPOINTS: readonly EndpointDef[] = [
     pathParams: ["jobId"],
   },
   {
+    method: "get",
+    path: "/pais-templates/search",
+    summary: "Search org PAIS product templates",
+    description:
+      "AND tokenization across q; optional manufacturer/model/approvalNumber filters; " +
+      "exact model match ranks first. hideExpiredQa=true drops ISO-dated QA past today. " +
+      "Never invents Florida approval numbers — returns only stored templates.",
+    tags: ["Permitting"],
+    scopes: ["permits:read"],
+  },
+  {
+    method: "get",
+    path: "/permit-packages/{packageId}/products",
+    summary: "List PAIS products on a permit package",
+    tags: ["Permitting"],
+    scopes: ["permits:read"],
+    pathParams: ["packageId"],
+  },
+  {
+    method: "post",
+    path: "/permit-packages/{packageId}/products",
+    summary: "Add a PAIS product row (or copy from template)",
+    description:
+      "Body: manufacturer/model/approvalNumber/category/codeVersion/qaExpiration/notes, " +
+      "or templateId to copy an org PaisProductTemplate. Never invents FL#.",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["packageId"],
+    successStatus: 201,
+  },
+  {
+    method: "delete",
+    path: "/permit-packages/{packageId}/products/{productId}",
+    summary: "Remove a PAIS product from a permit package",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["packageId", "productId"],
+    successStatus: 204,
+  },
+  {
     method: "patch",
     path: "/jobs/{jobId}/permit-rockstar-ledger",
     summary: "Update the job's Permit Rockstar ledger",

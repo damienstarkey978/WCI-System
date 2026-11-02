@@ -26,6 +26,11 @@ import {
   updatePermitPackageFields,
 } from "@/lib/permitting/packages";
 import {
+  addPackageProduct,
+  addPackageProductFromTemplate,
+  removePackageProduct,
+} from "@/lib/permitting/package-products";
+import {
   DuvalParcelLookupError,
   lookupDuvalParcels,
   type DuvalParcelResult,
@@ -645,6 +650,49 @@ export async function markPackageFormDownloadedAction(formData: FormData): Promi
   const formKey = String(formData.get("formKey") ?? "");
   try {
     await markPackageFormDownloaded(user.organizationId, packageId, formKey);
+  } catch {
+    // refresh either way
+  }
+  revalidate(jobId);
+}
+
+export async function addPackageProductAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const templateId = String(formData.get("templateId") ?? "").trim();
+  try {
+    if (templateId) {
+      await addPackageProductFromTemplate(user.organizationId, packageId, templateId);
+    } else {
+      await addPackageProduct(user.organizationId, packageId, {
+        manufacturer: optionalTrimmed(formData, "manufacturer"),
+        model: optionalTrimmed(formData, "model"),
+        approvalNumber: optionalTrimmed(formData, "approvalNumber"),
+        category: optionalTrimmed(formData, "category"),
+        codeVersion: optionalTrimmed(formData, "codeVersion"),
+        qaExpiration: optionalTrimmed(formData, "qaExpiration"),
+        notes: optionalTrimmed(formData, "notes"),
+      });
+    }
+  } catch (error) {
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not add PAIS product." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function removePackageProductAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const productId = String(formData.get("productId") ?? "");
+  try {
+    await removePackageProduct(user.organizationId, packageId, productId);
   } catch {
     // refresh either way
   }
