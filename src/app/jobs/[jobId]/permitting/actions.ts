@@ -474,8 +474,11 @@ export async function createPermitPackageAction(
       propertyAddress: String(formData.get("propertyAddress") ?? "") || null,
       jobPermitId: String(formData.get("jobPermitId") ?? "").trim() || null,
       contractorLicenseId,
-      formKeys: formKeys.length > 0 ? formKeys : ["noc", "permission_by_owner", "pais"],
-      // EPICS toggle is UI-only until batch 5; force false regardless of form.
+      formKeys:
+        formKeys.length > 0
+          ? formKeys
+          : ["noc", "permission_by_owner", "pais", "energy_form_r402"],
+      // EPICS toggle is UI-only; force false regardless of form — never auto-submits.
       automateWithCity: false,
       fieldValues,
     });
@@ -579,6 +582,12 @@ export async function updatePermitPackageFieldsAction(
     "lienorsNoticeRecipient",
     "expirationRule",
     "pboUsesPrivateProvider",
+    "r402ClimateZone",
+    "r402ConditionedSqFt",
+    "r402ProjectScope",
+    "r402MechanicalSystem",
+    "r402InsulationNotes",
+    "r402OtherNotes",
   ] as const) {
     const value = optionalTrimmed(formData, key);
     if (value) fields[key] = value;

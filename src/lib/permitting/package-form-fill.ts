@@ -45,6 +45,13 @@ export type PackageFillContext = {
    * ("No I will not be using a private provider"). Never invent; omit → city path.
    */
   readonly pboUsesPrivateProvider?: boolean | null;
+  /** Energy Form R402 worksheet — staff-entered only; official PDF has no AcroForm. */
+  readonly r402ClimateZone?: string | null;
+  readonly r402ConditionedSqFt?: string | null;
+  readonly r402ProjectScope?: string | null;
+  readonly r402MechanicalSystem?: string | null;
+  readonly r402InsulationNotes?: string | null;
+  readonly r402OtherNotes?: string | null;
   readonly owner: PackageFillOwner;
   readonly contractor: PackageFillContractor;
   /** PAIS product rows already shaped for AcroForm slots (batch 2: header only if empty). */
