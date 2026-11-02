@@ -50,6 +50,7 @@ import {
   ensureDefaultWciContractorLicense,
   listContractorLicenses,
   listFormSetTemplates,
+  listPaisProductTemplates,
 } from "@/lib/permitting/package-settings";
 import { isJaxEpicsConnected, latestEpicsSubmitForPackage } from "@/lib/permitting/epics-seam";
 import { listPermitPackagesForJob, packageGridFlags } from "@/lib/permitting/packages";
@@ -171,11 +172,12 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
   });
 
   await ensureDefaultWciContractorLicense(user.organizationId);
-  const [packages, licenses, epicsConnected, formSetTemplates] = await Promise.all([
+  const [packages, licenses, epicsConnected, formSetTemplates, paisTemplates] = await Promise.all([
     listPermitPackagesForJob(user.organizationId, jobId),
     listContractorLicenses(user.organizationId),
     isJaxEpicsConnected(user.organizationId),
     listFormSetTemplates(user.organizationId),
+    listPaisProductTemplates(user.organizationId),
   ]);
   const blankPdfUrls = blankPdfUrlsByFormKey();
   const epicsByPackageId = new Map(
@@ -266,6 +268,16 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
         r402InsulationNotes: fieldStr(bag, "r402InsulationNotes"),
         r402OtherNotes: fieldStr(bag, "r402OtherNotes"),
       },
+      products: pkg.products.map((p) => ({
+        id: p.id,
+        manufacturer: p.manufacturer ?? "",
+        model: p.model ?? "",
+        approvalNumber: p.approvalNumber ?? "",
+        category: p.category ?? "",
+        codeVersion: p.codeVersion ?? "",
+        qaExpiration: p.qaExpiration ?? "",
+        expiresAt: p.expiresAt ? p.expiresAt.toISOString() : null,
+      })),
       contractor: license
         ? {
             companyName: license.companyName,
@@ -335,6 +347,13 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
                 label: permitDisplayTitle(p),
               }))}
               epicsConnected={epicsConnected}
+              paisTemplates={paisTemplates.map((t) => ({
+                id: t.id,
+                name: t.name,
+                manufacturer: t.manufacturer ?? "",
+                model: t.model ?? "",
+                approvalNumber: t.approvalNumber ?? "",
+              }))}
             />
           </div>
         ) : (

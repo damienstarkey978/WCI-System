@@ -5,9 +5,11 @@ import { useActionState, useMemo, useState } from "react";
 import { DUVAL_MUNICIPALITIES } from "@/lib/permitting/form-catalog";
 
 import {
+  addPackageProductAction,
   linkPackageJobPermitAction,
   markPackageFormDownloadedAction,
   regeneratePackageFormAction,
+  removePackageProductAction,
   removePermitPackageAction,
   renamePermitPackageAction,
   requestEpicsCityPermitAction,
@@ -22,11 +24,32 @@ type PackageTab = "ACTIVE" | "SENT_TO_CONTRACTORS" | "ARCHIVED";
 type SidePanel =
   | "property_owner"
   | "contractor"
+  | "pais"
   | "r402"
   | "notarization"
   | "recording"
   | "city_permit"
   | "settings";
+
+type PackageProductRow = {
+  id: string;
+  manufacturer: string;
+  model: string;
+  approvalNumber: string;
+  category: string;
+  codeVersion: string;
+  qaExpiration: string;
+  /** ISO timestamp; when past, row is hidden from PAIS fill. */
+  expiresAt: string | null;
+};
+
+type PaisTemplateOption = {
+  id: string;
+  name: string;
+  manufacturer: string;
+  model: string;
+  approvalNumber: string;
+};
 
 type PackageFormRow = {
   id: string;
@@ -89,6 +112,7 @@ type PackageRow = {
     lastError: string | null;
     resultPermitNumber: string | null;
   } | null;
+  products: readonly PackageProductRow[];
 };
 
 type JobPermitOption = {
@@ -107,6 +131,7 @@ const TAB_LABELS: Record<PackageTab, string> = {
 const SIDE_TABS: readonly { key: SidePanel; label: string }[] = [
   { key: "property_owner", label: "Property Owner" },
   { key: "contractor", label: "Contractor" },
+  { key: "pais", label: "PAIS" },
   { key: "r402", label: "R402" },
   { key: "notarization", label: "Notarization" },
   { key: "recording", label: "Recording" },
@@ -158,12 +183,14 @@ export function PackagesPanel({
   packages,
   jobPermits,
   epicsConnected,
+  paisTemplates = [],
 }: {
   jobId: string;
   packages: readonly PackageRow[];
   jobPermits: readonly JobPermitOption[];
   /** Org has connected (non-disconnected) JAX EPICS credentials. */
   epicsConnected: boolean;
+  paisTemplates?: readonly PaisTemplateOption[];
 }) {
   const [tab, setTab] = useState<PackageTab>("ACTIVE");
   const [filter, setFilter] = useState("");
@@ -195,6 +222,7 @@ export function PackagesPanel({
     requestEpicsCityPermitAction,
     INITIAL,
   );
+  const [paisState, paisAction, paisPending] = useActionState(addPackageProductAction, INITIAL);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -832,6 +860,117 @@ export function PackagesPanel({
                     <p className="text-[11px] text-[var(--bt-hazard)]">{ownerState.error}</p>
                   ) : null}
                 </form>
+              ) : null}
+
+              {sidePanel === "pais" ? (
+                <div className="grid gap-3 text-xs">
+                  <p className="text-[10px] text-[var(--bt-muted)]">
+                    PAIS product rows fill Manufacturer/FL slots. Never invent Florida approval
+                    numbers — use a template or a known FL#. Expired rows (expiresAt) are hidden from
+                    fill.
+                  </p>
+                  <ul className="grid gap-1">
+                    {selected.products.length === 0 ? (
+                      <li className="text-[var(--bt-muted)]">No products on this package yet.</li>
+                    ) : (
+                      selected.products.map((p) => (
+                        <li
+                          key={p.id}
+                          className="flex items-start justify-between gap-2 rounded border px-2 py-1.5"
+                          style={{ borderColor: "var(--bt-border)" }}
+                        >
+                          <span>
+                            <span className="font-medium text-[var(--bt-text)]">
+                              {p.manufacturer || p.model || "Product"}
+                            </span>
+                            <span className="mt-0.5 block text-[10px] text-[var(--bt-muted)]">
+                              {[p.model, p.approvalNumber, p.codeVersion].filter(Boolean).join(" · ")}
+                              {p.expiresAt
+                                ? ` · expires ${p.expiresAt.slice(0, 10)} (past dates hidden from fill)`
+                                : ""}
+                            </span>
+                          </span>
+                          <form action={removePackageProductAction}>
+                            <input type="hidden" name="jobId" value={jobId} />
+                            <input type="hidden" name="packageId" value={selected.id} />
+                            <input type="hidden" name="productId" value={p.id} />
+                            <button
+                              type="submit"
+                              className="text-[10px] text-[var(--bt-hazard)] hover:underline"
+                            >
+                              Remove
+                            </button>
+                          </form>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                  {paisTemplates.length > 0 ? (
+                    <form action={paisAction} className="grid gap-1">
+                      <input type="hidden" name="jobId" value={jobId} />
+                      <input type="hidden" name="packageId" value={selected.id} />
+                      <label className="text-[10px] text-[var(--bt-muted)]">
+                        Add from org template
+                        <select
+                          name="templateId"
+                          className="mt-0.5 w-full rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: "var(--bt-border)" }}
+                          defaultValue=""
+                        >
+                          <option value="">Select template…</option>
+                          {paisTemplates.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                              {t.approvalNumber ? ` · ${t.approvalNumber}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={paisPending}
+                        className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
+                        style={{ background: "var(--bt-primary)" }}
+                      >
+                        {paisPending ? "Adding…" : "Add template product"}
+                      </button>
+                    </form>
+                  ) : null}
+                  <form action={paisAction} className="grid gap-1 border-t pt-2" style={{ borderColor: "var(--bt-border)" }}>
+                    <input type="hidden" name="jobId" value={jobId} />
+                    <input type="hidden" name="packageId" value={selected.id} />
+                    {(
+                      [
+                        ["manufacturer", "Manufacturer"],
+                        ["model", "Model"],
+                        ["approvalNumber", "FL / approval #"],
+                        ["codeVersion", "Code version"],
+                        ["qaExpiration", "QA expiration"],
+                        ["category", "Category"],
+                      ] as const
+                    ).map(([name, label]) => (
+                      <label key={name} className="text-[10px] text-[var(--bt-muted)]">
+                        {label}
+                        <input
+                          name={name}
+                          className="mt-0.5 w-full rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: "var(--bt-border)" }}
+                        />
+                      </label>
+                    ))}
+                    <button
+                      type="submit"
+                      disabled={paisPending}
+                      className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
+                      style={{ background: "var(--bt-primary)" }}
+                    >
+                      {paisPending ? "Adding…" : "Add product row"}
+                    </button>
+                    {paisState.error ? (
+                      <p className="text-[11px] text-[var(--bt-hazard)]">{paisState.error}</p>
+                    ) : null}
+                  </form>
+                </div>
               ) : null}
 
               {sidePanel === "r402" ? (
