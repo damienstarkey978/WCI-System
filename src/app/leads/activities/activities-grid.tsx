@@ -2,70 +2,125 @@
 
 import Link from "next/link";
 
-import { ActivityTypeIcon, activityTypeLabel } from "@/components/leads/activity-type";
+import { ActivityStatusPill, ActivityTypeIcon } from "@/components/leads/activity-type";
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
 import { formatDate } from "@/lib/format";
 
 export interface ActivityRow {
   readonly id: string;
   readonly leadId: string;
-  readonly leadName: string;
+  readonly title: string;
   readonly type: string;
-  readonly note: string;
-  readonly by: string | null;
-  readonly occurredAt: string;
-  readonly dueDate: string | null;
+  readonly typeLabel: string;
+  readonly status: "PAST_DUE" | "PENDING" | "COMPLETED" | "LOGGED";
+  readonly assignedUser: string | null;
+  readonly attendees: string | null;
+  readonly contactDate: string;
+  readonly activityNotes: string;
+  readonly cellPhone: string | null;
+  readonly city: string | null;
+  readonly email: string | null;
   readonly completed: boolean;
 }
 
-/** Client half of the Lead Activities list; see purchase-orders-grid.tsx for why the split exists. */
+/** Buildertrend Activity view columns for the Lead Activities list. */
 export function ActivitiesGrid({ rows }: { rows: readonly ActivityRow[] }) {
   const columns: DataGridColumn<ActivityRow>[] = [
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      sortValue: (row) => row.status,
+      render: (row) => <ActivityStatusPill status={row.status} />,
+    },
     {
       key: "type",
       header: "Type",
       sortable: true,
-      sortValue: (row) => activityTypeLabel(row.type),
+      sortValue: (row) => row.typeLabel,
       render: (row) => (
-        <div className="flex items-center gap-2">
-          <ActivityTypeIcon type={row.type} size="sm" completed={row.completed} />
-          <span className="text-sm font-medium text-[var(--bt-text)]">{activityTypeLabel(row.type)}</span>
+        <div className="flex min-w-[10rem] items-center gap-2">
+          <ActivityTypeIcon type={row.type} size="sm" completed={row.completed} btLabel={row.typeLabel} />
+          <span className="text-sm text-[var(--bt-text)]">{row.typeLabel}</span>
         </div>
       ),
     },
     {
-      key: "note",
-      header: "Activity",
-      render: (row) => (
-        <div className="min-w-0">
-          <span className={`line-clamp-2 text-sm ${row.completed ? "text-[var(--bt-muted)] line-through" : "text-[var(--bt-text)]"}`}>
-            {row.note}
-          </span>
-          {row.type === "TASK" ? (
-            <div className="mt-0.5 text-xs text-[var(--bt-muted)]">
-              {row.completed ? "Completed" : row.dueDate ? `Due ${formatDate(new Date(row.dueDate))}` : "Open task"}
-            </div>
-          ) : null}
-        </div>
-      ),
-    },
-    {
-      key: "leadName",
-      header: "Lead opportunity",
+      key: "title",
+      header: "Title",
       sortable: true,
       render: (row) => (
-        <Link href={`/leads/${row.leadId}?tab=activities`} className="font-medium text-[var(--bt-primary)] hover:underline">
-          {row.leadName}
+        <Link
+          href={`/leads/${row.leadId}?tab=activities`}
+          className="block max-w-[14rem] truncate font-medium text-[var(--bt-primary)] hover:underline"
+          title={row.title}
+        >
+          {row.title}
         </Link>
       ),
     },
-    { key: "by", header: "Assigned / by", render: (row) => <span className="text-sm text-[var(--bt-muted)]">{row.by ?? "—"}</span> },
     {
-      key: "occurredAt",
-      header: "Date",
+      key: "assignedUser",
+      header: "Assigned User",
       sortable: true,
-      render: (row) => <span className="whitespace-nowrap text-sm">{formatDate(new Date(row.occurredAt))}</span>,
+      render: (row) => <span className="whitespace-nowrap text-sm text-[var(--bt-text)]">{row.assignedUser ?? ""}</span>,
+    },
+    {
+      key: "attendees",
+      header: "Attendees",
+      render: (row) => <span className="text-sm text-[var(--bt-muted)]">{row.attendees ?? ""}</span>,
+    },
+    {
+      key: "contactDate",
+      header: "Contact Date",
+      sortable: true,
+      sortValue: (row) => row.contactDate,
+      render: (row) => <span className="whitespace-nowrap text-sm">{formatDate(new Date(row.contactDate))}</span>,
+    },
+    {
+      key: "activityNotes",
+      header: "Activity Notes",
+      render: (row) => (
+        <span className="line-clamp-2 max-w-[16rem] text-sm text-[var(--bt-text)]" title={row.activityNotes}>
+          {row.activityNotes}
+        </span>
+      ),
+    },
+    {
+      key: "cellPhone",
+      header: "Cell Phone",
+      render: (row) =>
+        row.cellPhone ? (
+          <a href={`tel:${row.cellPhone.replace(/[^\d+]/g, "")}`} className="whitespace-nowrap text-sm text-[var(--bt-primary)] hover:underline">
+            {row.cellPhone}
+          </a>
+        ) : (
+          ""
+        ),
+    },
+    {
+      key: "city",
+      header: "City",
+      sortable: true,
+      render: (row) => <span className="text-sm text-[var(--bt-text)]">{row.city ?? ""}</span>,
+    },
+    {
+      key: "email",
+      header: "Email Address",
+      render: (row) => <span className="max-w-[12rem] truncate text-sm text-[var(--bt-text)]">{row.email ?? ""}</span>,
     },
   ];
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="lead-activities" selectable emptyMessage="No activity matches." />;
+
+  return (
+    <DataGrid
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      viewKey="lead-activities"
+      selectable
+      emptyMessage="No activity matches."
+      sortToolbarInFooter
+      defaultSort={{ key: "contactDate", direction: "asc" }}
+    />
+  );
 }

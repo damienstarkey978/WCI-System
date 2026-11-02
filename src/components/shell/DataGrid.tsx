@@ -51,6 +51,8 @@ export function DataGrid<T>({
   pageSize: initialPageSize = 50,
   viewKey,
   defaultHiddenKeys = [],
+  sortToolbarInFooter = false,
+  defaultSort = null,
 }: {
   columns: readonly DataGridColumn<T>[];
   rows: readonly T[];
@@ -73,6 +75,13 @@ export function DataGrid<T>({
    * Buildertrend default is a short column set but WCI still keeps the extras available.
    */
   defaultHiddenKeys?: readonly string[];
+  /**
+   * When true (BT Lead Activities / Opportunities), Standard View lives in the
+   * footer next to pagination instead of a top bar above the table.
+   */
+  sortToolbarInFooter?: boolean;
+  /** Initial uncontrolled sort — e.g. Contact Date asc on Lead Activities. */
+  defaultSort?: { key: string; direction: "asc" | "desc" } | null;
 }) {
   const router = useRouter();
   const [page, setPage] = useState(0);
@@ -81,7 +90,7 @@ export function DataGrid<T>({
   // Selection and sort are controlled when the caller passes them, otherwise kept here,
   // so a grid that just says `selectable` still has working checkboxes and sortable headers.
   const [ownSelected, setOwnSelected] = useState<ReadonlySet<string>>(new Set());
-  const [ownSort, setOwnSort] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+  const [ownSort, setOwnSort] = useState<{ key: string; direction: "asc" | "desc" } | null>(defaultSort);
   const [hiddenKeys, setHiddenKeys] = useState<readonly string[]>(() => [...defaultHiddenKeys]);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [hasSavedView, setHasSavedView] = useState(false);
@@ -197,46 +206,55 @@ export function DataGrid<T>({
 
   const alignClass = (align: DataGridColumn<T>["align"]) => (align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left");
 
+  const viewChooserMenu = viewKey ? (
+    <div className={`relative ${sortToolbarInFooter ? "" : ""}`}>
+      <button
+        type="button"
+        onClick={() => setChooserOpen((open) => !open)}
+        aria-expanded={chooserOpen}
+        className="rounded border px-3 py-1 text-xs font-medium text-[var(--bt-text)]"
+        style={{ borderColor: "var(--bt-border)" }}
+      >
+        {hasSavedView ? "Custom view" : "Standard view"}
+      </button>
+      {chooserOpen ? (
+        <div
+          className={`absolute z-20 mt-1 w-56 rounded-lg border bg-[var(--bt-panel-bg)] p-2 shadow-lg ${sortToolbarInFooter ? "bottom-full left-0 mb-1" : "right-0 top-full"}`}
+          style={{ borderColor: "var(--bt-border)" }}
+        >
+          <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Columns</div>
+          {columns.map((column) => {
+            const shown = !hiddenKeys.includes(column.key);
+            return (
+              <label key={column.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-black/5">
+                <input
+                  type="checkbox"
+                  checked={shown}
+                  onChange={() => {
+                    // Never let the last visible column be hidden, or the grid would be blank.
+                    if (shown && visibleColumns.length === 1) return;
+                    saveHidden(shown ? [...hiddenKeys, column.key] : hiddenKeys.filter((key) => key !== column.key));
+                  }}
+                />
+                {column.header || column.key}
+              </label>
+            );
+          })}
+          {hasSavedView ? (
+            <button type="button" onClick={resetToStandardView} className="mt-1 w-full rounded px-2 py-1 text-left text-xs font-medium text-[var(--bt-primary)] hover:bg-black/5">
+              Back to Standard view
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <div className="overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
-      {viewKey ? (
+      {viewKey && !sortToolbarInFooter ? (
         <div className="relative flex items-center justify-end border-b px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
-          <button
-            type="button"
-            onClick={() => setChooserOpen((open) => !open)}
-            aria-expanded={chooserOpen}
-            className="rounded border px-3 py-1 text-xs font-medium text-[var(--bt-text)]"
-            style={{ borderColor: "var(--bt-border)" }}
-          >
-            {hasSavedView ? "Custom view" : "Standard view"}
-          </button>
-          {chooserOpen ? (
-            <div className="absolute right-3 top-full z-20 mt-1 w-56 rounded-lg border bg-[var(--bt-panel-bg)] p-2 shadow-lg" style={{ borderColor: "var(--bt-border)" }}>
-              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Columns</div>
-              {columns.map((column) => {
-                const shown = !hiddenKeys.includes(column.key);
-                return (
-                  <label key={column.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-black/5">
-                    <input
-                      type="checkbox"
-                      checked={shown}
-                      onChange={() => {
-                        // Never let the last visible column be hidden, or the grid would be blank.
-                        if (shown && visibleColumns.length === 1) return;
-                        saveHidden(shown ? [...hiddenKeys, column.key] : hiddenKeys.filter((key) => key !== column.key));
-                      }}
-                    />
-                    {column.header || column.key}
-                  </label>
-                );
-              })}
-              {hasSavedView ? (
-                <button type="button" onClick={resetToStandardView} className="mt-1 w-full rounded px-2 py-1 text-left text-xs font-medium text-[var(--bt-primary)] hover:bg-black/5">
-                  Back to Standard view
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+          {viewChooserMenu}
         </div>
       ) : null}
       <div className="max-h-[36rem] overflow-auto">
@@ -331,9 +349,13 @@ export function DataGrid<T>({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5 text-xs text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-        <span>
-          {clampedPage * pageSize + 1}-{Math.min(sortedRows.length, clampedPage * pageSize + pageRows.length)} of {sortedRows.length} items{effectiveSelected.size > 0 ? `, ${effectiveSelected.size} selected` : ""}
-        </span>
+        <div className="flex items-center gap-2">
+          {sortToolbarInFooter ? viewChooserMenu : null}
+          <span>
+            {clampedPage * pageSize + 1}-{Math.min(sortedRows.length, clampedPage * pageSize + pageRows.length)} of {sortedRows.length} items
+            {effectiveSelected.size > 0 ? `, ${effectiveSelected.size} selected` : ""}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <select
             value={pageSize}
