@@ -1,32 +1,27 @@
-import Link from "next/link";
-
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { ACTIVITY_TYPE_META, ACTIVITY_TYPE_ORDER, ActivityTypeIcon } from "@/components/leads/activity-type";
-import { EmptyState } from "@/components/shell/EmptyState";
-import { CalendarIcon, TaskIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
+import {
+  activityContactDate,
+  activityDisplayStatus,
+  activityTypeDisplayLabel,
+  parseLeadActivityNote,
+} from "@/lib/crm/lead-activity-display";
 import { db } from "@/lib/db";
 import { salesRepLeadActivityWhere } from "@/lib/staff/sales-rep-scope";
 
-import { ActivitiesGrid } from "./activities-grid";
+import type { ActivityRow } from "./activities-grid";
+import { LeadActivitiesClient } from "./lead-activities-client";
 
 export const dynamic = "force-dynamic";
 
-const TABS = [
-  { key: "all", label: "All" },
-  { key: "open-tasks", label: "Open tasks" },
-  ...ACTIVITY_TYPE_ORDER.map((key) => ({ key, label: ACTIVITY_TYPE_META[key].label + "s" })),
-] as const;
-
 /**
- * Cross-lead activity list, Buildertrend's "Lead Activities". The per-lead detail
- * page (src/app/leads/[leadId]/page.tsx) has the same data scoped to one lead; this
- * is the org-wide view, with the calendar view one link away. Sales shell hides the
- * jobs sidebar (see leads/layout.tsx).
+ * Cross-lead activity list, Buildertrend's "Lead Activities" Activity view.
+ * Sales shell hides the jobs sidebar (see leads/layout.tsx).
  */
 export default async function LeadActivitiesPage({ searchParams }: PageProps<"/leads/activities">) {
-  const { tab: tabParam } = await searchParams;
-  const tab = TABS.some((t) => t.key === tabParam) ? (tabParam as (typeof TABS)[number]["key"]) : "all";
+  const params = await searchParams;
+  const view = typeof params.view === "string" ? params.view : "activity";
+  const activeTab = view === "list" ? "list" : "activity";
 
   let user;
   try {
@@ -42,80 +37,84 @@ export default async function LeadActivitiesPage({ searchParams }: PageProps<"/l
     where: {
       organizationId: user.organizationId,
       ...salesRepLeadActivityWhere(user),
-      ...(tab === "open-tasks" ? { type: "TASK" as const, completedAt: null } : tab !== "all" ? { type: tab } : {}),
     },
+    // Newest first so Past Due / open follow-ups aren't truncated out of an
+    // oldest-N window; the grid still defaults Contact Date sort to ascending.
     orderBy: { occurredAt: "desc" },
-    take: 500,
+    take: 2000,
     include: {
-      lead: { select: { id: true, name: true } },
-      createdByUser: true,
+      lead: {
+        select: {
+          id: true,
+          name: true,
+          title: true,
+          phone: true,
+          email: true,
+          city: true,
+          stage: true,
+          assignedUser: { select: { name: true, email: true } },
+        },
+      },
+      createdByUser: { select: { name: true, email: true } },
       createdByApiKey: { select: { name: true } },
     },
   });
 
+  const typeSet = new Set<string>();
+  const assigneeSet = new Set<string>();
+  const leadStagesByLeadId: Record<string, string> = {};
+
+  const rows: ActivityRow[] = activities.map((activity) => {
+    const parsed = parseLeadActivityNote(activity.note);
+    const typeLabel = activityTypeDisplayLabel(activity.type, parsed.btType);
+    const status = activityDisplayStatus({
+      btStatus: parsed.btStatus,
+      completedAt: activity.completedAt,
+      dueDate: activity.dueDate,
+      type: activity.type,
+    });
+    const assignedUser =
+      parsed.assigned ||
+      activity.lead.assignedUser?.name ||
+      activity.lead.assignedUser?.email ||
+      activity.createdByUser?.name ||
+      activity.createdByUser?.email ||
+      activity.createdByApiKey?.name ||
+      null;
+    const contactDate = activityContactDate({
+      dueDate: activity.dueDate,
+      occurredAt: activity.occurredAt,
+    }).toISOString();
+
+    typeSet.add(typeLabel);
+    if (assignedUser) assigneeSet.add(assignedUser);
+    leadStagesByLeadId[activity.lead.id] = activity.lead.stage;
+
+    return {
+      id: activity.id,
+      leadId: activity.lead.id,
+      title: activity.lead.title?.trim() || activity.lead.name,
+      type: activity.type,
+      typeLabel,
+      status,
+      assignedUser,
+      attendees: null,
+      contactDate,
+      activityNotes: parsed.body,
+      cellPhone: activity.lead.phone,
+      city: activity.lead.city,
+      email: activity.lead.email,
+      completed: activity.completedAt !== null,
+    };
+  });
+
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-[var(--bt-text)]">Lead Activities</h1>
-          <p className="mt-0.5 text-sm text-[var(--bt-muted)]">Calls, emails, meetings, notes, and follow-up tasks across all leads.</p>
-        </div>
-        <Link
-          href="/leads/calendar"
-          className="inline-flex min-h-10 items-center gap-1.5 rounded border px-3 py-2 text-sm font-medium text-[var(--bt-text)] sm:min-h-0"
-          style={{ borderColor: "var(--bt-border)" }}
-        >
-          <CalendarIcon className="h-4 w-4 text-[var(--bt-muted)]" />
-          Calendar view
-        </Link>
-      </div>
-
-      <nav className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: "var(--bt-border)" }} aria-label="Activity filters">
-        {TABS.map((t) => {
-          const active = t.key === tab;
-          const typeKey = ACTIVITY_TYPE_ORDER.includes(t.key as (typeof ACTIVITY_TYPE_ORDER)[number])
-            ? (t.key as (typeof ACTIVITY_TYPE_ORDER)[number])
-            : null;
-          return (
-            <Link
-              key={t.key}
-              href={`/leads/activities${t.key === "all" ? "" : `?tab=${t.key}`}`}
-              className="-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition"
-              style={{ borderColor: active ? "var(--bt-primary)" : "transparent", color: active ? "var(--bt-primary)" : "var(--bt-muted)" }}
-            >
-              {typeKey ? <ActivityTypeIcon type={typeKey} size="sm" /> : null}
-              {t.key === "open-tasks" ? <ActivityTypeIcon type="TASK" size="sm" /> : null}
-              {t.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {activities.length === 0 && tab === "all" ? (
-        <EmptyState
-          icon={<TaskIcon className="h-10 w-10" />}
-          title="No activity yet"
-          description="Log a call, email, meeting, note, or follow-up task on a lead — everything shows up here."
-        />
-      ) : (
-        <ActivitiesGrid
-          rows={activities.map((activity) => ({
-            id: activity.id,
-            leadId: activity.lead.id,
-            leadName: activity.lead.name,
-            type: activity.type,
-            note: activity.note,
-            by: activity.createdByApiKey
-              ? `${activity.createdByApiKey.name} · API`
-              : activity.createdByUser
-                ? `${activity.createdByUser.email ?? activity.createdByUser.name} · Browser`
-                : null,
-            occurredAt: activity.occurredAt.toISOString(),
-            dueDate: activity.dueDate ? activity.dueDate.toISOString() : null,
-            completed: activity.completedAt !== null,
-          }))}
-        />
-      )}
-    </div>
+    <LeadActivitiesClient
+      rows={rows}
+      leadStagesByLeadId={leadStagesByLeadId}
+      activityTypeOptions={[...typeSet].sort((a, b) => a.localeCompare(b))}
+      assignedUserOptions={[...assigneeSet].sort((a, b) => a.localeCompare(b))}
+      activeTab={activeTab}
+    />
   );
 }
