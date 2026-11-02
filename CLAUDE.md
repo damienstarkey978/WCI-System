@@ -777,3 +777,12 @@ Record every architectural decision that departs from the above, with the reason
   worker (office Mac mini / long-running process outside Netlify's ~60s limit).
   Ambiguous worker failures must land in `NEEDS_REVIEW` — never silent auto-retry
   of a step that may already have succeeded. See `src/lib/permitting/epics-seam.ts`.
+- **QuickBooks bill push is globally paused by default (2026-11-02):** after the
+  10/29–10/30 cutover pushed ~1.3k WCI bills into QBO (including PAID history and
+  `JOB_*` prefix twins) and Bill.com treated them as unpaid AP, `syncBillToQuickBooks`
+  requires `QBO_BILL_PUSH_ENABLED=true` or it throws and sends nothing. Unset/any
+  other value = paused. READY_FOR_PAYMENT still records the per-bill send/skip
+  choice (materials UX unchanged); the global pause overrides the send path.
+  PAID/VOID/`paidAt` bills are also refused in the push path so they cannot
+  reappear as unpaid QBO bills. Invoice/vendor sync and QBO→WCI payment webhooks
+  are unchanged. See `docs/qbo-bill-push-pause-2026-11-02.md` in the project store.

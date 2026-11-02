@@ -195,6 +195,18 @@ export function quickBooksWebhookVerifierToken(): string | undefined {
 }
 
 /**
+ * Global kill switch for WCI → QuickBooks **bill** creates/updates
+ * (`syncBillToQuickBooks`). Defaults to **paused** unless this env var is
+ * exactly `"true"`. Invoice/vendor/customer sync and QBO→WCI payment webhooks
+ * are unaffected. Set on Netlify (site `idyllic-faun-929087`) when Money is
+ * ready to resume labor/unpaid-services bill posts — leave unset or any other
+ * value to keep the pause.
+ */
+export function isQuickBooksBillPushEnabled(): boolean {
+  return optional("QBO_BILL_PUSH_ENABLED") === "true";
+}
+
+/**
  * Transactional email (vendor portal invites). Resend's HTTP API
  * (https://resend.com): EMAIL_PROVIDER_API_KEY is the API key, EMAIL_FROM the verified
  * sender, e.g. `World Construction Inc <office@worldconstructioninc.com>`. Needs both —

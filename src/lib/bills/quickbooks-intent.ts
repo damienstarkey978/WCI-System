@@ -4,9 +4,13 @@
  * Business rule (Damien): materials do not go to QuickBooks; only labor (or
  * unpaid services / subcontract) should. Staff must confirm send vs skip when
  * marking READY_FOR_PAYMENT — never silently push every bill.
+ *
+ * Separate from the global `QBO_BILL_PUSH_ENABLED` pause (src/lib/env.ts): that
+ * kill switch overrides every push path; this module only encodes per-bill
+ * intent + status safety.
  */
 
-import { CostType } from "@/generated/prisma/enums";
+import { BillApprovalStatus, CostType } from "@/generated/prisma/enums";
 
 /** Cost types that are eligible to push to QuickBooks. */
 const QB_ELIGIBLE_COST_TYPES: ReadonlySet<CostType> = new Set([CostType.LABOR, CostType.SUBCONTRACTOR]);
@@ -120,4 +124,22 @@ export function defaultSkipReasonForSuggestion(suggestion: QuickBooksSendSuggest
 /** True when an explicit opt-out blocks a QuickBooks bill create/update. */
 export function isBillQuickBooksSyncBlocked(sendToQuickBooks: boolean | null | undefined): boolean {
   return sendToQuickBooks === false;
+}
+
+export interface BillQuickBooksPushSafetyInput {
+  readonly approvalStatus: BillApprovalStatus | string;
+  readonly paidAt?: Date | string | null;
+}
+
+/**
+ * Paid / void bills must never be posted (or re-posted) to QuickBooks as open
+ * unpaid AP. QBO Bill creates carry no payment — Bill.com would treat them as
+ * unpaid. `paidAt` is a belt-and-suspenders check for rows whose status and
+ * timestamp disagree.
+ */
+export function isBillQuickBooksPushUnsafeByStatus(bill: BillQuickBooksPushSafetyInput): boolean {
+  if (bill.approvalStatus === BillApprovalStatus.PAID || bill.approvalStatus === "PAID") return true;
+  if (bill.approvalStatus === BillApprovalStatus.VOID || bill.approvalStatus === "VOID") return true;
+  if (bill.paidAt != null) return true;
+  return false;
 }
