@@ -133,6 +133,7 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
       defaultHiddenKeys={isQboConnected ? DEFAULT_HIDDEN : DEFAULT_HIDDEN.filter((key) => key !== "qbo")}
       selectable
       showTotals
+      sortToolbarInFooter
       emptyMessage="No bills yet."
     />
   );

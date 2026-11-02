@@ -16,7 +16,7 @@ import { PhaseForm } from "./phase-form";
 import { ScheduleCalendar } from "./schedule-calendar";
 import type { CalendarMode, GanttScale, ScheduleViewKey } from "./schedule-chrome";
 import { ScheduleGantt } from "./schedule-gantt";
-import { ScheduleListGrid } from "./schedule-list-grid";
+import { ScheduleListClient } from "./schedule-list-client";
 import { NewScheduleItemButton } from "./schedule-item-modals";
 import { ScheduleToolbar } from "./schedule-toolbar";
 import { WorkdayExceptions } from "./workday-exceptions";
@@ -290,7 +290,7 @@ export default async function JobSchedulePage({ params, searchParams }: PageProp
           />
 
           {view === "list" ? (
-            <ScheduleListGrid
+            <ScheduleListClient
               rows={items.map((item) => ({
                 id: item.id,
                 title: item.title,

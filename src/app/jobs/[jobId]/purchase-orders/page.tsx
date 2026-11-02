@@ -1,8 +1,6 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { EmptyState } from "@/components/shell/EmptyState";
-import { PurchaseOrderIcon } from "@/components/shell/icons";
 import type { AddFromSource } from "@/components/financial/PoCostLineItems";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
@@ -12,7 +10,7 @@ import { nextAutoPoNumber } from "@/lib/purchase-orders/po-number";
 
 import { CreatePoModal } from "./create-po-modal";
 import { PurchaseOrdersBillsTabs, FinancialPageHeader } from "../financial-tabs";
-import { PurchaseOrdersGrid } from "./purchase-orders-grid";
+import { PurchaseOrdersListClient } from "./po-list-client";
 
 export const dynamic = "force-dynamic";
 
@@ -167,16 +165,7 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
 
       <PurchaseOrdersBillsTabs jobId={job.id} active="purchase-orders" />
 
-      {rows.length === 0 ? (
-        <EmptyState
-          icon={<PurchaseOrderIcon className="h-10 w-10" />}
-          title="No purchase orders yet"
-          description="Create a purchase order for materials or subcontract work on this job."
-          action={createAction}
-        />
-      ) : (
-        <PurchaseOrdersGrid rows={rows} />
-      )}
+      <PurchaseOrdersListClient rows={rows} createAction={createAction} />
     </div>
   );
 }

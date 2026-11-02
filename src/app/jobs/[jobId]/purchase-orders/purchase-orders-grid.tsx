@@ -106,6 +106,7 @@ export function PurchaseOrdersGrid({ rows }: { rows: readonly PurchaseOrderRow[]
       defaultHiddenKeys={DEFAULT_HIDDEN}
       selectable
       showTotals
+      sortToolbarInFooter
       rowActions={(row) => (
         <Link
           href={`/jobs/${row.jobId}/purchase-orders/${row.id}`}
