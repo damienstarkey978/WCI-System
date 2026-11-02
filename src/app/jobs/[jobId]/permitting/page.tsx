@@ -42,8 +42,15 @@ import {
   WCI_GENERATED_PACKAGE_FORMS,
   isWciGeneratedFormKey,
 } from "@/lib/permitting/form-catalog";
-import { loadDuvalJaxManifest } from "@/lib/permitting/form-manifest";
-import { ensureDefaultWciContractorLicense, listContractorLicenses } from "@/lib/permitting/package-settings";
+import {
+  blankPdfUrlsByFormKey,
+  loadDuvalJaxManifest,
+} from "@/lib/permitting/form-manifest";
+import {
+  ensureDefaultWciContractorLicense,
+  listContractorLicenses,
+  listFormSetTemplates,
+} from "@/lib/permitting/package-settings";
 import { isJaxEpicsConnected, latestEpicsSubmitForPackage } from "@/lib/permitting/epics-seam";
 import { listPermitPackagesForJob, packageGridFlags } from "@/lib/permitting/packages";
 
@@ -164,11 +171,13 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
   });
 
   await ensureDefaultWciContractorLicense(user.organizationId);
-  const [packages, licenses, epicsConnected] = await Promise.all([
+  const [packages, licenses, epicsConnected, formSetTemplates] = await Promise.all([
     listPermitPackagesForJob(user.organizationId, jobId),
     listContractorLicenses(user.organizationId),
     isJaxEpicsConnected(user.organizationId),
+    listFormSetTemplates(user.organizationId),
   ]);
+  const blankPdfUrls = blankPdfUrlsByFormKey();
   const epicsByPackageId = new Map(
     (
       await Promise.all(
@@ -326,6 +335,17 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
             licenseNumber: l.licenseNumber,
           }))}
           formAvailability={formAvailability}
+          blankPdfUrls={blankPdfUrls}
+          formSetTemplates={formSetTemplates.map((t) => ({
+            id: t.id,
+            name: t.name,
+            county: t.county,
+            municipality: t.municipality,
+            permitType: t.permitType,
+            formKeys: Array.isArray(t.formKeys)
+              ? t.formKeys.filter((k): k is string => typeof k === "string")
+              : [],
+          }))}
           initialParcelLock={
             job.parcelId && job.parcelConfirmedAt
               ? {

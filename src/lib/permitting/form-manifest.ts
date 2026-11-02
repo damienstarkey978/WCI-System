@@ -61,3 +61,20 @@ export function isOfficialFormAvailable(formKey: string): boolean {
   const entry = manifestEntryForKey(formKey);
   return Boolean(entry && entry.status === "available" && entry.file);
 }
+
+/** Public URL for an official blank under /public (client iframe preview). */
+export function officialBlankPublicUrl(formKey: string): string | null {
+  const entry = manifestEntryForKey(formKey);
+  if (!entry || entry.status !== "available" || !entry.file) return null;
+  return `/permit-forms/duval-jax/${entry.file}`;
+}
+
+export function blankPdfUrlsByFormKey(): Readonly<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const form of loadDuvalJaxManifest().forms) {
+    if (form.status === "available" && form.file) {
+      out[form.key] = `/permit-forms/duval-jax/${form.file}`;
+    }
+  }
+  return out;
+}

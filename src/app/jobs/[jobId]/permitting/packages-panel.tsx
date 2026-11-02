@@ -15,6 +15,8 @@ import {
   updatePermitPackageFieldsAction,
   type ActionState,
 } from "./actions";
+import { PackageFormEntryNav } from "./package-form-entry";
+import { PackageWizardShell } from "./package-wizard-shell";
 
 type PackageTab = "ACTIVE" | "SENT_TO_CONTRACTORS" | "ARCHIVED";
 type SidePanel =
@@ -155,6 +157,8 @@ export function PackagesPanel({
   const [selectedId, setSelectedId] = useState<string | null>(packages[0]?.id ?? null);
   const [selectedFormKey, setSelectedFormKey] = useState<string | null>(null);
   const [sidePanel, setSidePanel] = useState<SidePanel>("property_owner");
+  /** Step D: when true, show Rockstar form 1/N shell; otherwise package grid summary. */
+  const [formEntryMode, setFormEntryMode] = useState(false);
 
   const [renameState, renameAction, renamePending] = useActionState(
     renamePermitPackageAction,
@@ -205,8 +209,33 @@ export function PackagesPanel({
       ? selectedFormKey
       : (selected?.forms[0]?.formKey ?? null);
   const activeForm = selected?.forms.find((f) => f.formKey === activeFormKey) ?? null;
+  const activeFormIndex = selected
+    ? Math.max(
+        0,
+        selected.forms.findIndex((f) => f.formKey === activeFormKey),
+      )
+    : 0;
   const statusFlags = activeForm ? formStatusFlags(activeForm.status) : null;
   const createdForms = selected?.forms.filter((f) => f.status !== "DRAFT").length ?? 0;
+  const filledPreviewUrl =
+    selected && activeForm?.available
+      ? `/jobs/${jobId}/permitting/packages/${selected.id}/forms/${activeForm.formKey}/pdf`
+      : null;
+
+  function selectPackage(pkg: PackageRow) {
+    setSelectedId(pkg.id);
+    setSelectedFormKey(pkg.forms[0]?.formKey ?? null);
+    setFormEntryMode(false);
+  }
+
+  function goForm(delta: number) {
+    if (!selected) return;
+    const next = Math.min(
+      selected.forms.length - 1,
+      Math.max(0, activeFormIndex + delta),
+    );
+    setSelectedFormKey(selected.forms[next]?.formKey ?? null);
+  }
 
   return (
     <div className="space-y-3">
@@ -281,10 +310,7 @@ export function PackagesPanel({
                         ? "color-mix(in srgb, var(--bt-primary) 10%, transparent)"
                         : undefined,
                     }}
-                    onClick={() => {
-                      setSelectedId(pkg.id);
-                      setSelectedFormKey(pkg.forms[0]?.formKey ?? null);
-                    }}
+                    onClick={() => selectPackage(pkg)}
                   >
                     <td className="px-2 py-2 font-medium text-[var(--bt-text)]">{pkg.name}</td>
                     <td className="px-2 py-2 text-[var(--bt-muted)]">
@@ -363,118 +389,125 @@ export function PackagesPanel({
       </div>
 
       {selected ? (
-        <div
-          className="rounded-lg border bg-[var(--bt-panel-bg)] p-3"
-          style={{ borderColor: "var(--bt-border)" }}
-          aria-label="Selected permit package"
-        >
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <div className="text-sm font-semibold text-[var(--bt-text)]">
-                {selected.permitType.replaceAll("_", " ")} Permit
+        <div className="space-y-3" aria-label="Selected permit package">
+          <div
+            className="rounded-lg border bg-[var(--bt-panel-bg)] p-3"
+            style={{ borderColor: "var(--bt-border)" }}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-[var(--bt-text)]">
+                  {selected.permitType.replaceAll("_", " ")} Permit · {selected.name}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
+                  <a
+                    href={`/jobs/${jobId}/permitting/packages/${selected.id}/pdf`}
+                    className="font-semibold text-[var(--bt-primary)] hover:underline"
+                  >
+                    Download Package
+                  </a>
+                  <span className="text-[var(--bt-muted)]">
+                    Forms {createdForms} / {selected.forms.length}
+                  </span>
+                  <span className="text-[var(--bt-muted)]">
+                    Permits {selected.jobPermitId ? 1 : 0}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFormEntryMode(true)}
+                    className="font-semibold text-[var(--bt-primary)] hover:underline"
+                  >
+                    Step D · Enter forms 1/{Math.max(selected.forms.length, 1)}
+                  </button>
+                </div>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
-                <a
-                  href={`/jobs/${jobId}/permitting/packages/${selected.id}/pdf`}
-                  className="font-semibold text-[var(--bt-primary)] hover:underline"
-                >
-                  Download Package
-                </a>
-                <span className="text-[var(--bt-muted)]">
-                  Forms {createdForms} / {selected.forms.length}
-                </span>
-                <span className="text-[var(--bt-muted)]">
-                  Permits {selected.jobPermitId ? 1 : 0}
-                </span>
-              </div>
-            </div>
-            <form action={linkAction} className="flex flex-wrap items-end gap-2">
-              <input type="hidden" name="jobId" value={jobId} />
-              <input type="hidden" name="packageId" value={selected.id} />
-              <label className="text-[10px] text-[var(--bt-muted)]">
-                Linked job permit
-                <select
-                  name="jobPermitId"
-                  defaultValue={selected.jobPermitId ?? ""}
-                  className="mt-0.5 block rounded border px-2 py-1 text-xs"
+              <form action={linkAction} className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="jobId" value={jobId} />
+                <input type="hidden" name="packageId" value={selected.id} />
+                <label className="text-[10px] text-[var(--bt-muted)]">
+                  Linked job permit
+                  <select
+                    name="jobPermitId"
+                    defaultValue={selected.jobPermitId ?? ""}
+                    className="mt-0.5 block rounded border px-2 py-1 text-xs"
+                    style={{ borderColor: "var(--bt-border)" }}
+                  >
+                    <option value="">None</option>
+                    {jobPermits.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  disabled={linkPending}
+                  className="rounded border px-2 py-1 text-xs font-semibold disabled:opacity-50"
                   style={{ borderColor: "var(--bt-border)" }}
                 >
-                  <option value="">None</option>
-                  {jobPermits.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="submit"
-                disabled={linkPending}
-                className="rounded border px-2 py-1 text-xs font-semibold disabled:opacity-50"
-                style={{ borderColor: "var(--bt-border)" }}
-              >
-                {linkPending ? "Saving…" : "Save link"}
-              </button>
-              {linkState.error ? (
-                <p className="w-full text-[11px] text-[var(--bt-hazard)]">{linkState.error}</p>
-              ) : null}
-            </form>
+                  {linkPending ? "Saving…" : "Save link"}
+                </button>
+                {linkState.error ? (
+                  <p className="w-full text-[11px] text-[var(--bt-hazard)]">{linkState.error}</p>
+                ) : null}
+              </form>
+            </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(12rem,0.9fr)_minmax(14rem,1.1fr)_minmax(14rem,1.2fr)]">
-            <ul className="rounded border" style={{ borderColor: "var(--bt-border)" }}>
-              {selected.forms.map((form) => {
-                const active = form.formKey === activeFormKey;
-                return (
-                  <li key={form.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedFormKey(form.formKey)}
-                      className="flex w-full items-center gap-2 border-l-2 px-2 py-2 text-left text-xs"
-                      style={{
-                        borderLeftColor: active ? "var(--bt-primary)" : "transparent",
-                        background: active
-                          ? "color-mix(in srgb, var(--bt-primary) 8%, transparent)"
-                          : undefined,
-                      }}
-                    >
-                      <span
-                        aria-hidden
-                        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px]"
-                        style={{
-                          background:
-                            form.status === "DRAFT"
-                              ? "color-mix(in srgb, var(--bt-border) 55%, transparent)"
-                              : "color-mix(in srgb, var(--bt-status-open-bg) 80%, transparent)",
-                          color:
-                            form.status === "DRAFT" ? "var(--bt-muted)" : "var(--bt-status-open-text)",
-                        }}
+          {formEntryMode && activeForm ? (
+            <PackageWizardShell
+              title={`D · ${selected.name}`}
+              subtitle={`${municipalityLabel(selected.municipality)} · ${selected.county} · live filled preview`}
+              previewTitle={activeForm.title}
+              previewUrl={filledPreviewUrl}
+              previewEmptyHint={
+                activeForm.available
+                  ? "Filled PDF will appear here after generate."
+                  : "Official PDF not sourced yet — no invented blank."
+              }
+            >
+              <div className="grid gap-3">
+                <PackageFormEntryNav
+                  formIndex={activeFormIndex}
+                  formCount={selected.forms.length}
+                  formTitle={activeForm.title}
+                  onBack={() => goForm(-1)}
+                  onNext={() => goForm(1)}
+                  onMainMenu={() => setFormEntryMode(false)}
+                  updateSlot={
+                    activeForm.available ? (
+                      <form action={regenAction}>
+                        <input type="hidden" name="jobId" value={jobId} />
+                        <input type="hidden" name="packageId" value={selected.id} />
+                        <input type="hidden" name="formKey" value={activeForm.formKey} />
+                        <button
+                          type="submit"
+                          disabled={regenPending}
+                          className="rounded px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                          style={{ background: "#c2410c" }}
+                        >
+                          {regenPending ? "Updating…" : "Update Document"}
+                        </button>
+                      </form>
+                    ) : null
+                  }
+                  downloadSlot={
+                    activeForm.available ? (
+                      <a
+                        href={`/jobs/${jobId}/permitting/packages/${selected.id}/forms/${activeForm.formKey}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex rounded border px-2.5 py-1.5 text-xs font-semibold"
+                        style={{ borderColor: "var(--bt-border)" }}
                       >
-                        ✓
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block font-medium text-[var(--bt-text)]">{form.title}</span>
-                        <span className="text-[10px] text-[var(--bt-muted)]">
-                          {form.status.replaceAll("_", " ")}
-                          {form.available ? "" : " · PDF unavailable"}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            <div className="rounded border p-3" style={{ borderColor: "var(--bt-border)" }}>
-              {activeForm && statusFlags ? (
-                <>
-                  <h3 className="text-sm font-semibold text-[var(--bt-text)]">
-                    {activeForm.title}
-                  </h3>
-                  <p className="text-[11px] text-[var(--bt-muted)]">
-                    {municipalityLabel(selected.municipality)} · {selected.county}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-3">
+                        Download Form
+                      </a>
+                    ) : null
+                  }
+                />
+                {statusFlags ? (
+                  <div className="flex flex-wrap gap-3">
                     {(
                       [
                         ["Created", statusFlags.created],
@@ -489,75 +522,216 @@ export function PackagesPanel({
                       </div>
                     ))}
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {activeForm.available ? (
-                      <>
-                        <form action={regenAction}>
-                          <input type="hidden" name="jobId" value={jobId} />
-                          <input type="hidden" name="packageId" value={selected.id} />
-                          <input type="hidden" name="formKey" value={activeForm.formKey} />
-                          <button
-                            type="submit"
-                            disabled={regenPending}
-                            className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                            style={{ background: "#c2410c" }}
-                          >
-                            {regenPending ? "Updating…" : "Update Document"}
-                          </button>
-                        </form>
-                        <a
-                          href={`/jobs/${jobId}/permitting/packages/${selected.id}/forms/${activeForm.formKey}/pdf`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]"
-                          style={{ background: "var(--bt-primary)" }}
+                ) : null}
+                {regenState.error ? (
+                  <p className="text-[11px] text-[var(--bt-hazard)]">{regenState.error}</p>
+                ) : null}
+                <ul className="rounded border" style={{ borderColor: "var(--bt-border)" }}>
+                  {selected.forms.map((form, idx) => {
+                    const active = form.formKey === activeFormKey;
+                    return (
+                      <li key={form.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFormKey(form.formKey)}
+                          className="flex w-full items-center gap-2 border-l-2 px-2 py-2 text-left text-xs"
+                          style={{
+                            borderLeftColor: active ? "var(--bt-primary)" : "transparent",
+                            background: active
+                              ? "color-mix(in srgb, var(--bt-primary) 8%, transparent)"
+                              : undefined,
+                          }}
                         >
-                          Download Form
-                        </a>
-                        <form action={markPackageFormDownloadedAction}>
-                          <input type="hidden" name="jobId" value={jobId} />
-                          <input type="hidden" name="packageId" value={selected.id} />
-                          <input type="hidden" name="formKey" value={activeForm.formKey} />
-                          <button
-                            type="submit"
-                            className="text-[10px] text-[var(--bt-muted)] hover:underline"
-                          >
-                            Mark downloaded
-                          </button>
-                        </form>
-                      </>
-                    ) : (
-                      <p className="text-xs text-[var(--bt-muted)]">
-                        Official PDF not sourced yet — left unavailable (no invented blank).
-                      </p>
-                    )}
-                  </div>
-                  {regenState.error ? (
-                    <p className="mt-2 text-[11px] text-[var(--bt-hazard)]">{regenState.error}</p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="text-sm text-[var(--bt-muted)]">Select a form.</p>
-              )}
-            </div>
-
-            <div className="rounded border p-3" style={{ borderColor: "var(--bt-border)" }}>
-              <div className="mb-3 flex flex-wrap gap-1 border-b pb-2" style={{ borderColor: "var(--bt-border)" }}>
-                {SIDE_TABS.map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setSidePanel(t.key)}
-                    className="rounded px-2 py-1 text-[10px] font-semibold"
-                    style={{
-                      background: sidePanel === t.key ? "var(--bt-primary)" : "transparent",
-                      color: sidePanel === t.key ? "var(--bt-on-primary)" : "var(--bt-muted)",
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                          <span className="w-5 text-[10px] text-[var(--bt-muted)]">{idx + 1}</span>
+                          <span className="min-w-0">
+                            <span className="block font-medium text-[var(--bt-text)]">
+                              {form.title}
+                            </span>
+                            <span className="text-[10px] text-[var(--bt-muted)]">
+                              {form.status.replaceAll("_", " ")}
+                              {form.available ? "" : " · PDF unavailable"}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="text-[10px] text-[var(--bt-muted)]">
+                  Owner / contractor / city panels stay on Main Menu (package summary). Update Document
+                  regenerates the filled PDF in the live preview — never submits externally.
+                </p>
+                {activeForm.available ? (
+                  <form action={markPackageFormDownloadedAction}>
+                    <input type="hidden" name="jobId" value={jobId} />
+                    <input type="hidden" name="packageId" value={selected.id} />
+                    <input type="hidden" name="formKey" value={activeForm.formKey} />
+                    <button
+                      type="submit"
+                      className="text-[10px] text-[var(--bt-muted)] hover:underline"
+                    >
+                      Mark downloaded
+                    </button>
+                  </form>
+                ) : null}
               </div>
+            </PackageWizardShell>
+          ) : (
+            <div className="grid gap-3 lg:grid-cols-[minmax(12rem,0.9fr)_minmax(14rem,1.1fr)_minmax(14rem,1.2fr)]">
+              <ul className="rounded border" style={{ borderColor: "var(--bt-border)" }}>
+                {selected.forms.map((form) => {
+                  const active = form.formKey === activeFormKey;
+                  return (
+                    <li key={form.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFormKey(form.formKey);
+                          setFormEntryMode(true);
+                        }}
+                        className="flex w-full items-center gap-2 border-l-2 px-2 py-2 text-left text-xs"
+                        style={{
+                          borderLeftColor: active ? "var(--bt-primary)" : "transparent",
+                          background: active
+                            ? "color-mix(in srgb, var(--bt-primary) 8%, transparent)"
+                            : undefined,
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px]"
+                          style={{
+                            background:
+                              form.status === "DRAFT"
+                                ? "color-mix(in srgb, var(--bt-border) 55%, transparent)"
+                                : "color-mix(in srgb, var(--bt-status-open-bg) 80%, transparent)",
+                            color:
+                              form.status === "DRAFT"
+                                ? "var(--bt-muted)"
+                                : "var(--bt-status-open-text)",
+                          }}
+                        >
+                          ✓
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-medium text-[var(--bt-text)]">
+                            {form.title}
+                          </span>
+                          <span className="text-[10px] text-[var(--bt-muted)]">
+                            {form.status.replaceAll("_", " ")}
+                            {form.available ? "" : " · PDF unavailable"}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div className="rounded border p-3" style={{ borderColor: "var(--bt-border)" }}>
+                {activeForm && statusFlags ? (
+                  <>
+                    <h3 className="text-sm font-semibold text-[var(--bt-text)]">
+                      {activeForm.title}
+                    </h3>
+                    <p className="text-[11px] text-[var(--bt-muted)]">
+                      {municipalityLabel(selected.municipality)} · {selected.county}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      {(
+                        [
+                          ["Created", statusFlags.created],
+                          ["Notarized", statusFlags.notarized],
+                          ["Recorded", statusFlags.recorded],
+                          ["Downloaded", statusFlags.downloaded],
+                        ] as const
+                      ).map(([label, ok]) => (
+                        <div key={label} className="flex flex-col items-center gap-1 text-[10px]">
+                          <Flag ok={ok} />
+                          <span className="text-[var(--bt-muted)]">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormEntryMode(true)}
+                        className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]"
+                        style={{ background: "var(--bt-primary)" }}
+                      >
+                        Open Step D (live preview)
+                      </button>
+                      {activeForm.available ? (
+                        <>
+                          <form action={regenAction}>
+                            <input type="hidden" name="jobId" value={jobId} />
+                            <input type="hidden" name="packageId" value={selected.id} />
+                            <input type="hidden" name="formKey" value={activeForm.formKey} />
+                            <button
+                              type="submit"
+                              disabled={regenPending}
+                              className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                              style={{ background: "#c2410c" }}
+                            >
+                              {regenPending ? "Updating…" : "Update Document"}
+                            </button>
+                          </form>
+                          <a
+                            href={`/jobs/${jobId}/permitting/packages/${selected.id}/forms/${activeForm.formKey}/pdf`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]"
+                            style={{ background: "var(--bt-primary)" }}
+                          >
+                            Download Form
+                          </a>
+                          <form action={markPackageFormDownloadedAction}>
+                            <input type="hidden" name="jobId" value={jobId} />
+                            <input type="hidden" name="packageId" value={selected.id} />
+                            <input type="hidden" name="formKey" value={activeForm.formKey} />
+                            <button
+                              type="submit"
+                              className="text-[10px] text-[var(--bt-muted)] hover:underline"
+                            >
+                              Mark downloaded
+                            </button>
+                          </form>
+                        </>
+                      ) : (
+                        <p className="text-xs text-[var(--bt-muted)]">
+                          Official PDF not sourced yet — left unavailable (no invented blank).
+                        </p>
+                      )}
+                    </div>
+                    {regenState.error ? (
+                      <p className="mt-2 text-[11px] text-[var(--bt-hazard)]">{regenState.error}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-[var(--bt-muted)]">Select a form.</p>
+                )}
+              </div>
+
+              <div className="rounded border p-3" style={{ borderColor: "var(--bt-border)" }}>
+                <div
+                  className="mb-3 flex flex-wrap gap-1 border-b pb-2"
+                  style={{ borderColor: "var(--bt-border)" }}
+                >
+                  {SIDE_TABS.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setSidePanel(t.key)}
+                      className="rounded px-2 py-1 text-[10px] font-semibold"
+                      style={{
+                        background: sidePanel === t.key ? "var(--bt-primary)" : "transparent",
+                        color: sidePanel === t.key ? "var(--bt-on-primary)" : "var(--bt-muted)",
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
 
               {sidePanel === "property_owner" ? (
                 <form action={ownerAction} className="grid gap-2">
@@ -815,8 +989,9 @@ export function PackagesPanel({
                   </p>
                 </div>
               ) : null}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : null}
     </div>
