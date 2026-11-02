@@ -93,6 +93,14 @@ export const JACKSONVILLE_BUILDING_FORMS: readonly PermitFormCatalogEntry[] = [
 ] as const;
 
 /**
+ * WCI-branded generated forms (kickoff §7) — not Jacksonville.gov blanks.
+ * Appended to Duval Building pickers; Batch 8 builds the Scope of Values PDF.
+ */
+export const WCI_GENERATED_PACKAGE_FORMS: readonly PermitFormCatalogEntry[] = [
+  { key: "scope_of_values", title: "Scope of Values" },
+] as const;
+
+/**
  * Live PR (2026-10-31): Building + Duval Unincorporated shows these seven.
  * Kept as an explicit subset so the picker does not invent Jacksonville-only
  * forms for unincorporated parcels.
@@ -140,15 +148,21 @@ export function formsForCatalog(input: {
     return [{ key: "noc", title: "Notice of Commencement", preselected: true }];
   }
   if (input.municipality === "DUVAL_UNINCORPORATED") {
-    return DUVAL_UNINCORPORATED_BUILDING_FORMS;
+    return [...DUVAL_UNINCORPORATED_BUILDING_FORMS, ...WCI_GENERATED_PACKAGE_FORMS];
   }
-  // Jacksonville + beach cities: full Jacksonville building list from the spec.
-  return JACKSONVILLE_BUILDING_FORMS;
+  // Jacksonville + beach cities: full Jacksonville building list + WCI-generated.
+  return [...JACKSONVILLE_BUILDING_FORMS, ...WCI_GENERATED_PACKAGE_FORMS];
 }
 
 export function formTitleForKey(formKey: string): string {
   const hit =
     JACKSONVILLE_BUILDING_FORMS.find((f) => f.key === formKey) ??
-    DUVAL_UNINCORPORATED_BUILDING_FORMS.find((f) => f.key === formKey);
+    DUVAL_UNINCORPORATED_BUILDING_FORMS.find((f) => f.key === formKey) ??
+    WCI_GENERATED_PACKAGE_FORMS.find((f) => f.key === formKey);
   return hit?.title ?? formKey;
+}
+
+/** WCI-generated package forms (not city blanks in the Duval manifest). */
+export function isWciGeneratedFormKey(formKey: string): boolean {
+  return WCI_GENERATED_PACKAGE_FORMS.some((f) => f.key === formKey);
 }

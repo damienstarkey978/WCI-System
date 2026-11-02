@@ -37,7 +37,11 @@ import { EditPermitForm } from "./edit-permit-form";
 import { PackagesPanel } from "./packages-panel";
 import { PermitRockstarForm } from "./permit-rockstar-form";
 import { PermitReminderButton } from "./permit-reminder-button";
-import { JACKSONVILLE_BUILDING_FORMS } from "@/lib/permitting/form-catalog";
+import {
+  JACKSONVILLE_BUILDING_FORMS,
+  WCI_GENERATED_PACKAGE_FORMS,
+  isWciGeneratedFormKey,
+} from "@/lib/permitting/form-catalog";
 import { loadDuvalJaxManifest } from "@/lib/permitting/form-manifest";
 import { ensureDefaultWciContractorLicense, listContractorLicenses } from "@/lib/permitting/package-settings";
 import { isJaxEpicsConnected, latestEpicsSubmitForPackage } from "@/lib/permitting/epics-seam";
@@ -185,15 +189,19 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
     .filter(Boolean)
     .join(", ");
   const manifestByKey = new Map(loadDuvalJaxManifest().forms.map((f) => [f.key, f]));
-  const formAvailability = JACKSONVILLE_BUILDING_FORMS.map((f) => {
-    const m = manifestByKey.get(f.key);
-    return {
-      key: f.key,
-      title: f.title,
-      available: m?.status === "available" && Boolean(m.file),
-      revisionDate: m?.revisionDate ?? null,
-    };
-  });
+  const formAvailability = [...JACKSONVILLE_BUILDING_FORMS, ...WCI_GENERATED_PACKAGE_FORMS].map(
+    (f) => {
+      const m = manifestByKey.get(f.key);
+      const wciGenerated = isWciGeneratedFormKey(f.key);
+      return {
+        key: f.key,
+        title: f.title,
+        available: wciGenerated ? false : m?.status === "available" && Boolean(m.file),
+        revisionDate: m?.revisionDate ?? null,
+        wciGenerated,
+      };
+    },
+  );
 
   const packageRows = packages.map((pkg) => {
     const flags = packageGridFlags(pkg);
