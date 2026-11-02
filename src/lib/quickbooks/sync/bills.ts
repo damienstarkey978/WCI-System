@@ -1,17 +1,14 @@
 /**
  * WCI Bill -> QBO Bill (CLAUDE.md 2.3, "Bills ... WCI -> QBO"). Linked by
- * Bill.qboBillId once synced. Each line references a per-cost-code Item
- * (../sync/cost-codes.ts), so Bills break out by cost code in QBO the way Buildertrend
- * exports never did. Each line also carries the job as a CustomerRef when the job has
- * a client to sync as its sub-customer parent (../sync/jobs.ts) — that's job-costing
- * tagging, not a requirement, so a job without a client yet still syncs its bills fine,
- * just without that tag.
+ * Bill.qboBillId once synced.
  *
- * Requires a linked Vendor (Bill.vendorId): QBO Bills need a real VendorRef, and a
- * free-text vendorName with no Vendor record has nothing to sync as one. Bills entered
- * against an unlinked vendor name stay QuickBooks-only until a Vendor record exists.
+ * Money rules 2026-11-02 (Rules 1–6): pause default off; never push PAID/VOID/
+ * paidAt; never invent JOB_* numbers; duplicate-check before create; require
+ * READY_FOR_PAYMENT + explicit sendToQuickBooks=true; blank invoice # holds.
  */
 
+import { BillApprovalStatus } from "@/generated/prisma/enums";
+import { vendorInvoiceNumberPushBlockReason } from "@/lib/bills/bill-number";
 import {
   isBillQuickBooksPushUnsafeByStatus,
   isBillQuickBooksSyncBlocked,
@@ -22,6 +19,7 @@ import { accountingRequest } from "@/lib/quickbooks/client";
 import { getValidAccessToken, type ValidQuickBooksAccess } from "@/lib/quickbooks/connection-service";
 import { recordSyncAttempt } from "@/lib/quickbooks/sync-log";
 
+import { findOsBillDuplicate, findQboBillByDocNumber } from "./bill-duplicates";
 import { ensureCostCodeItemId } from "./cost-codes";
 import { JobHasNoClientError, syncJobToQuickBooks } from "./jobs";
 import { syncVendorToQuickBooks } from "./vendors";
@@ -72,6 +70,29 @@ export class BillQuickBooksPushUnsafeStatusError extends Error {
   }
 }
 
+/** Push only after READY_FOR_PAYMENT with an explicit sendToQuickBooks=true. */
+export class BillQuickBooksPushNotReadyError extends Error {
+  constructor(billId: string, detail: string) {
+    super(`Bill ${billId} cannot be pushed to QuickBooks: ${detail}`);
+    this.name = "BillQuickBooksPushNotReadyError";
+  }
+}
+
+/** Blank or invented JOB_* invoice number — hold; do not invent. */
+export class BillQuickBooksInvoiceNumberError extends Error {
+  constructor(billId: string, reason: string) {
+    super(`Bill ${billId}: ${reason}`);
+    this.name = "BillQuickBooksInvoiceNumberError";
+  }
+}
+
+export class BillQuickBooksDuplicateBlockedError extends Error {
+  constructor(billId: string, reason: string) {
+    super(`Bill ${billId} looks like a duplicate (${reason}). Refusing to create a second QuickBooks bill.`);
+    this.name = "BillQuickBooksDuplicateBlockedError";
+  }
+}
+
 interface QboRef {
   readonly Id: string;
   readonly SyncToken: string;
@@ -88,10 +109,43 @@ async function optionalJobCustomerRef(organizationId: string, job: { readonly id
   }
 }
 
-/** Push one Bill to QuickBooks, creating or updating as needed. Returns the QBO Bill id. */
-export async function syncBillToQuickBooks(organizationId: string, billId: string): Promise<string> {
+export interface SyncBillToQuickBooksOptions {
+  /**
+   * When true, run every guard and duplicate check but do not POST a new QBO Bill
+   * (idempotent updates of an already-linked bill still return the existing id).
+   */
+  readonly dryRun?: boolean;
+}
+
+export interface SyncBillToQuickBooksResult {
+  readonly qboBillId: string;
+  readonly action: "created" | "updated" | "linked" | "dry_run_would_create" | "dry_run_would_update";
+  readonly duplicateReason?: string;
+}
+
+/**
+ * Push one Bill to QuickBooks, creating or updating as needed.
+ * Money Rules 1–6 — see module header. Returns structured result; throws on refuse.
+ */
+export async function syncBillToQuickBooks(
+  organizationId: string,
+  billId: string,
+  options: SyncBillToQuickBooksOptions = {},
+): Promise<string> {
+  const result = await syncBillToQuickBooksDetailed(organizationId, billId, options);
+  return result.qboBillId;
+}
+
+export async function syncBillToQuickBooksDetailed(
+  organizationId: string,
+  billId: string,
+  options: SyncBillToQuickBooksOptions = {},
+): Promise<SyncBillToQuickBooksResult> {
+  const dryRun = options.dryRun === true;
+
   // Global pause first — blocks READY_FOR_PAYMENT auto-push, Sync button, and any agent script.
-  if (!isQuickBooksBillPushEnabled()) {
+  // Dry-run is allowed while paused so Money can list would-creates safely.
+  if (!dryRun && !isQuickBooksBillPushEnabled()) {
     throw new BillQuickBooksPushPausedError();
   }
 
@@ -100,18 +154,122 @@ export async function syncBillToQuickBooks(organizationId: string, billId: strin
     include: { lineItems: { include: { costCode: true }, orderBy: { sortOrder: "asc" } }, job: true, vendor: true },
   });
   if (!bill) throw new BillNotFoundError(billId);
+
+  // Rule 1 — never paid/void/historical paidAt
   if (isBillQuickBooksPushUnsafeByStatus(bill)) {
     throw new BillQuickBooksPushUnsafeStatusError(billId, bill.approvalStatus);
+  }
+
+  // Rule 5 — only after a person marked READY_FOR_PAYMENT with send=true
+  if (bill.approvalStatus !== BillApprovalStatus.READY_FOR_PAYMENT) {
+    throw new BillQuickBooksPushNotReadyError(
+      billId,
+      `status is ${bill.approvalStatus}, not READY_FOR_PAYMENT`,
+    );
+  }
+  if (bill.sendToQuickBooks !== true) {
+    throw new BillQuickBooksPushNotReadyError(
+      billId,
+      bill.sendToQuickBooks === false
+        ? "sendToQuickBooks is false (materials / skipped)"
+        : "sendToQuickBooks was never set true by an approver",
+    );
   }
   if (isBillQuickBooksSyncBlocked(bill.sendToQuickBooks)) {
     throw new BillQuickBooksSyncDeclinedError(billId, bill.quickBooksSkipReason);
   }
+
+  // Rule 2 — vendor invoice number exact; blank / JOB_* hold
+  const numberBlock = vendorInvoiceNumberPushBlockReason(bill.billNumber);
+  if (numberBlock) {
+    throw new BillQuickBooksInvoiceNumberError(billId, numberBlock);
+  }
+
   if (!bill.vendorId || !bill.vendor) throw new BillHasNoVendorError(billId);
 
+  const totalCents = bill.lineItems.reduce((sum, line) => sum + line.amountCents, 0);
+
+  // Rule 3 — OS duplicate check (link if twin already has qboBillId)
+  const osDup = await findOsBillDuplicate({
+    id: bill.id,
+    organizationId,
+    vendorId: bill.vendorId,
+    vendorName: bill.vendorName,
+    billNumber: bill.billNumber,
+    issuedOn: bill.issuedOn,
+    qboBillId: bill.qboBillId,
+    totalCents,
+  });
+
+  if (osDup && !bill.qboBillId) {
+    if (osDup.qboBillId) {
+      if (!dryRun) {
+        await db.bill.update({
+          where: { id: bill.id },
+          data: { qboBillId: osDup.qboBillId },
+        });
+        await recordSyncAttempt({
+          organizationId,
+          entityType: "BILL",
+          direction: "TO_QBO",
+          wciRecordId: bill.id,
+          qboId: osDup.qboBillId,
+        });
+      }
+      return {
+        qboBillId: osDup.qboBillId,
+        action: "linked",
+        duplicateReason: osDup.reason,
+      };
+    }
+    throw new BillQuickBooksDuplicateBlockedError(billId, `${osDup.reason} (OS bill ${osDup.billId})`);
+  }
+
   try {
+    if (dryRun && !isQuickBooksBillPushEnabled()) {
+      // Pause on: still report would-create/update without talking to QBO.
+      return {
+        qboBillId: bill.qboBillId ?? "dry-run",
+        action: bill.qboBillId ? "dry_run_would_update" : "dry_run_would_create",
+      };
+    }
+
     const vendorQboId = bill.vendor.qboVendorId ?? (await syncVendorToQuickBooks(organizationId, bill.vendor.id));
     const jobCustomerId = await optionalJobCustomerRef(organizationId, bill.job);
     const access = await getValidAccessToken(organizationId);
+
+    // Rule 3 — QBO DocNumber lookup when not yet linked
+    const linkedQboId = bill.qboBillId;
+    if (!linkedQboId && bill.billNumber) {
+      const qboHit = await findQboBillByDocNumber(access, bill.billNumber);
+      if (qboHit) {
+        if (!dryRun) {
+          await db.bill.update({
+            where: { id: bill.id },
+            data: { qboBillId: qboHit.id, qboSyncToken: qboHit.syncToken },
+          });
+          await recordSyncAttempt({
+            organizationId,
+            entityType: "BILL",
+            direction: "TO_QBO",
+            wciRecordId: bill.id,
+            qboId: qboHit.id,
+          });
+        }
+        return {
+          qboBillId: qboHit.id,
+          action: "linked",
+          duplicateReason: `QBO DocNumber already exists for "${bill.billNumber}"`,
+        };
+      }
+    }
+
+    if (dryRun) {
+      return {
+        qboBillId: linkedQboId ?? "dry-run",
+        action: linkedQboId ? "dry_run_would_update" : "dry_run_would_create",
+      };
+    }
 
     const lines = await Promise.all(
       bill.lineItems.map(async (line) => {
@@ -128,8 +286,7 @@ export async function syncBillToQuickBooks(organizationId: string, billId: strin
       }),
     );
 
-    // QBO DocNumber max length is 21. Prefixed migration bill numbers (JOB_…-…) can
-    // exceed that — truncate for QBO only; WCI keeps the full Bill.billNumber.
+    // QBO DocNumber max length is 21. Truncate for QBO only; WCI keeps the full Bill.billNumber.
     const docNumber = bill.billNumber
       ? bill.billNumber.length <= 21
         ? bill.billNumber
@@ -144,19 +301,23 @@ export async function syncBillToQuickBooks(organizationId: string, billId: strin
       ...(bill.dueOn ? { DueDate: bill.dueOn.toISOString().slice(0, 10) } : {}),
     };
 
-    const qboBill = bill.qboBillId
+    const wasUpdate = Boolean(linkedQboId);
+    const qboBill = linkedQboId
       ? await accountingRequest<{ Bill: QboRef }>({
           ...access,
           method: "POST",
           path: "bill",
-          body: { Id: bill.qboBillId, SyncToken: await currentSyncToken(access, bill.qboBillId), sparse: true, ...billFields },
+          body: { Id: linkedQboId, SyncToken: await currentSyncToken(access, linkedQboId), sparse: true, ...billFields },
         })
       : await accountingRequest<{ Bill: QboRef }>({ ...access, method: "POST", path: "bill", body: billFields });
 
     await db.bill.update({ where: { id: bill.id }, data: { qboBillId: qboBill.Bill.Id, qboSyncToken: qboBill.Bill.SyncToken } });
     await recordSyncAttempt({ organizationId, entityType: "BILL", direction: "TO_QBO", wciRecordId: bill.id, qboId: qboBill.Bill.Id });
-    return qboBill.Bill.Id;
+    return { qboBillId: qboBill.Bill.Id, action: wasUpdate ? "updated" : "created" };
   } catch (error) {
+    if (error instanceof BillQuickBooksDuplicateBlockedError) {
+      throw error;
+    }
     await recordSyncAttempt({ organizationId, entityType: "BILL", direction: "TO_QBO", wciRecordId: bill.id, error });
     throw error;
   }

@@ -786,3 +786,13 @@ Record every architectural decision that departs from the above, with the reason
   PAID/VOID/`paidAt` bills are also refused in the push path so they cannot
   reappear as unpaid QBO bills. Invoice/vendor sync and QBO→WCI payment webhooks
   are unchanged. See `docs/qbo-bill-push-pause-2026-11-02.md` in the project store.
+- **Money QBO bill-push rules 1–6 (2026-11-02):** push also requires
+  `READY_FOR_PAYMENT` + `sendToQuickBooks === true`, refuses blank/`JOB_*`
+  invoice numbers, duplicate-checks OS (+ QBO DocNumber when connected) and
+  links instead of creating a second payable, and exposes dry-run via
+  `POST /api/v1/bills/quickbooks-push-preview` / `scripts/qbo-bill-push-dry-run.mts`.
+  Live batches >5 need `QBO_BILL_BULK_PUSH_APPROVED=true`. BT import no longer
+  prefixes bill numbers. Partial Rule 7: nullable `Bill.paidOn` / `paidMethod`
+  (no QBO BillPayment yet). Rules 8–9 (bidirectional void, daily audit digest)
+  deferred. Pause stays OFF until Money signs off. Confirmation:
+  project-store `docs/qbo-bill-push-money-confirmation-2026-11-02.md`.

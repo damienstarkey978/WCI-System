@@ -19,6 +19,9 @@ import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickboo
 import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
 import {
   BillHasNoVendorError,
+  BillQuickBooksDuplicateBlockedError,
+  BillQuickBooksInvoiceNumberError,
+  BillQuickBooksPushNotReadyError,
   BillQuickBooksPushPausedError,
   BillQuickBooksPushUnsafeStatusError,
   BillQuickBooksSyncDeclinedError,
@@ -116,6 +119,9 @@ export async function syncBillToQuickBooksAction(_previous: ActionState, formDat
       error instanceof BillHasNoVendorError ||
       error instanceof BillQuickBooksPushPausedError ||
       error instanceof BillQuickBooksPushUnsafeStatusError ||
+      error instanceof BillQuickBooksPushNotReadyError ||
+      error instanceof BillQuickBooksInvoiceNumberError ||
+      error instanceof BillQuickBooksDuplicateBlockedError ||
       error instanceof BillQuickBooksSyncDeclinedError ||
       error instanceof QuickBooksApiError
     ) {

@@ -32,6 +32,8 @@ export const POST = withApiAuth<Context>(["bills:write"], async (request, auth, 
     const result = await updateBillStatus(auth.organizationId, billId, parsed.data.approvalStatus, {
       sendToQuickBooks: parsed.data.sendToQuickBooks,
       quickBooksSkipReason: parsed.data.quickBooksSkipReason,
+      paidOn: parsed.data.paidOn,
+      paidMethod: parsed.data.paidMethod,
     });
     const { unchanged, ...bill } = result;
     return Response.json({ data: bill, ...(unchanged ? { meta: { unchanged: true } } : {}) });

@@ -427,10 +427,23 @@ def build_bills(rows, prefix, cost_code_ids, po_number_map, po_id_by_number):
             warn("bills", label, "Missing dates — row skipped.")
             continue
         amount = cell(row, "Bill amount", "Bill Amount") or 0
+        # Money rule 2 (2026-11-02): never invent/prefix bill numbers (no JOB_<job>-…).
+        # Use the vendor/BT invoice number exactly. Blank → hold/skip (do not generate).
+        vendor_invoice_number = str(bill_raw or "").strip()
+        if not vendor_invoice_number:
+            warn("bills", label, "Blank Bill # — held (not imported); do not invent a JOB_ prefix.")
+            continue
+        if vendor_invoice_number.upper().startswith("JOB_") and "-" in vendor_invoice_number:
+            warn(
+                "bills",
+                label,
+                f'Refusing invented-looking number "{vendor_invoice_number}" — import the vendor invoice # only.',
+            )
+            continue
         payloads.append({
             "purchaseOrderId": purchase_order_id,
             "vendorName": clean_vendor_name(cell(row, "Pay to", "Pay To")),
-            "billNumber": f"{prefix}-{str(bill_raw).strip()}",
+            "billNumber": vendor_invoice_number,
             "approvalStatus": map_bill_status_flexible(row, label),
             "issuedOn": xl_to_iso(cell(row, "Invoice date", "Invoice Date")),
             "dueOn": xl_to_iso(cell(row, "Due date", "Due Date")),
@@ -442,6 +455,8 @@ def build_bills(rows, prefix, cost_code_ids, po_number_map, po_id_by_number):
                 "amountCents": round(float(amount or 0) * 100),
             }],
         })
+        # Note: `prefix` is intentionally unused for bills (Money rule 2 — no JOB_ invent).
+        # POs/invoices in this importer still use prefix.
     if missing_cost_code_count:
         warn(
             "bills",

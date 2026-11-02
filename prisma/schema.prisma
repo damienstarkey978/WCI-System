@@ -1439,7 +1439,14 @@ model Bill {
 
   issuedOn DateTime?
   dueOn    DateTime?
+  /// Wall-clock when the OS recorded PAID (often call time). Prefer paidOn for the
+  /// real payment calendar date Money needs for QBO/Bill.com (Rule 7 — partial).
   paidAt   DateTime?
+  /// Calendar date the vendor was actually paid (Money rule 7). Nullable; set
+  /// explicitly when marking PAID — never invent from call time.
+  paidOn   DateTime?
+  /// How it was paid (check #, ACH, Bill.com, etc.). Free text until BillPayment lands.
+  paidMethod String?
 
   /// True when the bill was drafted from a scanned receipt (Phase 8 OCR).
   fromOcr Boolean @default(false)

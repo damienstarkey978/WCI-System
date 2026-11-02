@@ -89,6 +89,15 @@ export interface CreateBillInput {
   readonly lineItems: readonly CreateBillLineItemInput[];
 }
 
+export class InventedBillNumberError extends Error {
+  constructor(billNumber: string) {
+    super(
+      `Bill number "${billNumber}" looks like an OS-invented JOB_ prefix — use the vendor's real invoice number only (Money rule 2).`,
+    );
+    this.name = "InventedBillNumberError";
+  }
+}
+
 export async function createBill(input: CreateBillInput) {
   const job = await db.job.findFirst({
     where: { id: input.jobId, organizationId: input.organizationId },
@@ -96,6 +105,12 @@ export async function createBill(input: CreateBillInput) {
   });
   if (!job) throw new JobNotFoundError(input.jobId);
   if (!acceptsNewCommitments(job.status)) throw new JobNotOpenError(input.jobId, job.status);
+
+  const { isInventedJobPrefixedBillNumber, normalizeVendorInvoiceNumber } = await import("@/lib/bills/bill-number");
+  const normalizedNumber = normalizeVendorInvoiceNumber(input.billNumber);
+  if (normalizedNumber && isInventedJobPrefixedBillNumber(normalizedNumber)) {
+    throw new InventedBillNumberError(normalizedNumber);
+  }
 
   if (input.purchaseOrderId) {
     const po = await db.purchaseOrder.findFirst({
@@ -141,7 +156,7 @@ export async function createBill(input: CreateBillInput) {
       purchaseOrderId: input.purchaseOrderId ?? null,
       vendorName: input.vendorName,
       vendorId: input.vendorId ?? null,
-      billNumber: input.billNumber ?? null,
+      billNumber: normalizedNumber,
       title: input.title ?? null,
       description: input.description ?? null,
       issuedOn: input.issuedOn ?? null,
@@ -217,6 +232,13 @@ export interface UpdateBillStatusOptions {
   readonly sendToQuickBooks?: boolean;
   /** Stored when sendToQuickBooks is false. */
   readonly quickBooksSkipReason?: string | null;
+  /**
+   * Real payment calendar date when marking PAID (Money rule 7). Prefer this over
+   * relying on paidAt (which may be call time). Does not yet push a QBO BillPayment.
+   */
+  readonly paidOn?: Date | null;
+  /** Payment method label when marking PAID (check, ACH, Bill.com, …). */
+  readonly paidMethod?: string | null;
 }
 
 /**
@@ -292,11 +314,22 @@ export async function updateBillStatus(
     }
   }
 
+  const paidMethod =
+    approvalStatus === BillApprovalStatus.PAID
+      ? options.paidMethod?.trim() || bill.paidMethod
+      : bill.paidMethod;
+  const paidOn =
+    approvalStatus === BillApprovalStatus.PAID
+      ? (options.paidOn ?? bill.paidOn ?? null)
+      : bill.paidOn;
+
   const updated = await db.bill.update({
     where: { id: bill.id },
     data: {
       approvalStatus,
+      // paidAt remains "when OS recorded PAID" for funnel/audit; paidOn is the real date.
       paidAt: approvalStatus === BillApprovalStatus.PAID ? (bill.paidAt ?? new Date()) : bill.paidAt,
+      ...(approvalStatus === BillApprovalStatus.PAID ? { paidOn, paidMethod } : {}),
       ...(approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT
         ? { sendToQuickBooks, quickBooksSkipReason }
         : {}),
