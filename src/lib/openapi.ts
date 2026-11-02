@@ -339,6 +339,27 @@ const ENDPOINTS: readonly EndpointDef[] = [
     requestSchema: updateJobPermittingFlagsSchema,
   },
   {
+    method: "get",
+    path: "/parcels/duval",
+    summary: "Look up Duval parcels (CityBiz/Parcels ArcGIS)",
+    description:
+      "Query by address, re, or streetNo+streetName. Returns owner/folio/legal/mailing/geometry " +
+      "from maps.coj.net — never invents parcel data. Used for permit-package address lock.",
+    tags: ["Permitting"],
+    scopes: ["permits:read"],
+  },
+  {
+    method: "post",
+    path: "/jobs/{jobId}/parcel/confirm",
+    summary: "Confirm a Duval parcel onto the job cache",
+    description:
+      "Staff Confirm after GET /parcels/duval. Writes Job.parcelId / ownerOfRecord / " +
+      "legalDescription / parcelSnapshot. Never invents owner or folio.",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["jobId"],
+  },
+  {
     method: "patch",
     path: "/jobs/{jobId}/permit-rockstar-ledger",
     summary: "Update the job's Permit Rockstar ledger",

@@ -318,6 +318,49 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
             licenseNumber: l.licenseNumber,
           }))}
           formAvailability={formAvailability}
+          initialParcelLock={
+            job.parcelId && job.parcelConfirmedAt
+              ? {
+                  propertyAddress:
+                    (job.parcelSnapshot &&
+                    typeof job.parcelSnapshot === "object" &&
+                    !Array.isArray(job.parcelSnapshot) &&
+                    typeof (job.parcelSnapshot as { siteAddress?: unknown }).siteAddress ===
+                      "string"
+                      ? (job.parcelSnapshot as { siteAddress: string }).siteAddress
+                      : null) ||
+                    propertyAddress,
+                  ownerName: job.ownerOfRecord ?? "",
+                  ownerMailingAddress:
+                    job.parcelSnapshot &&
+                    typeof job.parcelSnapshot === "object" &&
+                    !Array.isArray(job.parcelSnapshot) &&
+                    typeof (job.parcelSnapshot as { mailingAddressLine1?: unknown })
+                      .mailingAddressLine1 === "string"
+                      ? (job.parcelSnapshot as { mailingAddressLine1: string }).mailingAddressLine1
+                      : "",
+                  ownerCityStateZip:
+                    job.parcelSnapshot &&
+                    typeof job.parcelSnapshot === "object" &&
+                    !Array.isArray(job.parcelSnapshot) &&
+                    typeof (job.parcelSnapshot as { mailingCityStateZip?: unknown })
+                      .mailingCityStateZip === "string"
+                      ? (job.parcelSnapshot as { mailingCityStateZip: string }).mailingCityStateZip
+                      : "",
+                  legalDescription: job.legalDescription ?? "",
+                  taxFolio:
+                    job.parcelSnapshot &&
+                    typeof job.parcelSnapshot === "object" &&
+                    !Array.isArray(job.parcelSnapshot) &&
+                    typeof (job.parcelSnapshot as { taxFolioDisplay?: unknown }).taxFolioDisplay ===
+                      "string"
+                      ? (job.parcelSnapshot as { taxFolioDisplay: string }).taxFolioDisplay
+                      : (job.parcelId ?? ""),
+                  latitude: job.latitude,
+                  longitude: job.longitude,
+                }
+              : null
+          }
         />
       </section>
 

@@ -158,6 +158,10 @@ export async function buildPackageFillContext(
       city: true,
       state: true,
       postalCode: true,
+      parcelId: true,
+      ownerOfRecord: true,
+      legalDescription: true,
+      parcelSnapshot: true,
     },
   });
 
@@ -168,20 +172,35 @@ export async function buildPackageFillContext(
   });
   const client = clientAccess?.client;
 
+  const parcelSnap = asRecord(job?.parcelSnapshot);
+
   const propertyAddress =
     pkg.propertyAddress?.trim() ||
+    (typeof parcelSnap.siteAddress === "string" ? parcelSnap.siteAddress.trim() : "") ||
     [job?.addressLine1, job?.city, job?.state, job?.postalCode].filter(Boolean).join(", ") ||
     "";
 
   const ownerCityStateZip =
     strField(bag, "ownerCityStateZip") ||
+    (typeof parcelSnap.mailingCityStateZip === "string"
+      ? parcelSnap.mailingCityStateZip.trim()
+      : "") ||
     [client?.city, client?.state, client?.postalCode].filter(Boolean).join(", ");
 
   return {
     packageName: pkg.name,
     propertyAddress,
-    legalDescription: strField(bag, "legalDescription") || job?.lotInfo || "",
-    taxFolio: strField(bag, "taxFolio"),
+    // Prefer package bag, then confirmed job parcel cache, then lotInfo — never invent.
+    legalDescription:
+      strField(bag, "legalDescription") ||
+      job?.legalDescription ||
+      job?.lotInfo ||
+      "",
+    taxFolio:
+      strField(bag, "taxFolio") ||
+      (typeof parcelSnap.taxFolioDisplay === "string" ? parcelSnap.taxFolioDisplay.trim() : "") ||
+      job?.parcelId ||
+      "",
     permitNumber:
       strField(bag, "permitNumber") ||
       pkg.jobPermit?.permitNumber ||
@@ -206,8 +225,18 @@ export async function buildPackageFillContext(
       nocPreset?.expirationRule ||
       "1 year after recording",
     owner: {
-      name: strField(bag, "ownerName") || client?.name || "",
-      mailingAddress: strField(bag, "ownerMailingAddress") || client?.addressLine1 || "",
+      name:
+        strField(bag, "ownerName") ||
+        job?.ownerOfRecord ||
+        client?.name ||
+        "",
+      mailingAddress:
+        strField(bag, "ownerMailingAddress") ||
+        (typeof parcelSnap.mailingAddressLine1 === "string"
+          ? parcelSnap.mailingAddressLine1.trim()
+          : "") ||
+        client?.addressLine1 ||
+        "",
       cityStateZip: ownerCityStateZip,
       phone: strField(bag, "ownerPhone") || client?.phone || "",
       cellPhone: strField(bag, "ownerCellPhone") || client?.cellPhone || "",

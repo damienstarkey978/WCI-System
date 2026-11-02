@@ -325,6 +325,17 @@ model Job {
   sqft         Int?
   permitNumber String?
   lotInfo      String?
+  /// Duval RE# / tax folio from staff-confirmed Property Appraiser / GIS lookup.
+  /// Never invent — only written after address lock + Confirm.
+  parcelId String?
+  /// Owner of record from the confirmed parcel payload (may be a trust + ET AL).
+  ownerOfRecord String?
+  /// Legal description lines from the confirmed parcel (NOC).
+  legalDescription String? @db.Text
+  /// When staff confirmed the parcel lock for this job.
+  parcelConfirmedAt DateTime?
+  /// Last confirmed parcel snapshot (mailing, site parts, geometry, raw RE).
+  parcelSnapshot Json?
   /// Notice of Commencement on file (permitting checklist).
   nocOnFile    Boolean @default(false)
   /// NOC instrument / recording number (optional detail beyond the yes/no chip).

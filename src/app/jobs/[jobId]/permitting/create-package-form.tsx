@@ -9,6 +9,7 @@ import {
   type PermitCatalogPermitType,
 } from "@/lib/permitting/form-catalog";
 
+import { AddressLockStep, type LockedParcelFields } from "./address-lock-step";
 import { createPermitPackageAction, type ActionState } from "./actions";
 
 const INITIAL: ActionState = {};
@@ -31,6 +32,8 @@ type AvailableFormMeta = {
   revisionDate: string | null;
 };
 
+type InitialParcelLock = LockedParcelFields | null;
+
 export function CreatePackageForm({
   jobId,
   defaultAddress,
@@ -38,6 +41,7 @@ export function CreatePackageForm({
   buildingPermitId,
   licenses,
   formAvailability,
+  initialParcelLock = null,
 }: {
   jobId: string;
   defaultAddress: string;
@@ -45,12 +49,16 @@ export function CreatePackageForm({
   buildingPermitId: string | null;
   licenses: readonly LicenseOption[];
   formAvailability: readonly AvailableFormMeta[];
+  initialParcelLock?: InitialParcelLock;
 }) {
   const [state, action, pending] = useActionState(createPermitPackageAction, INITIAL);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [municipality, setMunicipality] = useState<PermitCatalogMunicipality>("JACKSONVILLE");
   const [permitType, setPermitType] = useState<PermitCatalogPermitType>("BUILDING");
-  const [propertyAddress, setPropertyAddress] = useState(defaultAddress);
+  const [propertyAddress, setPropertyAddress] = useState(
+    initialParcelLock?.propertyAddress || defaultAddress,
+  );
+  const [parcelLock, setParcelLock] = useState<LockedParcelFields | null>(initialParcelLock);
   const catalog = useMemo(
     () => formsForCatalog({ county: "DUVAL", municipality, permitType }),
     [municipality, permitType],
@@ -107,7 +115,9 @@ export function CreatePackageForm({
       ))}
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--bt-muted)]">
-        <span className={step === 1 ? "font-semibold text-[var(--bt-text)]" : ""}>1. Location</span>
+        <span className={step === 1 ? "font-semibold text-[var(--bt-text)]" : ""}>
+          1. Address lock
+        </span>
         <span aria-hidden>→</span>
         <span className={step === 2 ? "font-semibold text-[var(--bt-text)]" : ""}>
           2. Forms ({selectedCount}/{catalog.length})
@@ -117,7 +127,17 @@ export function CreatePackageForm({
       </div>
 
       {step === 1 ? (
-        <div className="grid gap-2">
+        <div className="grid gap-3">
+          <AddressLockStep
+            jobId={jobId}
+            defaultAddress={defaultAddress}
+            initialLocked={parcelLock}
+            onLocked={(fields) => {
+              setParcelLock(fields);
+              setPropertyAddress(fields.propertyAddress);
+            }}
+            onUnlock={() => setParcelLock(null)}
+          />
           <label className="grid gap-1">
             <span className="text-xs font-medium text-[var(--bt-muted)]">County</span>
             <input
@@ -175,23 +195,20 @@ export function CreatePackageForm({
               ))}
             </select>
           </label>
-          <label className="grid gap-1">
-            <span className="text-xs font-medium text-[var(--bt-muted)]">Property address</span>
-            <input
-              value={propertyAddress}
-              onChange={(e) => setPropertyAddress(e.target.value)}
-              className="rounded border px-3 py-2 text-sm"
-              style={{ borderColor: "var(--bt-border)" }}
-            />
-          </label>
           <button
             type="button"
+            disabled={!parcelLock}
             onClick={() => setStep(2)}
-            className="mt-1 w-fit rounded px-3 py-2 text-xs font-semibold text-[var(--bt-on-primary)]"
+            className="mt-1 w-fit rounded px-3 py-2 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
             style={{ background: "var(--bt-primary)" }}
           >
             Continue to forms
           </button>
+          {!parcelLock ? (
+            <p className="text-[10px] text-[var(--bt-muted)]">
+              Confirm a Duval parcel above before continuing (address lock → PAO/GIS → forms).
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -304,15 +321,33 @@ export function CreatePackageForm({
             </legend>
             <label className="grid gap-1">
               <span className="text-[10px] text-[var(--bt-muted)]">Owner name</span>
-              <input name="ownerName" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }} />
+              <input
+                name="ownerName"
+                defaultValue={parcelLock?.ownerName ?? ""}
+                key={`ownerName-${parcelLock?.taxFolio ?? "none"}`}
+                className="rounded border px-2 py-1.5 text-sm"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
             </label>
             <label className="grid gap-1">
               <span className="text-[10px] text-[var(--bt-muted)]">Owner mailing address</span>
-              <input name="ownerMailingAddress" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }} />
+              <input
+                name="ownerMailingAddress"
+                defaultValue={parcelLock?.ownerMailingAddress ?? ""}
+                key={`mail1-${parcelLock?.taxFolio ?? "none"}`}
+                className="rounded border px-2 py-1.5 text-sm"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
             </label>
             <label className="grid gap-1">
               <span className="text-[10px] text-[var(--bt-muted)]">Owner city / state / zip</span>
-              <input name="ownerCityStateZip" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }} />
+              <input
+                name="ownerCityStateZip"
+                defaultValue={parcelLock?.ownerCityStateZip ?? ""}
+                key={`mail2-${parcelLock?.taxFolio ?? "none"}`}
+                className="rounded border px-2 py-1.5 text-sm"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
             </label>
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="grid gap-1">
@@ -344,11 +379,23 @@ export function CreatePackageForm({
             </label>
             <label className="grid gap-1">
               <span className="text-[10px] text-[var(--bt-muted)]">Legal description / lot</span>
-              <input name="legalDescription" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }} />
+              <input
+                name="legalDescription"
+                defaultValue={parcelLock?.legalDescription ?? ""}
+                key={`legal-${parcelLock?.taxFolio ?? "none"}`}
+                className="rounded border px-2 py-1.5 text-sm"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
             </label>
             <label className="grid gap-1">
               <span className="text-[10px] text-[var(--bt-muted)]">Tax folio #</span>
-              <input name="taxFolio" className="rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }} />
+              <input
+                name="taxFolio"
+                defaultValue={parcelLock?.taxFolio ?? ""}
+                key={`folio-${parcelLock?.taxFolio ?? "none"}`}
+                className="rounded border px-2 py-1.5 text-sm"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
             </label>
           </fieldset>
 
