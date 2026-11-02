@@ -315,10 +315,7 @@ export async function syncBillToQuickBooksDetailed(
     await recordSyncAttempt({ organizationId, entityType: "BILL", direction: "TO_QBO", wciRecordId: bill.id, qboId: qboBill.Bill.Id });
     return { qboBillId: qboBill.Bill.Id, action: wasUpdate ? "updated" : "created" };
   } catch (error) {
-    if (
-      error instanceof BillQuickBooksDuplicateLinkedError ||
-      error instanceof BillQuickBooksDuplicateBlockedError
-    ) {
+    if (error instanceof BillQuickBooksDuplicateBlockedError) {
       throw error;
     }
     await recordSyncAttempt({ organizationId, entityType: "BILL", direction: "TO_QBO", wciRecordId: bill.id, error });
