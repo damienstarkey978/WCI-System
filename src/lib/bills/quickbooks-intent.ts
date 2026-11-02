@@ -129,17 +129,20 @@ export function isBillQuickBooksSyncBlocked(sendToQuickBooks: boolean | null | u
 export interface BillQuickBooksPushSafetyInput {
   readonly approvalStatus: BillApprovalStatus | string;
   readonly paidAt?: Date | string | null;
+  /** When set, also treated as paid history (Money rule 7 calendar date). */
+  readonly paidOn?: Date | string | null;
 }
 
 /**
  * Paid / void bills must never be posted (or re-posted) to QuickBooks as open
  * unpaid AP. QBO Bill creates carry no payment — Bill.com would treat them as
- * unpaid. `paidAt` is a belt-and-suspenders check for rows whose status and
- * timestamp disagree.
+ * unpaid. `paidAt` / `paidOn` are belt-and-suspenders checks for rows whose
+ * status and timestamps disagree.
  */
 export function isBillQuickBooksPushUnsafeByStatus(bill: BillQuickBooksPushSafetyInput): boolean {
   if (bill.approvalStatus === BillApprovalStatus.PAID || bill.approvalStatus === "PAID") return true;
   if (bill.approvalStatus === BillApprovalStatus.VOID || bill.approvalStatus === "VOID") return true;
   if (bill.paidAt != null) return true;
+  if (bill.paidOn != null) return true;
   return false;
 }

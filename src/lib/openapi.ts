@@ -32,6 +32,7 @@ import {
   convertLeadToJobSchema,
   createAllowanceSchema,
   createBidPackageSchema,
+  billQuickBooksPushPreviewSchema,
   createBillSchema,
   createChangeOrderSchema,
   createClientSchema,
@@ -763,6 +764,18 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["bills:write"],
     requestSchema: aiOcrBillSchema,
     successStatus: 201,
+  },
+  {
+    method: "post",
+    path: "/bills/quickbooks-push-preview",
+    summary: "Dry-run QuickBooks bill push (Money rule 4)",
+    description:
+      "Lists which bills would be created/updated/linked/refused in QBO with counts and dollar totals. " +
+      "Never creates QuickBooks bills. Safe while QBO_BILL_PUSH_ENABLED is unset. Optional billIds filter; " +
+      "default is READY_FOR_PAYMENT with sendToQuickBooks=true.",
+    tags: ["Bills", "QuickBooks"],
+    scopes: ["bills:read"],
+    requestSchema: billQuickBooksPushPreviewSchema,
   },
 
   // --- Invoicing ------------------------------------------------------------

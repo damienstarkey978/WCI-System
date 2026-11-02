@@ -2,7 +2,7 @@
  * Environment access. Nothing else in the app reads process.env directly.
  */
 
-function optional(name: string): string | undefined {
+export function optional(name: string): string | undefined {
   const value = process.env[name];
   return value === undefined || value === "" ? undefined : value;
 }
@@ -204,6 +204,15 @@ export function quickBooksWebhookVerifierToken(): string | undefined {
  */
 export function isQuickBooksBillPushEnabled(): boolean {
   return optional("QBO_BILL_PUSH_ENABLED") === "true";
+}
+
+/**
+ * Damien's explicit approval to live-push more than a handful of bills in one
+ * batch (Money rule 4). Unrelated to QBO_BILL_PUSH_ENABLED — both must be true
+ * for a large live batch. Dry-run never needs this.
+ */
+export function isQuickBooksBillBulkPushApproved(): boolean {
+  return optional("QBO_BILL_BULK_PUSH_APPROVED") === "true";
 }
 
 /**

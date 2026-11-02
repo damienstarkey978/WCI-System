@@ -302,6 +302,10 @@ export const updateBillStatusSchema = z
     sendToQuickBooks: z.boolean().optional(),
     /** Optional note when sendToQuickBooks is false. */
     quickBooksSkipReason: z.string().trim().max(500).nullable().optional(),
+    /** Real payment calendar date when marking PAID (Money rule 7 — OS store only for now). */
+    paidOn: z.coerce.date().nullish(),
+    /** Payment method label when marking PAID. */
+    paidMethod: z.string().trim().max(120).nullable().optional(),
   })
   .superRefine((value, ctx) => {
     if (value.approvalStatus === BillApprovalStatus.READY_FOR_PAYMENT && typeof value.sendToQuickBooks !== "boolean") {
@@ -313,6 +317,11 @@ export const updateBillStatusSchema = z
       });
     }
   });
+
+/** Dry-run QBO bill push preview (Money rule 4) — never creates QBO bills. */
+export const billQuickBooksPushPreviewSchema = z.object({
+  billIds: z.array(z.string().min(1).max(64)).max(500).optional(),
+});
 
 export const matchByRoadNameSchema = z.object({
   query: z.string().trim().min(1).max(500),
