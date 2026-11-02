@@ -46,7 +46,6 @@ export function BillsListClient({
   counts,
   rows,
   isQboConnected,
-  createBill,
   emptyAction,
 }: {
   jobId: string;
