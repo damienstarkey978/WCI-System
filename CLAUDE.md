@@ -796,3 +796,10 @@ Record every architectural decision that departs from the above, with the reason
   (no QBO BillPayment yet). Rules 8–9 (bidirectional void, daily audit digest)
   deferred. Pause stays OFF until Money signs off. Confirmation:
   project-store `docs/qbo-bill-push-money-confirmation-2026-11-02.md`.
+- **Money QBO bill-push rules 7–9 (2026-11-02 follow-up):** marking PAID on a
+  bill with `qboBillId` best-effort creates a QBO BillPayment (TxnDate from
+  `paidOn` when set) and stores `qboBillPaymentId`. VOID/DELETE of a pushed
+  bill best-effort deletes the QBO Bill (`bill?operation=delete`). `QboSyncLog`
+  gains vendor/docNumber/amountCents/actorLabel/operation; daily create count
+  via `GET /api/v1/quickbooks/bill-push-audit`. BillPayment/void are independent
+  of `QBO_BILL_PUSH_ENABLED` (create-pause only). Soft-fail — WCI status wins.

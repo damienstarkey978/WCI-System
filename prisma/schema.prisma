@@ -1467,6 +1467,8 @@ model Bill {
   /// QBO's own change-tracking token — required on every update call the QBO API
   /// accepts, or it rejects the request as a stale-data conflict. Refreshed on every sync.
   qboSyncToken String?
+  /// QBO BillPayment Id once WCI recorded payment in QuickBooks (Money rule 7).
+  qboBillPaymentId String?
 
   /// Explicit staff/agent choice at READY_FOR_PAYMENT: push this bill to QuickBooks
   /// (labor/unpaid services) or keep it WCI-only (materials). Null until that hop —
@@ -1979,10 +1981,20 @@ model QboSyncLog {
   status       QboSyncStatus
   errorMessage String?
 
+  /// Money rule 9 audit fields (nullable — older rows leave these null).
+  vendorName  String?
+  docNumber   String?
+  amountCents Int?
+  /// Who/what triggered the attempt (user email, api key name, "system", …).
+  actorLabel  String?
+  /// create | update | link | bill_payment | void | delete
+  operation   String?
+
   createdAt DateTime @default(now())
 
   @@index([organizationId, entityType, wciRecordId])
   @@index([organizationId, status])
+  @@index([organizationId, entityType, createdAt])
 }
 
 // ---------------------------------------------------------------------------

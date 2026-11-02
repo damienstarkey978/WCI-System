@@ -115,6 +115,12 @@ export async function deleteBill(organizationId: string, billId: string) {
     );
   }
 
+  // Money rule 8: if a pushed bill somehow still has qboBillId, delete QBO first.
+  if (bill.qboBillId) {
+    const { tryDeleteLinkedQuickBooksBill } = await import("@/lib/quickbooks/sync/bill-void");
+    await tryDeleteLinkedQuickBooksBill(organizationId, bill.id, { operation: "delete" });
+  }
+
   await db.bill.delete({ where: { id: bill.id } });
   return { id: bill.id, label };
 }

@@ -214,6 +214,10 @@ export async function syncBillToQuickBooksDetailed(
           direction: "TO_QBO",
           wciRecordId: bill.id,
           qboId: osDup.qboBillId,
+          vendorName: bill.vendorName,
+          docNumber: bill.billNumber,
+          amountCents: totalCents,
+          operation: "link",
         });
       }
       return {
@@ -254,6 +258,10 @@ export async function syncBillToQuickBooksDetailed(
             direction: "TO_QBO",
             wciRecordId: bill.id,
             qboId: qboHit.id,
+            vendorName: bill.vendorName,
+            docNumber: bill.billNumber,
+            amountCents: totalCents,
+            operation: "link",
           });
         }
         return {
@@ -312,13 +320,33 @@ export async function syncBillToQuickBooksDetailed(
       : await accountingRequest<{ Bill: QboRef }>({ ...access, method: "POST", path: "bill", body: billFields });
 
     await db.bill.update({ where: { id: bill.id }, data: { qboBillId: qboBill.Bill.Id, qboSyncToken: qboBill.Bill.SyncToken } });
-    await recordSyncAttempt({ organizationId, entityType: "BILL", direction: "TO_QBO", wciRecordId: bill.id, qboId: qboBill.Bill.Id });
+    await recordSyncAttempt({
+      organizationId,
+      entityType: "BILL",
+      direction: "TO_QBO",
+      wciRecordId: bill.id,
+      qboId: qboBill.Bill.Id,
+      vendorName: bill.vendorName,
+      docNumber: bill.billNumber,
+      amountCents: totalCents,
+      operation: wasUpdate ? "update" : "create",
+    });
     return { qboBillId: qboBill.Bill.Id, action: wasUpdate ? "updated" : "created" };
   } catch (error) {
     if (error instanceof BillQuickBooksDuplicateBlockedError) {
       throw error;
     }
-    await recordSyncAttempt({ organizationId, entityType: "BILL", direction: "TO_QBO", wciRecordId: bill.id, error });
+    await recordSyncAttempt({
+      organizationId,
+      entityType: "BILL",
+      direction: "TO_QBO",
+      wciRecordId: bill.id,
+      error,
+      vendorName: bill.vendorName,
+      docNumber: bill.billNumber,
+      amountCents: totalCents,
+      operation: bill.qboBillId ? "update" : "create",
+    });
     throw error;
   }
 }
