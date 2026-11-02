@@ -74,6 +74,8 @@ export type PackageFieldValues = {
   readonly designatedPersonForNotices?: string;
   readonly lienorsNoticeRecipient?: string;
   readonly expirationRule?: string;
+  /** "true" / "false" — Permission By Owner private-provider path. */
+  readonly pboUsesPrivateProvider?: string;
 };
 
 function toCatalogPermitType(t: PackagePermitType): PermitCatalogPermitType {
@@ -170,6 +172,7 @@ export async function buildPackageFillContext(
       ownerOfRecord: true,
       legalDescription: true,
       parcelSnapshot: true,
+      permitRockstarPrivateProvider: true,
     },
   });
 
@@ -233,6 +236,13 @@ export async function buildPackageFillContext(
       strField(bag, "expirationRule") ||
       nocPreset?.expirationRule ||
       "1 year after recording",
+    pboUsesPrivateProvider: (() => {
+      const raw = strField(bag, "pboUsesPrivateProvider").toLowerCase();
+      if (raw === "true" || raw === "1" || raw === "yes") return true;
+      if (raw === "false" || raw === "0" || raw === "no") return false;
+      // Fall back to job Rockstar ledger — still staff-set, never invented.
+      return job?.permitRockstarPrivateProvider ?? false;
+    })(),
     owner: {
       name:
         strField(bag, "ownerName") ||
