@@ -6,6 +6,7 @@ import { DUVAL_MUNICIPALITIES } from "@/lib/permitting/form-catalog";
 
 import {
   addPackageProductAction,
+  applyFormSetToPackageAction,
   confirmPaisPlansAction,
   linkPackageJobPermitAction,
   markPackageFormDownloadedAction,
@@ -29,10 +30,17 @@ type SidePanel =
   | "contractor"
   | "pais"
   | "r402"
+  | "scope_of_values"
   | "notarization"
   | "recording"
   | "city_permit"
   | "settings";
+
+type FormSetTemplateOption = {
+  id: string;
+  name: string;
+  formKeys: readonly string[];
+};
 
 type PackageProductRow = {
   id: string;
@@ -136,6 +144,7 @@ const SIDE_TABS: readonly { key: SidePanel; label: string }[] = [
   { key: "contractor", label: "Contractor" },
   { key: "pais", label: "PAIS" },
   { key: "r402", label: "R402" },
+  { key: "scope_of_values", label: "Scope of Values" },
   { key: "notarization", label: "Notarization" },
   { key: "recording", label: "Recording" },
   { key: "city_permit", label: "City Permit" },
@@ -187,6 +196,8 @@ export function PackagesPanel({
   jobPermits,
   epicsConnected,
   paisTemplates = [],
+  formSetTemplates = [],
+  initialPackageId = null,
 }: {
   jobId: string;
   packages: readonly PackageRow[];
@@ -194,12 +205,20 @@ export function PackagesPanel({
   /** Org has connected (non-disconnected) JAX EPICS credentials. */
   epicsConnected: boolean;
   paisTemplates?: readonly PaisTemplateOption[];
+  formSetTemplates?: readonly FormSetTemplateOption[];
+  /** Deep-link from `?packageId=` — selects that package when present. */
+  initialPackageId?: string | null;
 }) {
   const [tab, setTab] = useState<PackageTab>("ACTIVE");
   const [filter, setFilter] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [page, setPage] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(packages[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    if (initialPackageId && packages.some((p) => p.id === initialPackageId)) {
+      return initialPackageId;
+    }
+    return packages[0]?.id ?? null;
+  });
   const [selectedFormKey, setSelectedFormKey] = useState<string | null>(null);
   const [sidePanel, setSidePanel] = useState<SidePanel>("property_owner");
   /** Step D: when true, show Rockstar form 1/N shell; otherwise package grid summary. */
@@ -232,6 +251,10 @@ export function PackagesPanel({
   );
   const [confirmPlansState, confirmPlansAction, confirmPlansPending] = useActionState(
     confirmPaisPlansAction,
+    INITIAL,
+  );
+  const [formSetState, formSetAction, formSetPending] = useActionState(
+    applyFormSetToPackageAction,
     INITIAL,
   );
   const [selectedPlanIndexes, setSelectedPlanIndexes] = useState<readonly number[]>([]);
@@ -1167,6 +1190,29 @@ export function PackagesPanel({
                 </form>
               ) : null}
 
+              {sidePanel === "scope_of_values" ? (
+                <div className="grid gap-2 text-xs">
+                  <p className="font-semibold text-[var(--bt-text)]">Scope of Values</p>
+                  <p className="text-[10px] text-[var(--bt-muted)]">
+                    WCI-branded worksheet generated from this job&apos;s budget (cost-code groups →
+                    trade sections, amounts in cents). Not a city blank — never invents dollars or
+                    city wording. Add the form to the package (wizard default for Building) and use
+                    Update Document / Download to refresh the PDF after budget changes.
+                  </p>
+                  {selected.forms.some((f) => f.formKey === "scope_of_values") ? (
+                    <p className="text-[11px] text-[var(--bt-status-open-text)]">
+                      Scope of Values is on this package. Regenerate after sending an estimate to
+                      budget.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-[var(--bt-muted)]">
+                      Not on this package yet — apply a form-set template under Settings, or create a
+                      new package with the Robin Hood 5-doc defaults.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+
               {sidePanel === "contractor" ? (
                 selected.contractor ? (
                   <div className="space-y-1 text-xs text-[var(--bt-text)]">
@@ -1331,6 +1377,54 @@ export function PackagesPanel({
                       <p className="text-[11px] text-[var(--bt-hazard)]">{renameState.error}</p>
                     ) : null}
                   </form>
+
+                  {formSetTemplates.length > 0 ? (
+                    <form action={formSetAction} className="grid gap-1 border-t pt-2" style={{ borderColor: "var(--bt-border)" }}>
+                      <input type="hidden" name="jobId" value={jobId} />
+                      <input type="hidden" name="packageId" value={selected.id} />
+                      <p className="text-[10px] text-[var(--bt-muted)]">
+                        Apply a form-set template (adds missing forms only — never removes).
+                      </p>
+                      <label className="text-[10px] text-[var(--bt-muted)]">
+                        Form-set template
+                        <select
+                          name="templateId"
+                          className="mt-0.5 w-full rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: "var(--bt-border)" }}
+                          defaultValue=""
+                        >
+                          <option value="">Select template…</option>
+                          {formSetTemplates.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} ({t.formKeys.length} forms)
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={formSetPending}
+                        className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
+                        style={{ background: "var(--bt-primary)" }}
+                      >
+                        {formSetPending ? "Applying…" : "Apply form set"}
+                      </button>
+                      {formSetState.error ? (
+                        <p className="text-[11px] text-[var(--bt-hazard)]">{formSetState.error}</p>
+                      ) : null}
+                      {formSetState.ok ? (
+                        <p className="text-[11px] text-[var(--bt-status-open-text)]">Form set applied.</p>
+                      ) : null}
+                    </form>
+                  ) : (
+                    <p className="text-[10px] text-[var(--bt-muted)] border-t pt-2" style={{ borderColor: "var(--bt-border)" }}>
+                      Create form-set templates under{" "}
+                      <a href="/settings/permitting" className="text-[var(--bt-primary)] hover:underline">
+                        Permitting settings
+                      </a>
+                      .
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap gap-2">
                     {selected.status !== "ACTIVE" ? (

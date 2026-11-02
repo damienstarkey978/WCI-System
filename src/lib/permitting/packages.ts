@@ -496,6 +496,43 @@ export async function markPackageFormsCreated(organizationId: string, packageId:
  * Merge package fieldValues — never wipe existing keys when a partial update omits them.
  * Normalizes taxFolio to ######-#### when digits are present.
  */
+/**
+ * Add missing forms from a form-set template onto an existing package (additive).
+ * Does not remove forms already on the package. Regenerates newly added fillable forms.
+ */
+export async function applyFormSetToPackage(
+  organizationId: string,
+  packageId: string,
+  formKeys: readonly string[],
+) {
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const existing = new Set(pkg.forms.map((f) => f.formKey));
+  const toAdd = formKeys.filter((k) => k.trim() && !existing.has(k.trim()));
+  if (toAdd.length === 0) {
+    return pkg;
+  }
+  const maxSort = pkg.forms.reduce((m, f) => Math.max(m, f.sortOrder), -1);
+  await db.permitPackageForm.createMany({
+    data: toAdd.map((formKey, index) => ({
+      packageId,
+      formKey,
+      title: formTitleForKey(formKey),
+      sortOrder: maxSort + 1 + index,
+      status: PermitPackageFormStatus.DRAFT,
+    })),
+  });
+
+  for (const formKey of toAdd) {
+    if (!isPackageFormGeneratable(formKey)) continue;
+    try {
+      await regeneratePackageForm(organizationId, packageId, formKey);
+    } catch {
+      // Keep the form row even if fill fails (e.g. empty budget for SOV).
+    }
+  }
+  return getPermitPackage(organizationId, packageId);
+}
+
 export async function updatePermitPackageFields(
   organizationId: string,
   packageId: string,

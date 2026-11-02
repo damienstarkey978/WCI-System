@@ -13,8 +13,10 @@ import {
 import { requireAppUser } from "@/lib/auth";
 import { EmailNotConfiguredError, EmailSendError } from "@/lib/email/send";
 import { MoneyError, parseDollarsToCents } from "@/lib/money";
+import { db } from "@/lib/db";
 import {
   PermitPackageError,
+  applyFormSetToPackage,
   archivePermitPackage,
   createPermitPackage,
   linkPackageJobPermit,
@@ -771,6 +773,32 @@ export async function confirmPaisPlansAction(
   } catch (error) {
     if (error instanceof PermitPackageError) return { error: error.message };
     return { error: error instanceof Error ? error.message : "Could not add suggested products." };
+  }
+  revalidate(jobId);
+  return { ok: true };
+}
+
+export async function applyFormSetToPackageAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const templateId = String(formData.get("templateId") ?? "").trim();
+  if (!templateId) return { error: "Select a form-set template." };
+  try {
+    const tpl = await db.permitFormSetTemplate.findFirst({
+      where: { id: templateId, organizationId: user.organizationId },
+    });
+    if (!tpl) return { error: "Form-set template not found." };
+    const keys = Array.isArray(tpl.formKeys)
+      ? tpl.formKeys.filter((k): k is string => typeof k === "string")
+      : [];
+    await applyFormSetToPackage(user.organizationId, packageId, keys);
+  } catch (error) {
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not apply form set." };
   }
   revalidate(jobId);
   return { ok: true };
