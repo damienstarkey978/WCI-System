@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { CostType } from "@/generated/prisma/enums";
+import { BillApprovalStatus, CostType } from "@/generated/prisma/enums";
 
 import {
   DEFAULT_MATERIALS_SKIP_REASON,
   defaultSkipReasonForSuggestion,
+  isBillQuickBooksPushUnsafeByStatus,
   isBillQuickBooksSyncBlocked,
   suggestSendToQuickBooks,
 } from "./quickbooks-intent";
@@ -55,5 +56,29 @@ describe("isBillQuickBooksSyncBlocked", () => {
     expect(isBillQuickBooksSyncBlocked(true)).toBe(false);
     expect(isBillQuickBooksSyncBlocked(null)).toBe(false);
     expect(isBillQuickBooksSyncBlocked(undefined)).toBe(false);
+  });
+});
+
+describe("isBillQuickBooksPushUnsafeByStatus", () => {
+  it("blocks PAID and VOID bills", () => {
+    expect(isBillQuickBooksPushUnsafeByStatus({ approvalStatus: BillApprovalStatus.PAID })).toBe(true);
+    expect(isBillQuickBooksPushUnsafeByStatus({ approvalStatus: BillApprovalStatus.VOID })).toBe(true);
+    expect(isBillQuickBooksPushUnsafeByStatus({ approvalStatus: "PAID" })).toBe(true);
+  });
+
+  it("blocks when paidAt is set even if status is not PAID", () => {
+    expect(
+      isBillQuickBooksPushUnsafeByStatus({
+        approvalStatus: BillApprovalStatus.READY_FOR_PAYMENT,
+        paidAt: new Date("2026-01-01"),
+      }),
+    ).toBe(true);
+  });
+
+  it("allows unpaid in-funnel statuses without paidAt", () => {
+    expect(isBillQuickBooksPushUnsafeByStatus({ approvalStatus: BillApprovalStatus.READY_FOR_PAYMENT })).toBe(false);
+    expect(isBillQuickBooksPushUnsafeByStatus({ approvalStatus: BillApprovalStatus.APPROVED, paidAt: null })).toBe(
+      false,
+    );
   });
 });

@@ -12,8 +12,12 @@
  * against an unlinked vendor name stay QuickBooks-only until a Vendor record exists.
  */
 
-import { isBillQuickBooksSyncBlocked } from "@/lib/bills/quickbooks-intent";
+import {
+  isBillQuickBooksPushUnsafeByStatus,
+  isBillQuickBooksSyncBlocked,
+} from "@/lib/bills/quickbooks-intent";
 import { db } from "@/lib/db";
+import { isQuickBooksBillPushEnabled } from "@/lib/env";
 import { accountingRequest } from "@/lib/quickbooks/client";
 import { getValidAccessToken, type ValidQuickBooksAccess } from "@/lib/quickbooks/connection-service";
 import { recordSyncAttempt } from "@/lib/quickbooks/sync-log";
@@ -48,6 +52,26 @@ export class BillQuickBooksSyncDeclinedError extends Error {
   }
 }
 
+/** Global QBO_BILL_PUSH_ENABLED pause — no WCI → QBO bill creates/updates while unset/false. */
+export class BillQuickBooksPushPausedError extends Error {
+  constructor() {
+    super(
+      "QuickBooks bill push is paused (QBO_BILL_PUSH_ENABLED is not \"true\"). No bills are sent to QuickBooks until that env var is set to true on Netlify and the site is redeployed/env-reloaded.",
+    );
+    this.name = "BillQuickBooksPushPausedError";
+  }
+}
+
+/** PAID/VOID (or paidAt set) bills must not be created in QBO as open unpaid AP. */
+export class BillQuickBooksPushUnsafeStatusError extends Error {
+  constructor(billId: string, approvalStatus: string) {
+    super(
+      `Bill ${billId} cannot be pushed to QuickBooks while its status is ${approvalStatus} (paid/void bills must never post as unpaid AP).`,
+    );
+    this.name = "BillQuickBooksPushUnsafeStatusError";
+  }
+}
+
 interface QboRef {
   readonly Id: string;
   readonly SyncToken: string;
@@ -66,11 +90,19 @@ async function optionalJobCustomerRef(organizationId: string, job: { readonly id
 
 /** Push one Bill to QuickBooks, creating or updating as needed. Returns the QBO Bill id. */
 export async function syncBillToQuickBooks(organizationId: string, billId: string): Promise<string> {
+  // Global pause first — blocks READY_FOR_PAYMENT auto-push, Sync button, and any agent script.
+  if (!isQuickBooksBillPushEnabled()) {
+    throw new BillQuickBooksPushPausedError();
+  }
+
   const bill = await db.bill.findFirst({
     where: { id: billId, organizationId },
     include: { lineItems: { include: { costCode: true }, orderBy: { sortOrder: "asc" } }, job: true, vendor: true },
   });
   if (!bill) throw new BillNotFoundError(billId);
+  if (isBillQuickBooksPushUnsafeByStatus(bill)) {
+    throw new BillQuickBooksPushUnsafeStatusError(billId, bill.approvalStatus);
+  }
   if (isBillQuickBooksSyncBlocked(bill.sendToQuickBooks)) {
     throw new BillQuickBooksSyncDeclinedError(billId, bill.quickBooksSkipReason);
   }
