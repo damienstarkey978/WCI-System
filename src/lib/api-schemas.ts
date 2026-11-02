@@ -355,6 +355,33 @@ export const aiDraftTakeoffSchema = z.object({
   notes: z.string().trim().min(10).max(10_000),
 });
 
+/** AI PAIS pull-from-plans — draft suggestions only; never invents FL#. */
+export const pullProductsFromPlansSchema = z.object({
+  planNotes: z.string().trim().min(10).max(20_000),
+});
+
+export const confirmPaisPlansSuggestionsSchema = z.object({
+  items: z
+    .array(
+      z.discriminatedUnion("kind", [
+        z.object({
+          kind: z.literal("TEMPLATE"),
+          templateId: z.string().min(1).max(64),
+          notes: z.string().trim().max(500).nullish(),
+        }),
+        z.object({
+          kind: z.literal("FREE_TEXT"),
+          manufacturer: z.string().trim().min(1).max(255),
+          model: z.string().trim().max(255).nullish(),
+          category: z.string().trim().max(120).nullish(),
+          notes: z.string().trim().max(500).nullish(),
+        }),
+      ]),
+    )
+    .min(1)
+    .max(40),
+});
+
 export const queueTakeoffPurchasingSchema = z.object({
   lineIds: z.array(z.string().min(1).max(64)).min(1).max(200).optional(),
   vendorHint: z.string().trim().min(1).max(255).nullish(),

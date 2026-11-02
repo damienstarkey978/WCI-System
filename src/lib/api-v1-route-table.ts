@@ -67,6 +67,8 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/pais-templates/search": ["GET"],
   "/permit-packages/{packageId}/products": ["GET","POST"],
   "/permit-packages/{packageId}/products/{productId}": ["DELETE"],
+  "/permit-packages/{packageId}/pull-products-from-plans": ["POST"],
+  "/permit-packages/{packageId}/confirm-pais-plans": ["POST"],
   "/jobs/{jobId}/progress": ["GET"],
   "/jobs/{jobId}/purchase-orders": ["GET"],
   "/jobs/{jobId}/purchasing": ["GET"],

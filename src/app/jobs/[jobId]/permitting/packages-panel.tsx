@@ -6,8 +6,10 @@ import { DUVAL_MUNICIPALITIES } from "@/lib/permitting/form-catalog";
 
 import {
   addPackageProductAction,
+  confirmPaisPlansAction,
   linkPackageJobPermitAction,
   markPackageFormDownloadedAction,
+  pullProductsFromPlansAction,
   regeneratePackageFormAction,
   removePackageProductAction,
   removePermitPackageAction,
@@ -16,6 +18,7 @@ import {
   setPermitPackageStatusAction,
   updatePermitPackageFieldsAction,
   type ActionState,
+  type PullPlansActionState,
 } from "./actions";
 import { PackageFormEntryNav } from "./package-form-entry";
 import { PackageWizardShell } from "./package-wizard-shell";
@@ -223,6 +226,15 @@ export function PackagesPanel({
     INITIAL,
   );
   const [paisState, paisAction, paisPending] = useActionState(addPackageProductAction, INITIAL);
+  const [pullPlansState, pullPlansAction, pullPlansPending] = useActionState(
+    pullProductsFromPlansAction,
+    INITIAL as PullPlansActionState,
+  );
+  const [confirmPlansState, confirmPlansAction, confirmPlansPending] = useActionState(
+    confirmPaisPlansAction,
+    INITIAL,
+  );
+  const [selectedPlanIndexes, setSelectedPlanIndexes] = useState<readonly number[]>([]);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -970,6 +982,133 @@ export function PackagesPanel({
                       <p className="text-[11px] text-[var(--bt-hazard)]">{paisState.error}</p>
                     ) : null}
                   </form>
+
+                  <div className="grid gap-1 border-t pt-2" style={{ borderColor: "var(--bt-border)" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+                      Pull from plans
+                    </p>
+                    <p className="text-[10px] text-[var(--bt-muted)]">
+                      AI drafts candidates against org PAIS templates. FL# only via template match —
+                      never invented. Review before adding.
+                    </p>
+                    <form action={pullPlansAction} className="grid gap-1">
+                      <input type="hidden" name="jobId" value={jobId} />
+                      <input type="hidden" name="packageId" value={selected.id} />
+                      <label className="text-[10px] text-[var(--bt-muted)]">
+                        Plan / spec notes
+                        <textarea
+                          name="planNotes"
+                          rows={4}
+                          className="mt-0.5 w-full rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: "var(--bt-border)" }}
+                          placeholder="e.g. Hardie HZ5 siding, GAF Timberline HDZ roof, Jeld-Wen windows…"
+                          required
+                          minLength={10}
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={pullPlansPending || paisTemplates.length === 0}
+                        className="rounded border px-2 py-1 text-xs font-semibold disabled:opacity-50"
+                        style={{ borderColor: "var(--bt-border)" }}
+                      >
+                        {pullPlansPending ? "Drafting…" : "Draft from plans"}
+                      </button>
+                      {paisTemplates.length === 0 ? (
+                        <p className="text-[10px] text-[var(--bt-muted)]">
+                          Add PAIS templates in Permitting settings first (catalog binds FL#).
+                        </p>
+                      ) : null}
+                      {pullPlansState.error ? (
+                        <p className="text-[11px] text-[var(--bt-hazard)]">{pullPlansState.error}</p>
+                      ) : null}
+                    </form>
+                    {pullPlansState.suggestions && pullPlansState.suggestions.length > 0 ? (
+                      <form
+                        action={confirmPlansAction}
+                        className="grid gap-1"
+                        onSubmit={() => {
+                          /* selection encoded below via hidden field */
+                        }}
+                      >
+                        <input type="hidden" name="jobId" value={jobId} />
+                        <input type="hidden" name="packageId" value={selected.id} />
+                        <input
+                          type="hidden"
+                          name="itemsJson"
+                          value={JSON.stringify(
+                            pullPlansState.suggestions
+                              .filter((_, i) => selectedPlanIndexes.includes(i))
+                              .map((s) =>
+                                s.kind === "TEMPLATE"
+                                  ? { kind: "TEMPLATE", templateId: s.templateId, notes: s.notes }
+                                  : {
+                                      kind: "FREE_TEXT",
+                                      manufacturer: s.manufacturer,
+                                      model: s.model,
+                                      category: s.category,
+                                      notes: s.notes,
+                                    },
+                              ),
+                          )}
+                        />
+                        <ul className="grid gap-1">
+                          {pullPlansState.suggestions.map((s, index) => {
+                            const label =
+                              s.kind === "TEMPLATE"
+                                ? `${s.templateName ?? s.templateId}${s.approvalNumber ? ` · ${s.approvalNumber}` : ""}`
+                                : `${s.manufacturer}${s.model ? ` · ${s.model}` : ""} (no FL#)`;
+                            const checked = selectedPlanIndexes.includes(index);
+                            return (
+                              <li key={`${s.kind}-${index}`}>
+                                <label className="flex items-start gap-2 text-[11px] text-[var(--bt-text)]">
+                                  <input
+                                    type="checkbox"
+                                    className="mt-0.5"
+                                    checked={checked}
+                                    onChange={() => {
+                                      setSelectedPlanIndexes((prev) =>
+                                        checked
+                                          ? prev.filter((i) => i !== index)
+                                          : [...prev, index],
+                                      );
+                                    }}
+                                  />
+                                  <span>
+                                    {label}
+                                    <span className="block text-[10px] text-[var(--bt-muted)]">
+                                      {s.confidence} confidence
+                                      {s.notes ? ` · ${s.notes}` : ""}
+                                    </span>
+                                  </span>
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {(pullPlansState.assumptions ?? []).length > 0 ? (
+                          <p className="text-[10px] text-[var(--bt-muted)]">
+                            Assumptions: {(pullPlansState.assumptions ?? []).join("; ")}
+                          </p>
+                        ) : null}
+                        <button
+                          type="submit"
+                          disabled={confirmPlansPending || selectedPlanIndexes.length === 0}
+                          className="rounded px-2 py-1 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
+                          style={{ background: "var(--bt-primary)" }}
+                        >
+                          {confirmPlansPending
+                            ? "Adding…"
+                            : `Add ${selectedPlanIndexes.length || ""} selected`}
+                        </button>
+                        {confirmPlansState.error ? (
+                          <p className="text-[11px] text-[var(--bt-hazard)]">
+                            {confirmPlansState.error}
+                          </p>
+                        ) : null}
+                      </form>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
 

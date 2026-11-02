@@ -18,6 +18,8 @@ import {
   aiDraftEstimateSchema,
   aiDraftTakeoffSchema,
   aiOcrBillSchema,
+  confirmPaisPlansSuggestionsSchema,
+  pullProductsFromPlansSchema,
   convertPurchasingIntentSchema,
   createFolderSchema,
   healFileVisibilitySchema,
@@ -399,6 +401,31 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["permits:write"],
     pathParams: ["packageId", "productId"],
     successStatus: 204,
+  },
+  {
+    method: "post",
+    path: "/permit-packages/{packageId}/pull-products-from-plans",
+    summary: "AI-draft PAIS products from plan notes",
+    description:
+      "Returns suggestions only (does not persist). TEMPLATE matches are bound to org " +
+      "PaisProductTemplate ids; FREE_TEXT never includes an FL#. 503 without ANTHROPIC_API_KEY.",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["packageId"],
+    requestSchema: pullProductsFromPlansSchema,
+  },
+  {
+    method: "post",
+    path: "/permit-packages/{packageId}/confirm-pais-plans",
+    summary: "Persist staff-confirmed pull-from-plans suggestions",
+    description:
+      "Human review gate after pull-products-from-plans. TEMPLATE copies catalog FL#; " +
+      "FREE_TEXT still has no approval number.",
+    tags: ["Permitting"],
+    scopes: ["permits:write"],
+    pathParams: ["packageId"],
+    requestSchema: confirmPaisPlansSuggestionsSchema,
+    successStatus: 201,
   },
   {
     method: "patch",
