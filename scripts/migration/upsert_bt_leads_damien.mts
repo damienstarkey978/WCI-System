@@ -202,6 +202,9 @@ async function main() {
     const legacy = normalizeLeadKey(title, name, email);
     const match = byKey.get(key) ?? byKey.get(legacy);
 
+    // Prefer BT "Created Date" so imported leads don't all share the upsert clock.
+    const btCreatedAt = parseIsoDate(row["Created Date"]);
+
     if (!match) {
       const lead = await createLead({
         organizationId: ORG,
@@ -222,6 +225,7 @@ async function main() {
         projectedSalesDate: projected,
         tags,
         assignedUserId,
+        ...(btCreatedAt ? { createdAt: btCreatedAt } : {}),
       });
       if (mapped.stage !== LeadStage.NEW) {
         await db.lead.update({ where: { id: lead.id }, data: { stage: mapped.stage } });
