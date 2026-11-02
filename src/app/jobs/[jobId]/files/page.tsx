@@ -60,8 +60,18 @@ export default async function FilesPage({
   const page = Math.max(1, Number.parseInt(typeof pageParam === "string" ? pageParam : "1", 10) || 1);
 
   // Buildertrend's "Attached Documents": files that belong to another record (a bill, PO,
-  // invoice, selection option or daily log) rather than sitting loose in the job's documents.
-  const attachedWhere = { OR: [{ billId: { not: null } }, { purchaseOrderId: { not: null } }, { invoiceId: { not: null } }, { selectionOptionId: { not: null } }, { dailyLogId: { not: null } }] };
+  // invoice, selection option, daily log, or filled permit-package form) rather than sitting
+  // loose in the job's documents.
+  const attachedWhere = {
+    OR: [
+      { billId: { not: null } },
+      { purchaseOrderId: { not: null } },
+      { invoiceId: { not: null } },
+      { selectionOptionId: { not: null } },
+      { dailyLogId: { not: null } },
+      { permitPackageFormId: { not: null } },
+    ],
+  };
 
   // BT Documents always includes Pre-Sale Documents — self-heal before listing.
   await ensurePresaleDocumentsFolder(user.organizationId, job.id);

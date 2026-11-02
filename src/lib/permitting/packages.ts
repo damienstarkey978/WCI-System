@@ -13,7 +13,11 @@ import {
 } from "@/generated/prisma/enums";
 import { PDFDocument } from "pdf-lib";
 import { db } from "@/lib/db";
+import { isSupabaseStorageConfigured } from "@/lib/env";
+import { createFolder, FolderNameTakenError } from "@/lib/files/folders";
+import { uploadAndRegisterFile } from "@/lib/files/service";
 import { fillOfficialPermitPdf, PermitPdfFillError } from "@/lib/permitting/fill-pdf";
+import { formatTaxFolioDisplay } from "@/lib/permitting/duval-parcel";
 import { isOfficialFormAvailable } from "@/lib/permitting/form-manifest";
 import {
   formTitleForKey,
@@ -25,6 +29,9 @@ import {
   fieldWritesForFormKey,
   type PackageFillContext,
 } from "@/lib/permitting/package-form-fill";
+import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
+
+const PERMIT_PACKAGE_DOCS_FOLDER = "Permit Package Documents";
 
 export class PermitPackageError extends Error {
   constructor(
@@ -196,11 +203,12 @@ export async function buildPackageFillContext(
       job?.legalDescription ||
       job?.lotInfo ||
       "",
-    taxFolio:
+    taxFolio: formatTaxFolioDisplay(
       strField(bag, "taxFolio") ||
-      (typeof parcelSnap.taxFolioDisplay === "string" ? parcelSnap.taxFolioDisplay.trim() : "") ||
-      job?.parcelId ||
-      "",
+        (typeof parcelSnap.taxFolioDisplay === "string" ? parcelSnap.taxFolioDisplay.trim() : "") ||
+        job?.parcelId ||
+        "",
+    ),
     permitNumber:
       strField(bag, "permitNumber") ||
       pkg.jobPermit?.permitNumber ||
@@ -299,18 +307,93 @@ export async function generateFilledFormPdf(
   }
 }
 
+async function ensurePermitPackageDocsFolder(organizationId: string, jobId: string) {
+  const existing = await db.fileFolder.findFirst({
+    where: { organizationId, jobId, name: { equals: PERMIT_PACKAGE_DOCS_FOLDER, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  try {
+    const created = await createFolder(organizationId, jobId, PERMIT_PACKAGE_DOCS_FOLDER);
+    return created.id;
+  } catch (error) {
+    if (error instanceof FolderNameTakenError) {
+      const raced = await db.fileFolder.findFirst({
+        where: { organizationId, jobId, name: { equals: PERMIT_PACKAGE_DOCS_FOLDER, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (raced) return raced.id;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Upload a filled form PDF into job Files (Attached Documents via permitPackageFormId
+ * + Permit Package Documents folder). No-ops when Supabase Storage is not configured.
+ */
+export async function persistFilledFormPdfFile(
+  organizationId: string,
+  packageId: string,
+  formKey: string,
+  filled: { readonly bytes: Uint8Array; readonly fileName: string },
+): Promise<string | null> {
+  if (!isSupabaseStorageConfigured()) return null;
+
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const form = pkg.forms.find((f) => f.formKey === formKey);
+  if (!form) throw new PermitPackageError(`Form "${formKey}" is not on this package.`, "not_found");
+
+  // Drop prior attached file for this form (regenerate path).
+  if (form.pdfFileId) {
+    await db.file.updateMany({
+      where: { id: form.pdfFileId, organizationId },
+      data: { permitPackageFormId: null, deletedAt: new Date() },
+    });
+  }
+
+  const folderId = await ensurePermitPackageDocsFolder(organizationId, pkg.jobId);
+
+  try {
+    const file = await uploadAndRegisterFile({
+      organizationId,
+      jobId: pkg.jobId,
+      fileName: filled.fileName,
+      bytes: filled.bytes,
+      mimeType: "application/pdf",
+      category: "DOCUMENT",
+      folderId,
+      clientVisible: false,
+      subVisible: false,
+    });
+    await db.file.update({
+      where: { id: file.id },
+      data: { permitPackageFormId: form.id },
+    });
+    await db.permitPackageForm.update({
+      where: { id: form.id },
+      data: { pdfFileId: file.id },
+    });
+    return file.id;
+  } catch (error) {
+    if (error instanceof StorageNotConfiguredError) return null;
+    throw error;
+  }
+}
+
 /** Mark sourced forms CREATED after a successful fill smoke (no external submit). */
 export async function markPackageFormsCreated(organizationId: string, packageId: string) {
   const pkg = await getPermitPackage(organizationId, packageId);
   const fillable = pkg.forms.filter((f) => isOfficialFormAvailable(f.formKey));
   for (const form of fillable) {
-    // Ensure fill succeeds before flipping status.
-    await generateFilledFormPdf(organizationId, packageId, form.formKey);
+    const filled = await generateFilledFormPdf(organizationId, packageId, form.formKey);
+    const pdfFileId = await persistFilledFormPdfFile(organizationId, packageId, form.formKey, filled);
     await db.permitPackageForm.update({
       where: { id: form.id },
       data: {
         status: PermitPackageFormStatus.CREATED,
         fieldValues: asRecord(pkg.fieldValues) as Prisma.InputJsonValue,
+        ...(pdfFileId ? { pdfFileId } : {}),
       },
     });
   }
@@ -326,15 +409,29 @@ export async function markPackageFormsCreated(organizationId: string, packageId:
   });
 }
 
+/**
+ * Merge package fieldValues — never wipe existing keys when a partial update omits them.
+ * Normalizes taxFolio to ######-#### when digits are present.
+ */
 export async function updatePermitPackageFields(
   organizationId: string,
   packageId: string,
   fields: PackageFieldValues,
 ) {
-  await getPermitPackage(organizationId, packageId);
+  const pkg = await getPermitPackage(organizationId, packageId);
+  const existing = asRecord(pkg.fieldValues);
   const next: Record<string, string> = {};
-  for (const [key, value] of Object.entries(fields)) {
+  for (const [key, value] of Object.entries(existing)) {
     if (typeof value === "string" && value.trim()) next[key] = value.trim();
+  }
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (!trimmed) {
+      delete next[key];
+      continue;
+    }
+    next[key] = key === "taxFolio" ? formatTaxFolioDisplay(trimmed) : trimmed;
   }
   return db.permitPackage.update({
     where: { id: packageId },
@@ -539,11 +636,14 @@ export async function regeneratePackageForm(
       ? PermitPackageFormStatus.CREATED
       : form.status;
 
+  const pdfFileId = await persistFilledFormPdfFile(organizationId, packageId, formKey, filled);
+
   await db.permitPackageForm.update({
     where: { id: form.id },
     data: {
       status: nextStatus,
       fieldValues: asRecord(pkg.fieldValues) as Prisma.InputJsonValue,
+      ...(pdfFileId ? { pdfFileId } : {}),
     },
   });
 

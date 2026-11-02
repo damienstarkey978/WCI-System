@@ -14,7 +14,7 @@ describe("form catalog", () => {
     expect(JACKSONVILLE_BUILDING_FORMS[0]?.preselected).toBe(true);
   });
 
-  it("matches live Unincorporated Building subset (7 forms)", () => {
+  it("matches live Unincorporated Building subset plus WCI Scope of Values", () => {
     expect(DUVAL_UNINCORPORATED_BUILDING_FORMS).toHaveLength(7);
     const keys = formsForCatalog({
       county: "DUVAL",
@@ -29,20 +29,22 @@ describe("form catalog", () => {
       "reviewed_documents_sheet",
       "septic_site_plan_worksheet",
       "energy_form_r402",
+      "scope_of_values",
     ]);
   });
 
-  it("returns Jacksonville list for beach municipalities", () => {
+  it("returns Jacksonville city list + WCI Scope of Values for beach municipalities", () => {
     expect(
       formsForCatalog({
         county: "DUVAL",
         municipality: "JACKSONVILLE_BEACH",
         permitType: "BUILDING",
       }),
-    ).toHaveLength(22);
+    ).toHaveLength(23);
   });
 
-  it("resolves titles by key", () => {
+  it("resolves titles by key including Scope of Values", () => {
     expect(formTitleForKey("pais")).toContain("Product Approval");
+    expect(formTitleForKey("scope_of_values")).toBe("Scope of Values");
   });
 });

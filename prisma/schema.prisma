@@ -2486,6 +2486,10 @@ model File {
   invoiceId String?
   invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
+  /// Filled permit-package form PDF (shows under Files → Attached Documents).
+  permitPackageFormId String? @unique
+  permitPackageForm   PermitPackageForm? @relation("PermitPackageFormAttachedFile", fields: [permitPackageFormId], references: [id], onDelete: SetNull)
+
   /// The Documents folder this file sits in, if any (Buildertrend's Files > Documents
   /// folders). Null means unfiled. Deleting a folder unfiles its files, never deletes them.
   folderId String?
@@ -2510,6 +2514,7 @@ model File {
   @@index([billId])
   @@index([purchaseOrderId])
   @@index([invoiceId])
+  @@index([permitPackageFormId])
 }
 
 enum JobCustomFieldType {
@@ -4464,8 +4469,10 @@ model PermitPackageForm {
   sortOrder Int @default(0)
   status    PermitPackageFormStatus @default(DRAFT)
   fieldValues Json @default("{}")
-  /// Generated PDF registered as a job File (optional until batch 2).
+  /// Generated PDF File.id (also linked via File.permitPackageFormId for Attached Documents).
   pdfFileId String?
+
+  attachedFile File? @relation("PermitPackageFormAttachedFile")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

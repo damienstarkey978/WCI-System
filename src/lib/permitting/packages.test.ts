@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { jobFindFirst, packageCreate, licenseFindFirst, permitFindFirst } = vi.hoisted(() => ({
+const {
+  jobFindFirst,
+  packageCreate,
+  packageFindFirst,
+  packageUpdate,
+  licenseFindFirst,
+  permitFindFirst,
+} = vi.hoisted(() => ({
   jobFindFirst: vi.fn(),
   packageCreate: vi.fn(),
+  packageFindFirst: vi.fn(),
+  packageUpdate: vi.fn(),
   licenseFindFirst: vi.fn(),
   permitFindFirst: vi.fn(),
 }));
@@ -13,8 +22,8 @@ vi.mock("@/lib/db", () => ({
     permitPackage: {
       create: packageCreate,
       findMany: vi.fn(),
-      findFirst: vi.fn(),
-      update: vi.fn(),
+      findFirst: packageFindFirst,
+      update: packageUpdate,
     },
     contractorLicense: { findFirst: licenseFindFirst },
     jobPermit: { findFirst: permitFindFirst },
@@ -26,6 +35,7 @@ import {
   PermitPackageError,
   createPermitPackage,
   packageGridFlags,
+  updatePermitPackageFields,
 } from "@/lib/permitting/packages";
 
 describe("createPermitPackage", () => {
@@ -81,6 +91,50 @@ describe("createPermitPackage", () => {
     expect(arg.data.forms.create).toEqual([
       expect.objectContaining({ formKey: "noc", sortOrder: 0 }),
     ]);
+  });
+});
+
+describe("updatePermitPackageFields", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("merges into existing fieldValues and normalizes tax folio", async () => {
+    packageFindFirst.mockResolvedValue({
+      id: "pkg_1",
+      organizationId: "org_1",
+      fieldValues: { ownerName: "Keep Me", taxFolio: "old" },
+      forms: [],
+      products: [],
+      contractorLicense: null,
+      designProfessional: null,
+      jobPermit: null,
+    });
+    packageUpdate.mockImplementation(async ({ data }: { data: { fieldValues: Record<string, string> } }) => ({
+      id: "pkg_1",
+      fieldValues: data.fieldValues,
+      forms: [],
+    }));
+
+    const row = await updatePermitPackageFields("org_1", "pkg_1", {
+      taxFolio: "100804 0000",
+      descriptionOfImprovement: "Addition",
+    });
+
+    expect(packageUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          fieldValues: {
+            ownerName: "Keep Me",
+            taxFolio: "100804-0000",
+            descriptionOfImprovement: "Addition",
+          },
+        }),
+      }),
+    );
+    expect(row.fieldValues).toEqual(
+      expect.objectContaining({ ownerName: "Keep Me", taxFolio: "100804-0000" }),
+    );
   });
 });
 

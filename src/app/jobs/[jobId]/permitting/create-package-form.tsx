@@ -30,6 +30,7 @@ type AvailableFormMeta = {
   title: string;
   available: boolean;
   revisionDate: string | null;
+  wciGenerated?: boolean;
 };
 
 type InitialParcelLock = LockedParcelFields | null;
@@ -249,9 +250,11 @@ export function CreatePackageForm({
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm text-[var(--bt-text)]">{f.title}</span>
                       <span className="block text-[10px] text-[var(--bt-muted)]">
-                        {available
-                          ? `Official PDF · rev ${meta?.revisionDate ?? "—"}`
-                          : "PDF not sourced yet — package row only"}
+                        {meta?.wciGenerated
+                          ? "WCI-generated PDF (Batch 8) — selectable now, fill later"
+                          : available
+                            ? `Official PDF · rev ${meta?.revisionDate ?? "—"}`
+                            : "PDF not sourced yet — package row only"}
                       </span>
                     </span>
                   </label>
