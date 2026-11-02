@@ -31,6 +31,16 @@ import {
   removePackageProduct,
 } from "@/lib/permitting/package-products";
 import {
+  AiNotConfiguredError,
+  confirmPaisPlansSuggestions,
+  DraftGenerationError,
+  EmptyPaisTemplateCatalogError,
+  PackageNotFoundError,
+  pullProductsFromPlans,
+  type ConfirmPaisPlansItem,
+  type PaisPlansSuggestion,
+} from "@/lib/permitting/pull-products-from-plans";
+import {
   DuvalParcelLookupError,
   lookupDuvalParcels,
   type DuvalParcelResult,
@@ -697,6 +707,73 @@ export async function removePackageProductAction(formData: FormData): Promise<vo
     // refresh either way
   }
   revalidate(jobId);
+}
+
+export type PullPlansActionState = ActionState & {
+  suggestions?: readonly PaisPlansSuggestion[];
+  assumptions?: readonly string[];
+};
+
+export async function pullProductsFromPlansAction(
+  _previous: PullPlansActionState,
+  formData: FormData,
+): Promise<PullPlansActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const planNotes = String(formData.get("planNotes") ?? "");
+  try {
+    const result = await pullProductsFromPlans(user.organizationId, packageId, planNotes);
+    return {
+      ok: true,
+      suggestions: result.suggestions,
+      assumptions: result.draft.assumptions,
+    };
+  } catch (error) {
+    if (error instanceof AiNotConfiguredError) {
+      return { error: error.message };
+    }
+    if (error instanceof EmptyPaisTemplateCatalogError) {
+      return { error: error.message };
+    }
+    if (error instanceof PackageNotFoundError) {
+      return { error: error.message };
+    }
+    if (error instanceof DraftGenerationError) {
+      return { error: error.message };
+    }
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not pull products from plans." };
+  } finally {
+    // Suggestions are ephemeral — no package mutation yet.
+    void jobId;
+  }
+}
+
+export async function confirmPaisPlansAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const packageId = String(formData.get("packageId") ?? "");
+  const raw = String(formData.get("itemsJson") ?? "");
+  let items: ConfirmPaisPlansItem[] = [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error("itemsJson must be an array");
+    items = parsed as ConfirmPaisPlansItem[];
+  } catch {
+    return { error: "Invalid confirmation payload." };
+  }
+  try {
+    await confirmPaisPlansSuggestions(user.organizationId, packageId, items);
+  } catch (error) {
+    if (error instanceof PermitPackageError) return { error: error.message };
+    return { error: error instanceof Error ? error.message : "Could not add suggested products." };
+  }
+  revalidate(jobId);
+  return { ok: true };
 }
 
 /**
