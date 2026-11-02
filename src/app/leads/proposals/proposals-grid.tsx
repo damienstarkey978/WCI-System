@@ -81,6 +81,8 @@ export function LeadProposalsGrid({ rows }: { rows: readonly LeadProposalRow[] }
       viewKey="lead-proposals"
       selectable
       emptyMessage="No proposals match."
+      sortToolbarInFooter
+      defaultSort={{ key: "createdAt", direction: "desc" }}
     />
   );
 }
