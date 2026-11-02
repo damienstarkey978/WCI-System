@@ -23,12 +23,18 @@ import {
   r402FieldsFromContext,
   R402_FORM_KEY,
 } from "@/lib/permitting/r402-worksheet";
+import {
+  composeScopeOfValuesPdf,
+  loadScopeOfValuesForJob,
+  SCOPE_OF_VALUES_FORM_KEY,
+} from "@/lib/permitting/scope-of-values";
 import { setJobNocNtbo } from "@/lib/permitting/service";
 import { formatTaxFolioDisplay } from "@/lib/permitting/duval-parcel";
 import { isOfficialFormAvailable } from "@/lib/permitting/form-manifest";
 import {
   formTitleForKey,
   formsForCatalog,
+  isWciGeneratedFormKey,
   type PermitCatalogMunicipality,
   type PermitCatalogPermitType,
 } from "@/lib/permitting/form-catalog";
@@ -39,6 +45,11 @@ import {
 import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
 
 const PERMIT_PACKAGE_DOCS_FOLDER = "Permit Package Documents";
+
+/** Official city blanks OR WCI-generated package forms (e.g. Scope of Values). */
+export function isPackageFormGeneratable(formKey: string): boolean {
+  return isOfficialFormAvailable(formKey) || isWciGeneratedFormKey(formKey);
+}
 
 export class PermitPackageError extends Error {
   constructor(
@@ -310,7 +321,7 @@ export async function generateFilledFormPdf(
   if (!formRow) {
     throw new PermitPackageError(`Form "${formKey}" is not on this package.`, "not_found");
   }
-  if (!isOfficialFormAvailable(formKey)) {
+  if (!isPackageFormGeneratable(formKey)) {
     throw new PermitPackageError(
       `Official PDF for "${formKey}" is not sourced yet.`,
       "unavailable",
@@ -332,6 +343,24 @@ export async function generateFilledFormPdf(
     } catch (error) {
       throw new PermitPackageError(
         error instanceof Error ? error.message : "Could not compose R402 PDF.",
+        "validation",
+      );
+    }
+  }
+
+  // Scope of Values is WCI-generated from the job budget (never a city blank).
+  if (formKey === SCOPE_OF_VALUES_FORM_KEY) {
+    try {
+      const sov = await loadScopeOfValuesForJob(organizationId, pkg.jobId);
+      const bytes = await composeScopeOfValuesPdf(ctx, sov);
+      return {
+        bytes,
+        title: formRow.title,
+        fileName: `${safeName}-${formKey}.pdf`,
+      };
+    } catch (error) {
+      throw new PermitPackageError(
+        error instanceof Error ? error.message : "Could not compose Scope of Values PDF.",
         "validation",
       );
     }
@@ -431,10 +460,10 @@ export async function persistFilledFormPdfFile(
   }
 }
 
-/** Mark sourced forms CREATED after a successful fill smoke (no external submit). */
+/** Mark sourced / WCI-generated forms CREATED after a successful fill smoke (no external submit). */
 export async function markPackageFormsCreated(organizationId: string, packageId: string) {
   const pkg = await getPermitPackage(organizationId, packageId);
-  const fillable = pkg.forms.filter((f) => isOfficialFormAvailable(f.formKey));
+  const fillable = pkg.forms.filter((f) => isPackageFormGeneratable(f.formKey));
   for (const form of fillable) {
     const filled = await generateFilledFormPdf(organizationId, packageId, form.formKey);
     const pdfFileId = await persistFilledFormPdfFile(organizationId, packageId, form.formKey, filled);
@@ -572,9 +601,10 @@ export async function createPermitPackage(
     include: { forms: { orderBy: { sortOrder: "asc" } } },
   });
 
-  // Auto-fill any sourced blanks so staff can download immediately (no external submit).
-  const sourced = selectedKeys.filter((k) => isOfficialFormAvailable(k));
-  if (sourced.length > 0) {
+  // Auto-fill sourced city blanks + WCI-generated forms so staff can download immediately
+  // (no external submit).
+  const fillable = selectedKeys.filter((k) => isPackageFormGeneratable(k));
+  if (fillable.length > 0) {
     try {
       return await markPackageFormsCreated(organizationId, created.id);
     } catch {
@@ -728,11 +758,19 @@ export async function generateMergedPackagePdf(
   let formCount = 0;
 
   for (const form of pkg.forms) {
-    if (!isOfficialFormAvailable(form.formKey)) continue;
-    const writes = fieldWritesForFormKey(form.formKey, ctx);
-    if (!writes) continue;
+    if (!isPackageFormGeneratable(form.formKey)) continue;
     try {
-      const filled = await fillOfficialPermitPdf(form.formKey, writes);
+      let filled: Uint8Array;
+      if (form.formKey === R402_FORM_KEY) {
+        filled = await composeR402PackagePdf(ctx, r402FieldsFromContext(ctx));
+      } else if (form.formKey === SCOPE_OF_VALUES_FORM_KEY) {
+        const sov = await loadScopeOfValuesForJob(organizationId, pkg.jobId);
+        filled = await composeScopeOfValuesPdf(ctx, sov);
+      } else {
+        const writes = fieldWritesForFormKey(form.formKey, ctx);
+        if (!writes) continue;
+        filled = await fillOfficialPermitPdf(form.formKey, writes);
+      }
       const src = await PDFDocument.load(filled, { ignoreEncryption: true });
       const pages = await merged.copyPages(src, src.getPageIndices());
       for (const page of pages) merged.addPage(page);
