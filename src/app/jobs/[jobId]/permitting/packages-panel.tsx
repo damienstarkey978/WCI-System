@@ -58,6 +58,11 @@ type PackageRow = {
     phone: string;
     cellPhone: string;
     email: string;
+    taxFolio: string;
+    legalDescription: string;
+    descriptionOfImprovement: string;
+    ownersInterest: string;
+    designatedPersonForNotices: string;
   };
   contractor: {
     companyName: string;
@@ -745,6 +750,19 @@ export function PackagesPanel({
                       ["ownerPhone", "Phone", selected.owner.phone],
                       ["ownerCellPhone", "Cell", selected.owner.cellPhone],
                       ["ownerEmail", "Email", selected.owner.email],
+                      ["taxFolio", "Tax folio #", selected.owner.taxFolio],
+                      ["legalDescription", "Legal description", selected.owner.legalDescription],
+                      [
+                        "descriptionOfImprovement",
+                        "Description of improvement",
+                        selected.owner.descriptionOfImprovement,
+                      ],
+                      ["ownersInterest", "Owner's interest", selected.owner.ownersInterest],
+                      [
+                        "designatedPersonForNotices",
+                        "Designated person for notices",
+                        selected.owner.designatedPersonForNotices,
+                      ],
                     ] as const
                   ).map(([name, label, value]) => (
                     <label key={name} className="text-[10px] text-[var(--bt-muted)]">
@@ -757,13 +775,17 @@ export function PackagesPanel({
                       />
                     </label>
                   ))}
+                  <p className="text-[10px] text-[var(--bt-muted)]">
+                    Partial saves merge into existing package fields (folio/legal are not wiped). Prefer
+                    parcel Confirm values — do not invent owner/folio.
+                  </p>
                   <button
                     type="submit"
                     disabled={ownerPending}
                     className="mt-1 rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
                     style={{ background: "var(--bt-primary)" }}
                   >
-                    {ownerPending ? "Saving…" : "Save owner details"}
+                    {ownerPending ? "Saving…" : "Save owner / NOC fields"}
                   </button>
                   {ownerState.error ? (
                     <p className="text-[11px] text-[var(--bt-hazard)]">{ownerState.error}</p>

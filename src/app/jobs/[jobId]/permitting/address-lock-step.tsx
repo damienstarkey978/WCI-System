@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import type { DuvalParcelResult } from "@/lib/permitting/duval-parcel";
 
 import { confirmJobParcelAction, lookupDuvalParcelsAction } from "./actions";
+import { ParcelMap } from "./parcel-map";
 
 export type LockedParcelFields = {
   readonly propertyAddress: string;
@@ -134,11 +135,16 @@ export function AddressLockStep({
           </div>
         </dl>
         {locked.latitude != null && locked.longitude != null ? (
+          <ParcelMap
+            latitude={locked.latitude}
+            longitude={locked.longitude}
+            label="Confirmed parcel (Duval GIS)"
+          />
+        ) : (
           <p className="text-[10px] text-[var(--bt-muted)]">
-            Map pin {locked.latitude.toFixed(5)}, {locked.longitude.toFixed(5)} (Duval GIS). Parcel
-            outline lives in the job parcel snapshot for later map chrome.
+            No map pin from GIS for this parcel — folio/owner still locked from the layer response.
           </p>
-        ) : null}
+        )}
       </div>
     );
   }
@@ -186,6 +192,14 @@ export function AddressLockStep({
                 <div className="mt-0.5 line-clamp-2 text-[10px] text-[var(--bt-muted)]">
                   {p.legalDescription}
                 </div>
+              ) : null}
+              {p.latitude != null && p.longitude != null ? (
+                <ParcelMap
+                  latitude={p.latitude}
+                  longitude={p.longitude}
+                  label="Candidate map"
+                  className="mt-2 grid gap-1"
+                />
               ) : null}
               <button
                 type="button"
