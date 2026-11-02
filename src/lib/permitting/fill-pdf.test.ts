@@ -132,6 +132,22 @@ describe("duval-jax official form blanks", () => {
       "CGC1504962",
     );
     expect(form.getTextField("Project Address").getText()).toContain("3640 Newcomb");
+    // Default city Plans Review path (not private provider).
+    expect(form.getCheckBox("Plans Review").isChecked()).toBe(true);
+    expect(form.getCheckBox("No I will not be us").isChecked()).toBe(true);
+    expect(form.getCheckBox("Yes If yes Complete page 2").isChecked()).toBe(false);
+  });
+
+  it("Permission By Owner private-provider path flips staff checkboxes only", async () => {
+    const bytes = await fillOfficialPermitPdf(
+      "permission_by_owner",
+      permissionByOwnerFieldWrites({ ...sampleCtx, pboUsesPrivateProvider: true }),
+    );
+    const form = (await PDFDocument.load(bytes)).getForm();
+    expect(form.getCheckBox("Plans Review").isChecked()).toBe(false);
+    expect(form.getCheckBox("No I will not be us").isChecked()).toBe(false);
+    expect(form.getCheckBox("Yes If yes Complete page 2").isChecked()).toBe(true);
+    expect(form.getCheckBox("I authorize the use of the Private Provider").isChecked()).toBe(true);
   });
 
   it("fills PAIS project header", async () => {

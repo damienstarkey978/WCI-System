@@ -459,6 +459,7 @@ export async function createPermitPackageAction(
     "designatedPersonForNotices",
     "lienorsNoticeRecipient",
     "expirationRule",
+    "pboUsesPrivateProvider",
   ] as const) {
     const value = optionalTrimmed(formData, key);
     if (value) fieldValues[key] = value;
@@ -577,6 +578,7 @@ export async function updatePermitPackageFieldsAction(
     "designatedPersonForNotices",
     "lienorsNoticeRecipient",
     "expirationRule",
+    "pboUsesPrivateProvider",
   ] as const) {
     const value = optionalTrimmed(formData, key);
     if (value) fields[key] = value;

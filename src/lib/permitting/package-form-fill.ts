@@ -40,6 +40,11 @@ export type PackageFillContext = {
   readonly designatedPersonForNotices?: string | null;
   readonly lienorsNoticeRecipient?: string | null;
   readonly expirationRule?: string | null;
+  /**
+   * Permission By Owner — staff choice. Default false = city Plans Review path
+   * ("No I will not be using a private provider"). Never invent; omit → city path.
+   */
+  readonly pboUsesPrivateProvider?: boolean | null;
   readonly owner: PackageFillOwner;
   readonly contractor: PackageFillContractor;
   /** PAIS product rows already shaped for AcroForm slots (batch 2: header only if empty). */
@@ -136,11 +141,15 @@ export function permissionByOwnerFieldWrites(ctx: PackageFillContext): PdfFieldW
       "Print Name": trim(ctx.owner.name),
       "Name of Owner / Agent": trim(ctx.owner.name),
     },
-    checks: {
-      // Default: city plans review path; private-provider path left unchecked.
-      "Plans Review": true,
-      "No I will not be us": true,
-    },
+    checks: (() => {
+      const privateProvider = Boolean(ctx.pboUsesPrivateProvider);
+      return {
+        "Plans Review": !privateProvider,
+        "No I will not be us": !privateProvider,
+        "Yes If yes Complete page 2": privateProvider,
+        "I authorize the use of the Private Provider": privateProvider,
+      };
+    })(),
   };
 }
 

@@ -61,8 +61,10 @@ type PackageRow = {
     taxFolio: string;
     legalDescription: string;
     descriptionOfImprovement: string;
+    descriptionOfWork: string;
     ownersInterest: string;
     designatedPersonForNotices: string;
+    pboUsesPrivateProvider: boolean;
   };
   contractor: {
     companyName: string;
@@ -754,8 +756,13 @@ export function PackagesPanel({
                       ["legalDescription", "Legal description", selected.owner.legalDescription],
                       [
                         "descriptionOfImprovement",
-                        "Description of improvement",
+                        "Description of improvement (NOC)",
                         selected.owner.descriptionOfImprovement,
+                      ],
+                      [
+                        "descriptionOfWork",
+                        "Description of work (Permission By Owner)",
+                        selected.owner.descriptionOfWork,
                       ],
                       ["ownersInterest", "Owner's interest", selected.owner.ownersInterest],
                       [
@@ -775,9 +782,35 @@ export function PackagesPanel({
                       />
                     </label>
                   ))}
+                  <fieldset className="grid gap-1">
+                    <legend className="text-[10px] font-medium text-[var(--bt-muted)]">
+                      Permission By Owner — review path
+                    </legend>
+                    <label className="flex items-start gap-2 text-[11px] text-[var(--bt-text)]">
+                      <input
+                        type="radio"
+                        name="pboUsesPrivateProvider"
+                        value="false"
+                        defaultChecked={!selected.owner.pboUsesPrivateProvider}
+                        className="mt-0.5"
+                      />
+                      City Plans Review
+                    </label>
+                    <label className="flex items-start gap-2 text-[11px] text-[var(--bt-text)]">
+                      <input
+                        type="radio"
+                        name="pboUsesPrivateProvider"
+                        value="true"
+                        defaultChecked={selected.owner.pboUsesPrivateProvider}
+                        className="mt-0.5"
+                      />
+                      Private provider (authorize + page 2)
+                    </label>
+                  </fieldset>
                   <p className="text-[10px] text-[var(--bt-muted)]">
                     Partial saves merge into existing package fields (folio/legal are not wiped). Prefer
-                    parcel Confirm values — do not invent owner/folio.
+                    parcel Confirm values — do not invent owner/folio. Update Document after changing
+                    the PBO path.
                   </p>
                   <button
                     type="submit"

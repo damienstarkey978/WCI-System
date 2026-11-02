@@ -496,6 +496,14 @@ export function CreatePackageForm({
                   />
                 </label>
                 <label className="grid gap-1">
+                  <span className="text-[10px] text-[var(--bt-muted)]">Owner cell</span>
+                  <input
+                    name="ownerCellPhone"
+                    className="rounded border px-2 py-1.5 text-sm"
+                    style={{ borderColor: "var(--bt-border)" }}
+                  />
+                </label>
+                <label className="grid gap-1 sm:col-span-2">
                   <span className="text-[10px] text-[var(--bt-muted)]">Owner email</span>
                   <input
                     name="ownerEmail"
@@ -507,7 +515,7 @@ export function CreatePackageForm({
               </div>
               <label className="grid gap-1">
                 <span className="text-[10px] text-[var(--bt-muted)]">
-                  Description of improvement / work
+                  Description of improvement (NOC)
                 </span>
                 <textarea
                   name="descriptionOfImprovement"
@@ -516,6 +524,47 @@ export function CreatePackageForm({
                   style={{ borderColor: "var(--bt-border)" }}
                 />
               </label>
+              <label className="grid gap-1">
+                <span className="text-[10px] text-[var(--bt-muted)]">
+                  Description of work (Permission By Owner)
+                </span>
+                <textarea
+                  name="descriptionOfWork"
+                  rows={2}
+                  className="rounded border px-2 py-1.5 text-sm"
+                  style={{ borderColor: "var(--bt-border)" }}
+                />
+              </label>
+              <fieldset className="grid gap-1.5">
+                <legend className="text-[10px] font-medium text-[var(--bt-muted)]">
+                  Permission By Owner — review path
+                </legend>
+                <label className="flex items-start gap-2 text-xs text-[var(--bt-text)]">
+                  <input
+                    type="radio"
+                    name="pboUsesPrivateProvider"
+                    value="false"
+                    defaultChecked
+                    className="mt-0.5"
+                  />
+                  <span>
+                    City Plans Review (default) — checks &quot;Plans Review&quot; / not using private
+                    provider
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-xs text-[var(--bt-text)]">
+                  <input
+                    type="radio"
+                    name="pboUsesPrivateProvider"
+                    value="true"
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Private provider — authorizes private provider path (page 2). Staff choice only;
+                    never auto-selected from thin air.
+                  </span>
+                </label>
+              </fieldset>
               <label className="grid gap-1">
                 <span className="text-[10px] text-[var(--bt-muted)]">
                   Owner&apos;s interest (default Fee Simple)

@@ -252,8 +252,13 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
         taxFolio: fieldStr(bag, "taxFolio"),
         legalDescription: fieldStr(bag, "legalDescription"),
         descriptionOfImprovement: fieldStr(bag, "descriptionOfImprovement"),
+        descriptionOfWork: fieldStr(bag, "descriptionOfWork"),
         ownersInterest: fieldStr(bag, "ownersInterest"),
         designatedPersonForNotices: fieldStr(bag, "designatedPersonForNotices"),
+        pboUsesPrivateProvider: (() => {
+          const raw = fieldStr(bag, "pboUsesPrivateProvider").toLowerCase();
+          return raw === "true" || raw === "1" || raw === "yes";
+        })(),
       },
       contractor: license
         ? {
