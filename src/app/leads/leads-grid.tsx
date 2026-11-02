@@ -14,9 +14,11 @@ export interface LeadRow {
   readonly contactName: string;
   readonly contactPhone: string | null;
   readonly contactEmail: string | null;
+  readonly city: string | null;
   readonly source: string | null;
   readonly createdAt: string;
   readonly stage: string;
+  readonly assignedUser: string | null;
   readonly ageDays: number;
   readonly confidencePercent: number;
   readonly revenueMinCents: number | null;
@@ -24,7 +26,7 @@ export interface LeadRow {
 }
 
 /** Buildertrend Lead Opportunities Standard View: Lead Name, Stage, Contact, Phone, Email, … */
-const DEFAULT_HIDDEN = ["age", "confidence", "revenueMin", "revenueMax"] as const;
+const DEFAULT_HIDDEN = ["age", "confidence", "revenueMin", "revenueMax", "city"] as const;
 
 /** Client half of the Lead Opportunities list; see purchase-orders-grid.tsx for why the split exists. */
 export function LeadsGrid({ rows }: { rows: readonly LeadRow[] }) {
@@ -42,12 +44,36 @@ export function LeadsGrid({ rows }: { rows: readonly LeadRow[] }) {
         </div>
       ),
     },
-    { key: "stage", header: "Stage", render: (row) => <StageSelect leadId={row.id} stage={row.stage} /> },
-    { key: "contact", header: "Contact", render: (row) => row.contactName },
-    { key: "phone", header: "Phone", render: (row) => row.contactPhone ?? "" },
+    { key: "stage", header: "Lead Status", render: (row) => <StageSelect leadId={row.id} stage={row.stage} /> },
+    {
+      key: "assignedUser",
+      header: "Assigned User",
+      sortable: true,
+      render: (row) => <span className="whitespace-nowrap text-sm">{row.assignedUser ?? ""}</span>,
+    },
+    { key: "contact", header: "Contact", sortable: true, sortValue: (row) => row.contactName, render: (row) => row.contactName },
+    {
+      key: "phone",
+      header: "Phone",
+      render: (row) =>
+        row.contactPhone ? (
+          <a href={`tel:${row.contactPhone.replace(/[^\d+]/g, "")}`} className="text-[var(--bt-primary)] hover:underline">
+            {row.contactPhone}
+          </a>
+        ) : (
+          ""
+        ),
+    },
     { key: "email", header: "Email", render: (row) => row.contactEmail ?? "" },
-    { key: "source", header: "Lead Source", render: (row) => row.source ?? "" },
-    { key: "createdAt", header: "Created Date", sortable: true, render: (row) => formatDate(new Date(row.createdAt)) },
+    { key: "city", header: "City", sortable: true, render: (row) => row.city ?? "" },
+    { key: "source", header: "Lead Source", sortable: true, render: (row) => row.source ?? "" },
+    {
+      key: "createdAt",
+      header: "Created Date",
+      sortable: true,
+      sortValue: (row) => row.createdAt,
+      render: (row) => formatDate(new Date(row.createdAt)),
+    },
     { key: "age", header: "Age", align: "right", sortable: true, sortValue: (row) => row.ageDays, render: (row) => `${row.ageDays} days` },
     {
       key: "confidence",
@@ -76,7 +102,9 @@ export function LeadsGrid({ rows }: { rows: readonly LeadRow[] }) {
       selectable
       viewKey="lead-opportunities"
       defaultHiddenKeys={DEFAULT_HIDDEN}
-      emptyMessage="No lead opportunities yet."
+      emptyMessage="No lead opportunities match."
+      sortToolbarInFooter
+      defaultSort={{ key: "createdAt", direction: "desc" }}
     />
   );
 }
