@@ -114,11 +114,11 @@ export function CreatePackageForm({
     })) {
       if (f.preselected) initial.add(f.key);
     }
-    // Robin Hood–style building set: NOC (preselected) + PBO + PAIS + R402.
-    // Scope of Values (Batch 8) stays opt-in until the WCI generator lands.
+    // Robin Hood 5-doc building set: NOC (catalog preselected) + PBO + PAIS + R402 + SOV.
     initial.add("permission_by_owner");
     initial.add("pais");
     initial.add("energy_form_r402");
+    initial.add("scope_of_values");
     return initial;
   });
 

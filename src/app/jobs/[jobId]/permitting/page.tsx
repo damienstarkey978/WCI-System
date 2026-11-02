@@ -48,6 +48,7 @@ import {
 } from "@/lib/permitting/form-manifest";
 import {
   ensureDefaultWciContractorLicense,
+  ensureRobinHoodFormSetTemplate,
   listContractorLicenses,
   listFormSetTemplates,
   listPaisProductTemplates,
@@ -136,8 +137,16 @@ function permitChipTone(status: string): "ok" | "warn" | "bad" | "neutral" {
   }
 }
 
-export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId]/permitting">) {
+export default async function PermittingPage({
+  params,
+  searchParams,
+}: PageProps<"/jobs/[jobId]/permitting">) {
   const { jobId } = await params;
+  const query = await searchParams;
+  const initialPackageId =
+    typeof query.packageId === "string" && query.packageId.trim()
+      ? query.packageId.trim()
+      : null;
 
   let user;
   try {
@@ -172,6 +181,7 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
   });
 
   await ensureDefaultWciContractorLicense(user.organizationId);
+  await ensureRobinHoodFormSetTemplate(user.organizationId);
   const [packages, licenses, epicsConnected, formSetTemplates, paisTemplates] = await Promise.all([
     listPermitPackagesForJob(user.organizationId, jobId),
     listContractorLicenses(user.organizationId),
@@ -334,8 +344,9 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
       >
         <h2 className="text-base font-semibold text-[var(--bt-text)]">My Permit Packages</h2>
         <p className="mb-3 text-xs text-[var(--bt-muted)]">
-          Rockstar-style packages for this job. Official Jacksonville PDFs only when sourced. Download /
-          update documents never submit to the city, clerk, or notary.
+          Rockstar-style packages for this job (NOC, Permission By Owner, PAIS, R402, Scope of Values).
+          Official Jacksonville PDFs when sourced; Scope of Values is WCI-generated from the job budget.
+          Download / update never submit to the city, clerk, or notary.
         </p>
         {packageRows.length > 0 ? (
           <div className="mb-4">
@@ -354,6 +365,14 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
                 model: t.model ?? "",
                 approvalNumber: t.approvalNumber ?? "",
               }))}
+              formSetTemplates={formSetTemplates.map((t) => ({
+                id: t.id,
+                name: t.name,
+                formKeys: Array.isArray(t.formKeys)
+                  ? t.formKeys.filter((k): k is string => typeof k === "string")
+                  : [],
+              }))}
+              initialPackageId={initialPackageId}
             />
           </div>
         ) : (

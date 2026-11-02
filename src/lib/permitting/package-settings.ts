@@ -303,6 +303,54 @@ export async function listFormSetTemplates(organizationId: string) {
   });
 }
 
+/** Robin Hood 5-doc Duval Building starter set (idempotent seed). */
+export const ROBIN_HOOD_BUILDING_FORM_KEYS = [
+  "noc",
+  "permission_by_owner",
+  "pais",
+  "energy_form_r402",
+  "scope_of_values",
+] as const;
+
+/**
+ * Ensure an org has the Robin Hood Building form-set template.
+ * Idempotent by name+county+permitType unique constraint — skips if present.
+ */
+export async function ensureRobinHoodFormSetTemplate(organizationId: string) {
+  const existing = await db.permitFormSetTemplate.findFirst({
+    where: {
+      organizationId,
+      county: "DUVAL",
+      permitType: PackagePermitType.BUILDING,
+      name: "Robin Hood Building (5 docs)",
+    },
+  });
+  if (existing) return existing;
+  try {
+    return await createFormSetTemplate(organizationId, {
+      name: "Robin Hood Building (5 docs)",
+      county: "DUVAL",
+      municipality: "JACKSONVILLE",
+      permitType: PackagePermitType.BUILDING,
+      formKeys: ROBIN_HOOD_BUILDING_FORM_KEYS,
+    });
+  } catch (error) {
+    if (error instanceof PermitSettingsError && error.code === "duplicate") {
+      return (
+        (await db.permitFormSetTemplate.findFirst({
+          where: {
+            organizationId,
+            county: "DUVAL",
+            permitType: PackagePermitType.BUILDING,
+            name: "Robin Hood Building (5 docs)",
+          },
+        })) ?? null
+      );
+    }
+    throw error;
+  }
+}
+
 export async function createFormSetTemplate(organizationId: string, input: FormSetTemplateInput) {
   const name = input.name.trim();
   const county = input.county.trim().toUpperCase();
