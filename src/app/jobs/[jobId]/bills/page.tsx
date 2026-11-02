@@ -1,14 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { EmptyState } from "@/components/shell/EmptyState";
-import { ReceiptIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { billStatusCounts, billingInboxAddress } from "@/lib/bills/intake";
 import { db } from "@/lib/db";
 
-import { BillsGrid } from "./bills-grid";
+import { BillsListClient } from "./bills-list-client";
 import { BillUploader } from "./bill-uploader";
 import { CreateBillModal } from "./create-bill-modal";
 import { EmailToInboxButton } from "./email-to-inbox-button";
@@ -28,7 +25,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 function isTabKey(value: string | undefined): value is TabKey {
-  return TABS.some((tab) => tab.key === value);
+  return Boolean(value && TABS.some((tab) => tab.key === value));
 }
 
 export default async function BillsPage({ params, searchParams }: PageProps<"/jobs/[jobId]/bills">) {
@@ -146,43 +143,14 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
 
       <BillUploader jobId={job.id} inboxAddress={inboxAddress} />
 
-      <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
-        {TABS.map((tab) => {
-          const isActive = tab.key === activeTab;
-          const count = counts[tab.key];
-          return (
-            <Link
-              key={tab.key}
-              href={`/jobs/${job.id}/bills?status=${tab.key}`}
-              className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
-              style={{
-                borderColor: isActive ? "var(--bt-primary)" : "transparent",
-                color: isActive ? "var(--bt-primary)" : "var(--bt-muted)",
-              }}
-            >
-              {tab.label}
-              <span className="ml-1.5 rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold">{count}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {rows.length === 0 ? (
-        <EmptyState
-          icon={<ReceiptIcon className="h-10 w-10" />}
-          title={
-            activeTab === "INBOX"
-              ? "You're all caught up"
-              : activeTab === "ALL"
-                ? "No bills yet"
-                : `Nothing in ${TABS.find((t) => t.key === activeTab)?.label}`
-          }
-          description="Drop a receipt above, forward one to the inbox address, or add a bill by hand."
-          action={createBill}
-        />
-      ) : (
-        <BillsGrid rows={rows} isQboConnected={isQboConnected} />
-      )}
+      <BillsListClient
+        jobId={job.id}
+        activeTab={activeTab}
+        counts={counts}
+        rows={rows}
+        isQboConnected={isQboConnected}
+        emptyAction={createBill}
+      />
     </div>
   );
 }

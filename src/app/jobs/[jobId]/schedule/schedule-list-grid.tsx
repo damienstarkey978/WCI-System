@@ -155,6 +155,7 @@ export function ScheduleListGrid({
       selectable
       viewKey="schedule-list"
       defaultHiddenKeys={["end", "progress", "float", "critical", "confirmed"]}
+      sortToolbarInFooter
       emptyMessage="No schedule items yet."
       rowActions={actionSlot}
     />
