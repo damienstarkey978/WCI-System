@@ -74,6 +74,12 @@ export interface CreateLeadInput {
   readonly estimatedRevenueMaxCents?: number | null;
   readonly projectType?: string | null;
   readonly tags?: readonly string[];
+  /**
+   * Optional BT/source created timestamp. When omitted, Prisma `@default(now())`
+   * applies. Importers must pass the real opportunity created date so WCI does
+   * not stamp every migrated lead with the import clock.
+   */
+  readonly createdAt?: Date;
 }
 
 export async function createLead(input: CreateLeadInput) {
@@ -103,6 +109,7 @@ export async function createLead(input: CreateLeadInput) {
       estimatedRevenueMaxCents: input.estimatedRevenueMaxCents ?? null,
       projectType: input.projectType ?? null,
       tags: input.tags ? [...input.tags] : [],
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     },
   });
 }
