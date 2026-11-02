@@ -114,9 +114,11 @@ export function CreatePackageForm({
     })) {
       if (f.preselected) initial.add(f.key);
     }
-    // Batch-2 default trio when Jacksonville building (matches live Rockstar sample).
+    // Robin Hood–style building set: NOC (preselected) + PBO + PAIS + R402.
+    // Scope of Values (Batch 8) stays opt-in until the WCI generator lands.
     initial.add("permission_by_owner");
     initial.add("pais");
+    initial.add("energy_form_r402");
     return initial;
   });
 

@@ -17,6 +17,11 @@ import { isSupabaseStorageConfigured } from "@/lib/env";
 import { createFolder, FolderNameTakenError } from "@/lib/files/folders";
 import { uploadAndRegisterFile } from "@/lib/files/service";
 import { fillOfficialPermitPdf, PermitPdfFillError } from "@/lib/permitting/fill-pdf";
+import {
+  composeR402PackagePdf,
+  r402FieldsFromContext,
+  R402_FORM_KEY,
+} from "@/lib/permitting/r402-worksheet";
 import { setJobNocNtbo } from "@/lib/permitting/service";
 import { formatTaxFolioDisplay } from "@/lib/permitting/duval-parcel";
 import { isOfficialFormAvailable } from "@/lib/permitting/form-manifest";
@@ -76,6 +81,12 @@ export type PackageFieldValues = {
   readonly expirationRule?: string;
   /** "true" / "false" — Permission By Owner private-provider path. */
   readonly pboUsesPrivateProvider?: string;
+  readonly r402ClimateZone?: string;
+  readonly r402ConditionedSqFt?: string;
+  readonly r402ProjectScope?: string;
+  readonly r402MechanicalSystem?: string;
+  readonly r402InsulationNotes?: string;
+  readonly r402OtherNotes?: string;
 };
 
 function toCatalogPermitType(t: PackagePermitType): PermitCatalogPermitType {
@@ -243,6 +254,12 @@ export async function buildPackageFillContext(
       // Fall back to job Rockstar ledger — still staff-set, never invented.
       return job?.permitRockstarPrivateProvider ?? false;
     })(),
+    r402ClimateZone: strField(bag, "r402ClimateZone"),
+    r402ConditionedSqFt: strField(bag, "r402ConditionedSqFt"),
+    r402ProjectScope: strField(bag, "r402ProjectScope"),
+    r402MechanicalSystem: strField(bag, "r402MechanicalSystem"),
+    r402InsulationNotes: strField(bag, "r402InsulationNotes"),
+    r402OtherNotes: strField(bag, "r402OtherNotes"),
     owner: {
       name:
         strField(bag, "ownerName") ||
@@ -297,6 +314,25 @@ export async function generateFilledFormPdf(
   }
 
   const ctx = await buildPackageFillContext(organizationId, packageId);
+  const safeName = pkg.name.replace(/[^\w.-]+/g, "_").slice(0, 40);
+
+  // R402 official blank has zero AcroForm fields — cover worksheet + blank pages.
+  if (formKey === R402_FORM_KEY) {
+    try {
+      const bytes = await composeR402PackagePdf(ctx, r402FieldsFromContext(ctx));
+      return {
+        bytes,
+        title: formRow.title,
+        fileName: `${safeName}-${formKey}.pdf`,
+      };
+    } catch (error) {
+      throw new PermitPackageError(
+        error instanceof Error ? error.message : "Could not compose R402 PDF.",
+        "validation",
+      );
+    }
+  }
+
   const writes = fieldWritesForFormKey(formKey, ctx);
   if (!writes) {
     throw new PermitPackageError(`No fill mapping for "${formKey}".`, "unavailable");
@@ -304,7 +340,6 @@ export async function generateFilledFormPdf(
 
   try {
     const bytes = await fillOfficialPermitPdf(formKey, writes);
-    const safeName = pkg.name.replace(/[^\w.-]+/g, "_").slice(0, 40);
     return {
       bytes,
       title: formRow.title,

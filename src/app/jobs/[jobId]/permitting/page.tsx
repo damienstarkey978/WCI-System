@@ -259,6 +259,12 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
           const raw = fieldStr(bag, "pboUsesPrivateProvider").toLowerCase();
           return raw === "true" || raw === "1" || raw === "yes";
         })(),
+        r402ClimateZone: fieldStr(bag, "r402ClimateZone"),
+        r402ConditionedSqFt: fieldStr(bag, "r402ConditionedSqFt"),
+        r402ProjectScope: fieldStr(bag, "r402ProjectScope"),
+        r402MechanicalSystem: fieldStr(bag, "r402MechanicalSystem"),
+        r402InsulationNotes: fieldStr(bag, "r402InsulationNotes"),
+        r402OtherNotes: fieldStr(bag, "r402OtherNotes"),
       },
       contractor: license
         ? {

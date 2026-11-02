@@ -22,6 +22,7 @@ type PackageTab = "ACTIVE" | "SENT_TO_CONTRACTORS" | "ARCHIVED";
 type SidePanel =
   | "property_owner"
   | "contractor"
+  | "r402"
   | "notarization"
   | "recording"
   | "city_permit"
@@ -65,6 +66,12 @@ type PackageRow = {
     ownersInterest: string;
     designatedPersonForNotices: string;
     pboUsesPrivateProvider: boolean;
+    r402ClimateZone: string;
+    r402ConditionedSqFt: string;
+    r402ProjectScope: string;
+    r402MechanicalSystem: string;
+    r402InsulationNotes: string;
+    r402OtherNotes: string;
   };
   contractor: {
     companyName: string;
@@ -100,6 +107,7 @@ const TAB_LABELS: Record<PackageTab, string> = {
 const SIDE_TABS: readonly { key: SidePanel; label: string }[] = [
   { key: "property_owner", label: "Property Owner" },
   { key: "contractor", label: "Contractor" },
+  { key: "r402", label: "R402" },
   { key: "notarization", label: "Notarization" },
   { key: "recording", label: "Recording" },
   { key: "city_permit", label: "City Permit" },
@@ -819,6 +827,61 @@ export function PackagesPanel({
                     style={{ background: "var(--bt-primary)" }}
                   >
                     {ownerPending ? "Saving…" : "Save owner / NOC fields"}
+                  </button>
+                  {ownerState.error ? (
+                    <p className="text-[11px] text-[var(--bt-hazard)]">{ownerState.error}</p>
+                  ) : null}
+                </form>
+              ) : null}
+
+              {sidePanel === "r402" ? (
+                <form action={ownerAction} className="grid gap-2">
+                  <input type="hidden" name="jobId" value={jobId} />
+                  <input type="hidden" name="packageId" value={selected.id} />
+                  <p className="text-[10px] text-[var(--bt-muted)]">
+                    Official Form R402 has no AcroForm fields. Enter staff worksheet values only —
+                    never invent climate zone / SF / systems. Update Document prepends a WCI cover
+                    then the official blank.
+                  </p>
+                  {(
+                    [
+                      ["r402ClimateZone", "Climate zone", selected.owner.r402ClimateZone],
+                      [
+                        "r402ConditionedSqFt",
+                        "Conditioned area (SF)",
+                        selected.owner.r402ConditionedSqFt,
+                      ],
+                      ["r402ProjectScope", "Project scope", selected.owner.r402ProjectScope],
+                      [
+                        "r402MechanicalSystem",
+                        "Mechanical system",
+                        selected.owner.r402MechanicalSystem,
+                      ],
+                      [
+                        "r402InsulationNotes",
+                        "Insulation notes",
+                        selected.owner.r402InsulationNotes,
+                      ],
+                      ["r402OtherNotes", "Other notes", selected.owner.r402OtherNotes],
+                    ] as const
+                  ).map(([name, label, value]) => (
+                    <label key={name} className="text-[10px] text-[var(--bt-muted)]">
+                      {label}
+                      <input
+                        name={name}
+                        defaultValue={value}
+                        className="mt-0.5 w-full rounded border px-2 py-1 text-xs text-[var(--bt-text)]"
+                        style={{ borderColor: "var(--bt-border)" }}
+                      />
+                    </label>
+                  ))}
+                  <button
+                    type="submit"
+                    disabled={ownerPending}
+                    className="mt-1 rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)] disabled:opacity-50"
+                    style={{ background: "var(--bt-primary)" }}
+                  >
+                    {ownerPending ? "Saving…" : "Save R402 worksheet"}
                   </button>
                   {ownerState.error ? (
                     <p className="text-[11px] text-[var(--bt-hazard)]">{ownerState.error}</p>
