@@ -20,6 +20,31 @@ export class NoQuickBooksAccountError extends Error {
   }
 }
 
+/**
+ * Bank account used when recording a QBO BillPayment (Money rule 7). Prefers
+ * AccountType Bank; falls back to Credit Card. Never creates an account.
+ */
+export async function findBankAccountId(access: ValidQuickBooksAccess): Promise<string> {
+  const bank = await accountingRequest<{ QueryResponse: { Account?: QboAccountRef[] } }>({
+    ...access,
+    method: "GET",
+    path: "query",
+    query: { query: "select * from Account where AccountType = 'Bank' maxresults 1" },
+  });
+  const bankAccount = bank.QueryResponse.Account?.[0];
+  if (bankAccount) return bankAccount.Id;
+
+  const card = await accountingRequest<{ QueryResponse: { Account?: QboAccountRef[] } }>({
+    ...access,
+    method: "GET",
+    path: "query",
+    query: { query: "select * from Account where AccountType = 'Credit Card' maxresults 1" },
+  });
+  const cardAccount = card.QueryResponse.Account?.[0];
+  if (!cardAccount) throw new NoQuickBooksAccountError("Bank or Credit Card");
+  return cardAccount.Id;
+}
+
 /** The account revenue posts against on the generic Invoice line item. */
 export async function findIncomeAccountId(access: ValidQuickBooksAccess): Promise<string> {
   const result = await accountingRequest<{ QueryResponse: { Account?: QboAccountRef[] } }>({

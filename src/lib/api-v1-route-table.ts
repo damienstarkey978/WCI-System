@@ -20,6 +20,7 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/bills/{billId}/status": ["POST"],
   "/bills/ai-ocr": ["POST"],
   "/bills/quickbooks-push-preview": ["POST"],
+  "/quickbooks/bill-push-audit": ["GET"],
   "/certifications/expiring": ["GET"],
   "/change-orders": ["GET","POST"],
   "/change-orders/{changeOrderId}/approval-link": ["POST"],

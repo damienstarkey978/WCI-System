@@ -798,6 +798,16 @@ const ENDPOINTS: readonly EndpointDef[] = [
     scopes: ["bills:read"],
     requestSchema: billQuickBooksPushPreviewSchema,
   },
+  {
+    method: "get",
+    path: "/quickbooks/bill-push-audit",
+    summary: "Daily QBO bill-create audit count (Money rule 9)",
+    description:
+      "Returns count and dollar total of successful WCI→QBO bill creates since `since` " +
+      "(ISO datetime query param; default last 24 hours), plus up to 100 recent create rows. Read-only.",
+    tags: ["Bills", "QuickBooks"],
+    scopes: ["bills:read"],
+  },
 
   // --- Invoicing ------------------------------------------------------------
   {

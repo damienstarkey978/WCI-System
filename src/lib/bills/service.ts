@@ -234,11 +234,13 @@ export interface UpdateBillStatusOptions {
   readonly quickBooksSkipReason?: string | null;
   /**
    * Real payment calendar date when marking PAID (Money rule 7). Prefer this over
-   * relying on paidAt (which may be call time). Does not yet push a QBO BillPayment.
+   * relying on paidAt (which may be call time). Used as QBO BillPayment TxnDate.
    */
   readonly paidOn?: Date | null;
   /** Payment method label when marking PAID (check, ACH, Bill.com, …). */
   readonly paidMethod?: string | null;
+  /** Optional actor label for QBO audit log (Money rule 9). */
+  readonly actorLabel?: string | null;
 }
 
 /**
@@ -359,6 +361,23 @@ export async function updateBillStatus(
     }
   } else if (approvalStatus === BillApprovalStatus.PAID) {
     await emitEvent(organizationId, "bill.paid", eventPayload);
+    // Money rule 7: if this bill was pushed to QBO, record BillPayment so Bill.com
+    // does not keep it unpaid. Soft-fail — WCI PAID stands either way.
+    if (updated.qboBillId) {
+      const { tryRecordBillPaymentInQuickBooks } = await import("@/lib/quickbooks/sync/bill-payments");
+      await tryRecordBillPaymentInQuickBooks(organizationId, updated.id, {
+        actorLabel: options.actorLabel ?? null,
+      });
+    }
+  } else if (approvalStatus === BillApprovalStatus.VOID) {
+    // Money rule 8: void/delete the linked QBO bill so orphans do not stay payable.
+    if (bill.qboBillId) {
+      const { tryDeleteLinkedQuickBooksBill } = await import("@/lib/quickbooks/sync/bill-void");
+      await tryDeleteLinkedQuickBooksBill(organizationId, bill.id, {
+        actorLabel: options.actorLabel ?? null,
+        operation: "void",
+      });
+    }
   }
 
   return { ...updated, totalCents, unchanged: false as const };
