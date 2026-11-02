@@ -249,6 +249,11 @@ export default async function PermittingPage({ params }: PageProps<"/jobs/[jobId
         phone: fieldStr(bag, "ownerPhone"),
         cellPhone: fieldStr(bag, "ownerCellPhone"),
         email: fieldStr(bag, "ownerEmail"),
+        taxFolio: fieldStr(bag, "taxFolio"),
+        legalDescription: fieldStr(bag, "legalDescription"),
+        descriptionOfImprovement: fieldStr(bag, "descriptionOfImprovement"),
+        ownersInterest: fieldStr(bag, "ownersInterest"),
+        designatedPersonForNotices: fieldStr(bag, "designatedPersonForNotices"),
       },
       contractor: license
         ? {

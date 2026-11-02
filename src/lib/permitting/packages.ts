@@ -17,6 +17,7 @@ import { isSupabaseStorageConfigured } from "@/lib/env";
 import { createFolder, FolderNameTakenError } from "@/lib/files/folders";
 import { uploadAndRegisterFile } from "@/lib/files/service";
 import { fillOfficialPermitPdf, PermitPdfFillError } from "@/lib/permitting/fill-pdf";
+import { setJobNocNtbo } from "@/lib/permitting/service";
 import { formatTaxFolioDisplay } from "@/lib/permitting/duval-parcel";
 import { isOfficialFormAvailable } from "@/lib/permitting/form-manifest";
 import {
@@ -399,6 +400,10 @@ export async function markPackageFormsCreated(organizationId: string, packageId:
   }
 
   const hasNoc = fillable.some((f) => f.formKey === "noc");
+  if (hasNoc) {
+    // Package NOC fill implies the job-level "NOC on file" chip (docs builder + Rockstar ledger).
+    await setJobNocNtbo(organizationId, pkg.jobId, { nocOnFile: true });
+  }
   return db.permitPackage.update({
     where: { id: packageId },
     data: {
@@ -647,11 +652,14 @@ export async function regeneratePackageForm(
     },
   });
 
-  if (formKey === "noc" && !pkg.nocCreatedAt) {
-    await db.permitPackage.update({
-      where: { id: packageId },
-      data: { nocCreatedAt: new Date() },
-    });
+  if (formKey === "noc") {
+    if (!pkg.nocCreatedAt) {
+      await db.permitPackage.update({
+        where: { id: packageId },
+        data: { nocCreatedAt: new Date() },
+      });
+    }
+    await setJobNocNtbo(organizationId, pkg.jobId, { nocOnFile: true });
   }
 
   return filled;
