@@ -208,6 +208,50 @@ h3,
   }
 }
 
+/* Continuous motion while Ask Jarvis is mid-turn / drafting an estimate —
+   spinner + bouncing dots + soft pulse so the chat never looks idle next to
+   an older assistant bubble. */
+@keyframes wci-jarvis-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes wci-jarvis-dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@keyframes wci-jarvis-working-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--bt-primary) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bt-primary) 18%, transparent);
+  }
+}
+
+.wci-jarvis-spin {
+  animation: wci-jarvis-spin 0.75s linear infinite;
+}
+
+.wci-jarvis-dot {
+  animation: wci-jarvis-dot-bounce 1s ease-in-out infinite;
+}
+
+.wci-jarvis-working-pulse {
+  animation: wci-jarvis-working-pulse 1.6s ease-in-out infinite;
+}
+
 /* Idle animation for the traced Jarvis mascot (src/components/jarvis/JarvisMascot.tsx)
    when shown docked/floating — a subtle head-bob so it reads as alive, not static
    clip art. Kept out of the component's inline styles since @keyframes can't be

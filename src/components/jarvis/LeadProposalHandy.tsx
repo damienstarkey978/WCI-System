@@ -190,6 +190,8 @@ export function LeadProposalHandy({
                 generalNotes={leadNotes}
                 generalPhotos={generalPhotos}
                 leadIdForGeneralPhotos={leadId}
+                leadIdForEstimateNav={leadId}
+                knownEstimateIds={estimates.map((estimate) => estimate.id)}
                 navigateOnEstimateDraft
               />
             ) : (

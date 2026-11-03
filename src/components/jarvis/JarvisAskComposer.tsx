@@ -197,9 +197,10 @@ export function JarvisAskComposer({
             style={{ background: "var(--bt-primary)" }}
           >
             {busy ? (
-              <span className="text-xs font-semibold" aria-hidden>
-                …
-              </span>
+              <span
+                className="wci-jarvis-spin inline-block h-4 w-4 rounded-full border-2 border-[var(--bt-on-primary)]/30 border-t-[var(--bt-on-primary)]"
+                aria-hidden
+              />
             ) : (
               <SendArrowIcon />
             )}

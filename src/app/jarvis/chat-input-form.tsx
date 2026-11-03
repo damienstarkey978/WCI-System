@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 
 import { JarvisAskComposer } from "@/components/jarvis/JarvisAskComposer";
-import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
+import { JarvisWorkingIndicator } from "@/components/jarvis/JarvisWorkingIndicator";
 import { useFunUi } from "@/components/jarvis/useFunUi";
 import { prepareJarvisAttachments } from "@/lib/client/prepare-jarvis-attachments";
 import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
@@ -17,16 +17,25 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const funUi = useFunUi();
-  const [, startSend] = useTransition();
+  const [sendPending, startSend] = useTransition();
   // Separate from `pending`: this covers compressing photos in the browser, which
   // happens *before* formAction (and therefore useActionState's own pending flag)
   // ever starts — without it, attaching a big batch of photos looks like nothing is
   // happening for however long the compression takes.
   const [preparing, setPreparing] = useState(false);
+  const [requestInFlight, setRequestInFlight] = useState(false);
   // Set when a batch is rejected before it's ever submitted (too many photos, still
   // too large after compression) — shown the same way as a server-side error, but
   // without the round trip that error would otherwise cost.
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const working = preparing || pending || sendPending || requestInFlight;
+
+  useEffect(() => {
+    if (!requestInFlight) return;
+    if (preparing || pending || sendPending) return;
+    const timer = window.setTimeout(() => setRequestInFlight(false), 0);
+    return () => window.clearTimeout(timer);
+  }, [requestInFlight, preparing, pending, sendPending, state]);
 
   function fillSuggestion(suggestion: string) {
     const textarea = formRef.current?.elements.namedItem("text");
@@ -46,12 +55,9 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
 
   return (
     <>
-      {pending || preparing ? (
-        <div className="flex justify-start px-4 pt-3">
-          <div className="flex max-w-[70%] items-center gap-2 rounded-lg px-3 py-2 text-sm text-[var(--bt-muted)]" style={{ background: "#f3f4f6" }}>
-            {funUi ? <JarvisMascot expression="thinking" size={22} /> : null}
-            {preparing ? "Preparing photos…" : "Jarvis is thinking…"}
-          </div>
+      {working ? (
+        <div className="px-4 pt-3">
+          <JarvisWorkingIndicator mode={preparing ? "preparing" : "general"} funUi={funUi} />
         </div>
       ) : null}
       {showSuggestions ? (
@@ -74,17 +80,19 @@ export function ChatInputForm({ conversationId, showSuggestions }: { conversatio
         fileInputRef={fileInputRef}
         conversationId={conversationId}
         placeholder="Ask Jarvis"
-        pending={pending}
+        pending={working}
         preparing={preparing}
         funUi={funUi}
         rows={2}
         onTranscript={appendVoiceTranscript}
         onSubmit={async (formData) => {
           setAttachmentError(null);
+          setRequestInFlight(true);
           setPreparing(true);
           const prepared = await prepareJarvisAttachments(formData).finally(() => setPreparing(false));
           if (prepared.error) {
             setAttachmentError(prepared.error);
+            setRequestInFlight(false);
             return;
           }
           startSend(() => {
