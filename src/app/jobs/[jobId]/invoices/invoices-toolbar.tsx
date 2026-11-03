@@ -51,12 +51,11 @@ export function InvoicesToolbar({
 
       <Link
         href={`/jobs/${jobId}/invoices?tab=schedule`}
-        className="inline-flex min-h-9 items-center gap-1 rounded border px-3 py-1.5 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5"
-        style={
-          scheduleActive
-            ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" }
-            : { borderColor: "var(--bt-border)" }
-        }
+        className="inline-flex min-h-9 items-center gap-1 rounded border px-3 py-1.5 text-sm font-semibold hover:bg-black/5"
+        style={{
+          borderColor: scheduleActive ? "var(--bt-primary)" : "#3b82f6",
+          color: "#2563eb",
+        }}
       >
         <span aria-hidden className="text-base leading-none">
           +

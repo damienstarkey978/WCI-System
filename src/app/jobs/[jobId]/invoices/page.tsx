@@ -127,23 +127,23 @@ function ContractEquation({ contractPriceCents, paidCents }: { contractPriceCent
   const overpaid = remainingCents < 0;
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-2 text-sm text-[var(--bt-text)] sm:gap-x-4">
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-2 text-[var(--bt-text)] sm:gap-x-5">
         <div>
-          <div className="text-[11px] text-[var(--bt-muted)]">Original price</div>
-          <div className="font-medium tabular-nums">{formatMoney(contractPriceCents)}</div>
+          <div className="text-xs text-[var(--bt-muted)]">Original price</div>
+          <div className="text-xl font-semibold tabular-nums">{formatMoney(contractPriceCents)}</div>
         </div>
-        <span className="pb-0.5 text-[var(--bt-muted)]" aria-hidden>
+        <span className="pb-1 text-lg text-[var(--bt-muted)]" aria-hidden>
           −
         </span>
         <div>
-          <div className="text-[11px] text-[var(--bt-muted)]">Payments</div>
-          <div className="font-medium tabular-nums">{formatMoney(paidCents)}</div>
+          <div className="text-xs text-[var(--bt-muted)]">Payments</div>
+          <div className="text-xl font-semibold tabular-nums">{formatMoney(paidCents)}</div>
         </div>
-        <span className="pb-0.5 text-[var(--bt-muted)]" aria-hidden>
+        <span className="pb-1 text-lg text-[var(--bt-muted)]" aria-hidden>
           =
         </span>
         <div>
-          <div className="flex items-center gap-1 text-[11px] text-[var(--bt-muted)]">
+          <div className="flex items-center gap-1 text-xs text-[var(--bt-muted)]">
             Remaining balance
             <span
               title="The job's revised contract price minus every payment received so far. This is what the client still owes overall — it isn't the same as what has been invoiced yet."
@@ -154,7 +154,7 @@ function ContractEquation({ contractPriceCents, paidCents }: { contractPriceCent
             </span>
           </div>
           <div
-            className="text-base font-semibold tabular-nums"
+            className="text-xl font-semibold tabular-nums"
             style={{ color: overpaid ? "var(--bt-danger)" : "var(--bt-text)" }}
           >
             {formatMoney(remainingCents)}
@@ -179,6 +179,15 @@ function datePaidFor(invoice: {
   if (invoice.paidAt) return invoice.paidAt;
   const latest = invoice.payments[0];
   return latest?.receivedAt ?? null;
+}
+
+/** BT list shows short ids (0005); strip migration JOB_* / *-INV-* prefixes for display only. */
+function displayInvoiceId(invoiceNumber: string): string {
+  const jobPrefixed = invoiceNumber.match(/^JOB_[A-Za-z0-9]+-(.+)$/i);
+  if (jobPrefixed?.[1]) return jobPrefixed[1];
+  const invPrefixed = invoiceNumber.match(/^[A-Z0-9]+-INV-(.+)$/i);
+  if (invPrefixed?.[1]) return invPrefixed[1];
+  return invoiceNumber;
 }
 
 export default async function InvoicesPage({ params, searchParams }: PageProps<"/jobs/[jobId]/invoices">) {
@@ -327,7 +336,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
               />
             ) : (
             <Panel>
-              <Head columns={["Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Date paid"]} />
+              <Head columns={["\u00a0", "Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Date paid"]} />
               <tbody>
                 {invoicesForTable.map((invoice) => {
                   const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
@@ -339,10 +348,13 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                   const paidOn = displayStatus === "PAID" || paid > 0 ? datePaidFor(invoice) : null;
                   return (
                     <tr key={invoice.id} className="border-b align-middle last:border-0 hover:bg-black/[0.02]" style={{ borderColor: "var(--bt-border)" }}>
+                      <td className="w-8 px-2 py-2.5 sm:px-3">
+                        <input type="checkbox" aria-label={`Select invoice ${invoice.invoiceNumber}`} className="h-3.5 w-3.5 rounded border" style={{ borderColor: "var(--bt-border)" }} />
+                      </td>
                       <td className="max-w-[10rem] truncate px-3 py-2.5 text-[var(--bt-muted)] sm:px-4">{job.name}</td>
                       <td className="px-3 py-2.5 font-medium sm:px-4">
                         <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
-                          {invoice.invoiceNumber}
+                          {displayInvoiceId(invoice.invoiceNumber)}
                         </Link>
                         {termsLabel ? (
                           <div className="mt-0.5 text-[10px] text-[var(--bt-muted)]">{termsLabel}</div>
@@ -366,14 +378,14 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                           </div>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-muted)] sm:px-4">{formatDate(paidOn)}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--bt-muted)] sm:px-4">{formatDate(paidOn)}</td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)" }}>
-                  <td className="px-3 py-2.5 sm:px-4" colSpan={4}>
+                <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}>
+                  <td className="px-3 py-2.5 sm:px-4" colSpan={5}>
                     Totals
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(billedCents)}</td>
@@ -387,7 +399,9 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--bt-muted)]">
               <span>Standard View</span>
               <span>
-                {invoicesForTable.length} item{invoicesForTable.length === 1 ? "" : "s"}
+                {invoicesForTable.length === 0
+                  ? "0 items"
+                  : `1-${invoicesForTable.length} of ${invoicesForTable.length} items`}
               </span>
             </div>
             </>
