@@ -52,6 +52,10 @@ export const POST = withApiAuth(["proposals:write"], async (request, auth) => {
       clientId: parsed.data.clientId,
       title: parsed.data.title,
       coverMessage: parsed.data.coverMessage,
+      termsText: parsed.data.termsText,
+      requireSignature: parsed.data.requireSignature,
+      showFinancing: parsed.data.showFinancing,
+      pricingDisplay: parsed.data.pricingDisplay,
       options: parsed.data.options,
     });
     return Response.json({ data: proposal }, { status: 201 });

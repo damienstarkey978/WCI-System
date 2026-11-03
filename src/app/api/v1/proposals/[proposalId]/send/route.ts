@@ -2,6 +2,7 @@
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import {
+  ConfidenceReviewRequiredError,
   IncompletePreparedForError,
   IncompleteProposalTermsError,
   PaymentScheduleIncompleteError,
@@ -81,6 +82,9 @@ export const POST = withApiAuth<Context>(["proposals:write"], async (request, au
     }
     if (error instanceof RoofSendBlockedError) {
       return apiError(422, "roof_send_blocked", error.message, { reasons: error.reasons });
+    }
+    if (error instanceof ConfidenceReviewRequiredError) {
+      return apiError(422, "confidence_review_required", error.message, { reasons: error.reasons });
     }
     if (error instanceof ProposalClientContactMissingError) {
       return apiError(422, "client_contact_missing", error.message);

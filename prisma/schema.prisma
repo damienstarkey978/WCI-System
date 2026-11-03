@@ -122,6 +122,10 @@ model Organization {
   /// Org sales-tax rate for proposals (Handoff parity P2 #17). WCI default 0%.
   defaultTaxRateBasisPoints Int @default(0)
 
+  /// Default proposal template applied when creating proposals (CR P3 #29).
+  defaultProposalTemplateId String?
+  defaultProposalTemplate   ProposalTemplate? @relation("OrgDefaultProposalTemplate", fields: [defaultProposalTemplateId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1088,6 +1092,8 @@ model EstimateLineItem {
   /// Set only on AI-drafted lines (src/lib/ai/estimate-assistant.ts) — how confident
   /// the model was in this line's quantity/pricing. Null for hand-entered lines.
   confidence  LineItemConfidence?
+  /// Staff reviewed a LOW/MEDIUM confidence AI line (CR P3 #28). Null = unreviewed.
+  confidenceReviewedAt DateTime?
   /// Set only on AI-drafted lines — CATALOG when the unit cost came from the org's
   /// Materials Catalog, MARKET_RATE when the model estimated from its own knowledge.
   /// Null for hand-entered lines.
@@ -3343,6 +3349,13 @@ enum ProposalStatus {
   DECLINED
 }
 
+/// Client pricing presentation (CR P3 #30). SINGLE is the default even when
+/// multiple Estimate options exist — Good/Better/Best only when OPTIONS is chosen.
+enum ProposalPricingDisplay {
+  SINGLE
+  OPTIONS
+}
+
 /// Wraps up to 5 Estimate-backed options with the client-facing e-sign layer
 /// (CLAUDE.md 3: "Proposal builder with e-signature that converts to a Job
 /// on acceptance"; task #116's multi-option support — a "Good/Better/Best"
@@ -3413,6 +3426,12 @@ model Proposal {
   /// Snapshot of org tax rate at create/send (P2 #17). Display "Tax N% $X.XX".
   taxRateBasisPoints Int @default(0)
 
+  /// Illustrative "from $X/month" strip (CR P3 #27). Off when the lead declines financing.
+  showFinancing Boolean @default(true)
+
+  /// SINGLE (default) vs OPTIONS Good/Better/Best chooser (CR P3 #30).
+  pricingDisplay ProposalPricingDisplay @default(SINGLE)
+
   declinedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -3463,6 +3482,8 @@ model ProposalTemplate {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  defaultForOrgs Organization[] @relation("OrgDefaultProposalTemplate")
 
   @@index([organizationId])
 }
