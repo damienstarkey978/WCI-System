@@ -362,4 +362,19 @@ describe("estimateTotalCents", () => {
   it("returns zero for an estimate with no line items", () => {
     expect(estimateTotalCents([])).toBe(0);
   });
+
+  it("excludes OWNER_SUPPLIED lines from the client total", () => {
+    const total = estimateTotalCents([
+      { quantityMilli: 1_000, unitCostCents: 100_000, rateMode: "MARKUP", rateBasisPoints: 4_000 },
+      {
+        quantityMilli: 1_000,
+        unitCostCents: 50_000,
+        rateMode: "MARKUP",
+        rateBasisPoints: 4_000,
+        lineKind: "OWNER_SUPPLIED",
+      },
+    ]);
+    // Only the STANDARD line: $1,000 + 40% = $1,400.
+    expect(total).toBe(140_000);
+  });
 });

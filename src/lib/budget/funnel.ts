@@ -434,11 +434,22 @@ export function extendedCostCents(quantityMilli: number, unitCostCents: Cents): 
  * own rate. Shared by every place that shows an estimate/proposal-option total
  * (Lead Proposals list, the Proposal editor and PDF export, the client review page)
  * so they can't drift into computing it slightly differently.
+ *
+ * OWNER_SUPPLIED lines are excluded (Handoff parity — $0 / out of client totals).
  */
 export function estimateTotalCents(
-  lineItems: readonly { readonly quantityMilli: number; readonly unitCostCents: Cents; readonly rateMode: RateMode; readonly rateBasisPoints: BasisPoints }[],
+  lineItems: readonly {
+    readonly quantityMilli: number;
+    readonly unitCostCents: Cents;
+    readonly rateMode: RateMode;
+    readonly rateBasisPoints: BasisPoints;
+    readonly lineKind?: string | null;
+  }[],
 ): Cents {
-  return lineItems.reduce((total, item) => total + priceWithRate(extendedCostCents(item.quantityMilli, item.unitCostCents), item.rateMode, item.rateBasisPoints), 0);
+  return lineItems.reduce((total, item) => {
+    if (item.lineKind === "OWNER_SUPPLIED") return total;
+    return total + priceWithRate(extendedCostCents(item.quantityMilli, item.unitCostCents), item.rateMode, item.rateBasisPoints);
+  }, 0);
 }
 
 /** Cost types that count as labor, for the labor-actuals report and OT logic. */

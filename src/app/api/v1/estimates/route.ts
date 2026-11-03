@@ -8,8 +8,10 @@ import { db } from "@/lib/db";
 import { LeadNotFoundError } from "@/lib/crm/service";
 import {
   createEstimate,
+  DuplicateEstimateDraftError,
   HourlyLaborNotAllowedError,
   JobNotFoundError,
+  MutualLineKindError,
   UnknownCostCodeError,
   UnknownEstimateUnitError,
 } from "@/lib/estimates/service";
@@ -55,6 +57,14 @@ export const POST = withApiAuth(["estimates:write"], async (request, auth) => {
     }
     if (error instanceof HourlyLaborNotAllowedError) {
       return apiError(422, "hourly_labor_not_allowed", error.message);
+    }
+    if (error instanceof MutualLineKindError) {
+      return apiError(422, "mutual_line_kind", error.message);
+    }
+    if (error instanceof DuplicateEstimateDraftError) {
+      return apiError(409, "duplicate_draft", error.message, {
+        existingEstimateId: error.existingEstimateId,
+      });
     }
     throw error;
   }

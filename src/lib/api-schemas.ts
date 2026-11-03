@@ -259,20 +259,35 @@ const estimateUnitEnum = z
     return resolved;
   });
 
-export const estimateLineItemSchema = z.object({
-  costCodeId: z.string().min(1).max(64),
-  costType: z.enum(CostType).optional(),
-  title: z.string().trim().min(1).max(255),
-  description: z.string().trim().max(2_000).nullish(),
-  quantityMilli: quantityMilli.optional().default(1_000),
-  unit: estimateUnitEnum.nullish(),
-  unitCostCents: cents,
-  rateMode: rateMode.optional(),
-  rateBasisPoints: basisPoints.optional(),
-  taxable: z.boolean().optional(),
-  internalNote: z.string().trim().max(2_000).nullish(),
-  groupLabel: z.string().trim().max(120).nullish(),
-});
+export const estimateLineItemSchema = z
+  .object({
+    costCodeId: z.string().min(1).max(64),
+    costType: z.enum(CostType).optional(),
+    title: z.string().trim().min(1).max(255),
+    description: z.string().trim().max(2_000).nullish(),
+    quantityMilli: quantityMilli.optional().default(1_000),
+    unit: estimateUnitEnum.nullish(),
+    unitCostCents: cents,
+    rateMode: rateMode.optional(),
+    rateBasisPoints: basisPoints.optional(),
+    taxable: z.boolean().optional(),
+    internalNote: z.string().trim().max(2_000).nullish(),
+    groupLabel: z.string().trim().max(120).nullish(),
+    lineKind: z.enum(["STANDARD", "ALLOWANCE", "OWNER_SUPPLIED"]).optional(),
+    allowance: z.boolean().optional(),
+    ownerSupplied: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    const allowance = value.allowance === true || value.lineKind === "ALLOWANCE";
+    const ownerSupplied = value.ownerSupplied === true || value.lineKind === "OWNER_SUPPLIED";
+    if (allowance && ownerSupplied) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["lineKind"],
+        message: "A line cannot be both ALLOWANCE and OWNER_SUPPLIED.",
+      });
+    }
+  });
 
 export const createEstimateSchema = z.object({
   jobId: z.string().min(1).max(64).optional(),
@@ -282,6 +297,8 @@ export const createEstimateSchema = z.object({
   /** Org default is 40% (4000 bp); omitted callers get that from the service. */
   defaultRateBasisPoints: basisPoints.optional().default(4_000),
   lineItems: z.array(estimateLineItemSchema).min(1).max(500),
+  /** Required to create a second AI draft within the duplicate window. */
+  newVersion: z.boolean().optional(),
 }).superRefine((value, ctx) => {
   if (!value.jobId && !value.leadId) {
     ctx.addIssue({
@@ -949,15 +966,26 @@ const proposalOptionSchema = z.object({
   label: z.string().trim().min(1).max(100),
 });
 
-export const createProposalSchema = z.object({
-  jobId: z.string().min(1).max(64),
-  leadId: z.string().min(1).max(64).nullish(),
-  clientId: z.string().min(1).max(64),
-  title: z.string().trim().min(1).max(255),
-  coverMessage: z.string().trim().max(10_000).nullish(),
-  /** 1-5 priced options (task #116) — a single-option proposal auto-selects it. */
-  options: z.array(proposalOptionSchema).min(1).max(5),
-});
+export const createProposalSchema = z
+  .object({
+    /** Optional when leadId is set — lead proposals exist before a Job. */
+    jobId: z.string().min(1).max(64).nullish(),
+    leadId: z.string().min(1).max(64).nullish(),
+    clientId: z.string().min(1).max(64),
+    title: z.string().trim().min(1).max(255),
+    coverMessage: z.string().trim().max(10_000).nullish(),
+    /** 1-5 priced options (task #116) — a single-option proposal auto-selects it. */
+    options: z.array(proposalOptionSchema).min(1).max(5),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.jobId && !value.leadId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["jobId"],
+        message: "Provide jobId or leadId.",
+      });
+    }
+  });
 
 export const addProposalOptionSchema = proposalOptionSchema;
 

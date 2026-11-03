@@ -8,6 +8,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import type {
   CostType,
+  EstimateLineKind,
   LineItemConfidence,
   LineItemPriceSource,
   PermitWorkType,
@@ -15,6 +16,14 @@ import type {
 } from "@/generated/prisma/enums";
 import { LeadNotFoundError } from "@/lib/crm/service";
 import { db } from "@/lib/db";
+import {
+  DuplicateEstimateDraftError,
+  duplicateDraftCutoff,
+} from "@/lib/estimates/duplicate-draft";
+import {
+  assertLineKindExclusive,
+  MutualLineKindError,
+} from "@/lib/estimates/line-kind";
 import {
   assertNoHourlyLaborForPerUnitTrade,
   HourlyLaborNotAllowedError,
@@ -27,7 +36,12 @@ import {
 import { normalizeEstimateUnit, UnknownEstimateUnitError } from "@/lib/estimates/units";
 import type { BasisPoints } from "@/lib/money";
 
-export { HourlyLaborNotAllowedError, UnknownEstimateUnitError };
+export {
+  DuplicateEstimateDraftError,
+  HourlyLaborNotAllowedError,
+  MutualLineKindError,
+  UnknownEstimateUnitError,
+};
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -79,6 +93,9 @@ export interface CreateEstimateLineItemInput {
   readonly taxable?: boolean;
   readonly internalNote?: string | null;
   readonly groupLabel?: string | null;
+  readonly lineKind?: EstimateLineKind | string | null;
+  readonly allowance?: boolean;
+  readonly ownerSupplied?: boolean;
   /** Set only by the AI estimate assistant — null for hand-entered lines. */
   readonly confidence?: LineItemConfidence | null;
   /** Set only by the AI estimate assistant — null for hand-entered lines. */
@@ -101,6 +118,11 @@ export interface CreateEstimateInput {
   readonly pendingProposalDraft?: unknown | null;
   /** JAX EPICS–aligned work type (from Lead when drafting). */
   readonly permitWorkType?: PermitWorkType | null;
+  /**
+   * When true, skip the duplicate AI-draft 409 guard and create a versioned draft.
+   * Required for a second AI draft within DUPLICATE_DRAFT_WINDOW_HOURS.
+   */
+  readonly newVersion?: boolean;
 }
 
 async function loadOrgEstimateRateDefaults(organizationId: string): Promise<OrgEstimateRateDefaults> {
@@ -132,6 +154,21 @@ export async function createEstimate(input: CreateEstimateInput) {
     if (!lead) throw new LeadNotFoundError(input.leadId);
   }
 
+  if (input.aiGenerated && input.leadId && !input.newVersion) {
+    const recent = await db.estimate.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        leadId: input.leadId,
+        aiGenerated: true,
+        status: "DRAFT",
+        createdAt: { gte: duplicateDraftCutoff() },
+      },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    });
+    if (recent) throw new DuplicateEstimateDraftError(recent.id);
+  }
+
   const orgRates = await loadOrgEstimateRateDefaults(input.organizationId);
   const headerRate = resolveLineRate({
     org: orgRates,
@@ -159,6 +196,11 @@ export async function createEstimate(input: CreateEstimateInput) {
     const costCode = costCodeById.get(item.costCodeId)!;
     const costType = item.costType ?? costCode.defaultCostType;
     const unit = normalizeEstimateUnit(item.unit);
+    const lineKind = assertLineKindExclusive({
+      lineKind: item.lineKind,
+      allowance: item.allowance,
+      ownerSupplied: item.ownerSupplied,
+    });
     assertNoHourlyLaborForPerUnitTrade({
       costType,
       unit,
@@ -175,19 +217,25 @@ export async function createEstimate(input: CreateEstimateInput) {
       rateMode: item.rateMode ?? rateMode,
       rateBasisPoints: item.rateBasisPoints ?? defaultRateBasisPoints,
     });
+    const unitCostCents = lineKind === "OWNER_SUPPLIED" ? 0 : item.unitCostCents;
+    const groupLabel =
+      lineKind === "OWNER_SUPPLIED"
+        ? item.groupLabel?.trim() || "Owner-Supplied Materials"
+        : item.groupLabel ?? null;
     return {
       costCodeId: item.costCodeId,
       costType,
+      lineKind,
       title: item.title,
       description: item.description ?? null,
       quantityMilli: item.quantityMilli ?? 1_000,
-      unit,
-      unitCostCents: item.unitCostCents,
+      unit: lineKind === "ALLOWANCE" && !unit ? "ALLOWANCE" : unit,
+      unitCostCents,
       rateMode: lineRate.rateMode,
       rateBasisPoints: lineRate.rateBasisPoints,
       taxable: item.taxable ?? false,
       internalNote: item.internalNote ?? null,
-      groupLabel: item.groupLabel ?? null,
+      groupLabel,
       confidence: item.confidence ?? null,
       priceSource: item.priceSource ?? null,
       sortOrder: index,
