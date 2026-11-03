@@ -216,3 +216,112 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
     throw error;
   }
 }
+
+export class PurchaseOrderNotFoundForUpdateError extends Error {
+  constructor(purchaseOrderId: string) {
+    super(`No purchase order ${purchaseOrderId} in this organization.`);
+    this.name = "PurchaseOrderNotFoundForUpdateError";
+  }
+}
+
+export class PurchaseOrderLockedError extends Error {
+  constructor(status: string) {
+    super(`A ${status} purchase order cannot be edited in place — amend it first.`);
+    this.name = "PurchaseOrderLockedError";
+  }
+}
+
+/**
+ * Staff edit of general fields on a DRAFT / DECLINED / PENDING_APPROVAL PO
+ * (Buildertrend pencil-modal Save). Does not bump version or clear acceptance —
+ * those stay on amendPurchaseOrder. APPROVED / COMPLETED / CANCELLED must go
+ * through amend (or are terminal).
+ */
+export interface UpdatePurchaseOrderInput {
+  readonly organizationId: string;
+  readonly purchaseOrderId: string;
+  readonly title?: string | null;
+  readonly vendorName?: string;
+  readonly vendorId?: string | null;
+  readonly materialsOnly?: boolean;
+  readonly isVariance?: boolean;
+  readonly scheduledCompletionOn?: Date | null;
+  readonly completedOn?: Date | null;
+  readonly linkedScheduleItemId?: string | null;
+  readonly scopeOfWork?: string | null;
+  readonly internalNotes?: string | null;
+  readonly poNumber?: string;
+}
+
+const EDITABLE_STATUSES = new Set(["DRAFT", "DECLINED", "PENDING_APPROVAL"]);
+
+export async function updatePurchaseOrder(input: UpdatePurchaseOrderInput) {
+  const existing = await db.purchaseOrder.findFirst({
+    where: { id: input.purchaseOrderId, organizationId: input.organizationId },
+    select: { id: true, jobId: true, status: true, poNumber: true },
+  });
+  if (!existing) throw new PurchaseOrderNotFoundForUpdateError(input.purchaseOrderId);
+  if (!EDITABLE_STATUSES.has(existing.status)) {
+    throw new PurchaseOrderLockedError(existing.status);
+  }
+
+  if (input.vendorId) {
+    const vendor = await db.vendor.findFirst({
+      where: { id: input.vendorId, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    if (!vendor) throw new UnknownVendorError(input.vendorId);
+  }
+
+  if (input.linkedScheduleItemId) {
+    const item = await db.scheduleItem.findFirst({
+      where: {
+        id: input.linkedScheduleItemId,
+        schedule: { jobId: existing.jobId, organizationId: input.organizationId },
+      },
+      select: { id: true },
+    });
+    if (!item) throw new UnknownScheduleItemError(input.linkedScheduleItemId);
+  }
+
+  const poNumber = input.poNumber?.trim();
+  if (poNumber && poNumber !== existing.poNumber) {
+    const clash = await db.purchaseOrder.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        poNumber,
+        NOT: { id: existing.id },
+      },
+      select: { id: true },
+    });
+    if (clash) throw new DuplicatePoNumberError(poNumber);
+  }
+
+  try {
+    return await db.purchaseOrder.update({
+      where: { id: existing.id },
+      data: {
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.vendorName !== undefined ? { vendorName: input.vendorName } : {}),
+        ...(input.vendorId !== undefined ? { vendorId: input.vendorId } : {}),
+        ...(input.materialsOnly !== undefined ? { materialsOnly: input.materialsOnly } : {}),
+        ...(input.isVariance !== undefined ? { isVariance: input.isVariance } : {}),
+        ...(input.scheduledCompletionOn !== undefined
+          ? { scheduledCompletionOn: input.scheduledCompletionOn }
+          : {}),
+        ...(input.completedOn !== undefined ? { completedOn: input.completedOn } : {}),
+        ...(input.linkedScheduleItemId !== undefined
+          ? { linkedScheduleItemId: input.linkedScheduleItemId }
+          : {}),
+        ...(input.scopeOfWork !== undefined ? { scopeOfWork: input.scopeOfWork } : {}),
+        ...(input.internalNotes !== undefined ? { internalNotes: input.internalNotes } : {}),
+        ...(poNumber ? { poNumber } : {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new DuplicatePoNumberError(poNumber ?? existing.poNumber);
+    }
+    throw error;
+  }
+}

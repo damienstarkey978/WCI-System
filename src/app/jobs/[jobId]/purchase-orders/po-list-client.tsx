@@ -19,6 +19,8 @@ import {
   MultiSelectChips,
 } from "@/components/shell/list-filter-fields";
 
+import type { ScheduleOption, VendorOption } from "./create-po-form";
+import { PurchaseOrderDetailModal } from "./po-detail-modal";
 import { PurchaseOrdersGrid, type PurchaseOrderRow } from "./purchase-orders-grid";
 
 const PO_STATUSES = [
@@ -35,24 +37,40 @@ interface DraftFilters {
   statuses: string[];
   vendors: string[];
   datePreset: string;
+  /** When false (BT default), CANCELLED / recalled twins stay out of the grid. */
+  includeCancelled: boolean;
 }
 
-const EMPTY: DraftFilters = { keyword: "", statuses: [], vendors: [], datePreset: "all" };
+const EMPTY: DraftFilters = {
+  keyword: "",
+  statuses: [],
+  vendors: [],
+  datePreset: "all",
+  includeCancelled: false,
+};
 
 export function PurchaseOrdersListClient({
   rows,
+  vendors,
+  scheduleItems,
   createAction,
 }: {
   rows: readonly PurchaseOrderRow[];
+  vendors: readonly VendorOption[];
+  scheduleItems: readonly ScheduleOption[];
   createAction: React.ReactNode;
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [draft, setDraft] = useState<DraftFilters>(EMPTY);
   const [applied, setApplied] = useState<DraftFilters>(EMPTY);
+  const [editing, setEditing] = useState<PurchaseOrderRow | null>(null);
 
   const vendorOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const row of rows) if (row.vendorName) set.add(row.vendorName);
+    for (const row of rows) {
+      const name = row.vendorName?.trim();
+      if (name && name !== "Unassigned" && name !== "Unknown vendor") set.add(name);
+    }
     return [...set].sort((a, b) => a.localeCompare(b)).map((v) => ({ value: v, label: v }));
   }, [rows]);
 
@@ -68,6 +86,7 @@ export function PurchaseOrdersListClient({
   const filtered = useMemo(() => {
     const kw = applied.keyword.trim().toLowerCase();
     return rows.filter((row) => {
+      if (!applied.includeCancelled && row.status === "CANCELLED") return false;
       if (kw) {
         const hay = `${row.poNumber} ${row.poSuffix ?? ""} ${row.title ?? ""} ${row.vendorName}`.toLowerCase();
         if (!hay.includes(kw)) return false;
@@ -84,12 +103,17 @@ export function PurchaseOrdersListClient({
     applied.statuses.length > 0,
     applied.vendors.length > 0,
     applied.datePreset !== "all",
+    applied.includeCancelled,
   ]);
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex justify-end">
-        <ListToolbar filterOpen={filterOpen} filterActiveCount={activeCount} onFilterClick={() => setFilterOpen((o) => !o)} />
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <ListToolbar
+          filterOpen={filterOpen}
+          filterActiveCount={activeCount}
+          onFilterClick={() => setFilterOpen((o) => !o)}
+        />
       </div>
 
       <div className="flex flex-col gap-3 lg:flex-row">
@@ -105,10 +129,10 @@ export function PurchaseOrdersListClient({
             <EmptyState
               icon={<PurchaseOrderIcon className="h-10 w-10" />}
               title="No purchase orders match"
-              description="Clear filters or adjust Keyword / PO status / vendor / created date."
+              description="Clear filters or include Cancelled / adjust Keyword / PO status / vendor / created date."
             />
           ) : (
-            <PurchaseOrdersGrid rows={filtered} />
+            <PurchaseOrdersGrid rows={filtered} onEdit={setEditing} />
           )}
         </div>
 
@@ -155,8 +179,30 @@ export function PurchaseOrdersListClient({
               options={COMMON_DATE_PRESETS}
             />
           </FilterField>
+          <label className="flex items-center gap-2 pt-1 text-sm text-[var(--bt-text)]">
+            <input
+              type="checkbox"
+              checked={draft.includeCancelled}
+              onChange={(e) => setDraft((d) => ({ ...d, includeCancelled: e.target.checked }))}
+              className="rounded border"
+              style={{ borderColor: "var(--bt-border)" }}
+            />
+            Include cancelled
+          </label>
+          <div className="pt-1 text-xs text-[var(--bt-muted)]">
+            Cancelled import twins are hidden by default so the list matches Buildertrend&apos;s active set.
+          </div>
         </ListFilterSidebar>
       </div>
+
+      {editing ? (
+        <PurchaseOrderDetailModal
+          row={editing}
+          vendors={vendors}
+          scheduleItems={scheduleItems}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
     </div>
   );
 }
