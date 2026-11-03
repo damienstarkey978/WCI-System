@@ -6,6 +6,7 @@ import { extendedCostCents } from "@/lib/budget/funnel";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { DEFAULT_PO_SCOPE_OF_WORK } from "@/lib/purchase-orders/default-scope";
+import { resolvePoTitle } from "@/lib/purchase-orders/display";
 import { nextAutoPoNumber } from "@/lib/purchase-orders/po-number";
 
 import { CreatePoModal } from "./create-po-modal";
@@ -14,6 +15,10 @@ import { PurchaseOrdersListClient } from "./po-list-client";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Purchase Orders list — Buildertrend Standard View.
+ * Do not mount BillUploader / "Drop bills & receipts" here (Bills page only).
+ */
 export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[jobId]/purchase-orders">) {
   const { jobId } = await params;
 
@@ -35,7 +40,13 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
       db.purchaseOrder.findMany({
         where: { jobId: job.id },
         orderBy: { createdAt: "desc" },
-        include: { lineItems: true },
+        include: {
+          lineItems: { orderBy: { sortOrder: "asc" }, select: { title: true, quantityMilli: true, unitCostCents: true } },
+          linkedScheduleItem: { select: { id: true, title: true } },
+          bills: {
+            select: { approvalStatus: true, lineItems: { select: { amountCents: true } } },
+          },
+        },
       }),
       db.costCode.findMany({
         where: { organizationId: user.organizationId, isActive: true },
@@ -132,19 +143,44 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
     ),
   ];
 
-  const rows = purchaseOrders.map((po) => ({
-    id: po.id,
-    jobId: job.id,
-    jobName: job.name,
-    poNumber: po.poNumber,
-    poSuffix: po.poSuffix,
-    title: po.title,
-    vendorName: po.vendorName,
-    status: po.status,
-    workStatus: po.workStatus,
-    createdAt: po.createdAt.toISOString(),
-    totalCents: po.lineItems.reduce((total, item) => total + extendedCostCents(item.quantityMilli, item.unitCostCents), 0),
-  }));
+  const rows = purchaseOrders.map((po) => {
+    const totalCents = po.lineItems.reduce(
+      (total, item) => total + extendedCostCents(item.quantityMilli, item.unitCostCents),
+      0,
+    );
+    const billedCents = po.bills
+      .filter((bill) => bill.approvalStatus !== "VOID")
+      .reduce(
+        (total, bill) => total + bill.lineItems.reduce((sum, item) => sum + item.amountCents, 0),
+        0,
+      );
+    const outstandingCents = Math.max(0, totalCents - billedCents);
+    const billedPercent = totalCents === 0 ? 0 : Math.round((billedCents / totalCents) * 100);
+
+    return {
+      id: po.id,
+      jobId: job.id,
+      jobName: job.name,
+      poNumber: po.poNumber,
+      poSuffix: po.poSuffix,
+      title: resolvePoTitle(po.title, po.lineItems[0]?.title ?? null),
+      vendorName: po.vendorName,
+      vendorId: po.vendorId,
+      status: po.status,
+      workStatus: po.workStatus,
+      createdAt: po.createdAt.toISOString(),
+      totalCents,
+      materialsOnly: po.materialsOnly,
+      scheduledCompletionOn: po.scheduledCompletionOn?.toISOString() ?? null,
+      completedOn: po.completedOn?.toISOString() ?? null,
+      linkedScheduleItemId: po.linkedScheduleItemId,
+      linkedScheduleItemTitle: po.linkedScheduleItem?.title ?? null,
+      scopeOfWork: po.scopeOfWork,
+      internalNotes: po.internalNotes,
+      outstandingCents,
+      billedPercent,
+    };
+  });
 
   const createAction = (
     <CreatePoModal
@@ -165,7 +201,12 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
 
       <PurchaseOrdersBillsTabs jobId={job.id} active="purchase-orders" />
 
-      <PurchaseOrdersListClient rows={rows} createAction={createAction} />
+      <PurchaseOrdersListClient
+        rows={rows}
+        vendors={vendors}
+        scheduleItems={scheduleItems}
+        createAction={createAction}
+      />
     </div>
   );
 }

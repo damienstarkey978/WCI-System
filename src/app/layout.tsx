@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import localFont from "next/font/local";
 
 import { AuthProvider } from "@/components/auth-provider";
@@ -17,11 +17,14 @@ const inter = Inter({
 });
 
 /** The redesign's headline/display face, for h1-h3 and anything marked .display
- *  (see globals.css) — the rounder, more graphic sibling to Inter's body text. */
-const spaceGrotesk = Space_Grotesk({
+ *  (see globals.css). Vendored as next/font/local — same Turbopack flake as
+ *  Fredoka (vercel/next.js#99114 / "next/font/google queries have exactly one
+ *  entry"). Source: Google Fonts Space Grotesk v22 latin woff2, weights 500–700. */
+const spaceGrotesk = localFont({
+  src: "../fonts/SpaceGrotesk-latin.woff2",
   variable: "--font-space-grotesk",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: "500 700",
+  display: "swap",
 });
 
 /** Still used for job/cost-code prefixes and IDs via Tailwind's font-mono utility —

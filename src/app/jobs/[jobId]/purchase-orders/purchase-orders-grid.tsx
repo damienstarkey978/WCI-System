@@ -1,12 +1,20 @@
 "use client";
 
-import Link from "next/link";
-
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
-import { PencilIcon } from "@/components/shell/icons";
+import { InfoIcon, PencilIcon } from "@/components/shell/icons";
 import { formatDate, formatMoney } from "@/lib/format";
+import {
+  formatPoNumberDisplay,
+  formatPoStatusLabel,
+  formatWorkStatusLabel,
+} from "@/lib/purchase-orders/display";
 
-import { PO_STATUS_STYLE, WORK_STATUS_STYLE } from "./status-styles";
+import {
+  PO_STATUS_SHOWS_INFO,
+  PO_STATUS_STYLE,
+  WORK_STATUS_SHOWS_INFO,
+  WORK_STATUS_STYLE,
+} from "./status-styles";
 
 export interface PurchaseOrderRow {
   readonly id: string;
@@ -20,10 +28,42 @@ export interface PurchaseOrderRow {
   readonly workStatus: string;
   readonly createdAt: string;
   readonly totalCents: number;
+  readonly materialsOnly: boolean;
+  readonly scheduledCompletionOn: string | null;
+  readonly completedOn: string | null;
+  readonly linkedScheduleItemId: string | null;
+  readonly linkedScheduleItemTitle: string | null;
+  readonly scopeOfWork: string | null;
+  readonly internalNotes: string | null;
+  readonly vendorId: string | null;
+  readonly outstandingCents: number;
+  readonly billedPercent: number;
 }
 
-/** Buildertrend's Purchase Orders Standard View: Job, PO #, Title (+ edit action). */
-const DEFAULT_HIDDEN = ["vendorName", "status", "workStatus", "createdAt", "totalCents"] as const;
+/** Buildertrend Standard View hides Total; keep it available via column chooser. */
+const DEFAULT_HIDDEN = ["totalCents"] as const;
+
+function StatusPill({
+  label,
+  style,
+  showInfo,
+}: {
+  label: string;
+  style: { bg: string; text: string };
+  showInfo?: boolean;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        className="rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+        style={{ background: style.bg, color: style.text }}
+      >
+        {label}
+      </span>
+      {showInfo ? <InfoIcon className="h-3 w-3 text-[var(--bt-muted)]" /> : null}
+    </span>
+  );
+}
 
 /**
  * The client half of the Purchase Orders page — DataGrid's column `render`
@@ -31,7 +71,13 @@ const DEFAULT_HIDDEN = ["vendorName", "status", "workStatus", "createdAt", "tota
  * component boundary as props, so the server page.tsx shapes the rows into
  * plain data and hands them to this "use client" wrapper to actually render.
  */
-export function PurchaseOrdersGrid({ rows }: { rows: readonly PurchaseOrderRow[] }) {
+export function PurchaseOrdersGrid({
+  rows,
+  onEdit,
+}: {
+  rows: readonly PurchaseOrderRow[];
+  onEdit: (row: PurchaseOrderRow) => void;
+}) {
   const columns: DataGridColumn<PurchaseOrderRow>[] = [
     {
       key: "job",
@@ -44,56 +90,85 @@ export function PurchaseOrdersGrid({ rows }: { rows: readonly PurchaseOrderRow[]
       key: "poNumber",
       header: "PO #",
       sortable: true,
+      sortValue: (row) => formatPoNumberDisplay(row.poNumber, row.poSuffix),
       render: (row) => (
-        <Link href={`/jobs/${row.jobId}/purchase-orders/${row.id}`} className="font-medium hover:underline" style={{ color: "var(--bt-primary)" }}>
-          {row.poNumber}
-          {row.poSuffix ? `-${row.poSuffix}` : ""}
-        </Link>
+        <button
+          type="button"
+          onClick={() => onEdit(row)}
+          className="font-medium hover:underline"
+          style={{ color: "var(--bt-primary)" }}
+        >
+          {formatPoNumberDisplay(row.poNumber, row.poSuffix)}
+        </button>
       ),
     },
     {
       key: "title",
       header: "Title",
       sortable: true,
+      sortValue: (row) => row.title ?? "",
       render: (row) => (
-        <Link href={`/jobs/${row.jobId}/purchase-orders/${row.id}`} className="hover:underline" style={{ color: "var(--bt-primary)" }}>
+        <button type="button" onClick={() => onEdit(row)} className="text-left hover:underline" style={{ color: "var(--bt-primary)" }}>
           {row.title ?? "—"}
-        </Link>
+        </button>
       ),
     },
-    { key: "vendorName", header: "Performed by", sortable: true, render: (row) => row.vendorName },
     {
       key: "status",
-      header: "PO status",
+      header: "PO Status",
+      sortable: true,
+      sortValue: (row) => row.status,
       render: (row) => {
         const style = PO_STATUS_STYLE[row.status] ?? PO_STATUS_STYLE.DRAFT;
         return (
-          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-            {row.status.replace(/_/g, " ")}
-          </span>
+          <StatusPill
+            label={formatPoStatusLabel(row.status)}
+            style={style}
+            showInfo={PO_STATUS_SHOWS_INFO.has(row.status)}
+          />
         );
       },
     },
     {
       key: "workStatus",
-      header: "Work status",
+      header: "Work Status",
+      sortable: true,
+      sortValue: (row) => row.workStatus,
       render: (row) => {
-        const style = WORK_STATUS_STYLE[row.workStatus];
+        const style = WORK_STATUS_STYLE[row.workStatus] ?? WORK_STATUS_STYLE.NOT_COMPLETE;
         return (
-          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-            {row.workStatus.replace(/_/g, " ")}
-          </span>
+          <StatusPill
+            label={formatWorkStatusLabel(row.workStatus)}
+            style={style}
+            showInfo={WORK_STATUS_SHOWS_INFO.has(row.workStatus)}
+          />
         );
       },
     },
-    { key: "createdAt", header: "Created", sortable: true, render: (row) => formatDate(new Date(row.createdAt)) },
+    {
+      key: "vendorName",
+      header: "Performed By",
+      sortable: true,
+      render: (row) => {
+        const name = row.vendorName?.trim();
+        if (!name || name === "Unassigned" || name === "Unknown vendor") {
+          return <span className="text-[var(--bt-muted)]">—</span>;
+        }
+        return name;
+      },
+    },
+    {
+      key: "createdAt",
+      header: "Created Date",
+      sortable: true,
+      render: (row) => formatDate(new Date(row.createdAt)),
+    },
     {
       key: "totalCents",
       header: "Total",
       align: "right",
       sortable: true,
       render: (row) => formatMoney(row.totalCents),
-      total: formatMoney(rows.reduce((sum, row) => sum + row.totalCents, 0)),
     },
   ];
 
@@ -102,21 +177,27 @@ export function PurchaseOrdersGrid({ rows }: { rows: readonly PurchaseOrderRow[]
       columns={columns}
       rows={rows}
       rowKey={(row) => row.id}
-      viewKey="purchase-orders"
+      viewKey="purchase-orders-bt-standard"
       defaultHiddenKeys={DEFAULT_HIDDEN}
       selectable
-      showTotals
       sortToolbarInFooter
+      defaultSort={{ key: "createdAt", direction: "desc" }}
       rowActions={(row) => (
-        <Link
-          href={`/jobs/${row.jobId}/purchase-orders/${row.id}`}
-          aria-label={`Edit purchase order ${row.poNumber}`}
+        <button
+          type="button"
+          onClick={() => onEdit(row)}
+          aria-label={`Edit purchase order ${formatPoNumberDisplay(row.poNumber, row.poSuffix)}`}
           className="inline-flex rounded p-1 text-[var(--bt-muted)] hover:bg-black/5 hover:text-[var(--bt-primary)]"
         >
           <PencilIcon className="h-4 w-4" />
-        </Link>
+        </button>
       )}
       emptyMessage="No purchase orders yet."
     />
   );
+}
+
+/** Keep a full-page link available for the modal pop-out control. */
+export function purchaseOrderDetailHref(row: Pick<PurchaseOrderRow, "jobId" | "id">): string {
+  return `/jobs/${row.jobId}/purchase-orders/${row.id}`;
 }

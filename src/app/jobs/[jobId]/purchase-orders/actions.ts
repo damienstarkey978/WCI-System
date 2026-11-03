@@ -14,14 +14,18 @@ import {
   sendPurchaseOrderToVendor,
 } from "@/lib/purchase-orders/deliver";
 import { nextAutoPoNumber } from "@/lib/purchase-orders/po-number";
+import { formatPoNumberDisplay } from "@/lib/purchase-orders/display";
 import {
   createPurchaseOrder,
   DuplicatePoNumberError,
   JobNotFoundError,
   JobNotOpenError,
+  PurchaseOrderLockedError,
+  PurchaseOrderNotFoundForUpdateError,
   UnknownCostCodeError,
   UnknownScheduleItemError,
   UnknownVendorError,
+  updatePurchaseOrder,
 } from "@/lib/purchase-orders/service";
 import { looksLikeHtml, sanitizeRichTextHtml } from "@/lib/rich-text";
 import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
@@ -271,6 +275,115 @@ export async function setWorkStatusAction(_previous: ActionState, formData: Form
   return runWorkflowAction(jobId, purchaseOrderId, (organizationId, actorUserId) =>
     setWorkStatus({ organizationId, purchaseOrderId, workComplete, actor: { actorUserId } }),
   );
+}
+
+/**
+ * Pencil-modal Save — updates general fields on a draft / declined / pending PO.
+ * For Send, the modal posts intent=send after a successful save (or uses
+ * sendForApprovalAction when fields are unchanged).
+ */
+export async function updatePurchaseOrderAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const purchaseOrderId = String(formData.get("purchaseOrderId") ?? "");
+  const intent = String(formData.get("intent") ?? "save") === "send" ? "send" : "save";
+  const vendorId = String(formData.get("vendorId") ?? "").trim() || null;
+  const vendorName = String(formData.get("vendorName") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim() || null;
+  const poNumberRaw = String(formData.get("poNumber") ?? "").trim();
+  const storedPoNumber = String(formData.get("storedPoNumber") ?? "").trim();
+  const materialsOnly = String(formData.get("materialsOnly") ?? "") === "true";
+  const isVariance = String(formData.get("isVariance") ?? "") === "true";
+  const completionMode = String(formData.get("completionMode") ?? "date") === "schedule" ? "schedule" : "date";
+  const rawScope = String(formData.get("scopeOfWork") ?? "").trim();
+  const scopeOfWork = rawScope
+    ? looksLikeHtml(rawScope)
+      ? sanitizeRichTextHtml(rawScope)
+      : rawScope
+    : null;
+  const internalNotes = String(formData.get("internalNotes") ?? "").trim() || null;
+  const scheduledCompletionOn =
+    completionMode === "date" ? parseOptionalDate(String(formData.get("scheduledCompletionOn") ?? "")) : null;
+  const completedOn =
+    completionMode === "date" ? parseOptionalDate(String(formData.get("completedOn") ?? "")) : null;
+  const linkedScheduleItemId =
+    completionMode === "schedule" ? String(formData.get("linkedScheduleItemId") ?? "").trim() || null : null;
+
+  // Modal shows BT-style short numbers (0011). If the field still matches the
+  // display form of the stored value, keep the stored import id so we don't
+  // collide with cancelled JOB_* twins that share the same trailing digits.
+  const poNumber =
+    !poNumberRaw ||
+    poNumberRaw === storedPoNumber ||
+    poNumberRaw === formatPoNumberDisplay(storedPoNumber)
+      ? undefined
+      : poNumberRaw;
+
+  if (!vendorId && !vendorName) return { error: "Assign this purchase order to a vendor." };
+  if (intent === "send" && !vendorId) {
+    return { error: "Pick a vendor with a portal account before sending for approval." };
+  }
+
+  try {
+    await updatePurchaseOrder({
+      organizationId: user.organizationId,
+      purchaseOrderId,
+      poNumber,
+      title,
+      vendorName: vendorName || "Vendor",
+      vendorId,
+      materialsOnly,
+      isVariance,
+      scheduledCompletionOn: completionMode === "date" ? scheduledCompletionOn : null,
+      completedOn: completionMode === "date" ? completedOn : null,
+      linkedScheduleItemId: completionMode === "schedule" ? linkedScheduleItemId : null,
+      scopeOfWork,
+      internalNotes,
+    });
+  } catch (error) {
+    if (
+      error instanceof PurchaseOrderNotFoundForUpdateError ||
+      error instanceof PurchaseOrderLockedError ||
+      error instanceof DuplicatePoNumberError ||
+      error instanceof UnknownVendorError ||
+      error instanceof UnknownScheduleItemError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/purchase-orders`);
+  revalidatePath(`/jobs/${jobId}/purchase-orders/${purchaseOrderId}`);
+
+  if (intent === "save") {
+    return { ok: true, purchaseOrderId };
+  }
+
+  try {
+    const delivery = await sendPurchaseOrderToVendor({
+      organizationId: user.organizationId,
+      purchaseOrderId,
+      actor: { actorUserId: user.id },
+    });
+    revalidatePath(`/jobs/${jobId}/purchase-orders/${purchaseOrderId}`);
+    return {
+      ok: true,
+      purchaseOrderId,
+      acceptUrl: delivery.acceptUrl,
+      emailed: delivery.emailed,
+      needsManualDelivery: delivery.needsManualDelivery,
+    };
+  } catch (error) {
+    if (error instanceof PurchaseOrderVendorMissingError || error instanceof InvalidPurchaseOrderTransitionError) {
+      return {
+        ok: true,
+        purchaseOrderId,
+        error: `Purchase order saved, but could not send: ${error.message}`,
+      };
+    }
+    throw error;
+  }
 }
 
 /** Attach files to a saved PO (create modal is save-first for attachments). */
