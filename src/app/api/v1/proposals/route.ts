@@ -45,7 +45,15 @@ export const POST = withApiAuth(["proposals:write"], async (request, auth) => {
   }
 
   try {
-    const proposal = await createProposal({ organizationId: auth.organizationId, ...parsed.data });
+    const proposal = await createProposal({
+      organizationId: auth.organizationId,
+      jobId: parsed.data.jobId ?? undefined,
+      leadId: parsed.data.leadId ?? undefined,
+      clientId: parsed.data.clientId,
+      title: parsed.data.title,
+      coverMessage: parsed.data.coverMessage,
+      options: parsed.data.options,
+    });
     return Response.json({ data: proposal }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) return apiError(422, "unknown_job", error.message);

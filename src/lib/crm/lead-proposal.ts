@@ -21,6 +21,10 @@ import {
   DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
   DEFAULT_ESTIMATE_RATE_MODE,
 } from "@/lib/estimates/org-defaults";
+import {
+  nextVersionedTitle,
+  resolveProposalTitle,
+} from "@/lib/estimates/proposal-title";
 import { createEstimate, EstimateNotFoundError, type CreateEstimateLineItemInput } from "@/lib/estimates/service";
 import { db } from "@/lib/db";
 import { isSupabaseStorageConfigured } from "@/lib/env";
@@ -158,11 +162,20 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
     });
   }
 
+  const title = resolveProposalTitle({
+    leadTitle: lead.title,
+    addressLine1: lead.addressLine1,
+    clientName: lead.name,
+    tradeOrProjectType: lead.projectType,
+    aiProposedTitle: input.title,
+    allowAiInventedTitle: !input.aiGenerated,
+  });
+
   const estimate = await createEstimate({
     organizationId: input.organizationId,
     jobId: jobId ?? undefined,
     leadId: jobId ? undefined : lead.id,
-    title: input.title,
+    title,
     rateMode: input.rateMode ?? DEFAULT_ESTIMATE_RATE_MODE,
     defaultRateBasisPoints: input.defaultRateBasisPoints ?? DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
     lineItems: input.lineItems,
@@ -175,7 +188,7 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
     jobId: jobId ?? undefined,
     leadId: input.leadId,
     clientId: client.id,
-    title: input.title,
+    title,
     coverMessage: input.coverMessage,
     options: [{ estimateId: estimate.id, label: "Option 1" }],
     sections: input.proposalSections,
@@ -190,6 +203,8 @@ export interface DraftLeadProposalInput {
   readonly images?: readonly DraftEstimateImageInput[];
   readonly clientEmail?: string | null;
   readonly clientPhone?: string | null;
+  /** Required to create another AI draft within the duplicate window. */
+  readonly newVersion?: boolean;
 }
 
 /**
@@ -259,17 +274,34 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     await db.lead.update({ where: { id: lead.id }, data: { permitWorkType } });
   }
 
+  const existingTitles = (
+    await db.estimate.findMany({
+      where: { organizationId: input.organizationId, leadId: lead.id },
+      select: { title: true },
+    })
+  ).map((row) => row.title);
+
+  const baseTitle = resolveProposalTitle({
+    leadTitle: lead.title,
+    addressLine1: lead.addressLine1,
+    clientName: lead.name,
+    tradeOrProjectType: lead.projectType,
+    aiProposedTitle: draft.title,
+  });
+  const title = input.newVersion ? nextVersionedTitle(baseTitle, existingTitles) : baseTitle;
+
   const estimate = await createEstimate({
     organizationId: input.organizationId,
     jobId: jobId ?? undefined,
     // Always keep the lead link so Create Proposal can find the CRM record even
     // when this lead already converted and the estimate is also job-scoped.
     leadId: lead.id,
-    title: draft.title,
+    title,
     lineItems,
     aiGenerated: true,
     aiPromptNotes: input.notes,
     permitWorkType,
+    newVersion: input.newVersion,
     pendingProposalDraft: {
       coverMessage: draft.projectDescription,
       sections: draft.proposalSections.map((section) => ({

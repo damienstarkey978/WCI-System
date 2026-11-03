@@ -61,6 +61,7 @@ import {
   LeadNotFoundError as LeadProposalLeadNotFoundError,
   NoCostCodesError as LeadProposalNoCostCodesError,
 } from "@/lib/crm/lead-proposal";
+import { DuplicateEstimateDraftError } from "@/lib/estimates/duplicate-draft";
 import { convertLeadToJob, createLead, createLeadActivity } from "@/lib/crm/service";
 import { ProposalDraftWorkerNotConfiguredError, queueProposalDraftJob } from "@/lib/jarvis/proposal-draft-jobs";
 import { db } from "@/lib/db";
@@ -1170,12 +1171,16 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
   const draftLeadProposalTool = betaZodTool({
     name: "draft_lead_proposal",
     description:
-      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a DRAFT estimate first (line items + cost codes, Handoff-style). Client narrative is held on the estimate until a human explicitly converts it to a Proposal. Never sent, never auto-converted to a Job. Prefer this on a lead's Proposals tab. Drafting against the full catalog is usually queued and posted back into this conversation when ready; if the async worker isn't configured it runs inline instead. Pass the lead's id from list_leads.",
+      "Give Jarvis the scope of work, measurements, and notes for a lead, and it drafts a DRAFT estimate first (line items + cost codes, Handoff-style). Client narrative is held on the estimate until a human explicitly converts it to a Proposal. Never sent, never auto-converted to a Job. Prefer this on a lead's Proposals tab. Drafting against the full catalog is usually queued and posted back into this conversation when ready; if the async worker isn't configured it runs inline instead. Pass the lead's id from list_leads. If a DRAFT already exists for this lead within the last 4 hours, pass newVersion=true to create another (v2/v3 title).",
     inputSchema: z.object({
       leadId: z.string().describe("The lead's id, from list_leads"),
       notes: z.string().describe("Scope of work, measurements, materials, anything relevant"),
       clientEmail: z.string().optional().describe("Falls back to the lead's own email if omitted"),
       clientPhone: z.string().optional(),
+      newVersion: z
+        .boolean()
+        .optional()
+        .describe("Set true to create another draft when one already exists within the duplicate window"),
     }),
     run: async (input) => {
       try {
@@ -1207,12 +1212,16 @@ export function buildJarvisTools(ctx: JarvisToolContext): JarvisTool[] {
             images: ctx.images,
             clientEmail: input.clientEmail ?? null,
             clientPhone: input.clientPhone ?? null,
+            newVersion: input.newVersion,
           });
           ctx.sideEffects.push(`Drafted estimate ${estimate.id} for lead ${input.leadId}`);
           return `Drafted estimate "${estimate.title}" (id: ${estimate.id}) with line items — status DRAFT. Review it at /leads/estimates/${estimate.id}, then use Convert to Proposal to turn it into a client-facing DRAFT proposal. After that, apply_proposal_template can add saved prose/payment-schedule sections without changing pricing. Nothing is sent until a human sends it.`;
         } catch (draftError) {
           if (draftError instanceof AiNotConfiguredError) return "The AI assistant isn't configured — ANTHROPIC_API_KEY isn't set.";
           if (draftError instanceof LeadProposalLeadNotFoundError) return `No lead found with id ${input.leadId} in this organization.`;
+          if (draftError instanceof DuplicateEstimateDraftError) {
+            return `${draftError.message} Call draft_lead_proposal again with newVersion=true to create a versioned draft.`;
+          }
           if (
             draftError instanceof LeadMissingContactError ||
             draftError instanceof LeadProposalNoCostCodesError ||

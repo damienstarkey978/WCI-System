@@ -838,6 +838,13 @@ enum EstimateStatus {
   DECLINED
 }
 
+/// Line classification (Handoff parity P1 #12). OWNER_SUPPLIED is $0 / out of totals.
+enum EstimateLineKind {
+  STANDARD
+  ALLOWANCE
+  OWNER_SUPPLIED
+}
+
 /// Buildertrend's own PO Status vocabulary maps onto this: its "Internally Approved"
 /// and "Sub/Vendor Approved" are both APPROVED here (the distinction is preserved on
 /// PurchaseOrder.approvedBy), "Denied" is DECLINED, and "Recalled" is CANCELLED.
@@ -1045,6 +1052,8 @@ model EstimateLineItem {
   costCodeId String
   costCode   CostCode @relation(fields: [costCodeId], references: [id], onDelete: Restrict)
   costType   CostType @default(NONE)
+  /// STANDARD | ALLOWANCE (priced/in totals) | OWNER_SUPPLIED ($0 / out of totals).
+  lineKind   EstimateLineKind @default(STANDARD)
 
   title         String
   description   String?
