@@ -19,6 +19,13 @@ export class JobNotFoundError extends Error {
   }
 }
 
+export class LeadNotFoundError extends Error {
+  constructor(leadId: string) {
+    super(`Lead ${leadId} not found`);
+    this.name = "LeadNotFoundError";
+  }
+}
+
 export class NoCostCodesError extends Error {
   constructor() {
     super("This organization has no active cost codes to draft against. Seed the catalog first.");
@@ -26,13 +33,28 @@ export class NoCostCodesError extends Error {
   }
 }
 
+export class AiDraftTemplateNotFoundError extends Error {
+  constructor(templateId: string) {
+    super(`Estimate template ${templateId} not found`);
+    this.name = "AiDraftTemplateNotFoundError";
+  }
+}
+
 export { ClientNotFoundError };
 
 export interface CreateAiEstimateDraftInput {
   readonly organizationId: string;
-  readonly jobId: string;
+  /** Prefer jobId; leadId alone drafts against a pre-Job lead (CR P2 #26). */
+  readonly jobId?: string;
+  readonly leadId?: string;
   readonly notes: string;
   readonly images?: readonly DraftEstimateImageInput[];
+  /** Markup override in basis points — applied when persisting the DRAFT. */
+  readonly defaultRateBasisPoints?: number;
+  readonly rateMode?: "MARKUP" | "MARGIN";
+  /** Optional EstimateTemplate — its line titles are injected into the AI notes. */
+  readonly templateId?: string;
+  readonly newVersion?: boolean;
   /**
    * Handy-style notes → estimate lines → proposal: when true, also persist the
    * AI's client-facing narrative (projectDescription + proposalSections) as a
@@ -105,35 +127,71 @@ async function loadDraftingCatalogs(
  * existing Job. Admin/API callers omit that flag and only get the Estimate.
  */
 export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): Promise<CreateAiEstimateDraftResult> {
-  const job = await db.job.findFirst({
-    where: { id: input.jobId, organizationId: input.organizationId },
-    select: { id: true, name: true, permitWorkType: true },
-  });
-  if (!job) {
-    throw new JobNotFoundError(input.jobId);
+  if (!input.jobId && !input.leadId) {
+    throw new Error("createAiEstimateDraft requires a jobId or a leadId");
+  }
+
+  const job = input.jobId
+    ? await db.job.findFirst({
+        where: { id: input.jobId, organizationId: input.organizationId },
+        select: { id: true, name: true, permitWorkType: true },
+      })
+    : null;
+  if (input.jobId && !job) throw new JobNotFoundError(input.jobId);
+
+  const lead = input.leadId
+    ? await db.lead.findFirst({
+        where: { id: input.leadId, organizationId: input.organizationId },
+        select: { id: true, name: true, permitWorkType: true, notes: true },
+      })
+    : null;
+  if (input.leadId && !lead) throw new LeadNotFoundError(input.leadId);
+
+  let templateSeed = "";
+  if (input.templateId) {
+    const template = await db.estimateTemplate.findFirst({
+      where: { id: input.templateId, organizationId: input.organizationId },
+      include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+    });
+    if (!template) throw new AiDraftTemplateNotFoundError(input.templateId);
+    templateSeed = [
+      `Start from estimate template "${template.name}":`,
+      ...template.lineItems.map((line) => `- ${line.title}`),
+    ].join("\n");
   }
 
   const { costCodes, defaultCostTypeById, materialCatalog, preferenceInstructions } =
     await loadDraftingCatalogs(input.organizationId);
 
+  const scopeName = job?.name ?? lead?.name ?? "Project";
+  const permitWorkType = job?.permitWorkType ?? lead?.permitWorkType ?? null;
+  const notes = [templateSeed, lead?.notes?.trim(), input.notes].filter(Boolean).join("\n\n");
+
   const draft = await draftEstimateFromNotes({
-    jobName: job.name,
-    notes: input.notes,
+    jobName: scopeName,
+    notes,
     costCodes,
     materialCatalog,
     images: input.images,
     preferenceInstructions,
-    permitWorkType: job.permitWorkType,
+    permitWorkType,
   });
+
+  const rateMode = input.rateMode ?? draft.lineItems[0]?.rateMode ?? "MARKUP";
+  const defaultRateBasisPoints =
+    input.defaultRateBasisPoints ?? draft.lineItems[0]?.rateBasisPoints ?? 4_000;
 
   const estimate = await db.estimate.create({
     data: {
       organizationId: input.organizationId,
-      jobId: job.id,
+      jobId: job?.id ?? null,
+      leadId: lead?.id ?? null,
       title: draft.title,
       aiGenerated: true,
       aiPromptNotes: input.notes,
-      permitWorkType: job.permitWorkType,
+      permitWorkType,
+      rateMode,
+      defaultRateBasisPoints,
       lineItems: {
         create: draft.lineItems.map((line, index) => ({
           costCodeId: line.costCodeId,
@@ -144,8 +202,8 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
           quantityMilli: line.quantityMilli,
           unit: line.unit,
           unitCostCents: line.unitCostCents,
-          rateMode: line.rateMode,
-          rateBasisPoints: line.rateBasisPoints,
+          rateMode: input.rateMode ?? line.rateMode,
+          rateBasisPoints: input.defaultRateBasisPoints ?? line.rateBasisPoints,
           confidence: line.confidence,
           priceSource: line.priceSource,
           sourceNote: line.sourceNote,
@@ -165,6 +223,14 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
 
   if (!input.createProposal) {
     return base;
+  }
+
+  if (!job) {
+    return {
+      ...base,
+      proposalSkippedReason:
+        "Lead-only AI drafts leave the proposal for an explicit create-proposal step (pass jobId to auto-create).",
+    };
   }
 
   let clientId = input.clientId ?? null;

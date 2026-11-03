@@ -273,6 +273,8 @@ export const estimateLineItemSchema = z
     taxable: z.boolean().optional(),
     internalNote: z.string().trim().max(2_000).nullish(),
     groupLabel: z.string().trim().max(120).nullish(),
+    /** Per-area scope (CR P2 #16) — Bedroom 1, Jack & Jill bath, etc. */
+    areaLabel: z.string().trim().max(120).nullish(),
     lineKind: z.enum(["STANDARD", "ALLOWANCE", "OWNER_SUPPLIED"]).optional(),
     allowance: z.boolean().optional(),
     ownerSupplied: z.boolean().optional(),
@@ -418,10 +420,36 @@ export const heatherTestPurgeSchema = z.object({
   confirm: z.literal(true),
 });
 
-export const aiDraftEstimateSchema = z.object({
-  jobId: z.string().min(1).max(64),
-  notes: z.string().trim().min(10).max(10_000),
+const aiDraftAttachmentSchema = z.object({
+  base64Data: z.string().min(1).max(8_000_000),
+  mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
 });
+
+/** POST /estimates/ai-draft — CR P2 #26: jobId|leadId, markup, template, attachments. */
+export const aiDraftEstimateSchema = z
+  .object({
+    jobId: z.string().min(1).max(64).optional(),
+    leadId: z.string().min(1).max(64).optional(),
+    notes: z.string().trim().min(10).max(10_000),
+    /** Markup/margin override in basis points (org default otherwise). */
+    defaultRateBasisPoints: basisPoints.optional(),
+    rateMode: rateMode.optional(),
+    /** Seed scope from an EstimateTemplate before AI drafting. */
+    templateId: z.string().min(1).max(64).optional(),
+    /** Plans / Roofr screenshots / photos (base64). */
+    attachments: z.array(aiDraftAttachmentSchema).max(10).optional(),
+    images: z.array(aiDraftAttachmentSchema).max(10).optional(),
+    newVersion: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.jobId && !value.leadId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["jobId"],
+        message: "Provide jobId or leadId.",
+      });
+    }
+  });
 
 export const aiDraftTakeoffSchema = z.object({
   jobId: z.string().min(1).max(64),

@@ -848,6 +848,13 @@ enum EstimateLineKind {
   OWNER_SUPPLIED
 }
 
+/// Proposal narrative section type (CR P2 #20).
+enum ProposalSectionKind {
+  SCOPE
+  EXCLUSIONS
+  WARRANTY
+}
+
 /// Buildertrend's own PO Status vocabulary maps onto this: its "Internally Approved"
 /// and "Sub/Vendor Approved" are both APPROVED here (the distinction is preserved on
 /// PurchaseOrder.approvedBy), "Denied" is DECLINED, and "Recalled" is CANCELLED.
@@ -1074,6 +1081,8 @@ model EstimateLineItem {
   internalNote String?
   /// Free-form grouping (room, assembly) for the estimate worksheet.
   groupLabel   String?
+  /// Per-area scope (CR P2 #16) — Bedroom 1, Jack & Jill bath, garage-door infill, etc.
+  areaLabel    String?
   sortOrder    Int     @default(0)
 
   /// Set only on AI-drafted lines (src/lib/ai/estimate-assistant.ts) — how confident
@@ -3512,6 +3521,8 @@ model ProposalSection {
   /// Usually mirrors an EstimateLineItem.groupLabel from the source estimate,
   /// but not FK-linked — a section can be renamed, merged, or added by hand.
   title     String
+  /// SCOPE (default) | EXCLUSIONS | WARRANTY (CR P2 #20).
+  kind      ProposalSectionKind @default(SCOPE)
   sortOrder Int    @default(0)
 
   bullets ProposalSectionBullet[]

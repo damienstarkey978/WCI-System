@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({
   db: {
     job: { findFirst: vi.fn() },
+    lead: { findFirst: vi.fn() },
+    estimateTemplate: { findFirst: vi.fn() },
     costCode: { findMany: vi.fn() },
     materialCatalogItem: { findMany: vi.fn() },
     estimate: { create: vi.fn() },

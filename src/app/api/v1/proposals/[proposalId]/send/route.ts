@@ -7,17 +7,58 @@ import {
   PaymentScheduleIncompleteError,
   ProposalNotDraftError,
   ProposalNotFoundError,
+  RoofSendBlockedError,
   sendProposal,
   SignatureRequiredError,
 } from "@/lib/proposals/service";
 import { BannedCoverMessageError } from "@/lib/proposals/cover-message";
+import {
+  emailProposalToClient,
+  ProposalClientContactMissingError,
+  textProposalToClient,
+} from "@/lib/proposals/deliver";
+import { EmailNotConfiguredError, EmailSendError } from "@/lib/email/send";
+import { SmsNotConfiguredError, SmsSendError } from "@/lib/sms/send";
 
 type Context = { params: Promise<{ proposalId: string }> };
 
-export const POST = withApiAuth<Context>(["proposals:write"], async (_request, auth, context) => {
+/**
+ * Mark SENT. Optional body `{ channel: "email" | "sms" }` also delivers the
+ * approval link (CR P2 #24) — same paths as the staff UI.
+ */
+export const POST = withApiAuth<Context>(["proposals:write"], async (request, auth, context) => {
   const { proposalId } = await context.params;
 
+  let channel: "email" | "sms" | undefined;
   try {
+    const body = await request.json();
+    if (body && typeof body === "object" && "channel" in body) {
+      const value = (body as { channel?: unknown }).channel;
+      if (value === "email" || value === "sms") channel = value;
+      else if (value != null) {
+        return apiError(422, "validation_failed", 'channel must be "email" or "sms" when provided.');
+      }
+    }
+  } catch {
+    // Empty body is fine — status-only send.
+  }
+
+  try {
+    if (channel === "email") {
+      const delivery = await emailProposalToClient({
+        organizationId: auth.organizationId,
+        proposalId,
+      });
+      return Response.json({ data: delivery });
+    }
+    if (channel === "sms") {
+      const delivery = await textProposalToClient({
+        organizationId: auth.organizationId,
+        proposalId,
+      });
+      return Response.json({ data: delivery });
+    }
+
     const proposal = await sendProposal(auth.organizationId, proposalId);
     return Response.json({ data: proposal });
   } catch (error) {
@@ -37,6 +78,18 @@ export const POST = withApiAuth<Context>(["proposals:write"], async (_request, a
     }
     if (error instanceof IncompletePreparedForError) {
       return apiError(422, "incomplete_prepared_for", error.message, { reasons: error.reasons });
+    }
+    if (error instanceof RoofSendBlockedError) {
+      return apiError(422, "roof_send_blocked", error.message, { reasons: error.reasons });
+    }
+    if (error instanceof ProposalClientContactMissingError) {
+      return apiError(422, "client_contact_missing", error.message);
+    }
+    if (error instanceof EmailNotConfiguredError || error instanceof SmsNotConfiguredError) {
+      return apiError(503, "delivery_not_configured", error.message);
+    }
+    if (error instanceof EmailSendError || error instanceof SmsSendError) {
+      return apiError(502, "delivery_failed", error.message);
     }
     throw error;
   }

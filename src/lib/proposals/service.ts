@@ -36,7 +36,17 @@ import {
   assertCanDisableRequireSignature,
   assertCanSendWithSignaturePolicy,
 } from "@/lib/proposals/signature-policy";
+import {
+  ROOF_FIFTY_FIFTY_SCHEDULE,
+  shouldApplyRoofPaymentSchedule,
+  findRoofRoofrSourceIssues,
+  findMissingRoofAutoInsertTitles,
+} from "@/lib/estimates/roof-auto-insert";
 import { previewProposalSend } from "@/lib/proposals/send-preview";
+import {
+  mergeProposalSectionsWithDefaults,
+  type ProposalSectionKindValue,
+} from "@/lib/proposals/section-kinds";
 import { DEFAULT_ORG_TAX_RATE_BASIS_POINTS } from "@/lib/proposals/tax";
 import { assertProposalTermsReady } from "@/lib/proposals/terms-guard";
 import { transitionJobStatus } from "@/lib/jobs";
@@ -188,9 +198,19 @@ export class ProposalDrawOverallocatedError extends Error {
   }
 }
 
+export class RoofSendBlockedError extends Error {
+  readonly reasons: readonly string[];
+  constructor(reasons: readonly string[]) {
+    super(reasons.join(" "));
+    this.name = "RoofSendBlockedError";
+    this.reasons = reasons;
+  }
+}
+
 export interface CreateProposalSectionInput {
   readonly title: string;
   readonly bullets: readonly string[];
+  readonly kind?: ProposalSectionKindValue | null;
 }
 
 export interface CreateProposalOptionInput {
@@ -281,11 +301,42 @@ export async function createProposal(input: CreateProposalInput) {
   const coverMessage = normalizeProposalCoverMessage(input.coverMessage);
   assertCoverMessageAllowed(coverMessage);
 
+  const estimateLines = await db.estimateLineItem.findMany({
+    where: { estimateId: { in: input.options.map((option) => option.estimateId) } },
+    select: {
+      title: true,
+      description: true,
+      groupLabel: true,
+      unit: true,
+      sourceNote: true,
+      quantityMilli: true,
+      costCode: { select: { code: true, name: true } },
+    },
+  });
+  const roofLines = estimateLines.map((line) => ({
+    title: line.title,
+    description: line.description,
+    groupLabel: line.groupLabel,
+    unit: line.unit,
+    sourceNote: line.sourceNote,
+    quantityMilli: line.quantityMilli,
+    costCodeCode: line.costCode.code,
+    costCodeName: line.costCode.name,
+  }));
+  const isRoofJob = shouldApplyRoofPaymentSchedule(roofLines);
+
   const draws =
     input.draws && input.draws.length > 0
       ? input.draws
-      : DEFAULT_PROPOSAL_PAYMENT_SCHEDULE;
+      : isRoofJob
+        ? ROOF_FIFTY_FIFTY_SCHEDULE
+        : DEFAULT_PROPOSAL_PAYMENT_SCHEDULE;
   assertDepositWithinLimit(draws);
+
+  const sections = mergeProposalSectionsWithDefaults(input.sections ?? [], {
+    includeRoofWarranty: isRoofJob,
+    includeWoodReplacement: isRoofJob,
+  });
 
   const proposal = await db.proposal.create({
     data: {
@@ -308,17 +359,16 @@ export async function createProposal(input: CreateProposalInput) {
           sortOrder: index,
         })),
       },
-      sections: input.sections?.length
-        ? {
-            create: input.sections.map((section, sectionIndex) => ({
-              title: section.title,
-              sortOrder: sectionIndex,
-              bullets: {
-                create: section.bullets.map((text, bulletIndex) => ({ text, sortOrder: bulletIndex })),
-              },
-            })),
-          }
-        : undefined,
+      sections: {
+        create: sections.map((section, sectionIndex) => ({
+          title: section.title,
+          kind: section.kind,
+          sortOrder: sectionIndex,
+          bullets: {
+            create: section.bullets.map((text, bulletIndex) => ({ text, sortOrder: bulletIndex })),
+          },
+        })),
+      },
     },
     include: {
       options: { orderBy: { sortOrder: "asc" } },
@@ -433,10 +483,17 @@ export async function updateProposalCoverMessage(organizationId: string, proposa
   return db.proposal.update({ where: { id: proposalId }, data: { coverMessage: normalized } });
 }
 
-export async function addProposalSection(organizationId: string, proposalId: string, title: string) {
+export async function addProposalSection(
+  organizationId: string,
+  proposalId: string,
+  title: string,
+  kind: ProposalSectionKindValue = "SCOPE",
+) {
   await requireEditableProposal(organizationId, proposalId);
   const last = await db.proposalSection.findFirst({ where: { proposalId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
-  return db.proposalSection.create({ data: { proposalId, title, sortOrder: (last?.sortOrder ?? -1) + 1 } });
+  return db.proposalSection.create({
+    data: { proposalId, title, kind, sortOrder: (last?.sortOrder ?? -1) + 1 },
+  });
 }
 
 async function findSectionForOrg(organizationId: string, sectionId: string) {
@@ -545,6 +602,17 @@ export async function sendProposal(organizationId: string, proposalId: string) {
       organization: { select: { defaultProposalTerms: true, defaultTaxRateBasisPoints: true } },
       client: { select: { name: true, email: true, phone: true } },
       draws: { orderBy: { sortOrder: "asc" } },
+      options: {
+        include: {
+          estimate: {
+            include: {
+              lineItems: {
+                include: { costCode: { select: { code: true, name: true } } },
+              },
+            },
+          },
+        },
+      },
     },
   });
   if (!proposal) throw new ProposalNotFoundError(proposalId);
@@ -562,6 +630,28 @@ export async function sendProposal(organizationId: string, proposalId: string) {
   assertCoverMessageAllowed(proposal.coverMessage);
   assertPaymentScheduleReady(proposal.draws);
   assertPreparedForReady(proposal.client);
+
+  const estimateLines = proposal.options.flatMap((option) =>
+    option.estimate.lineItems.map((line) => ({
+      title: line.title,
+      description: line.description,
+      groupLabel: line.groupLabel,
+      unit: line.unit,
+      sourceNote: line.sourceNote,
+      quantityMilli: line.quantityMilli,
+      costCodeCode: line.costCode.code,
+      costCodeName: line.costCode.name,
+    })),
+  );
+  if (shouldApplyRoofPaymentSchedule(estimateLines)) {
+    const roofIssues = [
+      ...findRoofRoofrSourceIssues(estimateLines),
+      ...findMissingRoofAutoInsertTitles(estimateLines.map((line) => line.title ?? "")).map(
+        (title) => `Roofing scope is missing auto-insert line "${title}".`,
+      ),
+    ];
+    if (roofIssues.length > 0) throw new RoofSendBlockedError(roofIssues);
+  }
 
   const taxRateBasisPoints =
     proposal.taxRateBasisPoints ??
@@ -607,6 +697,17 @@ export async function getProposalSendPreview(organizationId: string, proposalId:
       organizationTerms: proposal.organization.defaultProposalTerms,
     });
 
+  const estimateLines = proposal.options.flatMap((option) =>
+    option.estimate.lineItems.map((line) => ({
+      title: line.title,
+      description: line.description,
+      groupLabel: line.groupLabel,
+      unit: line.unit,
+      sourceNote: line.sourceNote,
+      quantityMilli: line.quantityMilli,
+    })),
+  );
+
   const validation = previewProposalSend({
     title: proposal.title,
     coverMessage: proposal.coverMessage,
@@ -614,6 +715,7 @@ export async function getProposalSendPreview(organizationId: string, proposalId:
     requireSignature: proposal.requireSignature,
     draws: proposal.draws,
     preparedFor: proposal.client,
+    estimateLines,
   });
 
   return {

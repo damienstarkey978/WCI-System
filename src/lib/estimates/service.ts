@@ -33,6 +33,7 @@ import {
   resolveLineRate,
   type OrgEstimateRateDefaults,
 } from "@/lib/estimates/org-defaults";
+import { buildEstimateGroups } from "@/lib/estimates/groups";
 import { nextVersionedTitle } from "@/lib/estimates/proposal-title";
 import { normalizeEstimateUnit, UnknownEstimateUnitError } from "@/lib/estimates/units";
 import type { BasisPoints } from "@/lib/money";
@@ -94,6 +95,8 @@ export interface CreateEstimateLineItemInput {
   readonly taxable?: boolean;
   readonly internalNote?: string | null;
   readonly groupLabel?: string | null;
+  /** Per-area scope (CR P2 #16). */
+  readonly areaLabel?: string | null;
   readonly lineKind?: EstimateLineKind | string | null;
   readonly allowance?: boolean;
   readonly ownerSupplied?: boolean;
@@ -239,6 +242,7 @@ export async function createEstimate(input: CreateEstimateInput) {
       taxable: item.taxable ?? false,
       internalNote: item.internalNote ?? null,
       groupLabel,
+      areaLabel: item.areaLabel?.trim() || null,
       confidence: item.confidence ?? null,
       priceSource: item.priceSource ?? null,
       sourceNote: input.aiGenerated
@@ -286,7 +290,8 @@ export async function getEstimate(organizationId: string, estimateId: string) {
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
   });
   if (!estimate) throw new EstimateNotFoundError(estimateId);
-  return estimate;
+  const groups = buildEstimateGroups(estimate.lineItems);
+  return { ...estimate, groups };
 }
 
 export interface UpdateEstimateInput {
@@ -391,6 +396,7 @@ export async function copyEstimate(organizationId: string, estimateId: string) {
           taxable: item.taxable,
           internalNote: item.internalNote,
           groupLabel: item.groupLabel,
+          areaLabel: item.areaLabel,
           confidence: item.confidence,
           priceSource: item.priceSource,
           sourceNote: item.sourceNote,
@@ -474,6 +480,7 @@ export async function addEstimateLineItem(input: AddEstimateLineItemInput) {
       taxable: input.taxable ?? false,
       internalNote: input.internalNote ?? null,
       groupLabel: input.groupLabel ?? null,
+      areaLabel: input.areaLabel?.trim() || null,
       sortOrder: (last?.sortOrder ?? -1) + 1,
     },
   });
@@ -490,6 +497,7 @@ export interface UpdateEstimateLineItemInput {
   readonly unitCostCents?: number;
   readonly rateBasisPoints?: BasisPoints;
   readonly groupLabel?: string | null;
+  readonly areaLabel?: string | null;
 }
 
 export async function updateEstimateLineItem(input: UpdateEstimateLineItemInput) {
@@ -508,6 +516,7 @@ export async function updateEstimateLineItem(input: UpdateEstimateLineItemInput)
       unitCostCents: input.unitCostCents ?? lineItem.unitCostCents,
       rateBasisPoints: input.rateBasisPoints ?? lineItem.rateBasisPoints,
       groupLabel: input.groupLabel === undefined ? lineItem.groupLabel : input.groupLabel,
+      areaLabel: input.areaLabel === undefined ? lineItem.areaLabel : input.areaLabel?.trim() || null,
     },
   });
 }
