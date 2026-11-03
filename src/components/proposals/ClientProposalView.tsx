@@ -86,6 +86,7 @@ export function ClientProposalView({
   photos = [],
   quantities = [],
   showFinancing = true,
+  pricingDisplay = "SINGLE",
   clientSignature,
   companySignature,
   mode = "preview",
@@ -112,8 +113,13 @@ export function ClientProposalView({
   readonly photos?: readonly ClientProposalPhoto[];
   /** Handoff "Quantities at a Glance" — derived from estimate line items. */
   readonly quantities?: readonly ClientProposalQuantity[];
-  /** Illustrative "from $X/month" strip (not a lender quote). */
+  /** Illustrative "from $X/month" strip (not a lender quote). CR P3 #27. */
   readonly showFinancing?: boolean;
+  /**
+   * SINGLE (default) shows one total even with multiple estimate options.
+   * OPTIONS enables Good/Better/Best chooser (CR P3 #30).
+   */
+  readonly pricingDisplay?: "SINGLE" | "OPTIONS";
   readonly clientSignature?: ProposalSignatureSide | null;
   readonly companySignature?: ProposalSignatureSide | null;
   /** preview = staff/PDF; review = client link with accept/feedback slots. */
@@ -124,7 +130,12 @@ export function ClientProposalView({
   readonly companySignCta?: ReactNode;
 }) {
   const accent = accentColor?.trim() || "var(--bt-primary, #1a5c3a)";
-  const primaryTotal = options.length === 1 ? options[0].totalCents : null;
+  const showOptionChooser = pricingDisplay === "OPTIONS" && options.length > 1;
+  const primaryTotal = showOptionChooser
+    ? null
+    : options.length > 0
+      ? options[0].totalCents
+      : null;
   const isPrint = mode === "print";
   const companyAddress = formatCompanyAddress(organization);
   const slogan = resolveCompanySlogan(organization?.slogan);
@@ -146,7 +157,7 @@ export function ClientProposalView({
     formatMoney,
   });
   const displayDate = proposalDate ?? createdAt;
-  const monthlyLabel = showFinancing && options.length <= 1 ? formatIllustrativeMonthly(totalCents) : null;
+  const monthlyLabel = showFinancing && !showOptionChooser ? formatIllustrativeMonthly(totalCents) : null;
 
   return (
     <article
@@ -316,7 +327,7 @@ export function ClientProposalView({
       ) : null}
 
       <section className="mt-5 border-t border-[#e5e7eb] pt-4 sm:mt-6 sm:pt-5 break-inside-avoid">
-        {options.length <= 1 ? (
+        {!showOptionChooser ? (
           <>
             <h2 className="text-sm font-semibold">Pricing summary</h2>
             <dl className="mt-3 space-y-2 text-sm">

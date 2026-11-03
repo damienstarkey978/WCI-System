@@ -161,6 +161,8 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
         organizationLogoPath={organization?.logoPath ?? null}
         photos={photos}
         quantities={quantities}
+        showFinancing={proposal.showFinancing}
+        pricingDisplay={proposal.pricingDisplay}
         termsText={resolveProposalTermsText({
           proposalTerms: proposal.termsText,
           organizationTerms: organization?.defaultProposalTerms,

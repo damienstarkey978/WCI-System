@@ -495,6 +495,8 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               organizationLogoPath={organization?.logoPath ?? null}
               photos={clientPhotos}
               quantities={quantities}
+              showFinancing={proposal.showFinancing}
+              pricingDisplay={proposal.pricingDisplay}
               termsText={resolveProposalTermsText({
                 proposalTerms: proposal.termsText,
                 organizationTerms: organization?.defaultProposalTerms,

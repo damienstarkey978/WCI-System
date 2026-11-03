@@ -3,6 +3,7 @@
  * Aggregates blocking checks from P1 #6–10 + P2 #18/#21.
  */
 
+import { findConfidenceGateIssues } from "@/lib/estimates/confidence-gate";
 import {
   findMissingRoofAutoInsertTitles,
   findRoofRoofrSourceIssues,
@@ -14,6 +15,7 @@ import { findPreparedForIssues } from "@/lib/proposals/prepared-for";
 import { findProposalTermsIssues } from "@/lib/proposals/terms-guard";
 
 export interface ProposalSendPreviewLine {
+  readonly id?: string;
   readonly title?: string | null;
   readonly description?: string | null;
   readonly groupLabel?: string | null;
@@ -22,6 +24,8 @@ export interface ProposalSendPreviewLine {
   readonly unit?: string | null;
   readonly sourceNote?: string | null;
   readonly quantityMilli?: number;
+  readonly confidence?: "HIGH" | "MEDIUM" | "LOW" | null;
+  readonly confidenceReviewedAt?: Date | string | null;
 }
 
 export interface ProposalSendPreviewInput {
@@ -87,6 +91,17 @@ export function previewProposalSend(input: ProposalSendPreviewInput): ProposalSe
         message: `Roofing scope is missing auto-insert line "${title}".`,
       });
     }
+  }
+
+  for (const message of findConfidenceGateIssues(
+    lines.map((line, index) => ({
+      id: line.id ?? `line-${index}`,
+      title: line.title,
+      confidence: line.confidence,
+      confidenceReviewedAt: line.confidenceReviewedAt,
+    })),
+  )) {
+    issues.push({ code: "confidence_review_required", message });
   }
 
   return { ready: issues.length === 0, issues };

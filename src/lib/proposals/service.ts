@@ -36,6 +36,8 @@ import {
   assertCanDisableRequireSignature,
   assertCanSendWithSignaturePolicy,
 } from "@/lib/proposals/signature-policy";
+import { findConfidenceGateIssues } from "@/lib/estimates/confidence-gate";
+import { resolveShowFinancing } from "@/lib/estimates/financing";
 import {
   ROOF_FIFTY_FIFTY_SCHEDULE,
   shouldApplyRoofPaymentSchedule,
@@ -52,6 +54,7 @@ import { assertProposalTermsReady } from "@/lib/proposals/terms-guard";
 import { transitionJobStatus } from "@/lib/jobs";
 import type { BasisPoints } from "@/lib/money";
 import { emitEvent } from "@/lib/webhooks";
+import type { ProposalPricingDisplay } from "@/generated/prisma/enums";
 
 export { BannedCoverMessageError } from "@/lib/proposals/cover-message";
 export {
@@ -207,6 +210,15 @@ export class RoofSendBlockedError extends Error {
   }
 }
 
+export class ConfidenceReviewRequiredError extends Error {
+  readonly reasons: readonly string[];
+  constructor(reasons: readonly string[]) {
+    super(reasons.join(" "));
+    this.name = "ConfidenceReviewRequiredError";
+    this.reasons = reasons;
+  }
+}
+
 export interface CreateProposalSectionInput {
   readonly title: string;
   readonly bullets: readonly string[];
@@ -242,6 +254,10 @@ export interface CreateProposalInput {
   /// Not FK-derived from the estimate's line items — generated together, then editable
   /// independently, so they can drift apart after a human edits either side.
   readonly sections?: readonly CreateProposalSectionInput[];
+  /** Illustrative financing strip (CR P3 #27). Inferred from lead notes when omitted. */
+  readonly showFinancing?: boolean;
+  /** SINGLE (default) vs OPTIONS Good/Better/Best (CR P3 #30). */
+  readonly pricingDisplay?: ProposalPricingDisplay;
 }
 
 async function validateOptionEstimates(
@@ -301,6 +317,20 @@ export async function createProposal(input: CreateProposalInput) {
   const coverMessage = normalizeProposalCoverMessage(input.coverMessage);
   assertCoverMessageAllowed(coverMessage);
 
+  const leadNotes = input.leadId
+    ? (
+        await db.lead.findFirst({
+          where: { id: input.leadId, organizationId: input.organizationId },
+          select: { notes: true },
+        })
+      )?.notes
+    : null;
+  const showFinancing = resolveShowFinancing({
+    showFinancing: input.showFinancing,
+    leadNotes,
+  });
+  const pricingDisplay = input.pricingDisplay ?? "SINGLE";
+
   const estimateLines = await db.estimateLineItem.findMany({
     where: { estimateId: { in: input.options.map((option) => option.estimateId) } },
     select: {
@@ -349,6 +379,8 @@ export async function createProposal(input: CreateProposalInput) {
       termsText,
       requireSignature,
       taxRateBasisPoints,
+      showFinancing,
+      pricingDisplay,
       options: {
         create: input.options.map((option, index) => ({ estimateId: option.estimateId, label: option.label, sortOrder: index })),
       },
@@ -633,6 +665,7 @@ export async function sendProposal(organizationId: string, proposalId: string) {
 
   const estimateLines = proposal.options.flatMap((option) =>
     option.estimate.lineItems.map((line) => ({
+      id: line.id,
       title: line.title,
       description: line.description,
       groupLabel: line.groupLabel,
@@ -641,6 +674,8 @@ export async function sendProposal(organizationId: string, proposalId: string) {
       quantityMilli: line.quantityMilli,
       costCodeCode: line.costCode.code,
       costCodeName: line.costCode.name,
+      confidence: line.confidence,
+      confidenceReviewedAt: line.confidenceReviewedAt,
     })),
   );
   if (shouldApplyRoofPaymentSchedule(estimateLines)) {
@@ -652,6 +687,8 @@ export async function sendProposal(organizationId: string, proposalId: string) {
     ];
     if (roofIssues.length > 0) throw new RoofSendBlockedError(roofIssues);
   }
+  const confidenceIssues = findConfidenceGateIssues(estimateLines);
+  if (confidenceIssues.length > 0) throw new ConfidenceReviewRequiredError(confidenceIssues);
 
   const taxRateBasisPoints =
     proposal.taxRateBasisPoints ??
@@ -699,12 +736,15 @@ export async function getProposalSendPreview(organizationId: string, proposalId:
 
   const estimateLines = proposal.options.flatMap((option) =>
     option.estimate.lineItems.map((line) => ({
+      id: line.id,
       title: line.title,
       description: line.description,
       groupLabel: line.groupLabel,
       unit: line.unit,
       sourceNote: line.sourceNote,
       quantityMilli: line.quantityMilli,
+      confidence: line.confidence,
+      confidenceReviewedAt: line.confidenceReviewedAt,
     })),
   );
 
@@ -723,7 +763,25 @@ export async function getProposalSendPreview(organizationId: string, proposalId:
     validation,
     displayDate: proposal.sentAt ?? proposal.createdAt,
     taxRateBasisPoints: proposal.taxRateBasisPoints,
+    showFinancing: proposal.showFinancing,
+    pricingDisplay: proposal.pricingDisplay,
   };
+}
+
+/** Toggle financing strip / pricing display on a DRAFT proposal (CR P3 #27/#30). */
+export async function updateProposalClientDisplay(
+  organizationId: string,
+  proposalId: string,
+  input: { readonly showFinancing?: boolean; readonly pricingDisplay?: ProposalPricingDisplay },
+) {
+  await requireEditableProposal(organizationId, proposalId);
+  return db.proposal.update({
+    where: { id: proposalId },
+    data: {
+      ...(input.showFinancing !== undefined ? { showFinancing: input.showFinancing } : {}),
+      ...(input.pricingDisplay !== undefined ? { pricingDisplay: input.pricingDisplay } : {}),
+    },
+  });
 }
 
 export async function updateProposalTerms(

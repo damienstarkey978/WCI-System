@@ -521,6 +521,24 @@ export async function updateEstimateLineItem(input: UpdateEstimateLineItemInput)
   });
 }
 
+/** Mark an AI LOW/MEDIUM confidence line as staff-reviewed (CR P3 #28). */
+export async function markEstimateLineConfidenceReviewed(
+  organizationId: string,
+  estimateId: string,
+  lineItemId: string,
+) {
+  await requireEditableEstimate(organizationId, estimateId);
+  const lineItem = await db.estimateLineItem.findFirst({
+    where: { id: lineItemId, estimateId },
+    select: { id: true },
+  });
+  if (!lineItem) throw new EstimateLineItemNotFoundError(lineItemId);
+  return db.estimateLineItem.update({
+    where: { id: lineItem.id },
+    data: { confidenceReviewedAt: new Date() },
+  });
+}
+
 export async function deleteEstimateLineItem(organizationId: string, estimateId: string, lineItemId: string) {
   await requireEditableEstimate(organizationId, estimateId);
 

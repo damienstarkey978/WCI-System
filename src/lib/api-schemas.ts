@@ -1015,6 +1015,10 @@ export const createProposalSchema = z
     termsText: z.string().trim().max(50_000).nullish(),
     /** Default true; only ADMIN may set false (enforced in service). */
     requireSignature: z.boolean().optional(),
+    /** Illustrative financing strip (CR P3 #27); inferred from lead notes when omitted. */
+    showFinancing: z.boolean().optional(),
+    /** SINGLE (default) vs OPTIONS Good/Better/Best (CR P3 #30). */
+    pricingDisplay: z.enum(["SINGLE", "OPTIONS"]).optional(),
     /** 1-5 priced options (task #116) — a single-option proposal auto-selects it. */
     options: z.array(proposalOptionSchema).min(1).max(5),
   })
@@ -1034,6 +1038,22 @@ export const updateProposalTermsSchema = z.object({
 
 export const updateProposalRequireSignatureSchema = z.object({
   requireSignature: z.boolean(),
+});
+
+/** PATCH /proposals/{id}/client-display — financing + pricing display (CR P3 #27/#30). */
+export const updateProposalClientDisplaySchema = z.object({
+  showFinancing: z.boolean().optional(),
+  pricingDisplay: z.enum(["SINGLE", "OPTIONS"]).optional(),
+});
+
+/** GET/PATCH /organization/estimating-settings (CR P3 #29). */
+export const updateEstimatingSettingsSchema = z.object({
+  defaultEstimateRateMode: rateMode.optional(),
+  defaultEstimateRateBasisPoints: basisPoints.optional(),
+  allowPerLineRateOverride: z.boolean().optional(),
+  defaultTaxRateBasisPoints: basisPoints.optional(),
+  defaultProposalTerms: z.string().trim().max(50_000).nullish(),
+  defaultProposalTemplateId: z.string().min(1).max(64).nullish(),
 });
 
 export const addProposalOptionSchema = proposalOptionSchema;
