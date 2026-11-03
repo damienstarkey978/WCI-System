@@ -587,3 +587,15 @@ export function InboxIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Share / export network nodes — BT invoices header (multi-color chrome). */
+export function ShareIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <circle cx="14.5" cy="4.75" r="2" stroke="currentColor" strokeWidth={NAV} />
+      <circle cx="14.5" cy="15.25" r="2" stroke="currentColor" strokeWidth={NAV} />
+      <circle cx="5.5" cy="10" r="2" stroke="currentColor" strokeWidth={NAV} />
+      <path d="M7.35 9.15 12.65 5.6M7.35 10.85 12.65 14.4" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" />
+    </svg>
+  );
+}
