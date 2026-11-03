@@ -30,6 +30,7 @@ import { db } from "@/lib/db";
 import { isSupabaseStorageConfigured } from "@/lib/env";
 import { uploadAndRegisterFile } from "@/lib/files/service";
 import type { BasisPoints } from "@/lib/money";
+import { normalizeProposalCoverMessage } from "@/lib/proposals/cover-message";
 import { createProposal, type CreateProposalSectionInput } from "@/lib/proposals/service";
 
 const IMAGE_EXTENSION_BY_MEDIA_TYPE: Record<DraftEstimateImageInput["mediaType"], string> = {
@@ -244,9 +245,12 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
   // (JAX EPICS / Handoff parity — Robin Hood Dan Cook acceptance case).
   const permitWorkType = lead.permitWorkType ?? "ALTERATIONS_AND_REPAIRS";
 
+  // CR P1 #14 — draft from raw lead.notes (not a rewritten summary) when present.
+  const scopeNotes = lead.notes?.trim() || input.notes;
+
   const draft = await draftEstimateFromNotes({
     jobName: lead.name,
-    notes: input.notes,
+    notes: scopeNotes,
     costCodes,
     materialCatalog,
     images: input.images,
@@ -266,6 +270,7 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     confidence: line.confidence,
     priceSource: line.priceSource,
     groupLabel: line.groupLabel,
+    sourceNote: line.sourceNote,
   }));
 
   const jobId = lead.convertedJobId;
@@ -299,11 +304,11 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     title,
     lineItems,
     aiGenerated: true,
-    aiPromptNotes: input.notes,
+    aiPromptNotes: scopeNotes,
     permitWorkType,
     newVersion: input.newVersion,
     pendingProposalDraft: {
-      coverMessage: draft.projectDescription,
+      coverMessage: normalizeProposalCoverMessage(draft.projectDescription),
       sections: draft.proposalSections.map((section) => ({
         title: section.title,
         bullets: [...section.bullets],

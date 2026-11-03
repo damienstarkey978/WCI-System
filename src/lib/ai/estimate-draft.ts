@@ -25,6 +25,7 @@ import {
   DEFAULT_ESTIMATE_RATE_MODE,
 } from "@/lib/estimates/org-defaults";
 import { applyPricingRuleToLine } from "@/lib/estimates/pricing-rules";
+import { resolveSourceNoteFromNotes } from "@/lib/estimates/source-note";
 import { tryNormalizeEstimateUnit } from "@/lib/estimates/units";
 import { parseDollarsToCents, type BasisPoints, type Cents } from "@/lib/money";
 
@@ -95,6 +96,14 @@ export function buildLineItemSchema(costCodeIds: readonly string[]) {
       .enum(["CATALOG", "MARKET_RATE", "RULE", "COST_DB"])
       .describe(
         "CATALOG = materials catalog; COST_DB = cost-code default unit/cost; RULE = org pricing rule (roof/window/drywall); MARKET_RATE only as last resort",
+      ),
+    sourceNote: z
+      .string()
+      .trim()
+      .max(500)
+      .nullish()
+      .describe(
+        "Exact sentence copied from the field notes that justifies this line. If no sentence supports it, omit or use 'NOT IN NOTES' — never invent a paraphrase.",
       ),
   });
 }
@@ -253,6 +262,7 @@ export interface NormalizedEstimateLine {
   readonly rateBasisPoints: BasisPoints;
   readonly confidence: "HIGH" | "MEDIUM" | "LOW";
   readonly priceSource: "CATALOG" | "MARKET_RATE" | "RULE" | "COST_DB";
+  readonly sourceNote: string;
 }
 
 export interface NormalizeEstimateDraftOptions {
@@ -344,6 +354,12 @@ function normalizeLine(
     rateBasisPoints: DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
     confidence: line.confidence,
     priceSource: (ruled.priceSource as NormalizedEstimateLine["priceSource"]) ?? priceSource,
+    sourceNote: resolveSourceNoteFromNotes({
+      notes: options.notes,
+      title: line.title,
+      description: line.description,
+      modelSourceNote: line.sourceNote,
+    }),
   };
 }
 

@@ -100,6 +100,8 @@ export interface CreateEstimateLineItemInput {
   readonly confidence?: LineItemConfidence | null;
   /** Set only by the AI estimate assistant — null for hand-entered lines. */
   readonly priceSource?: LineItemPriceSource | null;
+  /** AI scope citation (CR P1 #14); null for hand-entered lines. */
+  readonly sourceNote?: string | null;
 }
 
 export interface CreateEstimateInput {
@@ -238,6 +240,9 @@ export async function createEstimate(input: CreateEstimateInput) {
       groupLabel,
       confidence: item.confidence ?? null,
       priceSource: item.priceSource ?? null,
+      sourceNote: input.aiGenerated
+        ? (item.sourceNote?.trim() || "NOT IN NOTES")
+        : item.sourceNote?.trim() || null,
       sortOrder: index,
     };
   });
