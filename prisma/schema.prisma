@@ -1081,6 +1081,10 @@ model EstimateLineItem {
   /// Null for hand-entered lines.
   priceSource LineItemPriceSource?
 
+  /// AI scope citation (CR P1 #14). Raw note sentence, or "NOT IN NOTES".
+  /// Null for hand-entered lines.
+  sourceNote String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3390,6 +3394,9 @@ model Proposal {
   /// Snapshot of Terms & Conditions shown/signed with this proposal (copied from
   /// Organization.defaultProposalTerms on create/send so later org edits don't rewrite signed docs).
   termsText String? @db.Text
+
+  /// Handoff parity P1 #8 — default ON; only ADMIN may turn off; send blocked while off.
+  requireSignature Boolean @default(true)
 
   declinedAt DateTime?
 

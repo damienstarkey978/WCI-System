@@ -9,6 +9,7 @@ import { draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/e
 import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
 import { listEnabledAiPreferenceInstructions } from "@/lib/ai/preference-instructions";
 import { createChangeOrder, JobNotFoundError as ChangeOrderJobNotFoundError, JobNotOpenError } from "@/lib/change-orders/service";
+import { normalizeProposalCoverMessage } from "@/lib/proposals/cover-message";
 import { ClientNotFoundError, createProposal } from "@/lib/proposals/service";
 
 export class JobNotFoundError extends Error {
@@ -147,6 +148,7 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
           rateBasisPoints: line.rateBasisPoints,
           confidence: line.confidence,
           priceSource: line.priceSource,
+          sourceNote: line.sourceNote,
           sortOrder: index,
         })),
       },
@@ -194,7 +196,7 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
     jobId: job.id,
     clientId,
     title: draft.title,
-    coverMessage: draft.projectDescription,
+    coverMessage: normalizeProposalCoverMessage(draft.projectDescription),
     options: [{ estimateId: estimate.id, label: "Option 1" }],
     sections: draft.proposalSections,
   });

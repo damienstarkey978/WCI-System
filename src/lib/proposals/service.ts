@@ -21,10 +21,35 @@ import { totalDrawPercentage } from "@/lib/invoicing/calc";
 import { resolveProposalTermsText } from "@/lib/organization/proposal-terms";
 import { readTemplateDraws, readTemplateSections } from "@/lib/proposal-templates/content";
 import { getProposalTemplate } from "@/lib/proposal-templates/service";
+import {
+  assertCoverMessageAllowed,
+  normalizeProposalCoverMessage,
+} from "@/lib/proposals/cover-message";
 import { hashProposalSignature } from "@/lib/proposals/e-sign";
+import {
+  assertDepositWithinLimit,
+  assertPaymentScheduleReady,
+  DEFAULT_PROPOSAL_PAYMENT_SCHEDULE,
+} from "@/lib/proposals/payment-schedule";
+import {
+  assertCanDisableRequireSignature,
+  assertCanSendWithSignaturePolicy,
+} from "@/lib/proposals/signature-policy";
+import { assertProposalTermsReady } from "@/lib/proposals/terms-guard";
 import { transitionJobStatus } from "@/lib/jobs";
 import type { BasisPoints } from "@/lib/money";
 import { emitEvent } from "@/lib/webhooks";
+
+export { BannedCoverMessageError } from "@/lib/proposals/cover-message";
+export {
+  DepositTooHighError,
+  PaymentScheduleIncompleteError,
+} from "@/lib/proposals/payment-schedule";
+export {
+  SignaturePolicyAdminRequiredError,
+  SignatureRequiredError,
+} from "@/lib/proposals/signature-policy";
+export { IncompleteProposalTermsError } from "@/lib/proposals/terms-guard";
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -179,6 +204,13 @@ export interface CreateProposalInput {
   readonly clientId: string;
   readonly title: string;
   readonly coverMessage?: string | null;
+  readonly termsText?: string | null;
+  /** Default true (CR P1 #8). Only ADMIN may create with false. */
+  readonly requireSignature?: boolean;
+  /** Actor role used when requireSignature is explicitly false. */
+  readonly actorRole?: string | null;
+  /** Seed draws; defaults to the WCI 15/20/20/20/15/10 schedule when omitted. */
+  readonly draws?: readonly { readonly title: string; readonly pctOfContractBasisPoints: BasisPoints }[];
   /** 1-5 priced options (CLAUDE.md 3/task #116) — each estimate must belong to
    *  the same Job (or the same Lead, if there's no Job yet) as the proposal. */
   readonly options: readonly CreateProposalOptionInput[];
@@ -229,10 +261,26 @@ export async function createProposal(input: CreateProposalInput) {
     where: { id: input.organizationId },
     select: { defaultProposalTerms: true },
   });
-  const termsText = resolveProposalTermsText({
-    proposalTerms: null,
-    organizationTerms: org?.defaultProposalTerms,
-  });
+  const termsText = assertProposalTermsReady(
+    resolveProposalTermsText({
+      proposalTerms: input.termsText,
+      organizationTerms: org?.defaultProposalTerms,
+    }),
+  );
+
+  const requireSignature = input.requireSignature !== false;
+  if (input.requireSignature === false) {
+    assertCanDisableRequireSignature(input.actorRole);
+  }
+
+  const coverMessage = normalizeProposalCoverMessage(input.coverMessage);
+  assertCoverMessageAllowed(coverMessage);
+
+  const draws =
+    input.draws && input.draws.length > 0
+      ? input.draws
+      : DEFAULT_PROPOSAL_PAYMENT_SCHEDULE;
+  assertDepositWithinLimit(draws);
 
   const proposal = await db.proposal.create({
     data: {
@@ -241,10 +289,18 @@ export async function createProposal(input: CreateProposalInput) {
       leadId: input.leadId ?? null,
       clientId: input.clientId,
       title: input.title,
-      coverMessage: input.coverMessage ?? null,
+      coverMessage,
       termsText,
+      requireSignature,
       options: {
         create: input.options.map((option, index) => ({ estimateId: option.estimateId, label: option.label, sortOrder: index })),
+      },
+      draws: {
+        create: draws.map((draw, index) => ({
+          title: draw.title,
+          pctOfContractBasisPoints: draw.pctOfContractBasisPoints,
+          sortOrder: index,
+        })),
       },
       sections: input.sections?.length
         ? {
@@ -258,7 +314,11 @@ export async function createProposal(input: CreateProposalInput) {
           }
         : undefined,
     },
-    include: { options: { orderBy: { sortOrder: "asc" } }, sections: { include: { bullets: true } } },
+    include: {
+      options: { orderBy: { sortOrder: "asc" } },
+      sections: { include: { bullets: true } },
+      draws: { orderBy: { sortOrder: "asc" } },
+    },
   });
 
   // A single-option proposal has no real choice to make — pre-select it so acceptance
@@ -362,7 +422,9 @@ async function requireEditableProposal(organizationId: string, proposalId: strin
 
 export async function updateProposalCoverMessage(organizationId: string, proposalId: string, coverMessage: string | null) {
   await requireEditableProposal(organizationId, proposalId);
-  return db.proposal.update({ where: { id: proposalId }, data: { coverMessage } });
+  const normalized = coverMessage == null ? null : normalizeProposalCoverMessage(coverMessage);
+  if (normalized) assertCoverMessageAllowed(normalized);
+  return db.proposal.update({ where: { id: proposalId }, data: { coverMessage: normalized } });
 }
 
 export async function addProposalSection(organizationId: string, proposalId: string, title: string) {
@@ -432,9 +494,25 @@ export interface AddProposalDrawInput {
 export async function addProposalDraw(organizationId: string, proposalId: string, input: AddProposalDrawInput) {
   await requireEditableProposal(organizationId, proposalId);
 
-  const existing = await db.proposalDraw.findMany({ where: { proposalId }, select: { pctOfContractBasisPoints: true, sortOrder: true } });
-  const total = totalDrawPercentage([...existing.map((draw) => draw.pctOfContractBasisPoints), input.pctOfContractBasisPoints]);
+  const existing = await db.proposalDraw.findMany({
+    where: { proposalId },
+    select: { title: true, pctOfContractBasisPoints: true, sortOrder: true },
+  });
+  const nextDraws = [
+    ...existing.map((draw) => ({
+      title: draw.title,
+      pctOfContractBasisPoints: draw.pctOfContractBasisPoints,
+      sortOrder: draw.sortOrder,
+    })),
+    {
+      title: input.title,
+      pctOfContractBasisPoints: input.pctOfContractBasisPoints,
+      sortOrder: existing.reduce((max, draw) => Math.max(max, draw.sortOrder), -1) + 1,
+    },
+  ];
+  const total = totalDrawPercentage(nextDraws.map((draw) => draw.pctOfContractBasisPoints));
   if (total > 10_000) throw new ProposalDrawOverallocatedError(total);
+  assertDepositWithinLimit(nextDraws);
 
   const lastSortOrder = existing.reduce((max, draw) => Math.max(max, draw.sortOrder), -1);
   return db.proposalDraw.create({
@@ -457,17 +535,25 @@ export async function deleteProposalDraw(organizationId: string, drawId: string)
 export async function sendProposal(organizationId: string, proposalId: string) {
   const proposal = await db.proposal.findFirst({
     where: { id: proposalId, organizationId },
-    include: { organization: { select: { defaultProposalTerms: true } } },
+    include: {
+      organization: { select: { defaultProposalTerms: true } },
+      draws: { orderBy: { sortOrder: "asc" } },
+    },
   });
   if (!proposal) throw new ProposalNotFoundError(proposalId);
   if (proposal.status !== ProposalStatus.DRAFT) throw new ProposalNotDraftError(proposalId, proposal.status);
 
-  const termsText =
+  assertCanSendWithSignaturePolicy(proposal.requireSignature);
+
+  const termsText = assertProposalTermsReady(
     proposal.termsText?.trim() ||
-    resolveProposalTermsText({
-      proposalTerms: null,
-      organizationTerms: proposal.organization.defaultProposalTerms,
-    });
+      resolveProposalTermsText({
+        proposalTerms: null,
+        organizationTerms: proposal.organization.defaultProposalTerms,
+      }),
+  );
+  assertCoverMessageAllowed(proposal.coverMessage);
+  assertPaymentScheduleReady(proposal.draws);
 
   const updated = await db.proposal.update({
     where: { id: proposal.id },
@@ -477,6 +563,32 @@ export async function sendProposal(organizationId: string, proposalId: string) {
   await emitEvent(organizationId, "proposal.sent", { proposalId: updated.id, jobId: updated.jobId });
 
   return updated;
+}
+
+export async function updateProposalTerms(
+  organizationId: string,
+  proposalId: string,
+  termsText: string,
+) {
+  await requireEditableProposal(organizationId, proposalId);
+  const ready = assertProposalTermsReady(termsText);
+  return db.proposal.update({ where: { id: proposalId }, data: { termsText: ready } });
+}
+
+export async function setProposalRequireSignature(input: {
+  readonly organizationId: string;
+  readonly proposalId: string;
+  readonly requireSignature: boolean;
+  readonly actorRole: string | null | undefined;
+}) {
+  await requireEditableProposal(input.organizationId, input.proposalId);
+  if (!input.requireSignature) {
+    assertCanDisableRequireSignature(input.actorRole);
+  }
+  return db.proposal.update({
+    where: { id: input.proposalId },
+    data: { requireSignature: input.requireSignature },
+  });
 }
 
 export class ProposalAlreadyCompanySignedError extends Error {

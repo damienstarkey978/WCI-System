@@ -104,11 +104,12 @@ describe("createAiEstimateDraft", () => {
         organizationId: "org_1",
         jobId: "job_1",
         clientId: "client_1",
-        coverMessage: "Paint the interior.",
+        coverMessage: expect.stringContaining("Thank you for the opportunity"),
         sections: [{ title: "Painting", bullets: ["Paint all interior walls, two coats"] }],
         options: [{ estimateId: "est_1", label: "Option 1" }],
       }),
     );
+    expect(vi.mocked(createProposal).mock.calls[0]![0].coverMessage).toContain("Paint the interior.");
   });
 
   it("skips the proposal with a clear reason when no client is linked", async () => {

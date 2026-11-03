@@ -974,6 +974,9 @@ export const createProposalSchema = z
     clientId: z.string().min(1).max(64),
     title: z.string().trim().min(1).max(255),
     coverMessage: z.string().trim().max(10_000).nullish(),
+    termsText: z.string().trim().max(50_000).nullish(),
+    /** Default true; only ADMIN may set false (enforced in service). */
+    requireSignature: z.boolean().optional(),
     /** 1-5 priced options (task #116) — a single-option proposal auto-selects it. */
     options: z.array(proposalOptionSchema).min(1).max(5),
   })
@@ -986,6 +989,14 @@ export const createProposalSchema = z
       });
     }
   });
+
+export const updateProposalTermsSchema = z.object({
+  termsText: z.string().trim().min(1).max(50_000),
+});
+
+export const updateProposalRequireSignatureSchema = z.object({
+  requireSignature: z.boolean(),
+});
 
 export const addProposalOptionSchema = proposalOptionSchema;
 
