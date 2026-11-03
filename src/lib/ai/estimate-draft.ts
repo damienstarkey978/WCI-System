@@ -24,6 +24,7 @@ import {
   DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
   DEFAULT_ESTIMATE_RATE_MODE,
 } from "@/lib/estimates/org-defaults";
+import { applyPricingRuleToLine } from "@/lib/estimates/pricing-rules";
 import { tryNormalizeEstimateUnit } from "@/lib/estimates/units";
 import { parseDollarsToCents, type BasisPoints, type Cents } from "@/lib/money";
 
@@ -32,6 +33,8 @@ export interface CostCodeOption {
   readonly code: string;
   readonly name: string;
   readonly defaultCostType: string;
+  readonly defaultUnit?: string | null;
+  readonly defaultUnitCostCents?: number | null;
 }
 
 export class EmptyCostCodeCatalogError extends Error {
@@ -89,8 +92,10 @@ export function buildLineItemSchema(costCodeIds: readonly string[]) {
       .enum(["HIGH", "MEDIUM", "LOW"])
       .describe("How confident you are in this line's quantity and pricing"),
     priceSource: z
-      .enum(["CATALOG", "MARKET_RATE"])
-      .describe("CATALOG when this unit cost came from a given material catalog entry; MARKET_RATE otherwise"),
+      .enum(["CATALOG", "MARKET_RATE", "RULE", "COST_DB"])
+      .describe(
+        "CATALOG = materials catalog; COST_DB = cost-code default unit/cost; RULE = org pricing rule (roof/window/drywall); MARKET_RATE only as last resort",
+      ),
   });
 }
 
@@ -247,7 +252,14 @@ export interface NormalizedEstimateLine {
   readonly rateMode: RateMode;
   readonly rateBasisPoints: BasisPoints;
   readonly confidence: "HIGH" | "MEDIUM" | "LOW";
-  readonly priceSource: "CATALOG" | "MARKET_RATE";
+  readonly priceSource: "CATALOG" | "MARKET_RATE" | "RULE" | "COST_DB";
+}
+
+export interface NormalizeEstimateDraftOptions {
+  readonly permitWorkType?: import("@/lib/estimates/pricing-rules").PermitWorkTypeValue | null;
+  readonly notes?: string | null;
+  readonly costCodes?: readonly CostCodeOption[];
+  readonly hasRoofrQuantity?: boolean;
 }
 
 export interface NormalizedProposalSection {
@@ -268,38 +280,84 @@ export interface NormalizedEstimateDraft {
  * units the rest of the system uses (CLAUDE.md 5). This is the one place a float from
  * the model touches money — everything downstream of this function is integer math.
  */
-export function normalizeEstimateDraft(raw: RawEstimateDraft): NormalizedEstimateDraft {
+export function normalizeEstimateDraft(
+  raw: RawEstimateDraft,
+  options: NormalizeEstimateDraftOptions = {},
+): NormalizedEstimateDraft {
+  const costCodeById = new Map((options.costCodes ?? []).map((code) => [code.id, code]));
   return {
     title: raw.title,
     projectDescription: raw.projectDescription,
     assumptions: raw.assumptions,
-    lineItems: raw.lineItems.map((line) => normalizeLine(line)),
+    lineItems: raw.lineItems.map((line) => normalizeLine(line, options, costCodeById.get(line.costCodeId))),
     proposalSections: raw.proposalSections.map((section) => ({ title: section.title, bullets: section.bullets })),
   };
 }
 
-function normalizeLine(line: RawEstimateLineItem): NormalizedEstimateLine {
+function normalizeLine(
+  line: RawEstimateLineItem,
+  options: NormalizeEstimateDraftOptions,
+  costCode?: CostCodeOption,
+): NormalizedEstimateLine {
   // Org-locked 40% MARKUP (Handoff parity P1 #1) — ignore the model's ratePercent
   // so every AI line lands on DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS. createEstimate
   // also re-locks AI drafts; this keeps unit tests and pending-draft UI honest.
+  let unit = tryNormalizeEstimateUnit(line.unit);
+  let unitCostCents = parseDollarsToCents(line.unitCostDollars);
+  let priceSource: NormalizedEstimateLine["priceSource"] = line.priceSource;
+
+  // Cost-DB defaults: prefer catalog unit/cost when the model left MARKET_RATE
+  // or omitted a sensible unit and the cost code has defaults.
+  if (costCode?.defaultUnitCostCents != null && costCode.defaultUnitCostCents > 0) {
+    if (priceSource === "MARKET_RATE" || priceSource === "COST_DB") {
+      unit = tryNormalizeEstimateUnit(costCode.defaultUnit) ?? unit;
+      unitCostCents = costCode.defaultUnitCostCents;
+      priceSource = "COST_DB";
+    } else if (!unit && costCode.defaultUnit) {
+      unit = tryNormalizeEstimateUnit(costCode.defaultUnit);
+    }
+  }
+
+  const ruled = applyPricingRuleToLine({
+    title: line.title,
+    description: line.description,
+    groupLabel: line.groupLabel,
+    costCodeName: costCode?.name,
+    costCodeCode: costCode?.code,
+    unit,
+    unitCostCents,
+    priceSource,
+    permitWorkType: options.permitWorkType,
+    notes: options.notes,
+    hasRoofrQuantity: options.hasRoofrQuantity,
+  });
+
   return {
     costCodeId: line.costCodeId,
     groupLabel: line.groupLabel,
     title: line.title,
     description: line.description ?? null,
     quantityMilli: Math.round(line.quantity * 1_000),
-    unit: tryNormalizeEstimateUnit(line.unit),
-    unitCostCents: parseDollarsToCents(line.unitCostDollars),
+    unit: tryNormalizeEstimateUnit(ruled.unit) ?? unit,
+    unitCostCents: ruled.unitCostCents,
     rateMode: DEFAULT_ESTIMATE_RATE_MODE,
     rateBasisPoints: DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
     confidence: line.confidence,
-    priceSource: line.priceSource,
+    priceSource: (ruled.priceSource as NormalizedEstimateLine["priceSource"]) ?? priceSource,
   };
 }
 
 /** A one-line-per-code catalog listing, used in the prompt so the model sees real options. */
 export function formatCostCodeCatalog(costCodes: readonly CostCodeOption[]): string {
-  return costCodes.map((code) => `${code.id} | ${code.code} | ${code.name} | ${code.defaultCostType}`).join("\n");
+  return costCodes
+    .map((code) => {
+      const defaults =
+        code.defaultUnitCostCents != null && code.defaultUnitCostCents > 0
+          ? ` | default ${code.defaultUnit ?? "?"} @ $${(code.defaultUnitCostCents / 100).toFixed(2)}`
+          : "";
+      return `${code.id} | ${code.code} | ${code.name} | ${code.defaultCostType}${defaults}`;
+    })
+    .join("\n");
 }
 
 export interface MaterialCatalogOption {

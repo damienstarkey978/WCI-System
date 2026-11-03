@@ -53,6 +53,10 @@ import {
   formatAiPreferenceInstructions,
   type AiPreferenceInstructionRow,
 } from "@/lib/ai/preference-instructions";
+import {
+  formatPricingRulesForPrompt,
+  type PermitWorkTypeValue,
+} from "@/lib/estimates/pricing-rules";
 import { isAnthropicConfigured } from "@/lib/env";
 
 export class AiNotConfiguredError extends Error {
@@ -161,6 +165,10 @@ export interface DraftEstimateInput {
   readonly images?: readonly DraftEstimateImageInput[];
   /** Org AI preference instructions (Handoff Presets). Optional for backward-compatible callers/tests. */
   readonly preferenceInstructions?: readonly AiPreferenceInstructionRow[];
+  /** JAX EPICS–aligned work type — drives drywall/window pricing rules. */
+  readonly permitWorkType?: PermitWorkTypeValue | null;
+  /** True when a Roofr takeoff quantity is available for roofing lines. */
+  readonly hasRoofrQuantity?: boolean;
 }
 
 type StreamClient = Pick<Anthropic["messages"], "stream">;
@@ -218,15 +226,18 @@ function buildCatalogPreamble(input: {
   readonly materialCatalog: readonly MaterialCatalogOption[];
   readonly preferenceInstructions: readonly AiPreferenceInstructionRow[];
   readonly scopeNotes: string;
+  readonly permitWorkType?: PermitWorkTypeValue | null;
 }): string {
   return [
     `Job: ${input.jobName}`,
     "",
-    "Cost code catalog (id | code | name | default cost type):",
+    "Cost code catalog (id | code | name | default cost type [| default unit @ cost]):",
     formatCostCodeCatalog(input.costCodes),
     "",
     "Materials catalog (vendor | description | unit | unit price):",
     formatMaterialCatalog(input.materialCatalog),
+    "",
+    formatPricingRulesForPrompt(input.permitWorkType),
     "",
     "Company AI preference instructions (from Handoff Presets — follow these):",
     formatAiPreferenceInstructions(input.preferenceInstructions),
@@ -280,6 +291,7 @@ export async function draftEstimateFromNotes(
     materialCatalog,
     preferenceInstructions,
     scopeNotes,
+    permitWorkType: input.permitWorkType,
   });
 
   const images = input.images ?? [];
@@ -405,7 +417,12 @@ export async function draftEstimateFromNotes(
     proposalSections: narrative.parsed.proposalSections,
   });
 
-  return normalizeEstimateDraft(merged);
+  return normalizeEstimateDraft(merged, {
+    permitWorkType: input.permitWorkType,
+    notes: scopeNotes,
+    costCodes: input.costCodes,
+    hasRoofrQuantity: input.hasRoofrQuantity,
+  });
 }
 
 function dedupeStrings(values: readonly string[]): string[] {

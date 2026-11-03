@@ -6,7 +6,13 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
-import type { CostType, LineItemConfidence, LineItemPriceSource, RateMode } from "@/generated/prisma/enums";
+import type {
+  CostType,
+  LineItemConfidence,
+  LineItemPriceSource,
+  PermitWorkType,
+  RateMode,
+} from "@/generated/prisma/enums";
 import { LeadNotFoundError } from "@/lib/crm/service";
 import { db } from "@/lib/db";
 import {
@@ -93,6 +99,8 @@ export interface CreateEstimateInput {
   readonly aiPromptNotes?: string | null;
   /** Client narrative held until explicit Create Proposal (lead Jarvis path). */
   readonly pendingProposalDraft?: unknown | null;
+  /** JAX EPICS–aligned work type (from Lead when drafting). */
+  readonly permitWorkType?: PermitWorkType | null;
 }
 
 async function loadOrgEstimateRateDefaults(organizationId: string): Promise<OrgEstimateRateDefaults> {
@@ -194,6 +202,7 @@ export async function createEstimate(input: CreateEstimateInput) {
       title: input.title,
       rateMode,
       defaultRateBasisPoints,
+      permitWorkType: input.permitWorkType ?? null,
       aiGenerated: input.aiGenerated ?? false,
       aiPromptNotes: input.aiPromptNotes ?? null,
       pendingProposalDraft:

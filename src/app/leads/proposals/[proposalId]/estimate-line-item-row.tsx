@@ -20,7 +20,7 @@ export interface EstimateLineItemData {
   /** Set only on AI-drafted lines — null for hand-entered ones. */
   readonly confidence: "HIGH" | "MEDIUM" | "LOW" | null;
   /** Set only on AI-drafted lines — null for hand-entered ones. */
-  readonly priceSource: "CATALOG" | "MARKET_RATE" | "MANUAL" | null;
+  readonly priceSource: "CATALOG" | "MARKET_RATE" | "MANUAL" | "RULE" | "COST_DB" | null;
 }
 
 const CONFIDENCE_STYLE: Record<"MEDIUM" | "LOW", { bg: string; text: string; label: string }> = {
@@ -42,6 +42,16 @@ function LineItemBadges({ confidence, priceSource }: { confidence: EstimateLineI
       {priceSource === "MARKET_RATE" ? (
         <span className="rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
           Market-rate estimate
+        </span>
+      ) : null}
+      {priceSource === "RULE" ? (
+        <span className="rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
+          Pricing rule
+        </span>
+      ) : null}
+      {priceSource === "COST_DB" ? (
+        <span className="rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", color: "var(--bt-primary)" }}>
+          Cost DB
         </span>
       ) : null}
     </div>

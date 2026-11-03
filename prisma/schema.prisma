@@ -331,6 +331,8 @@ model Job {
 
   sqft         Int?
   permitNumber String?
+  /// JAX EPICS–aligned work type (carried from Lead/Estimate on conversion).
+  permitWorkType PermitWorkType?
   lotInfo      String?
   /// Duval RE# / tax folio from staff-confirmed Property Appraiser / GIS lookup.
   /// Never invent — only written after address lock + Confirm.
@@ -514,6 +516,11 @@ model CostCode {
   code            String
   name            String
   defaultCostType CostType @default(NONE)
+
+  /// Cost-DB defaults that feed AI drafts (Handoff parity P1 #3). When set,
+  /// drafters prefer these over MARKET_RATE and stamp priceSource COST_DB.
+  defaultUnit          String?
+  defaultUnitCostCents Int?
 
   /// Supports the cost-code hierarchy the Estimate builder groups by (Phase 1).
   parentId String?
@@ -807,6 +814,20 @@ enum LineItemPriceSource {
   CATALOG
   MARKET_RATE
   MANUAL
+  /// Org pricing rule (roof SQ, window EA, drywall SHEET, …).
+  RULE
+  /// Cost-code catalog default unit/unitCost on CostCode.
+  COST_DB
+}
+
+/// JAX EPICS–aligned permit work type (Handoff parity CR P1 #31). Carries
+/// lead → estimate → job and drives drywall/window pricing rules.
+enum PermitWorkType {
+  NEW_CONSTRUCTION
+  ALTERATIONS_AND_REPAIRS
+  ADDITION
+  DEMOLITION
+  OTHER
 }
 
 enum EstimateStatus {
@@ -981,6 +1002,9 @@ model Estimate {
   /// Default pricing rate applied to new line items (org default is 40% MARKUP).
   rateMode               RateMode @default(MARKUP)
   defaultRateBasisPoints Int      @default(4000)
+
+  /// Permit work type for pricing rules (copied from Lead when drafting).
+  permitWorkType PermitWorkType?
 
   sentAt         DateTime?
   lockedAt       DateTime?
@@ -3221,6 +3245,9 @@ model Lead {
   estimatedRevenueMaxCents Int?
   /// Free text (e.g. "Kitchen Remodel") rather than a managed picklist for now.
   projectType              String?
+  /// JAX EPICS–aligned work type — drives drywall/window pricing rules on AI drafts.
+  /// Robin Hood Dan Cook garage remodel = ALTERATIONS_AND_REPAIRS.
+  permitWorkType           PermitWorkType?
   tags                     String[]  @default([])
 
   assignedUserId String?
