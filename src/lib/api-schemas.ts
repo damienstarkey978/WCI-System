@@ -40,6 +40,9 @@ export const createJobSchema = z.object({
   longitude: z.number().min(-180).max(180).nullish(),
   sqft: z.number().int().positive().nullish(),
   permitNumber: nullableTrimmed,
+  permitWorkType: z
+    .enum(["NEW_CONSTRUCTION", "ALTERATIONS_AND_REPAIRS", "ADDITION", "DEMOLITION", "OTHER"])
+    .nullish(),
   lotInfo: nullableTrimmed,
   projectedStart: z.coerce.date().nullish(),
   projectedEnd: z.coerce.date().nullish(),

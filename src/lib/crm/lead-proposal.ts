@@ -204,7 +204,14 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
   const [costCodeRows, materialRows, preferenceInstructions] = await Promise.all([
     db.costCode.findMany({
       where: { organizationId: input.organizationId, isActive: true },
-      select: { id: true, code: true, name: true, defaultCostType: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        defaultCostType: true,
+        defaultUnit: true,
+        defaultUnitCostCents: true,
+      },
     }),
     db.materialCatalogItem.findMany({
       where: { organizationId: input.organizationId },
@@ -218,6 +225,9 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
 
   const costCodes: readonly CostCodeOption[] = costCodeRows;
   const materialCatalog: readonly MaterialCatalogOption[] = materialRows;
+  // Garage remodeled leads without an explicit work type default to Alterations & Repairs
+  // (JAX EPICS / Handoff parity — Robin Hood Dan Cook acceptance case).
+  const permitWorkType = lead.permitWorkType ?? "ALTERATIONS_AND_REPAIRS";
 
   const draft = await draftEstimateFromNotes({
     jobName: lead.name,
@@ -226,6 +236,7 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     materialCatalog,
     images: input.images,
     preferenceInstructions,
+    permitWorkType,
   });
 
   const lineItems: readonly CreateEstimateLineItemInput[] = draft.lineItems.map((line) => ({
@@ -244,6 +255,10 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
 
   const jobId = lead.convertedJobId;
 
+  if (!lead.permitWorkType) {
+    await db.lead.update({ where: { id: lead.id }, data: { permitWorkType } });
+  }
+
   const estimate = await createEstimate({
     organizationId: input.organizationId,
     jobId: jobId ?? undefined,
@@ -254,6 +269,7 @@ export async function draftLeadProposalFromNotes(input: DraftLeadProposalInput) 
     lineItems,
     aiGenerated: true,
     aiPromptNotes: input.notes,
+    permitWorkType,
     pendingProposalDraft: {
       coverMessage: draft.projectDescription,
       sections: draft.proposalSections.map((section) => ({

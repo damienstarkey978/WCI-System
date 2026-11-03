@@ -185,6 +185,8 @@ export async function convertLeadToJob(
         // Sales Rep scoping keys off salespersonUserId — copy the lead assignee
         // so the rep keeps seeing the job after conversion.
         salespersonUserId: lead.assignedUserId,
+        // Carry JAX EPICS work type so estimate pricing rules stay consistent.
+        permitWorkType: rest.permitWorkType ?? lead.permitWorkType ?? null,
         customFields: (customFields ?? {}) as Prisma.InputJsonValue,
       },
     });

@@ -61,7 +61,14 @@ async function loadDraftingCatalogs(
 ) {
   const costCodeRows = await db.costCode.findMany({
     where: { organizationId, isActive: true },
-    select: { id: true, code: true, name: true, defaultCostType: true },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      defaultCostType: true,
+      defaultUnit: true,
+      defaultUnitCostCents: true,
+    },
   });
   if (costCodeRows.length === 0) {
     throw new NoCostCodesError();
@@ -99,7 +106,7 @@ async function loadDraftingCatalogs(
 export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): Promise<CreateAiEstimateDraftResult> {
   const job = await db.job.findFirst({
     where: { id: input.jobId, organizationId: input.organizationId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, permitWorkType: true },
   });
   if (!job) {
     throw new JobNotFoundError(input.jobId);
@@ -115,6 +122,7 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
     materialCatalog,
     images: input.images,
     preferenceInstructions,
+    permitWorkType: job.permitWorkType,
   });
 
   const estimate = await db.estimate.create({
@@ -124,6 +132,7 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
       title: draft.title,
       aiGenerated: true,
       aiPromptNotes: input.notes,
+      permitWorkType: job.permitWorkType,
       lineItems: {
         create: draft.lineItems.map((line, index) => ({
           costCodeId: line.costCodeId,
@@ -132,6 +141,7 @@ export async function createAiEstimateDraft(input: CreateAiEstimateDraftInput): 
           description: line.description,
           groupLabel: line.groupLabel,
           quantityMilli: line.quantityMilli,
+          unit: line.unit,
           unitCostCents: line.unitCostCents,
           rateMode: line.rateMode,
           rateBasisPoints: line.rateBasisPoints,
