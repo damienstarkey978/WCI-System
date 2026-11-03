@@ -2306,17 +2306,20 @@ const ENDPOINTS: readonly EndpointDef[] = [
   {
     method: "post",
     path: "/proposals/{proposalId}/send",
-    summary: "Mark a proposal SENT",
+    summary: "Mark a proposal SENT (optional email/SMS delivery)",
+    description:
+      "Status-only by default. Pass { channel: \"email\" | \"sms\" } to also deliver the approval link (CR P2 #24).",
     tags: ["CRM"],
     scopes: ["proposals:write"],
     pathParams: ["proposalId"],
+    requestSchema: z.object({ channel: z.enum(["email", "sms"]).optional() }),
   },
   {
     method: "get",
     path: "/proposals/{proposalId}/send-preview",
     summary: "Pre-send validation preview",
     description:
-      "Returns ready/issues for terms, payment schedule, require-signature, cover message, and prepared-for (CR P2 #25).",
+      "Returns ready/issues for terms, payment schedule, require-signature, cover message, prepared-for, and roof Roofr/auto-insert guards (CR P2 #18/#25).",
     tags: ["CRM"],
     scopes: ["proposals:read"],
     pathParams: ["proposalId"],

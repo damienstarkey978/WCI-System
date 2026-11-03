@@ -11,7 +11,13 @@
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { aiDraftEstimateSchema, formatZodIssues } from "@/lib/api-schemas";
 import { AiNotConfiguredError, DraftGenerationError } from "@/lib/ai/estimate-assistant";
-import { createAiEstimateDraft, JobNotFoundError, NoCostCodesError } from "@/lib/ai/service";
+import {
+  AiDraftTemplateNotFoundError,
+  createAiEstimateDraft,
+  JobNotFoundError,
+  LeadNotFoundError,
+  NoCostCodesError,
+} from "@/lib/ai/service";
 
 export const POST = withApiAuth(["estimates:write"], async (request, auth) => {
   let payload: unknown;
@@ -27,15 +33,28 @@ export const POST = withApiAuth(["estimates:write"], async (request, auth) => {
   }
 
   try {
+    const images = parsed.data.attachments ?? parsed.data.images;
     const result = await createAiEstimateDraft({
       organizationId: auth.organizationId,
       jobId: parsed.data.jobId,
+      leadId: parsed.data.leadId,
       notes: parsed.data.notes,
+      defaultRateBasisPoints: parsed.data.defaultRateBasisPoints,
+      rateMode: parsed.data.rateMode,
+      templateId: parsed.data.templateId,
+      newVersion: parsed.data.newVersion,
+      images,
     });
     return Response.json({ data: result }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) {
       return apiError(422, "unknown_job", error.message);
+    }
+    if (error instanceof LeadNotFoundError) {
+      return apiError(422, "unknown_lead", error.message);
+    }
+    if (error instanceof AiDraftTemplateNotFoundError) {
+      return apiError(422, "unknown_template", error.message);
     }
     if (error instanceof NoCostCodesError) {
       return apiError(422, "no_cost_codes", error.message);
