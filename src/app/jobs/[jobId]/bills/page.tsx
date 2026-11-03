@@ -1,15 +1,16 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { formatActorAttribution } from "@/lib/actor";
 import { currentAppUser } from "@/lib/auth";
 import { billStatusCounts, billingInboxAddress } from "@/lib/bills/intake";
 import { db } from "@/lib/db";
+import { isQuickBooksBillPushEnabled } from "@/lib/env";
 
 import { BillsListClient } from "./bills-list-client";
-import { BillUploader } from "./bill-uploader";
 import { CreateBillModal } from "./create-bill-modal";
 import { EmailToInboxButton } from "./email-to-inbox-button";
-import { PurchaseOrdersBillsTabs, FinancialPageHeader } from "../financial-tabs";
+import { PurchaseOrdersBillsTabs } from "../financial-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ const TABS = [
   { key: "IN_REVIEW", label: "In Review" },
   { key: "READY_FOR_PAYMENT", label: "Ready for Payment" },
   { key: "PAID", label: "Paid" },
-  { key: "ALL", label: "All bills" },
+  { key: "ALL", label: "All Bills" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -56,43 +57,55 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
   const statusFilter =
     activeTab === "ALL" ? { approvalStatus: { not: "VOID" as const } } : { approvalStatus: activeTab };
 
-  const [bills, counts, costCodes, purchaseOrders, vendors, schedules, qboConnection, organization] = await Promise.all([
-    db.bill.findMany({
-      where: { jobId: job.id, ...statusFilter },
-      orderBy: { createdAt: "desc" },
-      include: {
-        lineItems: true,
-        createdByUser: { select: { name: true, email: true } },
-        createdByApiKey: { select: { name: true, agentKind: true } },
-        purchaseOrder: { select: { id: true, poNumber: true, title: true } },
-      },
-    }),
-    billStatusCounts(user.organizationId, job.id),
-    db.costCode.findMany({
-      where: { organizationId: user.organizationId, isActive: true },
-      orderBy: { sortOrder: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
-    db.purchaseOrder.findMany({
-      where: { jobId: job.id },
-      select: { id: true, poNumber: true, title: true, vendorId: true, vendorName: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.vendor.findMany({
-      where: { organizationId: user.organizationId },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-    db.schedule.findMany({
-      where: { jobId: job.id, organizationId: user.organizationId },
-      select: { items: { orderBy: { sortOrder: "asc" }, select: { id: true, title: true } } },
-    }),
-    db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } }),
-    db.organization.findUniqueOrThrow({ where: { id: user.organizationId }, select: { slug: true } }),
-  ]);
+  const [bills, counts, costCodes, purchaseOrders, vendors, schedules, qboConnection, organization, staffUsers] =
+    await Promise.all([
+      db.bill.findMany({
+        where: { jobId: job.id, ...statusFilter },
+        orderBy: { createdAt: "desc" },
+        include: {
+          lineItems: true,
+          createdByUser: { select: { name: true, email: true } },
+          createdByApiKey: { select: { name: true, agentKind: true } },
+          purchaseOrder: { select: { id: true, poNumber: true, title: true } },
+        },
+      }),
+      billStatusCounts(user.organizationId, job.id),
+      db.costCode.findMany({
+        where: { organizationId: user.organizationId, isActive: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, code: true, name: true },
+      }),
+      db.purchaseOrder.findMany({
+        where: { jobId: job.id },
+        select: { id: true, poNumber: true, title: true, vendorId: true, vendorName: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      db.vendor.findMany({
+        where: { organizationId: user.organizationId },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      db.schedule.findMany({
+        where: { jobId: job.id, organizationId: user.organizationId },
+        select: { items: { orderBy: { sortOrder: "asc" }, select: { id: true, title: true } } },
+      }),
+      db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } }),
+      db.organization.findUniqueOrThrow({ where: { id: user.organizationId }, select: { slug: true } }),
+      db.user.findMany({
+        where: { organizationId: user.organizationId },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, email: true },
+        take: 50,
+      }),
+    ]);
   const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
+  const qboBillPushEnabled = isQuickBooksBillPushEnabled();
   const inboxAddress = billingInboxAddress(organization.slug);
   const scheduleItems = schedules.flatMap((schedule) => schedule.items);
+  const staffOptions = staffUsers.map((row) => ({
+    id: row.id,
+    name: row.name?.trim() || row.email || "Staff",
+  }));
 
   const rows = bills.map((bill) => ({
     id: bill.id,
@@ -105,10 +118,10 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
     poId: bill.purchaseOrder?.id ?? null,
     poNumber: bill.purchaseOrder?.poNumber ?? null,
     poTitle: bill.purchaseOrder?.title ?? null,
-    createdByName: bill.createdByApiKey
-      ? `${bill.createdByApiKey.name} · API`
-      : bill.createdByUser
-        ? `${bill.createdByUser.name ?? bill.createdByUser.email} · Browser`
+    // BT "Created by" shows the person name only — channel badges belong on detail, not the list.
+    createdByName:
+      bill.createdByUser || bill.createdByApiKey
+        ? formatActorAttribution({ user: bill.createdByUser, apiKey: bill.createdByApiKey }).label
         : null,
     approvalStatus: bill.approvalStatus,
     dateLabel: (bill.issuedOn ?? bill.createdAt).toISOString(),
@@ -125,31 +138,31 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
       purchaseOrders={purchaseOrders}
       vendors={vendors}
       scheduleItems={scheduleItems}
+      staffUsers={staffOptions}
+      isQboConnected={isQboConnected}
+      qboBillPushEnabled={qboBillPushEnabled}
     />
   );
 
-  const createAction = (
-    <div className="flex items-center gap-2">
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-2">
       <EmailToInboxButton inboxAddress={inboxAddress} />
       {createBill}
     </div>
   );
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <FinancialPageHeader jobName={job.name} title="Bills" action={createAction} />
-
-      <PurchaseOrdersBillsTabs jobId={job.id} active="bills" />
-
-      <BillUploader jobId={job.id} inboxAddress={inboxAddress} />
-
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <BillsListClient
         jobId={job.id}
+        jobName={job.name}
         activeTab={activeTab}
         counts={counts}
         rows={rows}
         isQboConnected={isQboConnected}
         emptyAction={createBill}
+        headerActions={headerActions}
+        tabs={<PurchaseOrdersBillsTabs jobId={job.id} active="bills" />}
       />
     </div>
   );

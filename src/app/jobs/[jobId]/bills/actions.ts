@@ -2,8 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
+import { setBillApprovers } from "@/lib/bills/intake";
+import { applyLienWaiver } from "@/lib/bills/lien-waivers";
 import {
   createBill,
+  InventedBillNumberError,
   JobNotFoundError,
   JobNotOpenError,
   PurchaseOrderJobMismatchError,
@@ -14,6 +17,7 @@ import {
 } from "@/lib/bills/service";
 import { requireAppUser } from "@/lib/auth";
 import { extendedCostCents } from "@/lib/budget/funnel";
+import { isQuickBooksBillPushEnabled } from "@/lib/env";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
 import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
 import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
@@ -41,6 +45,12 @@ function parseOptionalDate(raw: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+const LIEN_KIND_TO_TEMPLATE: Record<string, string> = {
+  conditional: "Conditional",
+  unconditional: "Unconditional",
+  final: "Final unconditional",
+};
+
 export async function createBillAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();
 
@@ -57,6 +67,22 @@ export async function createBillAction(_previous: ActionState, formData: FormDat
   const linkedScheduleItemId =
     completionMode === "schedule" ? String(formData.get("linkedScheduleItemId") ?? "").trim() || null : null;
 
+  const saveIntentRaw = String(formData.get("saveIntent") ?? "job").trim();
+  const saveIntent = saveIntentRaw === "draft" || saveIntentRaw === "ready" ? saveIntentRaw : "job";
+  const sendRaw = String(formData.get("sendToQuickBooks") ?? "").trim();
+  const sendToQuickBooks = sendRaw === "true" ? true : sendRaw === "false" ? false : null;
+  const billableToClient = String(formData.get("billableToClient") ?? "") === "true";
+  const quickBooksSkipReason =
+    sendToQuickBooks === false ? String(formData.get("quickBooksSkipReason") ?? "").trim() || "Skipped QuickBooks on create" : null;
+  const approverIds = String(formData.get("approverIds") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const lienKinds = String(formData.get("lienWaiverKinds") ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+
   if (!vendorName) return { error: "Vendor name is required." };
 
   try {
@@ -67,6 +93,8 @@ export async function createBillAction(_previous: ActionState, formData: FormDat
       ...(item.costType ? { costType: item.costType } : {}),
     }));
     if (lineItems.length === 0) return { error: "Add at least one line item." };
+
+    const approvalStatus = saveIntent === "ready" ? "READY_FOR_PAYMENT" : "IN_REVIEW";
 
     const created = await createBill({
       organizationId: user.organizationId,
@@ -81,8 +109,56 @@ export async function createBillAction(_previous: ActionState, formData: FormDat
       dueOn,
       linkedScheduleItemId,
       createdByUserId: user.id,
+      sendToQuickBooks,
+      quickBooksSkipReason,
+      billableToClient,
+      approvalStatus,
       lineItems,
     });
+
+    if (approverIds.length > 0) {
+      await setBillApprovers({
+        organizationId: user.organizationId,
+        billId: created.id,
+        approverUserIds: approverIds,
+      });
+    }
+
+    // First selected lien kind wins for the single LienWaiver row (v1 model).
+    const firstLien = lienKinds[0];
+    if (firstLien) {
+      const templateName = LIEN_KIND_TO_TEMPLATE[firstLien] ?? "Conditional";
+      await applyLienWaiver({
+        organizationId: user.organizationId,
+        billId: created.id,
+        templateName,
+      });
+    }
+
+    // "Immediately upon save" only attempts a live push when Ready + intent true + global pause off.
+    if (saveIntent === "ready" && sendToQuickBooks === true && isQuickBooksBillPushEnabled()) {
+      try {
+        await syncBillToQuickBooks(user.organizationId, created.id);
+      } catch (error) {
+        if (
+          error instanceof QuickBooksNotConfiguredError ||
+          error instanceof QuickBooksNotConnectedError ||
+          error instanceof BillHasNoVendorError ||
+          error instanceof BillQuickBooksPushPausedError ||
+          error instanceof BillQuickBooksPushUnsafeStatusError ||
+          error instanceof BillQuickBooksPushNotReadyError ||
+          error instanceof BillQuickBooksInvoiceNumberError ||
+          error instanceof BillQuickBooksDuplicateBlockedError ||
+          error instanceof BillQuickBooksSyncDeclinedError ||
+          error instanceof QuickBooksApiError
+        ) {
+          // Intent is already stored; do not fail the create — list/detail show QB status.
+          revalidatePath(`/jobs/${jobId}/bills`);
+          return { ok: true, billId: created.id };
+        }
+        throw error;
+      }
+    }
 
     revalidatePath(`/jobs/${jobId}/bills`);
     return { ok: true, billId: created.id };
@@ -93,7 +169,8 @@ export async function createBillAction(_previous: ActionState, formData: FormDat
       error instanceof UnknownPurchaseOrderError ||
       error instanceof PurchaseOrderJobMismatchError ||
       error instanceof UnknownVendorError ||
-      error instanceof UnknownScheduleItemError
+      error instanceof UnknownScheduleItemError ||
+      error instanceof InventedBillNumberError
     ) {
       return { error: error.message };
     }

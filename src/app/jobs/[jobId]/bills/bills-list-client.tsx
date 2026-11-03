@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/shell/EmptyState";
 import { ReceiptIcon } from "@/components/shell/icons";
@@ -27,7 +27,7 @@ const TABS = [
   { key: "IN_REVIEW", label: "In Review" },
   { key: "READY_FOR_PAYMENT", label: "Ready for Payment" },
   { key: "PAID", label: "Paid" },
-  { key: "ALL", label: "All bills" },
+  { key: "ALL", label: "All Bills" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -42,18 +42,26 @@ const EMPTY: DraftFilters = { keyword: "", vendors: [], datePreset: "all" };
 
 export function BillsListClient({
   jobId,
+  jobName,
   activeTab,
   counts,
   rows,
   isQboConnected,
   emptyAction,
+  headerActions,
+  tabs,
 }: {
   jobId: string;
+  jobName: string;
   activeTab: TabKey;
   counts: Readonly<Partial<Record<TabKey, number>> & { ALL?: number }>;
   rows: readonly BillRow[];
   isQboConnected: boolean;
-  emptyAction: React.ReactNode;
+  emptyAction: ReactNode;
+  /** Email to Inbox / + Bill — sits with BT's colorful icon cluster. */
+  headerActions: ReactNode;
+  /** Purchase Orders | Bills strip — kept between title and status chips like BT. */
+  tabs: ReactNode;
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [draft, setDraft] = useState<DraftFilters>(EMPTY);
@@ -86,28 +94,50 @@ export function BillsListClient({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
-          {TABS.map((tab) => {
-            const isActive = tab.key === activeTab;
-            return (
-              <Link
-                key={tab.key}
-                href={`/jobs/${jobId}/bills?status=${tab.key}`}
-                className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs text-[var(--bt-muted)]">{jobName}</div>
+          <h1 className="text-xl font-semibold text-[var(--bt-text)]">Bills</h1>
+        </div>
+        <ListToolbar
+          filterOpen={filterOpen}
+          filterActiveCount={activeCount}
+          onFilterClick={() => setFilterOpen((o) => !o)}
+          secondaryAction={headerActions}
+        />
+      </div>
+
+      {tabs}
+
+      <nav className="flex flex-wrap gap-0 border-b" style={{ borderColor: "var(--bt-border)" }} aria-label="Bill status">
+        {TABS.map((tab) => {
+          const isActive = tab.key === activeTab;
+          const count = counts[tab.key] ?? 0;
+          return (
+            <Link
+              key={tab.key}
+              href={`/jobs/${jobId}/bills?status=${tab.key}`}
+              className="-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition"
+              style={{
+                borderColor: isActive ? "var(--bt-link, #1F4ECD)" : "transparent",
+                color: isActive ? "var(--bt-link, #1F4ECD)" : "var(--bt-muted)",
+                fontWeight: isActive ? 600 : 500,
+              }}
+            >
+              {tab.label}
+              <span
+                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums"
                 style={{
-                  borderColor: isActive ? "var(--bt-primary)" : "transparent",
-                  color: isActive ? "var(--bt-primary)" : "var(--bt-muted)",
+                  background: isActive ? "color-mix(in srgb, var(--bt-link, #1F4ECD) 12%, transparent)" : "#eef0f3",
+                  color: isActive ? "var(--bt-link, #1F4ECD)" : "#6b7280",
                 }}
               >
-                {tab.label}
-                <span className="ml-1.5 rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold">{counts[tab.key] ?? 0}</span>
-              </Link>
-            );
-          })}
-        </nav>
-        <ListToolbar filterOpen={filterOpen} filterActiveCount={activeCount} onFilterClick={() => setFilterOpen((o) => !o)} />
-      </div>
+                {count}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
 
       <div className="flex flex-col gap-3 lg:flex-row">
         <div className="min-w-0 flex-1">
@@ -121,7 +151,7 @@ export function BillsListClient({
                     ? "No bills yet"
                     : `Nothing in ${TABS.find((t) => t.key === activeTab)?.label}`
               }
-              description="Drop a receipt above, forward one to the inbox address, or add a bill by hand."
+              description="Forward a vendor bill to the inbox address, or add a bill by hand."
               action={emptyAction}
             />
           ) : filtered.length === 0 ? (

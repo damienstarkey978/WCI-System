@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  displayBillNumber,
   isInventedJobPrefixedBillNumber,
   normalizeVendorInvoiceNumber,
   vendorInvoiceNumberPushBlockReason,
@@ -25,5 +26,12 @@ describe("bill-number Money rules", () => {
     expect(vendorInvoiceNumberPushBlockReason(null)).toMatch(/blank/i);
     expect(vendorInvoiceNumberPushBlockReason("JOB_5E26-0007")).toMatch(/JOB_/);
     expect(vendorInvoiceNumberPushBlockReason("0094")).toBeNull();
+  });
+
+  it("displayBillNumber strips invented JOB_ prefix for list cells", () => {
+    expect(displayBillNumber("JOB_5B13-256753")).toBe("256753");
+    expect(displayBillNumber("JOB_755B-0094")).toBe("0094");
+    expect(displayBillNumber("0013")).toBe("0013");
+    expect(displayBillNumber(null)).toBeNull();
   });
 });
