@@ -31,10 +31,13 @@ import {
   assertPaymentScheduleReady,
   DEFAULT_PROPOSAL_PAYMENT_SCHEDULE,
 } from "@/lib/proposals/payment-schedule";
+import { assertPreparedForReady } from "@/lib/proposals/prepared-for";
 import {
   assertCanDisableRequireSignature,
   assertCanSendWithSignaturePolicy,
 } from "@/lib/proposals/signature-policy";
+import { previewProposalSend } from "@/lib/proposals/send-preview";
+import { DEFAULT_ORG_TAX_RATE_BASIS_POINTS } from "@/lib/proposals/tax";
 import { assertProposalTermsReady } from "@/lib/proposals/terms-guard";
 import { transitionJobStatus } from "@/lib/jobs";
 import type { BasisPoints } from "@/lib/money";
@@ -45,6 +48,7 @@ export {
   DepositTooHighError,
   PaymentScheduleIncompleteError,
 } from "@/lib/proposals/payment-schedule";
+export { IncompletePreparedForError } from "@/lib/proposals/prepared-for";
 export {
   SignaturePolicyAdminRequiredError,
   SignatureRequiredError,
@@ -259,7 +263,7 @@ export async function createProposal(input: CreateProposalInput) {
 
   const org = await db.organization.findUnique({
     where: { id: input.organizationId },
-    select: { defaultProposalTerms: true },
+    select: { defaultProposalTerms: true, defaultTaxRateBasisPoints: true },
   });
   const termsText = assertProposalTermsReady(
     resolveProposalTermsText({
@@ -267,6 +271,7 @@ export async function createProposal(input: CreateProposalInput) {
       organizationTerms: org?.defaultProposalTerms,
     }),
   );
+  const taxRateBasisPoints = org?.defaultTaxRateBasisPoints ?? DEFAULT_ORG_TAX_RATE_BASIS_POINTS;
 
   const requireSignature = input.requireSignature !== false;
   if (input.requireSignature === false) {
@@ -292,6 +297,7 @@ export async function createProposal(input: CreateProposalInput) {
       coverMessage,
       termsText,
       requireSignature,
+      taxRateBasisPoints,
       options: {
         create: input.options.map((option, index) => ({ estimateId: option.estimateId, label: option.label, sortOrder: index })),
       },
@@ -536,7 +542,8 @@ export async function sendProposal(organizationId: string, proposalId: string) {
   const proposal = await db.proposal.findFirst({
     where: { id: proposalId, organizationId },
     include: {
-      organization: { select: { defaultProposalTerms: true } },
+      organization: { select: { defaultProposalTerms: true, defaultTaxRateBasisPoints: true } },
+      client: { select: { name: true, email: true, phone: true } },
       draws: { orderBy: { sortOrder: "asc" } },
     },
   });
@@ -554,15 +561,67 @@ export async function sendProposal(organizationId: string, proposalId: string) {
   );
   assertCoverMessageAllowed(proposal.coverMessage);
   assertPaymentScheduleReady(proposal.draws);
+  assertPreparedForReady(proposal.client);
+
+  const taxRateBasisPoints =
+    proposal.taxRateBasisPoints ??
+    proposal.organization.defaultTaxRateBasisPoints ??
+    DEFAULT_ORG_TAX_RATE_BASIS_POINTS;
 
   const updated = await db.proposal.update({
     where: { id: proposal.id },
-    data: { status: ProposalStatus.SENT, sentAt: new Date(), termsText },
+    data: {
+      status: ProposalStatus.SENT,
+      sentAt: new Date(),
+      termsText,
+      taxRateBasisPoints,
+    },
   });
 
   await emitEvent(organizationId, "proposal.sent", { proposalId: updated.id, jobId: updated.jobId });
 
   return updated;
+}
+
+/** Blocking validation for staff/agent preview-before-send (CR P2 #25). */
+export async function getProposalSendPreview(organizationId: string, proposalId: string) {
+  const proposal = await db.proposal.findFirst({
+    where: { id: proposalId, organizationId },
+    include: {
+      organization: { select: { defaultProposalTerms: true } },
+      client: { select: { name: true, email: true, phone: true } },
+      draws: { orderBy: { sortOrder: "asc" } },
+      options: {
+        orderBy: { sortOrder: "asc" },
+        include: { estimate: { include: { lineItems: true } } },
+      },
+      sections: { orderBy: { sortOrder: "asc" }, include: { bullets: { orderBy: { sortOrder: "asc" } } } },
+    },
+  });
+  if (!proposal) throw new ProposalNotFoundError(proposalId);
+
+  const termsText =
+    proposal.termsText?.trim() ||
+    resolveProposalTermsText({
+      proposalTerms: null,
+      organizationTerms: proposal.organization.defaultProposalTerms,
+    });
+
+  const validation = previewProposalSend({
+    title: proposal.title,
+    coverMessage: proposal.coverMessage,
+    termsText,
+    requireSignature: proposal.requireSignature,
+    draws: proposal.draws,
+    preparedFor: proposal.client,
+  });
+
+  return {
+    proposal,
+    validation,
+    displayDate: proposal.sentAt ?? proposal.createdAt,
+    taxRateBasisPoints: proposal.taxRateBasisPoints,
+  };
 }
 
 export async function updateProposalTerms(

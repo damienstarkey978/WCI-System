@@ -2283,6 +2283,16 @@ const ENDPOINTS: readonly EndpointDef[] = [
     pathParams: ["proposalId"],
   },
   {
+    method: "get",
+    path: "/proposals/{proposalId}/send-preview",
+    summary: "Pre-send validation preview",
+    description:
+      "Returns ready/issues for terms, payment schedule, require-signature, cover message, and prepared-for (CR P2 #25).",
+    tags: ["CRM"],
+    scopes: ["proposals:read"],
+    pathParams: ["proposalId"],
+  },
+  {
     method: "patch",
     path: "/proposals/{proposalId}/terms",
     summary: "Set proposal Terms & Conditions text",

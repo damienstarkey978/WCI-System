@@ -2,6 +2,7 @@
 
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import {
+  IncompletePreparedForError,
   IncompleteProposalTermsError,
   PaymentScheduleIncompleteError,
   ProposalNotDraftError,
@@ -33,6 +34,9 @@ export const POST = withApiAuth<Context>(["proposals:write"], async (_request, a
     }
     if (error instanceof BannedCoverMessageError) {
       return apiError(422, "banned_cover_message", error.message);
+    }
+    if (error instanceof IncompletePreparedForError) {
+      return apiError(422, "incomplete_prepared_for", error.message, { reasons: error.reasons });
     }
     throw error;
   }

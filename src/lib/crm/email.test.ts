@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeLeadEmail } from "@/lib/crm/email";
+import { findLeadEmailIssues, normalizeLeadEmail } from "@/lib/crm/email";
 
 describe("normalizeLeadEmail", () => {
   it("fixes .comm → .com (Robin Hood Dan Cook typo)", () => {
@@ -14,5 +14,17 @@ describe("normalizeLeadEmail", () => {
   it("returns null for blank", () => {
     expect(normalizeLeadEmail(null)).toBeNull();
     expect(normalizeLeadEmail("")).toBeNull();
+  });
+});
+
+describe("findLeadEmailIssues", () => {
+  it("flags .comm before normalization", () => {
+    expect(findLeadEmailIssues("dancook428@yahoo.comm")).toEqual(
+      expect.arrayContaining([expect.stringMatching(/mistyped/i)]),
+    );
+  });
+
+  it("accepts a normal address", () => {
+    expect(findLeadEmailIssues("dancook428@yahoo.com")).toEqual([]);
   });
 });

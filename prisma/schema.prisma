@@ -119,6 +119,9 @@ model Organization {
   defaultEstimateRateBasisPoints  Int      @default(4000)
   allowPerLineRateOverride        Boolean  @default(false)
 
+  /// Org sales-tax rate for proposals (Handoff parity P2 #17). WCI default 0%.
+  defaultTaxRateBasisPoints Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3397,6 +3400,9 @@ model Proposal {
 
   /// Handoff parity P1 #8 — default ON; only ADMIN may turn off; send blocked while off.
   requireSignature Boolean @default(true)
+
+  /// Snapshot of org tax rate at create/send (P2 #17). Display "Tax N% $X.XX".
+  taxRateBasisPoints Int @default(0)
 
   declinedAt DateTime?
 

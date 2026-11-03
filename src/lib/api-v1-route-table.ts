@@ -120,6 +120,7 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/proposals/{proposalId}/decline": ["POST"],
   "/proposals/{proposalId}/require-signature": ["PATCH"],
   "/proposals/{proposalId}/send": ["POST"],
+  "/proposals/{proposalId}/send-preview": ["GET"],
   "/proposals/{proposalId}/terms": ["PATCH"],
   "/purchase-orders": ["GET","POST"],
   "/purchase-orders/{purchaseOrderId}": ["DELETE"],

@@ -145,6 +145,8 @@ export default async function ProposalPdfPage({ params }: PageProps<"/proposals/
         client={proposal.client}
         organization={organization}
         createdAt={proposal.createdAt}
+              proposalDate={proposal.sentAt ?? proposal.createdAt}
+              taxRateBasisPoints={proposal.taxRateBasisPoints}
         coverMessage={proposal.coverMessage}
         sections={proposal.sections.map((section) => ({
           id: section.id,

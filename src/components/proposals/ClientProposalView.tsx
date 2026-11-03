@@ -14,6 +14,8 @@ import { ProposalTermsBlock } from "@/components/proposals/ProposalTermsBlock";
 import { formatIllustrativeMonthly } from "@/lib/estimates/financing";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatCompanyAddress, resolveCompanySlogan } from "@/lib/organization/company-defaults";
+import { computeProposalTaxCents, formatProposalTaxLine } from "@/lib/proposals/tax";
+import type { BasisPoints } from "@/lib/money";
 
 export type ClientProposalOrg = {
   readonly name: string;
@@ -70,6 +72,8 @@ export function ClientProposalView({
   client,
   organization,
   createdAt,
+  /** CR P2 #23 — prefer sentAt when present so the date refreshes on send. */
+  proposalDate,
   coverMessage,
   sections,
   draws,
@@ -78,6 +82,7 @@ export function ClientProposalView({
   logoUrl,
   organizationLogoPath = null,
   termsText = null,
+  taxRateBasisPoints = 0,
   photos = [],
   quantities = [],
   showFinancing = true,
@@ -94,7 +99,9 @@ export function ClientProposalView({
   readonly client: ClientProposalClient;
   readonly organization: ClientProposalOrg;
   readonly createdAt: Date;
+  readonly proposalDate?: Date | null;
   readonly coverMessage: string | null;
+  readonly taxRateBasisPoints?: BasisPoints | number;
   readonly sections: readonly ClientProposalSection[];
   readonly draws: readonly ClientProposalDraw[];
   readonly options: readonly ClientProposalOption[];
@@ -130,8 +137,15 @@ export function ClientProposalView({
   const subtotalCents =
     primaryTotal ??
     (options.length > 0 ? Math.min(...options.map((o) => o.totalCents)) : 0);
-  const taxCents = 0;
-  const totalCents = primaryTotal ?? subtotalCents + taxCents;
+  const taxBp = (taxRateBasisPoints ?? 0) as BasisPoints;
+  const taxCents = computeProposalTaxCents(subtotalCents, taxBp);
+  const totalCents = primaryTotal != null ? primaryTotal + taxCents : subtotalCents + taxCents;
+  const taxLineLabel = formatProposalTaxLine({
+    taxRateBasisPoints: taxBp,
+    taxCents,
+    formatMoney,
+  });
+  const displayDate = proposalDate ?? createdAt;
   const monthlyLabel = showFinancing && options.length <= 1 ? formatIllustrativeMonthly(totalCents) : null;
 
   return (
@@ -201,7 +215,7 @@ export function ClientProposalView({
         </div>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">Date</div>
-          <div className="mt-1 font-medium">{formatDate(createdAt)}</div>
+          <div className="mt-1 font-medium">{formatDate(displayDate)}</div>
         </div>
       </div>
 
@@ -311,8 +325,8 @@ export function ClientProposalView({
                 <dd className="tabular-nums font-medium">{formatMoney(subtotalCents)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-[#6b7280]">Tax</dt>
-                <dd className="tabular-nums text-[#6b7280]">0.0%</dd>
+                <dt className="text-[#6b7280]">{taxLineLabel}</dt>
+                <dd className="tabular-nums text-[#6b7280]">{formatMoney(taxCents)}</dd>
               </div>
               <div className="flex items-baseline justify-between gap-3 border-t border-[#e5e7eb] pt-2">
                 <dt className="font-semibold">Total</dt>
