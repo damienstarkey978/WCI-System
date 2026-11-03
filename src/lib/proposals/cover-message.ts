@@ -1,11 +1,10 @@
 /**
  * Standard client cover-message opener (Handoff parity CR P1 #9).
- * Exact Handoff thank-you copy was not in the CR store — this is the WCI OS
- * canonical opener until Damien supplies the Handoff string verbatim.
+ * Verbatim thank-you text from Damien's CR — do not paraphrase.
  */
 
 export const STANDARD_PROPOSAL_COVER_OPENER =
-  "Thank you for the opportunity to provide this proposal. Please review the scope of work, pricing, and payment schedule below.";
+  "Thank you for the opportunity to work on your project. Our goal is to make this process as smooth and transparent as possible for you.";
 
 /** Banned AI filler from the CR — never allow this phrase on a client proposal. */
 export const BANNED_COVER_PHRASE = "turning your project dreams into reality";
