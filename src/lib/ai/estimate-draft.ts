@@ -20,7 +20,12 @@ export const ESTIMATE_LINE_ITEMS_PER_PASS = 40;
 import { z } from "zod";
 
 import { RateMode } from "@/generated/prisma/enums";
-import { parseDollarsToCents, parsePercentToBasisPoints, type BasisPoints, type Cents } from "@/lib/money";
+import {
+  DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
+  DEFAULT_ESTIMATE_RATE_MODE,
+} from "@/lib/estimates/org-defaults";
+import { tryNormalizeEstimateUnit } from "@/lib/estimates/units";
+import { parseDollarsToCents, type BasisPoints, type Cents } from "@/lib/money";
 
 export interface CostCodeOption {
   readonly id: string;
@@ -73,7 +78,12 @@ export function buildLineItemSchema(costCodeIds: readonly string[]) {
     quantity: z.number().positive().max(1_000_000).describe("Quantity in whole units (hours, gallons, sq ft, etc.)"),
     unit: z.string().trim().max(40).nullish().describe("Unit of measure, e.g. 'hr', 'gal', 'sqft'"),
     unitCostDollars: z.number().positive().max(10_000_000).describe("Cost per unit in dollars, before markup"),
-    ratePercent: z.number().min(0).max(200).describe("Markup or margin percent to apply on top of cost"),
+    ratePercent: z
+      .number()
+      .min(0)
+      .max(200)
+      .default(40)
+      .describe("Markup percent — WCI org default is 40%; normalizeEstimateDraft forces 40 regardless"),
     rateMode: z.enum(RateMode).default(RateMode.MARKUP),
     confidence: z
       .enum(["HIGH", "MEDIUM", "LOW"])
@@ -269,16 +279,19 @@ export function normalizeEstimateDraft(raw: RawEstimateDraft): NormalizedEstimat
 }
 
 function normalizeLine(line: RawEstimateLineItem): NormalizedEstimateLine {
+  // Org-locked 40% MARKUP (Handoff parity P1 #1) — ignore the model's ratePercent
+  // so every AI line lands on DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS. createEstimate
+  // also re-locks AI drafts; this keeps unit tests and pending-draft UI honest.
   return {
     costCodeId: line.costCodeId,
     groupLabel: line.groupLabel,
     title: line.title,
     description: line.description ?? null,
     quantityMilli: Math.round(line.quantity * 1_000),
-    unit: line.unit?.trim() || null,
+    unit: tryNormalizeEstimateUnit(line.unit),
     unitCostCents: parseDollarsToCents(line.unitCostDollars),
-    rateMode: line.rateMode,
-    rateBasisPoints: parsePercentToBasisPoints(line.ratePercent),
+    rateMode: DEFAULT_ESTIMATE_RATE_MODE,
+    rateBasisPoints: DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
     confidence: line.confidence,
     priceSource: line.priceSource,
   };

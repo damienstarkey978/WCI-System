@@ -1,7 +1,7 @@
 /**
  * Handoff-density estimate spreadsheet: compact rows, Handoff column set
- * (Item · Quantity · Unit cost · Cost type · Client total), sticky totals
- * with optional cost/markup breakdown. WCI colors.
+ * (Item · Quantity · Unit cost · Cost type · Client total), sticky totals,
+ * and a Show breakdown control that opens the Handoff-style Breakdown panel.
  */
 
 "use client";
@@ -12,6 +12,8 @@ import {
   reorderEstimateLineItemsAction,
   type ReorderActionState,
 } from "@/app/leads/estimates/[estimateId]/reorder-actions";
+import { EstimateBreakdownPanel } from "@/components/estimates/EstimateBreakdownPanel";
+import { breakdownLinesFromSpreadsheetItems } from "@/lib/estimates/breakdown";
 import { resolveLineUnit } from "@/lib/estimates/units";
 import { formatMoney, formatPercent } from "@/lib/format";
 
@@ -149,49 +151,72 @@ export function EstimateSpreadsheet({
 
   const displayGroups = reorderable ? localGroups : groups;
   const colCount = 5;
+  const breakdownLines = useMemo(
+    () =>
+      breakdownLinesFromSpreadsheetItems(
+        displayGroups.flatMap((group) =>
+          group.items.map((item) => ({
+            costType: item.costType,
+            builderCostCents: item.builderCostCents,
+            clientTotalCents: item.clientTotalCents,
+            rateBasisPoints: item.rateBasisPoints,
+          })),
+        ),
+      ),
+    [displayGroups],
+  );
 
   return (
     <div className="flex flex-col gap-0">
-      <div
-        className="overflow-x-auto rounded-md border bg-[var(--bt-panel-bg)]"
-        style={{ borderColor: "var(--bt-border)" }}
-      >
-        <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
-          <thead>
-            <tr
-              className="border-b text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
-              style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
-            >
-              <th className="px-2 py-1.5 font-semibold sm:px-2.5">Item</th>
-              <th className="px-1.5 py-1.5 text-right font-semibold">Quantity</th>
-              <th className="px-1.5 py-1.5 text-right font-semibold">Unit cost</th>
-              <th className="hidden px-1.5 py-1.5 font-semibold sm:table-cell">Cost type</th>
-              <th className="px-2 py-1.5 text-right font-semibold sm:px-2.5">Client total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayGroups.length === 0 ? (
-              <tr>
-                <td colSpan={colCount} className="px-4 py-6 text-center text-sm text-[var(--bt-muted)]">
-                  No line items on this estimate yet.
-                </td>
-              </tr>
-            ) : null}
-            {displayGroups.map((group, groupIndex) => (
-              <GroupRows
-                key={group.label}
-                group={group}
-                groupNumber={groupIndex + 1}
-                showBreakdown={showBreakdown}
-                reorderable={reorderable}
-                draggingId={draggingId}
-                onDragStart={setDraggingId}
-                onDragEnd={() => setDraggingId(null)}
-                onDropOn={moveItem}
-              />
-            ))}
-          </tbody>
-        </table>
+      <div className={`flex min-w-0 gap-0 ${showBreakdown ? "flex-col lg:flex-row" : ""}`}>
+        <div className="min-w-0 flex-1">
+          <div
+            className="overflow-x-auto rounded-md border bg-[var(--bt-panel-bg)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          >
+            <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
+              <thead>
+                <tr
+                  className="border-b text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
+                  style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
+                >
+                  <th className="px-2 py-1.5 font-semibold sm:px-2.5">Item</th>
+                  <th className="px-1.5 py-1.5 text-right font-semibold">Quantity</th>
+                  <th className="px-1.5 py-1.5 text-right font-semibold">Unit cost</th>
+                  <th className="hidden px-1.5 py-1.5 font-semibold sm:table-cell">Cost type</th>
+                  <th className="px-2 py-1.5 text-right font-semibold sm:px-2.5">Client total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayGroups.length === 0 ? (
+                  <tr>
+                    <td colSpan={colCount} className="px-4 py-6 text-center text-sm text-[var(--bt-muted)]">
+                      No line items on this estimate yet.
+                    </td>
+                  </tr>
+                ) : null}
+                {displayGroups.map((group, groupIndex) => (
+                  <GroupRows
+                    key={group.label}
+                    group={group}
+                    groupNumber={groupIndex + 1}
+                    reorderable={reorderable}
+                    draggingId={draggingId}
+                    onDragStart={setDraggingId}
+                    onDragEnd={() => setDraggingId(null)}
+                    onDropOn={moveItem}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <EstimateBreakdownPanel
+          lines={breakdownLines}
+          open={showBreakdown}
+          onClose={() => setShowBreakdown(false)}
+        />
       </div>
 
       {reorderState.error ? <p className="mt-1 text-xs text-red-600">{reorderState.error}</p> : null}
@@ -209,8 +234,13 @@ export function EstimateSpreadsheet({
             type="button"
             onClick={() => setShowBreakdown((v) => !v)}
             className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold hover:bg-[var(--bt-panel-bg-muted)]"
-            style={{ borderColor: "var(--bt-border)" }}
+            style={{
+              borderColor: showBreakdown ? "var(--bt-primary)" : "var(--bt-border)",
+              color: showBreakdown ? "var(--bt-primary)" : undefined,
+            }}
             aria-pressed={showBreakdown}
+            aria-expanded={showBreakdown}
+            aria-controls="estimate-breakdown-panel"
           >
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden className="opacity-70">
               <path d="M2 3h8M2 6h8M2 9h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -251,7 +281,6 @@ export function EstimateSpreadsheet({
 function GroupRows({
   group,
   groupNumber,
-  showBreakdown,
   reorderable,
   draggingId,
   onDragStart,
@@ -260,7 +289,6 @@ function GroupRows({
 }: {
   readonly group: SpreadsheetGroup;
   readonly groupNumber: number;
-  readonly showBreakdown: boolean;
   readonly reorderable: boolean;
   readonly draggingId: string | null;
   readonly onDragStart: (id: string) => void;
@@ -333,18 +361,6 @@ function GroupRows({
                     <div className="min-w-0">
                       <div className="text-[12px] font-medium leading-tight text-[var(--bt-text)]">{item.title}</div>
                       <div className="truncate text-[9px] leading-tight text-[var(--bt-muted)]">{item.costCodeLabel}</div>
-                      {showBreakdown && item.description ? (
-                        <p className="mt-0.5 line-clamp-1 text-[9px] leading-tight text-[var(--bt-muted)]">
-                          {item.description}
-                        </p>
-                      ) : null}
-                      {showBreakdown ? (
-                        <p className="mt-0.5 text-[9px] tabular-nums text-[var(--bt-muted)]">
-                          Cost {formatMoney(item.builderCostCents)} ·{" "}
-                          {formatPercent(item.rateBasisPoints)}
-                          {item.rateMode === "MARGIN" ? " mar" : " mk"}
-                        </p>
-                      ) : null}
                       <div className="mt-0.5 sm:hidden">
                         <span
                           className="inline-block rounded px-1 py-px text-[8px] font-semibold"

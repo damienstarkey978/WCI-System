@@ -12,10 +12,15 @@
 import { AiNotConfiguredError, DraftGenerationError, draftEstimateFromNotes, type DraftEstimateImageInput } from "@/lib/ai/estimate-assistant";
 import type { CostCodeOption, MaterialCatalogOption } from "@/lib/ai/estimate-draft";
 import { listEnabledAiPreferenceInstructions } from "@/lib/ai/preference-instructions";
+import { normalizeLeadEmail } from "@/lib/crm/email";
 import { LeadNotFoundError } from "@/lib/crm/service";
 import { Prisma } from "@/generated/prisma/client";
 import type { RateMode } from "@/generated/prisma/enums";
 import { parsePendingProposalDraft } from "@/lib/crm/pending-proposal-draft";
+import {
+  DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
+  DEFAULT_ESTIMATE_RATE_MODE,
+} from "@/lib/estimates/org-defaults";
 import { createEstimate, EstimateNotFoundError, type CreateEstimateLineItemInput } from "@/lib/estimates/service";
 import { db } from "@/lib/db";
 import { isSupabaseStorageConfigured } from "@/lib/env";
@@ -104,7 +109,7 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
   const lead = await db.lead.findFirst({ where: { id: input.leadId, organizationId: input.organizationId } });
   if (!lead) throw new LeadNotFoundError(input.leadId);
 
-  const clientEmail = input.clientEmail ?? lead.email;
+  const clientEmail = normalizeLeadEmail(input.clientEmail ?? lead.email);
   if (!clientEmail) throw new LeadMissingContactError(input.leadId);
 
   // Null until a proposal for this lead is actually accepted (acceptProposal()
@@ -112,6 +117,11 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
   // acceptance") — unless this lead already has one, from an earlier accepted
   // proposal (e.g. this is a follow-up/revised proposal against that same job).
   const jobId = lead.convertedJobId;
+
+  // Repair a lead row that still has a TLD typo (e.g. yahoo.comm) when we touch it.
+  if (lead.email && normalizeLeadEmail(lead.email) !== lead.email) {
+    await db.lead.update({ where: { id: lead.id }, data: { email: clientEmail } });
+  }
 
   const client = await db.client.upsert({
     where: { organizationId_email: { organizationId: input.organizationId, email: clientEmail } },
@@ -153,8 +163,8 @@ export async function createLeadProposal(input: CreateLeadProposalInput) {
     jobId: jobId ?? undefined,
     leadId: jobId ? undefined : lead.id,
     title: input.title,
-    rateMode: input.rateMode,
-    defaultRateBasisPoints: input.defaultRateBasisPoints,
+    rateMode: input.rateMode ?? DEFAULT_ESTIMATE_RATE_MODE,
+    defaultRateBasisPoints: input.defaultRateBasisPoints ?? DEFAULT_ESTIMATE_MARKUP_BASIS_POINTS,
     lineItems: input.lineItems,
     aiGenerated: input.aiGenerated,
     aiPromptNotes: input.aiPromptNotes,

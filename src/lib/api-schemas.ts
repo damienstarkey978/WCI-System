@@ -224,12 +224,45 @@ const quantityMilli = z.number().int().positive().max(1_000_000_000);
 const cents = z.number().int().min(-1_000_000_000).max(1_000_000_000);
 const basisPoints = z.number().int().min(-9_999).max(1_000_000);
 
+const estimateUnitEnum = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    if (!value) return null;
+    const upper = value.toUpperCase();
+    const allowed = new Set(["EA", "SF", "LF", "SQ", "SHEET", "LS", "HR", "ALLOWANCE"]);
+    const aliases: Record<string, string> = {
+      HOUR: "HR",
+      HOURS: "HR",
+      EACH: "EA",
+      SQFT: "SF",
+      "SQ FT": "SF",
+      SQUARE: "SQ",
+      LINFT: "LF",
+      "LIN FT": "LF",
+      SHT: "SHEET",
+      LUMP: "LS",
+      "LUMP SUM": "LS",
+      ALLOW: "ALLOWANCE",
+    };
+    const resolved = aliases[upper] ?? (allowed.has(upper) ? upper : null);
+    if (!resolved) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Unknown unit "${value}". Allowed: EA, SF, LF, SQ, SHEET, LS, HR, ALLOWANCE.`,
+      });
+      return z.NEVER;
+    }
+    return resolved;
+  });
+
 export const estimateLineItemSchema = z.object({
   costCodeId: z.string().min(1).max(64),
   costType: z.enum(CostType).optional(),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().max(2_000).nullish(),
   quantityMilli: quantityMilli.optional().default(1_000),
+  unit: estimateUnitEnum.nullish(),
   unitCostCents: cents,
   rateMode: rateMode.optional(),
   rateBasisPoints: basisPoints.optional(),
@@ -239,11 +272,21 @@ export const estimateLineItemSchema = z.object({
 });
 
 export const createEstimateSchema = z.object({
-  jobId: z.string().min(1).max(64),
+  jobId: z.string().min(1).max(64).optional(),
+  leadId: z.string().min(1).max(64).optional(),
   title: z.string().trim().min(1).max(255),
   rateMode: rateMode.optional().default(RateMode.MARKUP),
-  defaultRateBasisPoints: basisPoints.optional().default(0),
+  /** Org default is 40% (4000 bp); omitted callers get that from the service. */
+  defaultRateBasisPoints: basisPoints.optional().default(4_000),
   lineItems: z.array(estimateLineItemSchema).min(1).max(500),
+}).superRefine((value, ctx) => {
+  if (!value.jobId && !value.leadId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["jobId"],
+      message: "Provide jobId or leadId.",
+    });
+  }
 });
 
 export const createPurchaseOrderSchema = z.object({

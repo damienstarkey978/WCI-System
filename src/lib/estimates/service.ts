@@ -9,7 +9,19 @@ import { Prisma } from "@/generated/prisma/client";
 import type { CostType, LineItemConfidence, LineItemPriceSource, RateMode } from "@/generated/prisma/enums";
 import { LeadNotFoundError } from "@/lib/crm/service";
 import { db } from "@/lib/db";
+import {
+  assertNoHourlyLaborForPerUnitTrade,
+  HourlyLaborNotAllowedError,
+} from "@/lib/estimates/no-hourly";
+import {
+  LOCKED_ORG_ESTIMATE_RATE_DEFAULTS,
+  resolveLineRate,
+  type OrgEstimateRateDefaults,
+} from "@/lib/estimates/org-defaults";
+import { normalizeEstimateUnit, UnknownEstimateUnitError } from "@/lib/estimates/units";
 import type { BasisPoints } from "@/lib/money";
+
+export { HourlyLaborNotAllowedError, UnknownEstimateUnitError };
 
 export class JobNotFoundError extends Error {
   constructor(jobId: string) {
@@ -83,6 +95,23 @@ export interface CreateEstimateInput {
   readonly pendingProposalDraft?: unknown | null;
 }
 
+async function loadOrgEstimateRateDefaults(organizationId: string): Promise<OrgEstimateRateDefaults> {
+  const org = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: {
+      defaultEstimateRateMode: true,
+      defaultEstimateRateBasisPoints: true,
+      allowPerLineRateOverride: true,
+    },
+  });
+  if (!org) return LOCKED_ORG_ESTIMATE_RATE_DEFAULTS;
+  return {
+    rateMode: org.defaultEstimateRateMode,
+    defaultRateBasisPoints: org.defaultEstimateRateBasisPoints,
+    allowPerLineRateOverride: org.allowPerLineRateOverride,
+  };
+}
+
 export async function createEstimate(input: CreateEstimateInput) {
   if (!input.jobId && !input.leadId) throw new Error("createEstimate requires a jobId or a leadId");
 
@@ -95,19 +124,67 @@ export async function createEstimate(input: CreateEstimateInput) {
     if (!lead) throw new LeadNotFoundError(input.leadId);
   }
 
-  const rateMode = input.rateMode ?? "MARKUP";
-  const defaultRateBasisPoints = input.defaultRateBasisPoints ?? 0;
+  const orgRates = await loadOrgEstimateRateDefaults(input.organizationId);
+  const headerRate = resolveLineRate({
+    org: orgRates,
+    rateMode: input.rateMode,
+    rateBasisPoints: input.defaultRateBasisPoints,
+  });
+  // AI drafts always lock to org default even if a caller forgot to pass rates.
+  const rateMode = input.aiGenerated ? orgRates.rateMode : headerRate.rateMode;
+  const defaultRateBasisPoints = input.aiGenerated
+    ? orgRates.defaultRateBasisPoints
+    : headerRate.rateBasisPoints;
 
   const costCodeIds = [...new Set(input.lineItems.map((item) => item.costCodeId))];
   const known = await db.costCode.findMany({
     where: { id: { in: costCodeIds }, organizationId: input.organizationId },
-    select: { id: true, defaultCostType: true },
+    select: { id: true, defaultCostType: true, code: true, name: true },
   });
   if (known.length !== costCodeIds.length) {
     const knownIds = new Set(known.map((code) => code.id));
     throw new UnknownCostCodeError(costCodeIds.filter((id) => !knownIds.has(id)));
   }
-  const defaultCostTypeById = new Map(known.map((code) => [code.id, code.defaultCostType]));
+  const costCodeById = new Map(known.map((code) => [code.id, code]));
+
+  const preparedLines = input.lineItems.map((item, index) => {
+    const costCode = costCodeById.get(item.costCodeId)!;
+    const costType = item.costType ?? costCode.defaultCostType;
+    const unit = normalizeEstimateUnit(item.unit);
+    assertNoHourlyLaborForPerUnitTrade({
+      costType,
+      unit,
+      title: item.title,
+      description: item.description,
+      groupLabel: item.groupLabel,
+      costCodeCode: costCode.code,
+      costCodeName: costCode.name,
+    });
+    const lineRate = resolveLineRate({
+      org: input.aiGenerated
+        ? { ...orgRates, allowPerLineRateOverride: false }
+        : orgRates,
+      rateMode: item.rateMode ?? rateMode,
+      rateBasisPoints: item.rateBasisPoints ?? defaultRateBasisPoints,
+    });
+    return {
+      costCodeId: item.costCodeId,
+      costType,
+      title: item.title,
+      description: item.description ?? null,
+      quantityMilli: item.quantityMilli ?? 1_000,
+      unit,
+      unitCostCents: item.unitCostCents,
+      rateMode: lineRate.rateMode,
+      rateBasisPoints: lineRate.rateBasisPoints,
+      taxable: item.taxable ?? false,
+      internalNote: item.internalNote ?? null,
+      groupLabel: item.groupLabel ?? null,
+      confidence: item.confidence ?? null,
+      priceSource: item.priceSource ?? null,
+      sortOrder: index,
+    };
+  });
 
   return db.estimate.create({
     data: {
@@ -126,23 +203,7 @@ export async function createEstimate(input: CreateEstimateInput) {
             ? Prisma.DbNull
             : (input.pendingProposalDraft as Prisma.InputJsonValue),
       lineItems: {
-        create: input.lineItems.map((item, index) => ({
-          costCodeId: item.costCodeId,
-          costType: item.costType ?? defaultCostTypeById.get(item.costCodeId) ?? "NONE",
-          title: item.title,
-          description: item.description ?? null,
-          quantityMilli: item.quantityMilli ?? 1_000,
-          unit: item.unit?.trim() || null,
-          unitCostCents: item.unitCostCents,
-          rateMode: item.rateMode ?? rateMode,
-          rateBasisPoints: item.rateBasisPoints ?? defaultRateBasisPoints,
-          taxable: item.taxable ?? false,
-          internalNote: item.internalNote ?? null,
-          groupLabel: item.groupLabel ?? null,
-          confidence: item.confidence ?? null,
-          priceSource: item.priceSource ?? null,
-          sortOrder: index,
-        })),
+        create: preparedLines,
       },
     },
     include: { lineItems: { orderBy: { sortOrder: "asc" } } },
@@ -186,12 +247,30 @@ export interface AddEstimateLineItemInput extends CreateEstimateLineItemInput {
 
 export async function addEstimateLineItem(input: AddEstimateLineItemInput) {
   const estimate = await requireEditableEstimate(input.organizationId, input.estimateId);
+  const orgRates = await loadOrgEstimateRateDefaults(input.organizationId);
 
   const costCode = await db.costCode.findFirst({
     where: { id: input.costCodeId, organizationId: input.organizationId },
-    select: { id: true, defaultCostType: true },
+    select: { id: true, defaultCostType: true, code: true, name: true },
   });
   if (!costCode) throw new UnknownCostCodeError([input.costCodeId]);
+
+  const costType = input.costType ?? costCode.defaultCostType;
+  const unit = normalizeEstimateUnit(input.unit);
+  assertNoHourlyLaborForPerUnitTrade({
+    costType,
+    unit,
+    title: input.title,
+    description: input.description,
+    groupLabel: input.groupLabel,
+    costCodeCode: costCode.code,
+    costCodeName: costCode.name,
+  });
+  const lineRate = resolveLineRate({
+    org: orgRates,
+    rateMode: input.rateMode ?? estimate.rateMode,
+    rateBasisPoints: input.rateBasisPoints ?? estimate.defaultRateBasisPoints,
+  });
 
   const last = await db.estimateLineItem.findFirst({ where: { estimateId: input.estimateId }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
 
@@ -199,14 +278,14 @@ export async function addEstimateLineItem(input: AddEstimateLineItemInput) {
     data: {
       estimateId: input.estimateId,
       costCodeId: input.costCodeId,
-      costType: input.costType ?? costCode.defaultCostType,
+      costType,
       title: input.title,
       description: input.description ?? null,
       quantityMilli: input.quantityMilli ?? 1_000,
-      unit: input.unit?.trim() || null,
+      unit,
       unitCostCents: input.unitCostCents,
-      rateMode: input.rateMode ?? estimate.rateMode,
-      rateBasisPoints: input.rateBasisPoints ?? estimate.defaultRateBasisPoints,
+      rateMode: lineRate.rateMode,
+      rateBasisPoints: lineRate.rateBasisPoints,
       taxable: input.taxable ?? false,
       internalNote: input.internalNote ?? null,
       groupLabel: input.groupLabel ?? null,
