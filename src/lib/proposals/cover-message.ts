@@ -16,11 +16,23 @@ export class BannedCoverMessageError extends Error {
   }
 }
 
-export function assertCoverMessageAllowed(message: string | null | undefined): void {
-  if (!message) return;
+export function findCoverMessageIssues(message: string | null | undefined): string[] {
+  if (!message?.trim()) {
+    return ["Cover message is required (must start with the standard thank-you opener)."];
+  }
   if (message.toLowerCase().includes(BANNED_COVER_PHRASE)) {
+    return [`Cover message must not include "${BANNED_COVER_PHRASE}".`];
+  }
+  return [];
+}
+
+export function assertCoverMessageAllowed(message: string | null | undefined): void {
+  const issues = findCoverMessageIssues(message);
+  if (issues.length === 0) return;
+  if (issues.some((issue) => issue.includes(BANNED_COVER_PHRASE))) {
     throw new BannedCoverMessageError();
   }
+  throw new Error(issues[0]);
 }
 
 /**

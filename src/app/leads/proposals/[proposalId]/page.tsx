@@ -479,6 +479,8 @@ export default async function ProposalEditorPage({ params, searchParams }: PageP
               client={proposal.client}
               organization={organization}
               createdAt={proposal.createdAt}
+              proposalDate={proposal.sentAt ?? proposal.createdAt}
+              taxRateBasisPoints={proposal.taxRateBasisPoints}
               coverMessage={proposal.coverMessage}
               sections={proposal.sections.map((section) => ({
                 id: section.id,
