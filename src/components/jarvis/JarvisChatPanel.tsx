@@ -27,15 +27,28 @@ import {
   type LauncherActionState,
   type LauncherPendingActionData,
 } from "@/app/jarvis/actions";
-import { loadLeadGeneralPhotosForJarvisAction } from "@/app/leads/[leadId]/jarvis-seed-actions";
+import {
+  findLeadPendingEstimateWorkspaceAction,
+  loadLeadGeneralPhotosForJarvisAction,
+} from "@/app/leads/[leadId]/jarvis-seed-actions";
 import { prepareJarvisAttachments } from "@/lib/client/prepare-jarvis-attachments";
 import { JarvisAskComposer } from "@/components/jarvis/JarvisAskComposer";
 import { JarvisMascot } from "@/components/jarvis/JarvisMascot";
+import { JarvisWorkingIndicator, type JarvisWorkingMode } from "@/components/jarvis/JarvisWorkingIndicator";
 import { useFunUi } from "@/components/jarvis/useFunUi";
+import {
+  findEstimateWorkspaceHrefInMessages,
+  isAsyncDraftFailureMessage,
+  isWaitingOnAsyncDraft,
+} from "@/lib/jarvis/estimate-workspace-nav";
 import { JARVIS_SUGGESTIONS } from "@/lib/jarvis/suggestions";
 
 const STORAGE_KEY_PREFIX = "jarvis-chat-conversation-id";
 const DRAFT_POLL_MS = 4_000;
+/** Inline Anthropic draft can take a while; past this we clear the spinner and offer retry. */
+const TURN_TIMEOUT_MS = 180_000;
+/** Async worker path — longer, but never spin forever on a dead poll. */
+const DRAFT_POLL_TIMEOUT_MS = 300_000;
 
 export interface JarvisGeneralPhotoSeed {
   readonly id: string;
@@ -70,6 +83,17 @@ interface JarvisChatPanelProps {
    */
   readonly navigateOnEstimateDraft?: boolean;
   /**
+   * Lead id used to poll for a pending estimate workspace when the chat reply
+   * omits the link (apology / notes paragraph). Falls back to leadIdForGeneralPhotos.
+   */
+  readonly leadIdForEstimateNav?: string | null;
+  /**
+   * Estimate ids already rendered on the page at load. Auto-nav only follows
+   * *new* ids after a draft (so "compose another" isn't yanked to an old draft),
+   * unless the page thought there were none (stuck START HERE recovery).
+   */
+  readonly knownEstimateIds?: readonly string[];
+  /**
    * `docked` = estimate rail: no inner Jarvis chrome (outer rail already has Jarvis
    * header), denser empty state, compact composer. `default` = floating launcher /
    * full embeds.
@@ -77,22 +101,6 @@ interface JarvisChatPanelProps {
   readonly chrome?: "default" | "docked";
   /** Truncated address chip in Ask composer (Handoff location pin). */
   readonly locationChip?: string | null;
-}
-
-function isWaitingOnAsyncDraft(messages: readonly { role: string; content: string }[]): boolean {
-  const lastAssistant = [...messages].reverse().find((message) => message.role === "ASSISTANT");
-  if (!lastAssistant) return false;
-  return (
-    lastAssistant.content.includes("Queued that up") ||
-    lastAssistant.content.includes("I'll post the result right here")
-  );
-}
-
-const ESTIMATE_WORKSPACE_PATH = /\/leads\/estimates\/([a-z0-9]+)/i;
-
-function extractEstimateWorkspaceHref(content: string): string | null {
-  const match = content.match(ESTIMATE_WORKSPACE_PATH);
-  return match ? `/leads/estimates/${match[1]}` : null;
 }
 
 function EmbeddedPendingActionCard({
@@ -192,6 +200,8 @@ function JarvisChatBody({
   generalPhotos,
   leadIdForGeneralPhotos,
   navigateOnEstimateDraft = false,
+  leadIdForEstimateNav = null,
+  knownEstimateIds = [],
   chrome = "default",
   locationChip = null,
 }: {
@@ -208,6 +218,8 @@ function JarvisChatBody({
   generalPhotos?: readonly JarvisGeneralPhotoSeed[];
   leadIdForGeneralPhotos?: string | null;
   navigateOnEstimateDraft?: boolean;
+  leadIdForEstimateNav?: string | null;
+  knownEstimateIds?: readonly string[];
   chrome?: "default" | "docked";
   locationChip?: string | null;
 }) {
@@ -215,6 +227,9 @@ function JarvisChatBody({
   const router = useRouter();
   const funUi = useFunUi();
   const navigatedEstimateHref = useRef<string | null>(null);
+  const knownEstimateIdSet = useRef(new Set(knownEstimateIds));
+  const watchedForNewEstimateRef = useRef(false);
+  const leadIdForNav = leadIdForEstimateNav ?? leadIdForGeneralPhotos ?? null;
   const [initialConversationId] = useState<string | undefined>(() =>
     typeof window !== "undefined" ? (sessionStorage.getItem(storageKeyFull) ?? undefined) : undefined,
   );
@@ -233,15 +248,23 @@ function JarvisChatBody({
   // therefore useActionState's own `pending`) ever starts — see chat-input-form.tsx's
   // identical note.
   const [preparing, setPreparing] = useState(false);
+  // Stays true from submit click through the whole server turn. useActionState's
+  // `pending` alone can drop (or never flip) after async attachment prep +
+  // startTransition — leaving only an older assistant bubble and looking idle.
+  const [requestInFlight, setRequestInFlight] = useState(false);
+  const [optimisticUserText, setOptimisticUserText] = useState<string | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [hangError, setHangError] = useState<string | null>(null);
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
   const [loadingGeneralPhotos, setLoadingGeneralPhotos] = useState(false);
+  const [workspaceReadyHref, setWorkspaceReadyHref] = useState<string | null>(null);
   const [, startRefresh] = useTransition();
   // useActionState's dispatch must run inside a transition (or as a form action /
   // formAction prop). Calling it after async attachment prep used to happen outside
   // one — React then warned and `pending` stayed false, so the UI looked idle while
   // the server action was still running (or appeared stuck on long drafts).
-  const [, startSend] = useTransition();
+  // Keep `sendPending` — the launcher used to discard it, which hid the working UI.
+  const [sendPending, startSend] = useTransition();
 
   const trimmedGeneralNotes = generalNotes?.trim() ?? "";
   const generalPhotoCount = generalPhotos?.length ?? 0;
@@ -260,20 +283,65 @@ function JarvisChatBody({
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [viewState.messages, viewState.pendingActions]);
-
-  useEffect(() => {
-    onPendingChange?.(pending);
-  }, [pending, onPendingChange]);
+  }, [viewState.messages, viewState.pendingActions, workspaceReadyHref]);
 
   const messages = viewState.messages ?? [];
   const pendingActions = viewState.pendingActions ?? [];
   const pendingCount = viewState.pendingCount ?? pendingActions.filter((action) => action.status === "PENDING").length;
   const conversationId = viewState.conversationId;
   const waitingOnDraft = isWaitingOnAsyncDraft(messages);
+  const lastAssistant = [...messages].reverse().find((message) => message.role === "ASSISTANT");
+  const draftFailed = Boolean(lastAssistant && isAsyncDraftFailureMessage(lastAssistant.content));
+  // Combined busy flag: covers prep → transition → action → async draft poll.
+  const turnInFlight = preparing || pending || sendPending || requestInFlight;
+  const working = (turnInFlight || waitingOnDraft) && !draftFailed && !hangError;
 
   useEffect(() => {
-    if (!conversationId || !waitingOnDraft || pending) return;
+    onPendingChange?.(working);
+  }, [working, onPendingChange]);
+
+  // Drop the local in-flight latch once React reports the action/transition done.
+  // waitingOnDraft keeps `working` true after that so the indicator stays up.
+  // setTimeout avoids react-hooks/set-state-in-effect (sync setState in effect body).
+  useEffect(() => {
+    if (!requestInFlight) return;
+    if (preparing || pending || sendPending) return;
+    const timer = window.setTimeout(() => {
+      setRequestInFlight(false);
+      setOptimisticUserText(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [requestInFlight, preparing, pending, sendPending, viewState.messages, viewState.error]);
+
+  function goToEstimateWorkspace(href: string) {
+    if (navigatedEstimateHref.current === href) return;
+    navigatedEstimateHref.current = href;
+    setWorkspaceReadyHref(href);
+    setRequestInFlight(false);
+    setOptimisticUserText(null);
+    setHangError(null);
+    // Refresh RSC so Lead Proposals doesn't keep a stale empty-estimates tree.
+    router.refresh();
+    router.push(href);
+  }
+
+  // Message-derived navigation: scan the whole thread (not just the last bubble).
+  // An apology/notes paragraph after a successful draft used to block redirect.
+  useEffect(() => {
+    if (!navigateOnEstimateDraft || docked) return;
+    const href = findEstimateWorkspaceHrefInMessages(messages);
+    if (!href) return;
+    const estimateId = href.split("/").pop() ?? "";
+    const isKnown = knownEstimateIdSet.current.has(estimateId);
+    // Same rule as the DB poll — only follow ids this page render didn't already list.
+    if (knownEstimateIdSet.current.size > 0 && isKnown) return;
+    goToEstimateWorkspace(href);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate once per href; router is stable enough
+  }, [navigateOnEstimateDraft, docked, messages]);
+
+  // Conversation poll while the async worker is drafting.
+  useEffect(() => {
+    if (!conversationId || !waitingOnDraft || turnInFlight || draftFailed) return;
     const epochAtStart = sendEpochRef.current;
     const timer = window.setInterval(() => {
       startRefresh(async () => {
@@ -282,18 +350,77 @@ function JarvisChatBody({
       });
     }, DRAFT_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [conversationId, waitingOnDraft, pending]);
+  }, [conversationId, waitingOnDraft, turnInFlight, draftFailed]);
+
+  // DB poll: draft can finish (or already exist) while chat stays on an apology bubble.
+  useEffect(() => {
+    if (!navigateOnEstimateDraft || !leadIdForNav || docked) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      const pendingWorkspace = await findLeadPendingEstimateWorkspaceAction(leadIdForNav);
+      if (cancelled || !pendingWorkspace) return;
+      const isNew = !knownEstimateIdSet.current.has(pendingWorkspace.estimateId);
+      // Stuck recovery: page rendered with zero estimates but DB already has one.
+      // After a send: follow new ids only (don't yank "compose another" to an old draft).
+      if (knownEstimateIdSet.current.size > 0 && !isNew) return;
+      goToEstimateWorkspace(`/leads/estimates/${pendingWorkspace.estimateId}`);
+    };
+
+    // One-shot stuck recovery when RSC still thinks there are no estimates.
+    if (knownEstimateIdSet.current.size === 0) {
+      void poll();
+    }
+
+    if (!(working || watchedForNewEstimateRef.current)) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void poll();
+    const timer = window.setInterval(() => {
+      void poll();
+    }, DRAFT_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigateOnEstimateDraft, leadIdForNav, docked, working]);
+
+  // Hang / timeout: never leave a spinning or idle-stuck START HERE card forever.
+  useEffect(() => {
+    if (!turnInFlight) return;
+    const timer = window.setTimeout(() => {
+      setRequestInFlight(false);
+      setOptimisticUserText(null);
+      setHangError(
+        navigateOnEstimateDraft
+          ? "Jarvis is taking too long. Retry below — or open the estimate workspace if the draft already landed."
+          : "Jarvis is taking too long. You can retry your message.",
+      );
+    }, TURN_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [turnInFlight, navigateOnEstimateDraft]);
 
   useEffect(() => {
-    if (!navigateOnEstimateDraft || pending || waitingOnDraft) return;
-    const thread = viewState.messages ?? [];
-    const lastAssistant = [...thread].reverse().find((message) => message.role === "ASSISTANT");
-    if (!lastAssistant) return;
-    const href = extractEstimateWorkspaceHref(lastAssistant.content);
-    if (!href || navigatedEstimateHref.current === href) return;
-    navigatedEstimateHref.current = href;
-    router.push(href);
-  }, [navigateOnEstimateDraft, viewState.messages, pending, waitingOnDraft, router]);
+    if (!waitingOnDraft || turnInFlight || draftFailed) return;
+    const timer = window.setTimeout(() => {
+      setHangError(
+        "Still no draft reply from Jarvis. Retry, or open the estimate workspace if it already exists in another tab.",
+      );
+    }, DRAFT_POLL_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [waitingOnDraft, turnInFlight, draftFailed]);
+
+  const workingMode: JarvisWorkingMode = preparing
+    ? "preparing"
+    : waitingOnDraft && !turnInFlight
+      ? "draft_poll"
+      : navigateOnEstimateDraft
+        ? "estimate"
+        : "general";
 
   function fillSuggestion(suggestion: string) {
     const textarea = formRef.current?.elements.namedItem("text");
@@ -386,7 +513,7 @@ function JarvisChatBody({
                 : "flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]"
             }
           >
-            {funUi ? <JarvisMascot expression={pending ? "thinking" : "happy"} size={28} tone="light" /> : <span>✦</span>} Jarvis
+            {funUi ? <JarvisMascot expression={working ? "thinking" : "happy"} size={28} tone="light" /> : <span>✦</span>} Jarvis
           </span>
           <div className={funUi ? "flex items-center gap-3 text-xs text-white/90" : "flex items-center gap-2.5 text-xs"}>
             <button type="button" onClick={onNewChat} className={funUi ? "hover:underline" : "text-[var(--bt-muted)] hover:underline"}>
@@ -478,19 +605,29 @@ function JarvisChatBody({
                   </div>
                 ))
               : null}
+            {optimisticUserText && turnInFlight ? (
+              <div className="flex justify-end">
+                <div
+                  className="max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm opacity-90"
+                  style={{ background: "var(--bt-primary)", color: "var(--bt-on-primary)" }}
+                >
+                  {optimisticUserText}
+                </div>
+              </div>
+            ) : null}
           </>
         )}
-        {pending ? (
-          <div className="flex items-center gap-2 justify-start">
-            {funUi ? <JarvisMascot expression="thinking" size={26} badge /> : null}
-            <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm text-[var(--bt-muted)]" style={{ background: "var(--bt-panel-bg-muted)" }}>
-              Jarvis is thinking…
+        {optimisticUserText && turnInFlight && messages.length === 0 && pendingActions.length === 0 ? (
+          <div className="flex justify-end">
+            <div
+              className="max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm opacity-90"
+              style={{ background: "var(--bt-primary)", color: "var(--bt-on-primary)" }}
+            >
+              {optimisticUserText}
             </div>
           </div>
         ) : null}
-        {waitingOnDraft && !pending ? (
-          <p className="text-center text-xs text-[var(--bt-muted)]">Still drafting — this chat will update when it finishes…</p>
-        ) : null}
+        {working ? <JarvisWorkingIndicator key={workingMode} mode={workingMode} funUi={funUi} compact={docked} /> : null}
         {pendingCount > 0 && conversationId && pendingActions.length === 0 ? (
           <div className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
             {pendingCount} action{pendingCount === 1 ? "" : "s"} waiting on your confirmation —{" "}
@@ -508,7 +645,7 @@ function JarvisChatBody({
         conversationId={conversationId}
         contextJson={context ? JSON.stringify(context) : ""}
         placeholder={composerPlaceholder}
-        pending={pending}
+        pending={working}
         preparing={preparing}
         funUi={funUi}
         rows={docked ? 2 : 2}
@@ -517,12 +654,20 @@ function JarvisChatBody({
         onTranscript={appendVoiceTranscript}
         onSubmit={async (formData) => {
           setAttachmentError(null);
+          setHangError(null);
+          setWorkspaceReadyHref(null);
           sendEpochRef.current += 1;
           setOverlayState(null);
+          if (navigateOnEstimateDraft) watchedForNewEstimateRef.current = true;
+          const typed = String(formData.get("text") ?? "").trim();
+          setOptimisticUserText(typed || null);
+          setRequestInFlight(true);
           setPreparing(true);
           const prepared = await prepareJarvisAttachments(formData).finally(() => setPreparing(false));
           if (prepared.error) {
             setAttachmentError(prepared.error);
+            setRequestInFlight(false);
+            setOptimisticUserText(null);
             return;
           }
           startSend(() => {
@@ -536,7 +681,7 @@ function JarvisChatBody({
               <button
                 type="button"
                 onClick={seedGeneralNotes}
-                disabled={pending || preparing}
+                disabled={working}
                 className="min-h-10 touch-manipulation rounded-full border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
                 style={{ borderColor: "var(--bt-primary)" }}
               >
@@ -545,7 +690,7 @@ function JarvisChatBody({
               <button
                 type="button"
                 onClick={() => void seedGeneralPhotos()}
-                disabled={pending || preparing || loadingGeneralPhotos}
+                disabled={working || loadingGeneralPhotos}
                 className="min-h-10 touch-manipulation rounded-full border px-3 py-2 text-left text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
                 style={{ borderColor: "var(--bt-primary)" }}
               >
@@ -556,10 +701,66 @@ function JarvisChatBody({
         }
         footer={
           <>
-            {seedStatus ? <p className="px-0.5 text-xs text-[var(--bt-muted)]">{seedStatus}</p> : null}
-            {preparing ? <p className="px-0.5 text-xs text-[var(--bt-muted)]">Preparing photos…</p> : null}
+            {seedStatus && !working ? <p className="px-0.5 text-xs text-[var(--bt-muted)]">{seedStatus}</p> : null}
+            {working ? (
+              <p className="px-0.5 text-xs font-medium" style={{ color: "var(--bt-primary)" }} aria-live="polite">
+                {preparing
+                  ? "Preparing photos…"
+                  : waitingOnDraft && !turnInFlight
+                    ? "Draft still running — hang tight…"
+                    : navigateOnEstimateDraft
+                      ? "Working on estimate…"
+                      : "Jarvis is working…"}
+              </p>
+            ) : null}
+            {workspaceReadyHref ? (
+              <p className="px-0.5 text-xs font-medium" style={{ color: "var(--bt-primary)" }}>
+                Estimate ready —{" "}
+                <Link href={workspaceReadyHref} className="underline">
+                  open workspace
+                </Link>
+              </p>
+            ) : null}
+            {hangError ? (
+              <div className="flex flex-col gap-1.5 px-0.5">
+                <p className="text-xs text-red-600" role="alert">
+                  {hangError}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-full border px-2.5 py-1 text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5"
+                    style={{ borderColor: "var(--bt-primary)" }}
+                    onClick={() => {
+                      setHangError(null);
+                      if (leadIdForNav) {
+                        void findLeadPendingEstimateWorkspaceAction(leadIdForNav).then((pendingWorkspace) => {
+                          if (pendingWorkspace) {
+                            goToEstimateWorkspace(`/leads/estimates/${pendingWorkspace.estimateId}`);
+                          } else {
+                            setSeedStatus("No estimate on this lead yet — send another Ask Jarvis message to draft.");
+                          }
+                        });
+                      }
+                    }}
+                  >
+                    Check for estimate
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border px-2.5 py-1 text-xs font-medium text-[var(--bt-text)] hover:bg-black/5"
+                    style={{ borderColor: "var(--bt-border)" }}
+                    onClick={() => setHangError(null)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {attachmentError ?? viewState.error ? (
-              <p className="px-0.5 text-xs text-red-600">{attachmentError ?? viewState.error}</p>
+              <p className="px-0.5 text-xs text-red-600" role="alert">
+                {attachmentError ?? viewState.error}
+              </p>
             ) : null}
           </>
         }
@@ -584,6 +785,8 @@ export function JarvisChatPanel({
   generalPhotos,
   leadIdForGeneralPhotos,
   navigateOnEstimateDraft = false,
+  leadIdForEstimateNav = null,
+  knownEstimateIds = [],
   chrome = "default",
   locationChip = null,
 }: JarvisChatPanelProps) {
@@ -611,6 +814,8 @@ export function JarvisChatPanel({
       generalPhotos={generalPhotos}
       leadIdForGeneralPhotos={leadIdForGeneralPhotos}
       navigateOnEstimateDraft={navigateOnEstimateDraft}
+      leadIdForEstimateNav={leadIdForEstimateNav}
+      knownEstimateIds={knownEstimateIds}
       chrome={chrome}
       locationChip={locationChip}
     />
