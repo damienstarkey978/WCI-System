@@ -22,23 +22,46 @@ import {
 } from "./credit-deposit-panels";
 import { CreateDrawScheduleForm, GenerateDrawInvoiceButton } from "./draw-panels";
 import { FinancialPageHeader } from "../financial-tabs";
-import { RecordPaymentForm } from "./record-payment-form";
-import { VoidInvoiceButton } from "./void-invoice-button";
+import { InvoicesToolbar } from "./invoices-toolbar";
 
 export const dynamic = "force-dynamic";
 
+/** Buildertrend invoice status pills — green Paid, orange Pending/Sent (not Open-sky blue). */
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  REQUESTED: { bg: "#e5e7eb", text: "#374151" },
-  SENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  ISSUED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  RECEIVED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  PARTIALLY_PAID: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  PAID: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  APPLIED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
+  REQUESTED: { bg: "#fff4e5", text: "#b76e00" },
+  SENT: { bg: "#fff4e5", text: "#b76e00" },
+  ISSUED: { bg: "#fff4e5", text: "#b76e00" },
+  RECEIVED: { bg: "#fff4e5", text: "#b76e00" },
+  PARTIALLY_PAID: { bg: "#fff4e5", text: "#b76e00" },
+  PAID: { bg: "#e6f4ea", text: "#1e7e34" },
+  APPLIED: { bg: "#e6f4ea", text: "#1e7e34" },
   VOID: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
   REFUNDED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
 };
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case "PAID":
+    case "APPLIED":
+      return "Paid";
+    case "SENT":
+    case "ISSUED":
+    case "REQUESTED":
+    case "RECEIVED":
+      return "Pending/Sent";
+    case "PARTIALLY_PAID":
+      return "Partially paid";
+    case "DRAFT":
+      return "Draft";
+    case "VOID":
+      return "Void";
+    case "REFUNDED":
+      return "Refunded";
+    default:
+      return status.replace(/_/g, " ");
+  }
+}
 
 // "schedule" isn't in this tab row — Buildertrend puts Payment Schedule behind its
 // own header button instead of a tab (see the header's "Payment schedule" link
@@ -61,15 +84,18 @@ function isTabKey(value: string | undefined): value is TabKey {
 function Badge({ status }: { status: string }) {
   const style = STATUS_STYLE[status] ?? STATUS_STYLE.DRAFT;
   return (
-    <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: style.bg, color: style.text }}>
-      {status.replace(/_/g, " ")}
+    <span
+      className="inline-flex rounded px-1.5 py-0.5 text-[11px] font-semibold"
+      style={{ background: style.bg, color: style.text }}
+    >
+      {statusLabel(status)}
     </span>
   );
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-lg border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
+    <div className="overflow-x-auto rounded border bg-[var(--bt-panel-bg)]" style={{ borderColor: "var(--bt-border)" }}>
       <table className="w-full min-w-max text-left text-sm">{children}</table>
     </div>
   );
@@ -79,11 +105,11 @@ function Head({ columns }: { columns: readonly string[] }) {
   return (
     <thead>
       <tr
-        className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
-        style={{ borderColor: "var(--bt-border)" }}
+        className="border-b text-xs font-semibold text-[var(--bt-muted)]"
+        style={{ borderColor: "var(--bt-border)", background: "color-mix(in srgb, var(--bt-primary) 6%, var(--bt-panel-bg))" }}
       >
         {columns.map((column) => (
-          <th key={column} className={`px-4 py-3 ${column.startsWith("~") ? "text-right" : ""}`}>
+          <th key={column} className={`px-3 py-2.5 font-semibold sm:px-4 ${column.startsWith("~") ? "text-right" : ""}`}>
             {column.replace(/^~/, "")}
           </th>
         ))}
@@ -93,46 +119,42 @@ function Head({ columns }: { columns: readonly string[] }) {
 }
 
 /**
- * Buildertrend's equation at the top of Invoices: Total revised price minus
- * Payments equals Remaining balance. Distinct from the Outstanding tile below,
- * which is only what has been invoiced so far.
+ * Buildertrend's equation above the invoices table: Original price − Payments =
+ * Remaining. Inline density — not the former heavy summary-card stack.
  */
 function ContractEquation({ contractPriceCents, paidCents }: { contractPriceCents: number; paidCents: number }) {
   const remainingCents = contractPriceCents - paidCents;
-  // Negative remaining means cash received exceeds the budgeted/proposal+CO
-  // revised price — usually a missing proposal (e.g. Stockton roof on a separate
-  // BT proposal) or a $0 contract job, not double-counted payments (those are
-  // excluded via VOID filtering). Do not invent budget lines to zero this out.
   const overpaid = remainingCents < 0;
   return (
-    <div className="flex flex-col gap-2">
-      <div
-        className="flex flex-wrap items-center gap-4 rounded-lg border bg-[var(--bt-panel-bg)] px-4 py-3 sm:gap-6"
-        style={{ borderColor: "var(--bt-border)" }}
-      >
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-2 text-[var(--bt-text)] sm:gap-x-5">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Total revised price</div>
-          <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(contractPriceCents)}</div>
+          <div className="text-xs text-[var(--bt-muted)]">Original price</div>
+          <div className="text-xl font-semibold tabular-nums">{formatMoney(contractPriceCents)}</div>
         </div>
-        <span className="text-lg text-[var(--bt-muted)]">−</span>
+        <span className="pb-1 text-lg text-[var(--bt-muted)]" aria-hidden>
+          −
+        </span>
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Payments</div>
-          <div className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{formatMoney(paidCents)}</div>
+          <div className="text-xs text-[var(--bt-muted)]">Payments</div>
+          <div className="text-xl font-semibold tabular-nums">{formatMoney(paidCents)}</div>
         </div>
-        <span className="text-lg text-[var(--bt-muted)]">=</span>
+        <span className="pb-1 text-lg text-[var(--bt-muted)]" aria-hidden>
+          =
+        </span>
         <div>
-          <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+          <div className="flex items-center gap-1 text-xs text-[var(--bt-muted)]">
             Remaining balance
             <span
-              title="The job's revised contract price minus every payment received so far. This is what the client still owes overall — it isn't the same as what has been invoiced yet, below."
-              className="cursor-help rounded-full border text-[10px] leading-3"
-              style={{ borderColor: "var(--bt-border)", width: "14px", height: "14px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+              title="The job's revised contract price minus every payment received so far. This is what the client still owes overall — it isn't the same as what has been invoiced yet."
+              className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border text-[9px] leading-none"
+              style={{ borderColor: "var(--bt-border)", color: "#3b82f6" }}
             >
               i
             </span>
           </div>
           <div
-            className="mt-1 text-lg font-semibold"
+            className="text-xl font-semibold tabular-nums"
             style={{ color: overpaid ? "var(--bt-danger)" : "var(--bt-text)" }}
           >
             {formatMoney(remainingCents)}
@@ -150,46 +172,22 @@ function ContractEquation({ contractPriceCents, paidCents }: { contractPriceCent
   );
 }
 
-/**
- * What the office needs to know about invoices billed so far on this job: how much
- * has been billed, how much came in against those invoices, what's still owed, and
- * how much of that is late. Overdue is called out separately from outstanding
- * because they prompt different actions — one is waiting, the other is chasing.
- */
-function SummaryStrip({
-  billedCents,
-  paidCents,
-  creditedCents,
-  overdueCents,
-  unappliedDepositCents,
-}: {
-  billedCents: number;
-  paidCents: number;
-  creditedCents: number;
-  overdueCents: number;
-  unappliedDepositCents: number;
-}) {
-  const outstanding = billedCents - paidCents - creditedCents;
-  const tiles = [
-    { label: "Billed", value: formatMoney(billedCents) },
-    { label: "Received", value: formatMoney(paidCents) },
-    { label: "Outstanding", value: formatMoney(outstanding) },
-    { label: "Overdue", value: formatMoney(overdueCents), danger: overdueCents > 0 },
-    { label: "Deposits held", value: formatMoney(unappliedDepositCents) },
-  ];
+function datePaidFor(invoice: {
+  paidAt: Date | null;
+  payments: readonly { receivedAt: Date }[];
+}): Date | null {
+  if (invoice.paidAt) return invoice.paidAt;
+  const latest = invoice.payments[0];
+  return latest?.receivedAt ?? null;
+}
 
-  return (
-    <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
-      {tiles.map((tile) => (
-        <div key={tile.label} className="rounded-lg border bg-[var(--bt-panel-bg)] px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{tile.label}</div>
-          <div className="mt-0.5 text-sm font-semibold" style={{ color: tile.danger ? "var(--bt-danger)" : "var(--bt-text)" }}>
-            {tile.value}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+/** BT list shows short ids (0005); strip migration JOB_* / *-INV-* prefixes for display only. */
+function displayInvoiceId(invoiceNumber: string): string {
+  const jobPrefixed = invoiceNumber.match(/^JOB_[A-Za-z0-9]+-(.+)$/i);
+  if (jobPrefixed?.[1]) return jobPrefixed[1];
+  const invPrefixed = invoiceNumber.match(/^[A-Z0-9]+-INV-(.+)$/i);
+  if (invPrefixed?.[1]) return invPrefixed[1];
+  return invoiceNumber;
 }
 
 export default async function InvoicesPage({ params, searchParams }: PageProps<"/jobs/[jobId]/invoices">) {
@@ -245,18 +243,6 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
     (total, invoice) => total + invoice.creditMemos.reduce((sum, memo) => sum + memo.amountCents, 0),
     0,
   );
-  const overdueCents = live.reduce((total, invoice) => {
-    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
-    const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paid);
-    if (displayStatus === "PAID" || displayStatus === "DRAFT") return total;
-    if (daysOverdue(invoice.dueOn, now) === 0) return total;
-    const settled =
-      paid + invoice.creditMemos.reduce((sum, memo) => sum + memo.amountCents, 0);
-    return total + (invoice.amountCents - settled);
-  }, 0);
-  const unappliedDepositCents = deposits
-    .filter((deposit) => deposit.status === "RECEIVED")
-    .reduce((total, deposit) => total + deposit.amountCents, 0);
 
   // Only invoices that still owe something are worth applying a credit or deposit to.
   const openInvoices: OpenInvoiceOption[] = live
@@ -275,34 +261,11 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
     .sort((a, b) => b.payment.receivedAt.getTime() - a.payment.receivedAt.getTime());
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
       <FinancialPageHeader
         jobName={job.name}
         title="Invoices"
-        action={
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/jobs/${job.id}/invoices?tab=schedule`}
-              className="rounded border px-3 py-2 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5"
-              style={activeTab === "schedule" ? { borderColor: "var(--bt-primary)", color: "var(--bt-primary)" } : { borderColor: "var(--bt-border)" }}
-            >
-              Payment schedule
-            </Link>
-            <CreateModal triggerLabel="+ Invoice" title="New invoice">
-              <CreateInvoiceForm jobId={job.id} />
-            </CreateModal>
-          </div>
-        }
-      />
-
-      <ContractEquation contractPriceCents={contractPriceCents} paidCents={paidCents} />
-
-      <SummaryStrip
-        billedCents={billedCents}
-        paidCents={paidCents}
-        creditedCents={creditedCents}
-        overdueCents={overdueCents}
-        unappliedDepositCents={unappliedDepositCents}
+        action={<InvoicesToolbar jobId={job.id} scheduleActive={activeTab === "schedule"} />}
       />
 
       <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
@@ -323,6 +286,10 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
           );
         })}
       </nav>
+
+      {activeTab === "invoices" || activeTab === "payments" || activeTab === "credits" || activeTab === "deposits" ? (
+        <ContractEquation contractPriceCents={contractPriceCents} paidCents={paidCents} />
+      ) : null}
 
       {activeTab === "invoices" ? (
         <>
@@ -369,7 +336,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
               />
             ) : (
             <Panel>
-              <Head columns={["Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Due", "Actions"]} />
+              <Head columns={["\u00a0", "Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Date paid"]} />
               <tbody>
                 {invoicesForTable.map((invoice) => {
                   const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
@@ -378,63 +345,65 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
                   const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paid);
                   const termsLabel = paymentTermsDisplayLabel(invoice.paymentTerms);
                   const late = displayStatus !== "PAID" && displayStatus !== "DRAFT" && daysOverdue(invoice.dueOn, now);
-                  const canAct = displayStatus !== "VOID" && displayStatus !== "PAID";
+                  const paidOn = displayStatus === "PAID" || paid > 0 ? datePaidFor(invoice) : null;
                   return (
-                    <tr key={invoice.id} className="border-b align-top last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                      <td className="max-w-[9rem] px-3 py-3 text-[var(--bt-muted)] sm:px-4">{job.name}</td>
-                      <td className="px-3 py-3 font-medium sm:px-4">
-                        <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
-                          {invoice.invoiceNumber}
-                        </Link>
-                        <div className="mt-0.5 flex flex-col text-[10px] text-[var(--bt-muted)]">
-                          {termsLabel ? <span>{termsLabel}</span> : null}
-                          <span>{invoice.clientLastViewedAt ? `Viewed ${formatDate(invoice.clientLastViewedAt)}` : "Not viewed yet"}</span>
-                        </div>
+                    <tr key={invoice.id} className="border-b align-middle last:border-0 hover:bg-black/[0.02]" style={{ borderColor: "var(--bt-border)" }}>
+                      <td className="w-8 px-2 py-2.5 sm:px-3">
+                        <input type="checkbox" aria-label={`Select invoice ${invoice.invoiceNumber}`} className="h-3.5 w-3.5 rounded border" style={{ borderColor: "var(--bt-border)" }} />
                       </td>
-                      <td className="px-3 py-3 sm:px-4">
+                      <td className="max-w-[10rem] truncate px-3 py-2.5 text-[var(--bt-muted)] sm:px-4">{job.name}</td>
+                      <td className="px-3 py-2.5 font-medium sm:px-4">
+                        <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
+                          {displayInvoiceId(invoice.invoiceNumber)}
+                        </Link>
+                        {termsLabel ? (
+                          <div className="mt-0.5 text-[10px] text-[var(--bt-muted)]">{termsLabel}</div>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2.5 sm:px-4">
                         <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
                           {invoice.title ?? "—"}
                         </Link>
                       </td>
-                      <td className="px-3 py-3 sm:px-4">
+                      <td className="px-3 py-2.5 sm:px-4">
                         <Badge status={displayStatus} />
                       </td>
-                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(invoice.amountCents)}</td>
-                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(paid)}</td>
-                      <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(balance)}</td>
-                      <td className="px-4 py-3 text-[var(--bt-muted)]">
-                        {formatDate(invoice.dueOn)}
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(invoice.amountCents)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(paid)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">
+                        {formatMoney(balance)}
                         {late ? (
-                          <span className="ml-1.5 text-[10px] font-semibold" style={{ color: "var(--bt-danger)" }}>
+                          <div className="text-[10px] font-semibold" style={{ color: "var(--bt-danger)" }}>
                             {late}d late
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        {canAct ? (
-                          <div className="flex flex-col items-start gap-1">
-                            <RecordPaymentForm jobId={job.id} invoiceId={invoice.id} />
-                            <VoidInvoiceButton jobId={job.id} invoiceId={invoice.id} />
                           </div>
                         ) : null}
                       </td>
+                      <td className="px-3 py-2.5 tabular-nums text-[var(--bt-muted)] sm:px-4">{formatDate(paidOn)}</td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)" }}>
-                  <td className="px-4 py-3" colSpan={4}>
+                <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}>
+                  <td className="px-3 py-2.5 sm:px-4" colSpan={5}>
                     Totals
                   </td>
-                  <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(billedCents)}</td>
-                  <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(paidCents)}</td>
-                  <td className="px-4 py-3 text-right text-[var(--bt-text)]">{formatMoney(billedCents - paidCents - creditedCents)}</td>
-                  <td className="px-4 py-3" colSpan={2} />
+                  <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(billedCents)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(paidCents)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(billedCents - paidCents - creditedCents)}</td>
+                  <td className="px-3 py-2.5 sm:px-4" />
                 </tr>
               </tfoot>
             </Panel>
             )}
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--bt-muted)]">
+              <span>Standard View</span>
+              <span>
+                {invoicesForTable.length === 0
+                  ? "0 items"
+                  : `1-${invoicesForTable.length} of ${invoicesForTable.length} items`}
+              </span>
+            </div>
             </>
           )}
         </>

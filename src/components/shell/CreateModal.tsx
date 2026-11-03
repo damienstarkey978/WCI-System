@@ -23,6 +23,7 @@ export function CreateModal({
   variant = "primary",
   size = "md",
   hideHeader = false,
+  hideTrigger = false,
 }: {
   triggerLabel: string;
   title: string;
@@ -36,6 +37,8 @@ export function CreateModal({
   size?: "md" | "lg";
   /** When the child form renders its own title bar (e.g. Schedule Item). */
   hideHeader?: boolean;
+  /** When a parent owns the open trigger (e.g. BT split "+ Invoice" dropdown). */
+  hideTrigger?: boolean;
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
@@ -44,6 +47,7 @@ export function CreateModal({
 
   return (
     <>
+      {hideTrigger ? null : (
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -56,6 +60,7 @@ export function CreateModal({
       >
         {triggerLabel}
       </button>
+      )}
       {open ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
