@@ -309,6 +309,16 @@ export const createEstimateSchema = z.object({
   }
 });
 
+/** PUT /estimates/{id} header fields (CR P2 #19). */
+export const updateEstimateSchema = z.object({
+  title: z.string().trim().min(1).max(255).optional(),
+  rateMode: rateMode.optional(),
+  defaultRateBasisPoints: basisPoints.optional(),
+  permitWorkType: z
+    .enum(["NEW_CONSTRUCTION", "ALTERATIONS_AND_REPAIRS", "ADDITION", "DEMOLITION", "OTHER"])
+    .nullish(),
+});
+
 export const createPurchaseOrderSchema = z.object({
   jobId: z.string().min(1).max(64),
   poNumber: z.string().trim().min(1).max(64),

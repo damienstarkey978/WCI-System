@@ -33,6 +33,7 @@ import {
   resolveLineRate,
   type OrgEstimateRateDefaults,
 } from "@/lib/estimates/org-defaults";
+import { nextVersionedTitle } from "@/lib/estimates/proposal-title";
 import { normalizeEstimateUnit, UnknownEstimateUnitError } from "@/lib/estimates/units";
 import type { BasisPoints } from "@/lib/money";
 
@@ -277,6 +278,128 @@ async function requireEditableEstimate(organizationId: string, estimateId: strin
   if (!estimate) throw new EstimateNotFoundError(estimateId);
   if (estimate.status !== "DRAFT") throw new EstimateNotEditableError(estimateId, estimate.status);
   return estimate;
+}
+
+export async function getEstimate(organizationId: string, estimateId: string) {
+  const estimate = await db.estimate.findFirst({
+    where: { id: estimateId, organizationId },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!estimate) throw new EstimateNotFoundError(estimateId);
+  return estimate;
+}
+
+export interface UpdateEstimateInput {
+  readonly organizationId: string;
+  readonly estimateId: string;
+  readonly title?: string;
+  readonly rateMode?: RateMode;
+  readonly defaultRateBasisPoints?: BasisPoints;
+  readonly permitWorkType?: PermitWorkType | null;
+}
+
+/** PUT header fields on a DRAFT estimate (CR P2 #19). */
+export async function updateEstimate(input: UpdateEstimateInput) {
+  const estimate = await requireEditableEstimate(input.organizationId, input.estimateId);
+  const orgRates = await loadOrgEstimateRateDefaults(input.organizationId);
+
+  let rateMode = estimate.rateMode;
+  let defaultRateBasisPoints = estimate.defaultRateBasisPoints;
+  if (input.rateMode !== undefined || input.defaultRateBasisPoints !== undefined) {
+    const resolved = resolveLineRate({
+      org: orgRates,
+      rateMode: input.rateMode ?? estimate.rateMode,
+      rateBasisPoints: input.defaultRateBasisPoints ?? estimate.defaultRateBasisPoints,
+    });
+    rateMode = resolved.rateMode;
+    defaultRateBasisPoints = resolved.rateBasisPoints;
+  }
+
+  return db.estimate.update({
+    where: { id: estimate.id },
+    data: {
+      title: input.title?.trim() || estimate.title,
+      rateMode,
+      defaultRateBasisPoints,
+      permitWorkType:
+        input.permitWorkType === undefined ? estimate.permitWorkType : input.permitWorkType,
+    },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+/**
+ * Copy an estimate to a new DRAFT with " v2"/version+1 title (CR P2 #19).
+ * Line items are duplicated; lock/budget state is not.
+ */
+export async function copyEstimate(organizationId: string, estimateId: string) {
+  const source = await db.estimate.findFirst({
+    where: { id: estimateId, organizationId },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!source) throw new EstimateNotFoundError(estimateId);
+
+  const siblingWhere =
+    source.jobId && source.leadId
+      ? { OR: [{ jobId: source.jobId }, { leadId: source.leadId }] }
+      : source.jobId
+        ? { jobId: source.jobId }
+        : source.leadId
+          ? { leadId: source.leadId }
+          : { id: source.id };
+
+  const siblings = await db.estimate.findMany({
+    where: { organizationId, ...siblingWhere },
+    select: { title: true, version: true },
+  });
+
+  const title = nextVersionedTitle(
+    source.title,
+    siblings.map((row) => row.title),
+  );
+  const nextVersion = Math.max(source.version, ...siblings.map((row) => row.version), 0) + 1;
+
+  return db.estimate.create({
+    data: {
+      organizationId,
+      jobId: source.jobId,
+      leadId: source.leadId,
+      title,
+      version: nextVersion,
+      status: "DRAFT",
+      rateMode: source.rateMode,
+      defaultRateBasisPoints: source.defaultRateBasisPoints,
+      permitWorkType: source.permitWorkType,
+      aiGenerated: false,
+      aiPromptNotes: source.aiPromptNotes,
+      pendingProposalDraft:
+        source.pendingProposalDraft === null
+          ? Prisma.DbNull
+          : (source.pendingProposalDraft as Prisma.InputJsonValue),
+      lineItems: {
+        create: source.lineItems.map((item, index) => ({
+          costCodeId: item.costCodeId,
+          costType: item.costType,
+          lineKind: item.lineKind,
+          title: item.title,
+          description: item.description,
+          quantityMilli: item.quantityMilli,
+          unit: item.unit,
+          unitCostCents: item.unitCostCents,
+          rateMode: item.rateMode,
+          rateBasisPoints: item.rateBasisPoints,
+          taxable: item.taxable,
+          internalNote: item.internalNote,
+          groupLabel: item.groupLabel,
+          confidence: item.confidence,
+          priceSource: item.priceSource,
+          sourceNote: item.sourceNote,
+          sortOrder: index,
+        })),
+      },
+    },
+    include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+  });
 }
 
 export class EstimateNotLockedError extends Error {

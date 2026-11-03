@@ -37,6 +37,8 @@ export const API_V1_ROUTE_METHODS: Readonly<Record<string, readonly string[]>> =
   "/draw-schedules": ["GET","POST"],
   "/draws/{drawId}/generate-invoice": ["POST"],
   "/estimates": ["GET","POST"],
+  "/estimates/{estimateId}": ["GET","PUT"],
+  "/estimates/{estimateId}/copy": ["POST"],
   "/estimates/{estimateId}/send-to-budget": ["POST"],
   "/estimates/ai-draft": ["POST"],
   "/events": ["POST"],
