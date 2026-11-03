@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-/** Buildertrend's "Email to Inbox" header button — copies the same forwarding address BillUploader already shows inline. */
+/** Buildertrend's "Email to Inbox" header button — copies the org billing inbox address. */
 export function EmailToInboxButton({ inboxAddress }: { inboxAddress: string }) {
   const [copied, setCopied] = useState(false);
 

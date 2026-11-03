@@ -3,17 +3,19 @@
 import Link from "next/link";
 
 import { DataGrid, type DataGridColumn } from "@/components/shell/DataGrid";
-import { formatDate, formatMoney } from "@/lib/format";
+import { displayBillNumber } from "@/lib/bills/bill-number";
+import { formatDateUtc, formatMoney } from "@/lib/format";
 
 import { SyncToQuickBooksButton } from "./sync-to-quickbooks-button";
 
+/** Buildertrend-style status chip colors — distinct hues, not a teal wash. */
 const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   INBOX: { bg: "#e5e7eb", text: "#374151" },
-  IN_REVIEW: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  APPROVED: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  READY_FOR_PAYMENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  PAID: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  VOID: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
+  IN_REVIEW: { bg: "#fef3c7", text: "#b45309" },
+  APPROVED: { bg: "#dbeafe", text: "#1d4ed8" },
+  READY_FOR_PAYMENT: { bg: "#ede9fe", text: "#6d28d9" },
+  PAID: { bg: "#dcfce7", text: "#15803d" },
+  VOID: { bg: "#fee2e2", text: "#b91c1c" },
 };
 
 export interface BillRow {
@@ -35,11 +37,19 @@ export interface BillRow {
   readonly sendToQuickBooks: boolean | null;
 }
 
-/** Buildertrend's Bills Standard View: Job, Created by, Bill #, Bill title. */
-const DEFAULT_HIDDEN = ["vendorName", "po", "status", "date", "totalCents", "qbo"] as const;
+/**
+ * Buildertrend Bills Standard View: Job, Created by, Bill #, Bill title,
+ * Pay to, Bill amount, Invoice date. PO / Status / QuickBooks stay available
+ * via the Standard view chooser.
+ */
+const DEFAULT_HIDDEN = ["po", "status", "qbo"] as const;
+
+/** Link blue sampled from BT Bills list (#1F4ECD), not WCI teal. */
+const BT_LINK = "#1F4ECD";
 
 /** The client half of the Bills page — see purchase-orders-grid.tsx's doc comment for why this split exists. */
 export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; isQboConnected: boolean }) {
+  const amountTotal = formatMoney(rows.reduce((sum, row) => sum + row.totalCents, 0));
   const columns: DataGridColumn<BillRow>[] = [
     {
       key: "job",
@@ -48,14 +58,19 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
       sortValue: (row) => row.jobName,
       render: (row) => <span className="text-[var(--bt-muted)]">{row.jobName}</span>,
     },
-    { key: "createdBy", header: "Created by", render: (row) => row.createdByName ?? "—" },
+    {
+      key: "createdBy",
+      header: "Created by",
+      render: (row) => <span className="text-[var(--bt-muted)]">{row.createdByName ?? "—"}</span>,
+    },
     {
       key: "billNumber",
       header: "Bill #",
       sortable: true,
+      sortValue: (row) => displayBillNumber(row.billNumber) ?? row.billNumber ?? "",
       render: (row) => (
-        <Link href={`/jobs/${row.jobId}/bills/${row.id}`} className="font-medium hover:underline" style={{ color: "var(--bt-primary)" }}>
-          {row.billNumber ?? "—"}
+        <Link href={`/jobs/${row.jobId}/bills/${row.id}`} className="font-medium hover:underline" style={{ color: BT_LINK }}>
+          {displayBillNumber(row.billNumber) ?? "—"}
         </Link>
       ),
     },
@@ -64,20 +79,45 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
       header: "Bill title",
       render: (row) => (
         <>
-          <Link href={`/jobs/${row.jobId}/bills/${row.id}`} className="hover:underline" style={{ color: "var(--bt-primary)" }}>
+          <Link href={`/jobs/${row.jobId}/bills/${row.id}`} className="hover:underline" style={{ color: BT_LINK }}>
             {row.title ?? row.vendorName}
           </Link>
-          {row.fromOcr ? <span className="ml-1.5 rounded bg-black/5 px-1 py-0.5 text-[10px] text-[var(--bt-muted)]">AI</span> : null}
+          {row.fromOcr ? (
+            <span className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold" style={{ background: "#ede9fe", color: "#6d28d9" }}>
+              AI
+            </span>
+          ) : null}
         </>
       ),
     },
-    { key: "vendorName", header: "Pay to", sortable: true, render: (row) => <span className="font-medium text-[var(--bt-text)]">{row.vendorName}</span> },
+    {
+      key: "vendorName",
+      header: "Pay to",
+      sortable: true,
+      render: (row) => <span className="text-[var(--bt-text)]">{row.vendorName}</span>,
+    },
+    {
+      key: "totalCents",
+      header: "Bill amount",
+      align: "right",
+      sortable: true,
+      render: (row) => <span className="tabular-nums">{formatMoney(row.totalCents)}</span>,
+      total: <span className="tabular-nums">{amountTotal}</span>,
+    },
+    {
+      key: "date",
+      header: "Invoice date",
+      align: "right",
+      sortable: true,
+      sortValue: (row) => row.dateLabel,
+      render: (row) => <span className="tabular-nums text-[var(--bt-muted)]">{formatDateUtc(new Date(row.dateLabel))}</span>,
+    },
     {
       key: "po",
       header: "PO",
       render: (row) =>
         row.poId ? (
-          <Link href={`/jobs/${row.jobId}/purchase-orders/${row.poId}`} className="hover:underline" style={{ color: "var(--bt-primary)" }}>
+          <Link href={`/jobs/${row.jobId}/purchase-orders/${row.poId}`} className="hover:underline" style={{ color: BT_LINK }}>
             {row.poNumber}
             {row.poTitle ? ` — ${row.poTitle}` : ""}
           </Link>
@@ -97,15 +137,6 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
         );
       },
     },
-    { key: "date", header: "Invoice date", sortable: true, sortValue: (row) => row.dateLabel, render: (row) => formatDate(new Date(row.dateLabel)) },
-    {
-      key: "totalCents",
-      header: "Amount",
-      align: "right",
-      sortable: true,
-      render: (row) => formatMoney(row.totalCents),
-      total: formatMoney(rows.reduce((sum, row) => sum + row.totalCents, 0)),
-    },
     ...(isQboConnected
       ? [
           {
@@ -113,7 +144,13 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
             header: "QuickBooks",
             align: "right" as const,
             render: (row: BillRow) => {
-              if (row.qboBillId) return <span className="text-xs text-[var(--bt-muted)]">Synced</span>;
+              if (row.qboBillId) {
+                return (
+                  <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: "#dcfce7", color: "#15803d" }}>
+                    Synced
+                  </span>
+                );
+              }
               if (row.sendToQuickBooks === false) {
                 return <span className="text-xs text-[var(--bt-muted)]">Skipped</span>;
               }
@@ -129,11 +166,12 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
       columns={columns}
       rows={rows}
       rowKey={(row) => row.id}
-      viewKey="bills"
-      defaultHiddenKeys={isQboConnected ? DEFAULT_HIDDEN : DEFAULT_HIDDEN.filter((key) => key !== "qbo")}
+      viewKey="bills-bt-standard"
+      defaultHiddenKeys={isQboConnected ? [...DEFAULT_HIDDEN] : DEFAULT_HIDDEN.filter((key) => key !== "qbo")}
       selectable
       showTotals
       sortToolbarInFooter
+      pageSize={100}
       emptyMessage="No bills yet."
     />
   );

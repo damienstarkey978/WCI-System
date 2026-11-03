@@ -22,6 +22,20 @@ export function isInventedJobPrefixedBillNumber(billNumber: string | null | unde
 }
 
 /**
+ * Buildertrend-style Bill # for list cells: strip invented `JOB_<prefix>-` so
+ * `JOB_5B13-256753` reads as `256753`. Does not mutate stored values (Money /
+ * QBO push still sees the raw number and refuses JOB_* twins).
+ */
+export function displayBillNumber(billNumber: string | null | undefined): string | null {
+  const normalized = normalizeVendorInvoiceNumber(billNumber);
+  if (!normalized) return null;
+  if (!isInventedJobPrefixedBillNumber(normalized)) return normalized;
+  const dash = normalized.lastIndexOf("-");
+  const suffix = dash >= 0 ? normalized.slice(dash + 1).trim() : "";
+  return suffix.length > 0 ? suffix : normalized;
+}
+
+/**
  * Numbers safe to send as QBO DocNumber: non-blank and not an invented JOB_* prefix.
  * Blank → hold/flag (do not generate). JOB_* → refuse.
  */

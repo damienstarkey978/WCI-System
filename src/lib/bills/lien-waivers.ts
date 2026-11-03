@@ -40,33 +40,66 @@ export interface LienWaiverFacts {
  * The waiver bodies. Conditional is the safe default — it only takes effect once the
  * payment actually clears, so it can be sent with the check rather than after it.
  */
+function conditionalBody(facts: LienWaiverFacts): string {
+  return [
+    "CONDITIONAL WAIVER AND RELEASE UPON PROGRESS PAYMENT",
+    "",
+    `Claimant: ${facts.vendorName}`,
+    `Project: ${facts.jobName}${facts.jobAddress ? `, ${facts.jobAddress}` : ""}`,
+    `Through date: ${facts.throughDate.toISOString().slice(0, 10)}`,
+    facts.billNumber ? `Invoice reference: ${facts.billNumber}` : "",
+    `Payment amount: ${formatMoney(facts.amountCents)}`,
+    "",
+    "Upon receipt by the claimant of a check payable to the claimant in the amount",
+    "stated above, and when the check has been properly endorsed and has been paid by",
+    "the bank on which it is drawn, this document becomes effective to release any",
+    "mechanic's lien, stop payment notice, or payment bond right the claimant has on",
+    "the project through the through date stated above, to the extent of the payment",
+    "amount stated above.",
+    "",
+    "This release covers a progress payment only. It does not cover retention,",
+    "pending modifications, or items furnished after the through date.",
+    "",
+    "Claimant signature: ______________________________",
+    "Printed name: ____________________________________",
+    "Date: ____________________________________________",
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+function unconditionalBody(title: string, facts: LienWaiverFacts): string {
+  return [
+    title,
+    "",
+    `Claimant: ${facts.vendorName}`,
+    `Project: ${facts.jobName}${facts.jobAddress ? `, ${facts.jobAddress}` : ""}`,
+    `Through date: ${facts.throughDate.toISOString().slice(0, 10)}`,
+    facts.billNumber ? `Invoice reference: ${facts.billNumber}` : "",
+    `Payment amount: ${formatMoney(facts.amountCents)}`,
+    "",
+    "The claimant has been paid and releases any mechanic's lien, stop payment notice,",
+    "or payment bond right the claimant has on the project through the through date,",
+    "to the extent of the payment amount stated above.",
+    "",
+    "Claimant signature: ______________________________",
+    "Printed name: ____________________________________",
+    "Date: ____________________________________________",
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+/**
+ * The waiver bodies. Conditional is the safe default — it only takes effect once the
+ * payment actually clears, so it can be sent with the check rather than after it.
+ * BT Create Bill checkboxes map to Conditional / Unconditional / Final unconditional.
+ */
 export const TEMPLATES: Readonly<Record<string, (facts: LienWaiverFacts) => string>> = {
-  "Standard Lien Waiver": (facts) =>
-    [
-      "CONDITIONAL WAIVER AND RELEASE UPON PROGRESS PAYMENT",
-      "",
-      `Claimant: ${facts.vendorName}`,
-      `Project: ${facts.jobName}${facts.jobAddress ? `, ${facts.jobAddress}` : ""}`,
-      `Through date: ${facts.throughDate.toISOString().slice(0, 10)}`,
-      facts.billNumber ? `Invoice reference: ${facts.billNumber}` : "",
-      `Payment amount: ${formatMoney(facts.amountCents)}`,
-      "",
-      "Upon receipt by the claimant of a check payable to the claimant in the amount",
-      "stated above, and when the check has been properly endorsed and has been paid by",
-      "the bank on which it is drawn, this document becomes effective to release any",
-      "mechanic's lien, stop payment notice, or payment bond right the claimant has on",
-      "the project through the through date stated above, to the extent of the payment",
-      "amount stated above.",
-      "",
-      "This release covers a progress payment only. It does not cover retention,",
-      "pending modifications, or items furnished after the through date.",
-      "",
-      "Claimant signature: ______________________________",
-      "Printed name: ____________________________________",
-      "Date: ____________________________________________",
-    ]
-      .filter((line) => line !== "")
-      .join("\n"),
+  "Standard Lien Waiver": conditionalBody,
+  Conditional: conditionalBody,
+  Unconditional: (facts) => unconditionalBody("UNCONDITIONAL WAIVER AND RELEASE UPON PROGRESS PAYMENT", facts),
+  "Final unconditional": (facts) => unconditionalBody("UNCONDITIONAL WAIVER AND RELEASE UPON FINAL PAYMENT", facts),
 };
 
 export const TEMPLATE_NAMES = Object.keys(TEMPLATES);

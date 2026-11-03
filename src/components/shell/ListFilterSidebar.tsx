@@ -73,24 +73,25 @@ export function ListFilterButton({
   open: boolean;
   onClick: () => void;
 }) {
+  const filterAccent = "var(--bt-chrome-filter, #5ba3d9)";
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={open}
       aria-label={activeCount > 0 ? `Filter, ${activeCount} active` : "Filter"}
-      className="relative inline-flex h-9 w-9 items-center justify-center rounded border transition"
+      className="relative inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white transition"
       style={{
-        borderColor: open || activeCount > 0 ? "var(--bt-primary)" : "var(--bt-border)",
-        color: open || activeCount > 0 ? "var(--bt-primary)" : "var(--bt-muted)",
-        background: open ? "color-mix(in srgb, var(--bt-primary) 10%, transparent)" : "transparent",
+        borderColor: open || activeCount > 0 ? filterAccent : "var(--bt-border)",
+        color: open || activeCount > 0 ? filterAccent : "var(--bt-chrome-filter-idle, #64748b)",
+        background: open ? "color-mix(in srgb, #5ba3d9 12%, white)" : "white",
       }}
     >
       <FunnelIcon className="h-4 w-4" />
       {activeCount > 0 ? (
         <span
-          className="absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-[var(--bt-on-primary)]"
-          style={{ background: "var(--bt-primary)" }}
+          className="absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+          style={{ background: filterAccent }}
         >
           {activeCount}
         </span>

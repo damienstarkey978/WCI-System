@@ -8,6 +8,7 @@ import {
   CreateBillForm,
   type PurchaseOrderOption,
   type ScheduleOption,
+  type StaffOption,
   type VendorOption,
 } from "./create-bill-form";
 
@@ -19,6 +20,9 @@ export function CreateBillModal({
   purchaseOrders,
   vendors,
   scheduleItems,
+  staffUsers,
+  isQboConnected,
+  qboBillPushEnabled,
   triggerLabel = "+ Bill",
 }: {
   jobId: string;
@@ -27,6 +31,9 @@ export function CreateBillModal({
   purchaseOrders: readonly PurchaseOrderOption[];
   vendors: readonly VendorOption[];
   scheduleItems: readonly ScheduleOption[];
+  staffUsers: readonly StaffOption[];
+  isQboConnected: boolean;
+  qboBillPushEnabled: boolean;
   triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -36,7 +43,7 @@ export function CreateBillModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
+        className="rounded-md px-4 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
         style={{ background: "var(--bt-primary)" }}
       >
         {triggerLabel}
@@ -57,6 +64,9 @@ export function CreateBillModal({
               purchaseOrders={purchaseOrders}
               vendors={vendors}
               scheduleItems={scheduleItems}
+              staffUsers={staffUsers}
+              isQboConnected={isQboConnected}
+              qboBillPushEnabled={qboBillPushEnabled}
               onClose={() => setOpen(false)}
             />
           </div>

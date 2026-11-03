@@ -96,6 +96,15 @@
   --bt-danger: #dc2626;
   --bt-hazard: #d97706;
   --bt-success: #16a34a;
+  /* Buildertrend list-chrome icon accents (help / settings / export / filter).
+     Kept distinct from --bt-primary (WCI brand teal) so status/action glyphs
+     read like BT's colorful system rather than a monochrome teal wash. */
+  --bt-link: #1f4ecd;
+  --bt-chrome-help: #3b82f6;
+  --bt-chrome-settings: #8b5cf6;
+  --bt-chrome-export: #16a34a;
+  --bt-chrome-filter: #5ba3d9;
+  --bt-chrome-filter-idle: #64748b;
   /* Text/icon color for anything painted solid --bt-primary (buttons, badges,
      active pills) — white here since #1a56db is dark enough, but the dark-mode
      redesign's accent (#4da3ff) is a much lighter blue that white text can't sit
@@ -156,6 +165,12 @@
   --bt-hazard: #f5a623;
   --bt-success: #4ade80;
   --bt-on-primary: #0b0d10;
+  --bt-link: #6ea8fe;
+  --bt-chrome-help: #60a5fa;
+  --bt-chrome-settings: #a78bfa;
+  --bt-chrome-export: #4ade80;
+  --bt-chrome-filter: #7dd3fc;
+  --bt-chrome-filter-idle: #94a3b8;
 }
 
 body {

@@ -82,6 +82,13 @@ export interface CreateBillInput {
   readonly dueOn?: Date | null;
   readonly linkedScheduleItemId?: string | null;
   readonly fromOcr?: boolean;
+  /** Create-Bill / Ready-for-Payment QuickBooks intent (null = unset). */
+  readonly sendToQuickBooks?: boolean | null;
+  readonly quickBooksSkipReason?: string | null;
+  /** Buildertrend "Mark as Billable to Client". */
+  readonly billableToClient?: boolean;
+  /** Optional initial pipeline status (defaults IN_REVIEW). */
+  readonly approvalStatus?: "INBOX" | "IN_REVIEW" | "READY_FOR_PAYMENT";
   /** @deprecated Prefer `actor` — kept so staff actions that already pass user id keep working. */
   readonly createdByUserId?: string | null;
   /** Browser User XOR API key — stamped on createdBy* columns. */
@@ -163,6 +170,10 @@ export async function createBill(input: CreateBillInput) {
       dueOn: input.dueOn ?? null,
       linkedScheduleItemId: input.linkedScheduleItemId ?? null,
       fromOcr: input.fromOcr ?? false,
+      sendToQuickBooks: input.sendToQuickBooks ?? null,
+      quickBooksSkipReason: input.quickBooksSkipReason ?? null,
+      billableToClient: input.billableToClient ?? false,
+      approvalStatus: input.approvalStatus ?? "IN_REVIEW",
       ...(input.actor
         ? creatorColumns(input.actor)
         : {

@@ -1535,9 +1535,13 @@ model Bill {
   /// Explicit staff/agent choice at READY_FOR_PAYMENT: push this bill to QuickBooks
   /// (labor/unpaid services) or keep it WCI-only (materials). Null until that hop —
   /// never silently sync on status alone. See src/lib/bills/quickbooks-intent.ts.
+  /// Also settable from Create Bill ("Send to QuickBooks immediately upon save").
   sendToQuickBooks     Boolean?
   /// Why QuickBooks was skipped when sendToQuickBooks is false (e.g. materials).
   quickBooksSkipReason String?
+
+  /// Buildertrend "Mark as Billable to Client" — intent only until invoicing wires it.
+  billableToClient Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
