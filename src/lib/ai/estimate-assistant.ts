@@ -103,6 +103,10 @@ Rules:
   verbatim (mark priceSource "CATALOG") when an item matches. Only fall back to a
   realistic current U.S. market rate (priceSource "MARKET_RATE") when nothing in the
   catalog matches.
+- Apply 40% MARKUP on every line (ratePercent 40, rateMode MARKUP). Do not invent
+  per-line markups — the org locks markup at 40%.
+- Never price roofing, windows/doors, drywall, stucco, insulation, paint, LVP, or
+  tile as LABOR hours. Use per-unit units (SQ / EA / SHEET / SF) instead.
 - Where the notes or photos don't give you a quantity or a clear scope, make a
   reasonable assumption and say so explicitly in "assumptions" — never silently guess
   on something that materially changes the price.

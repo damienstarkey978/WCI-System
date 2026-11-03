@@ -273,9 +273,9 @@ describe("normalizeEstimateDraft — the float-to-integer boundary", () => {
     expect(draft.lineItems[1].quantityMilli).toBe(12_500);
   });
 
-  it("preserves unit of measure when the model supplies one", () => {
+  it("normalizes unit of measure to the canonical enum when the model supplies one", () => {
     const draft = normalizeEstimateDraft(raw);
-    expect(draft.lineItems[0].unit).toBe("hr");
+    expect(draft.lineItems[0].unit).toBe("HR");
     expect(draft.lineItems[1].unit).toBeNull();
   });
 
@@ -285,10 +285,12 @@ describe("normalizeEstimateDraft — the float-to-integer boundary", () => {
     expect(draft.lineItems[1].unitCostCents).toBe(5_299);
   });
 
-  it("converts percent to basis points", () => {
+  it("forces org-locked 40% markup on every AI line (ignores model ratePercent)", () => {
     const draft = normalizeEstimateDraft(raw);
-    expect(draft.lineItems[0].rateBasisPoints).toBe(2_000);
-    expect(draft.lineItems[1].rateBasisPoints).toBe(1_000);
+    expect(draft.lineItems[0].rateBasisPoints).toBe(4_000);
+    expect(draft.lineItems[1].rateBasisPoints).toBe(4_000);
+    expect(draft.lineItems[0].rateMode).toBe("MARKUP");
+    expect(draft.lineItems[1].rateMode).toBe("MARKUP");
   });
 
   it("defaults a missing description to null, not undefined", () => {

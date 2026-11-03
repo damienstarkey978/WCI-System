@@ -13,6 +13,7 @@ import type { Actor } from "@/lib/actor";
 import { creatorColumns } from "@/lib/actor";
 import type { CreateJobInput } from "@/lib/api-schemas";
 import { moveLeadAttachmentsToJob } from "@/lib/crm/attachments";
+import { normalizeLeadEmail } from "@/lib/crm/email";
 import { db } from "@/lib/db";
 import { ensurePresaleDocumentsFolderOnJobCreate } from "@/lib/files/presale-documents";
 import { emitEvent } from "@/lib/webhooks";
@@ -93,7 +94,7 @@ export async function createLead(input: CreateLeadInput) {
       organizationId: input.organizationId,
       title: input.title ?? null,
       name: input.name,
-      email: input.email ?? null,
+      email: normalizeLeadEmail(input.email),
       phone: input.phone ?? null,
       contactClientId: input.contactClientId ?? null,
       source: input.source ?? null,

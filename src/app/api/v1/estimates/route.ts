@@ -5,7 +5,14 @@
 import { apiError, withApiAuth } from "@/lib/api-auth";
 import { createEstimateSchema, formatZodIssues } from "@/lib/api-schemas";
 import { db } from "@/lib/db";
-import { createEstimate, JobNotFoundError, UnknownCostCodeError } from "@/lib/estimates/service";
+import { LeadNotFoundError } from "@/lib/crm/service";
+import {
+  createEstimate,
+  HourlyLaborNotAllowedError,
+  JobNotFoundError,
+  UnknownCostCodeError,
+  UnknownEstimateUnitError,
+} from "@/lib/estimates/service";
 
 export const GET = withApiAuth(["estimates:read"], async (request, auth) => {
   const jobId = new URL(request.url).searchParams.get("jobId");
@@ -39,8 +46,15 @@ export const POST = withApiAuth(["estimates:write"], async (request, auth) => {
     return Response.json({ data: estimate }, { status: 201 });
   } catch (error) {
     if (error instanceof JobNotFoundError) return apiError(422, "unknown_job", error.message);
+    if (error instanceof LeadNotFoundError) return apiError(422, "unknown_lead", error.message);
     if (error instanceof UnknownCostCodeError) {
       return apiError(422, "unknown_cost_code", error.message, { unknown: error.unknownIds });
+    }
+    if (error instanceof UnknownEstimateUnitError) {
+      return apiError(422, "unknown_unit", error.message);
+    }
+    if (error instanceof HourlyLaborNotAllowedError) {
+      return apiError(422, "hourly_labor_not_allowed", error.message);
     }
     throw error;
   }

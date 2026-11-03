@@ -963,6 +963,10 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
           .array(
             z.object({
               costCodeId: z.string().describe("A cost code id from list_cost_codes. Never invent one."),
+              costType: z
+                .enum(["LABOR", "MATERIAL", "EQUIPMENT", "SUBCONTRACTOR", "OTHER", "NONE"])
+                .optional()
+                .describe("Overrides the cost code's default cost type when set."),
               title: z.string().describe("What this line is, e.g. '2x4x8 lumber' or 'Framing labor'."),
               description: z.string().nullish().describe("Optional detail shown to the client."),
               quantityMilli: z
@@ -971,6 +975,10 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
                 .positive()
                 .optional()
                 .describe("Quantity in THOUSANDTHS, so 2.5 units is 2500. Defaults to 1000 (one unit)."),
+              unit: z
+                .string()
+                .nullish()
+                .describe("Unit of measure: EA, SF, LF, SQ, SHEET, LS, HR, or ALLOWANCE (case-insensitive)."),
               unitCostCents: z
                 .number()
                 .int()
@@ -981,8 +989,14 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
                 .int()
                 .min(0)
                 .optional()
-                .describe("Markup in BASIS POINTS on top of cost, so 20% is 2000. Omit to use the org's default."),
+                .describe(
+                  "Markup in BASIS POINTS on top of cost. Org default is 4000 (40%). Per-line override needs admin flag; omit to use 40%.",
+                ),
               taxable: z.boolean().optional().describe("Whether sales tax applies to this line."),
+              groupLabel: z
+                .string()
+                .nullish()
+                .describe("Worksheet group, e.g. 'Roofing' or 'Windows & Doors'."),
             }),
           )
           .min(1)
@@ -1007,12 +1021,15 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
         clientPhone?: string | null;
         lineItems: {
           costCodeId: string;
+          costType?: "LABOR" | "MATERIAL" | "EQUIPMENT" | "SUBCONTRACTOR" | "OTHER" | "NONE";
           title: string;
           description?: string | null;
           quantityMilli?: number;
+          unit?: string | null;
           unitCostCents: number;
           rateBasisPoints?: number;
           taxable?: boolean;
+          groupLabel?: string | null;
         }[];
         sections?: { title: string; bullets: string[] }[];
       };
@@ -1027,12 +1044,15 @@ export function buildMcpServer(auth: ApiKeyContext, options: McpServerOptions): 
           clientPhone: input.clientPhone,
           lineItems: input.lineItems.map((line) => ({
             costCodeId: line.costCodeId,
+            costType: line.costType,
             title: line.title,
             description: line.description,
             quantityMilli: line.quantityMilli,
+            unit: line.unit,
             unitCostCents: line.unitCostCents,
             rateBasisPoints: line.rateBasisPoints,
             taxable: line.taxable,
+            groupLabel: line.groupLabel,
           })),
           proposalSections: input.sections?.map((section) => ({ title: section.title, bullets: section.bullets })),
           // Drafted by a model, even though the model is on the other end of the

@@ -112,6 +112,13 @@ model Organization {
   /// Exact WCI legal wording — do not invent; seed from canonical terms doc.
   defaultProposalTerms String? @db.Text
 
+  /// Org locked estimate/proposal markup (Handoff parity: 40% MARKUP). AI drafts
+  /// and create_proposal_for_lead always use these; per-line overrides require
+  /// allowPerLineRateOverride (admin).
+  defaultEstimateRateMode         RateMode @default(MARKUP)
+  defaultEstimateRateBasisPoints  Int      @default(4000)
+  allowPerLineRateOverride        Boolean  @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -971,9 +978,9 @@ model Estimate {
   /// Bumped when a locked estimate is revised, preserving history.
   version Int            @default(1)
 
-  /// Default pricing rate applied to new line items.
+  /// Default pricing rate applied to new line items (org default is 40% MARKUP).
   rateMode               RateMode @default(MARKUP)
-  defaultRateBasisPoints Int      @default(0)
+  defaultRateBasisPoints Int      @default(4000)
 
   sentAt         DateTime?
   lockedAt       DateTime?

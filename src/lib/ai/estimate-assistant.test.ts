@@ -88,7 +88,7 @@ describe("draftEstimateFromNotes", () => {
     expect(draft.projectDescription).toBe("A full interior repaint of walls and trim.");
     expect(draft.lineItems).toHaveLength(1);
     expect(draft.lineItems[0].unitCostCents).toBe(4_500);
-    expect(draft.lineItems[0].rateBasisPoints).toBe(2_000);
+    expect(draft.lineItems[0].rateBasisPoints).toBe(4_000);
     expect(draft.proposalSections).toEqual(NARRATIVE_PASS.proposalSections);
     expect(client.stream).toHaveBeenCalledTimes(2);
   });
