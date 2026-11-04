@@ -190,6 +190,39 @@ export function CloseIcon({ className }: IconProps) {
   );
 }
 
+export function ChevronLeftIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M12.5 4.5 7 10l5.5 5.5" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function ChevronRightIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M7.5 4.5 13 10l-5.5 5.5" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Soft-delete / remove photo affordance. */
+export function TrashIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
+      <path d="M4.5 6.5h11" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" />
+      <path d="M8 3.75h4" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" />
+      <path
+        d="M6.25 6.5V15a1.25 1.25 0 0 0 1.25 1.25h5A1.25 1.25 0 0 0 13.75 15V6.5"
+        stroke="currentColor"
+        strokeWidth={NAV}
+        strokeLinejoin="round"
+      />
+      <path d="M8.5 9v4.5M11.5 9v4.5" stroke="currentColor" strokeWidth={NAV} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function HistoryIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">

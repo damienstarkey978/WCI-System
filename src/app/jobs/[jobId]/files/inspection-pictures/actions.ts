@@ -8,7 +8,13 @@ import { PermitTrade } from "@/generated/prisma/enums";
 import { appBaseUrl } from "@/lib/app-url";
 import { requireAppUser } from "@/lib/auth";
 import { deleteFolder, FolderNotFoundError } from "@/lib/files/folders";
-import { JobNotFoundError, purgeFile, trashFile, uploadAndRegisterFile } from "@/lib/files/service";
+import {
+  FileNotFoundError,
+  JobNotFoundError,
+  purgeFile,
+  trashFile,
+  uploadAndRegisterFile,
+} from "@/lib/files/service";
 import {
   createInspectionPictureFolder,
   InspectionFolderNameRequiredError,
@@ -130,17 +136,60 @@ export async function uploadInspectionPhotosAction(_previous: ActionState, formD
   return { ok: true, uploaded: files.length };
 }
 
-export async function deleteInspectionPhotoAction(formData: FormData): Promise<void> {
+/**
+ * Soft-delete one inspection photo. Returns ActionState so the client gallery
+ * can surface failures (the old void form-action path failed silently in the UI).
+ */
+export async function deleteInspectionPhotoAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const user = await requireAppUser();
   const jobId = String(formData.get("jobId") ?? "");
   const folderId = String(formData.get("folderId") ?? "");
   const fileId = String(formData.get("fileId") ?? "");
+  if (!fileId) return { error: "Photo is required." };
+
   try {
     await trashFile(user.organizationId, fileId);
-  } catch {
-    // already gone
+  } catch (error) {
+    if (!(error instanceof FileNotFoundError)) {
+      return { error: error instanceof Error ? error.message : "Could not delete photo." };
+    }
   }
   revalidate(jobId, folderId);
+  return { ok: true };
+}
+
+/** Soft-delete many inspection photos in one action (bulk select). */
+export async function deleteInspectionPhotosAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const folderId = String(formData.get("folderId") ?? "");
+  const fileIds = formData
+    .getAll("fileIds")
+    .map((value) => String(value))
+    .filter(Boolean);
+  if (fileIds.length === 0) return { error: "Select at least one photo." };
+
+  let deleted = 0;
+  for (const fileId of fileIds) {
+    try {
+      await trashFile(user.organizationId, fileId);
+      deleted += 1;
+    } catch (error) {
+      if (error instanceof FileNotFoundError) {
+        deleted += 1;
+        continue;
+      }
+      return { error: error instanceof Error ? error.message : "Could not delete photos." };
+    }
+  }
+  revalidate(jobId, folderId);
+  return { ok: true, uploaded: deleted };
 }
 
 export async function purgeInspectionPhotoAction(formData: FormData): Promise<void> {
