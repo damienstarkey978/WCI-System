@@ -1,3 +1,4 @@
+import { PhotoGallery } from "@/components/files/PhotoGallery";
 import {
   getInspectionFolderForShareToken,
   InvalidInspectionShareLinkError,
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
  * SubmittalReviewLink / SurveyResponseLink — no Client/Vendor seat).
  *
  * View-only: inspectors see company, folder, job, live Building permit #, and
- * the photo grid. Upload stays on the staff / bot Files path — not this link.
+ * the photo grid (shared lightbox). Upload stays on the staff / bot Files path.
  */
 export default async function InspectionPictureSharePage({
   params,
@@ -60,26 +61,14 @@ export default async function InspectionPictureSharePage({
         <h2 className="mb-2 text-sm font-semibold text-[var(--bt-text)]">
           Photos ({resolved.photos.length})
         </h2>
-        {resolved.photos.length === 0 ? (
-          <p className="text-sm text-[var(--bt-muted)]">No photos in this folder yet.</p>
-        ) : (
-          <ul className="grid grid-cols-3 gap-2">
-            {resolved.photos.map((file) => (
-              <li
-                key={file.id}
-                className="aspect-square overflow-hidden rounded-lg border"
-                style={{ borderColor: "var(--bt-border)" }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={file.url}
-                  alt={file.fileName}
-                  className="h-full w-full object-cover"
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        <PhotoGallery
+          photos={resolved.photos.map((file) => ({
+            id: file.id,
+            fileName: file.fileName,
+            url: file.url,
+            category: "PHOTO",
+          }))}
+        />
       </div>
     </div>
   );
