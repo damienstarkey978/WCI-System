@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { OutboundBrandMark } from "@/components/branding/OutboundBrandMark";
-import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { db } from "@/lib/db";
@@ -14,16 +13,44 @@ import {
   declineChangeOrderAction,
   markChangeOrderSentAction,
 } from "../actions";
+import { ChangeOrderHeaderActions } from "./co-header-actions";
 import { ChangeOrderDetailForm } from "./detail-form";
+import { ChangeOrderLineItemsToolbar } from "./line-items-toolbar";
 
 export const dynamic = "force-dynamic";
 
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
   DRAFT: { bg: "#e5e7eb", text: "#374151", label: "Draft" },
-  PENDING_APPROVAL: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)", label: "Sent / Pending" },
-  APPROVED: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)", label: "Approved" },
+  PENDING_APPROVAL: { bg: "#fff4e5", text: "#b76e00", label: "Sent / Pending" },
+  APPROVED: { bg: "#e6f4ea", text: "#1e7e34", label: "Approved" },
   DECLINED: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)", label: "Declined" },
 };
+
+function costTypeLabel(costType: string): string {
+  switch (costType) {
+    case "LABOR":
+      return "Labor";
+    case "MATERIAL":
+      return "Material";
+    case "EQUIPMENT":
+      return "Equipment";
+    case "SUBCONTRACTOR":
+      return "Subcontractor";
+    case "OTHER":
+      return "Other";
+    default:
+      return "None";
+  }
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs font-medium text-[var(--bt-muted)]">{label}</div>
+      <div className="mt-0.5 text-sm text-[var(--bt-text)]">{children}</div>
+    </div>
+  );
+}
 
 export default async function ChangeOrderDetailPage({
   params,
@@ -44,10 +71,27 @@ export default async function ChangeOrderDetailPage({
   }
 
   const [job, organization] = await Promise.all([
-    db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } }),
+    db.job.findFirst({
+      where: { id: jobId, organizationId: user.organizationId },
+      include: {
+        clientAccess: {
+          take: 1,
+          include: { client: { select: { name: true } } },
+        },
+      },
+    }),
     db.organization.findUnique({
       where: { id: user.organizationId },
-      select: { name: true, logoPath: true, addressLine1: true, city: true, state: true, postalCode: true, contactEmail: true, contactPhone: true },
+      select: {
+        name: true,
+        logoPath: true,
+        addressLine1: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        contactEmail: true,
+        contactPhone: true,
+      },
     }),
   ]);
   if (!job) notFound();
@@ -83,15 +127,34 @@ export default async function ChangeOrderDetailPage({
   const coNumber = String(changeOrder.number).padStart(4, "0");
   const editable = changeOrder.status === "DRAFT" || changeOrder.status === "PENDING_APPROVAL";
   const badge = STATUS_BADGE[changeOrder.status] ?? STATUS_BADGE.DRAFT;
+  const clientName = job.clientAccess[0]?.client.name ?? null;
+  const clientInitials = clientName
+    ? clientName
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? "")
+        .join("")
+    : "—";
+  const clientLastViewed = changeOrder.clientSignedAt
+    ? formatDateUtc(changeOrder.clientSignedAt)
+    : changeOrder.status === "DRAFT"
+      ? "—"
+      : "Never";
 
   const lineRows =
     changeOrder.mode === "FLAT"
       ? [
           {
             id: "flat",
+            group: changeOrder.title,
             title: changeOrder.title,
-            code: null as string | null,
+            description: changeOrder.notesBuilder ?? "",
+            costType: "None",
             qtyLabel: "1",
+            unitCostLabel: formatMoney(builderCost),
+            amountLabel: formatMoney(clientPrice),
+            code: null as string | null,
             costCents: builderCost,
             priceCents: clientPrice,
           },
@@ -101,64 +164,82 @@ export default async function ChangeOrderDetailPage({
           const price = priceWithRate(cost, item.rateMode, item.rateBasisPoints);
           return {
             id: item.id,
+            group: item.costCode.name,
             title: item.title,
-            code: item.costCode.code,
+            description: "",
+            costType: costTypeLabel(item.costType),
             qtyLabel: (item.quantityMilli / 1000).toFixed(item.quantityMilli % 1000 === 0 ? 0 : 3),
+            unitCostLabel: formatMoney(item.unitCostCents),
+            amountLabel: formatMoney(price),
+            code: item.costCode.code,
             costCents: cost,
             priceCents: price,
           };
         });
 
+  // Group consecutive lines that share a cost-code name (BT category headers).
+  const grouped: { group: string; rows: typeof lineRows }[] = [];
+  for (const row of lineRows) {
+    const last = grouped[grouped.length - 1];
+    if (last && last.group === row.group) last.rows.push(row);
+    else grouped.push({ group: row.group, rows: [row] });
+  }
+
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link href={`/jobs/${job.id}/change-orders`} className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
-            ← Change Orders
+        <div className="min-w-0">
+          <Link
+            href={`/jobs/${job.id}/change-orders`}
+            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--bt-muted)] hover:text-[var(--bt-primary)]"
+            aria-label="Back to change orders"
+          >
+            <span aria-hidden>←</span>
+            <span className="truncate">{job.name}</span>
           </Link>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <PageHeader jobName={job.name} title="Change Order" />
-            <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: badge.bg, color: badge.text }}>
+            <h1 className="text-xl font-semibold text-[var(--bt-text)]">Change Order</h1>
+            <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: badge.bg, color: badge.text }}>
               {badge.label}
             </span>
           </div>
-          <p className="mt-1 text-sm text-[var(--bt-muted)]">
-            #{coNumber}
-            {changeOrder.deadline ? ` · Deadline ${formatDateUtc(changeOrder.deadline)}` : ""}
-          </p>
         </div>
-        {editable ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {changeOrder.status === "DRAFT" ? (
-              <form action={markChangeOrderSentAction}>
+
+        <div className="flex flex-col items-end gap-2">
+          <ChangeOrderHeaderActions jobId={job.id} changeOrderId={changeOrder.id} editable={editable} />
+          {editable ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {changeOrder.status === "DRAFT" ? (
+                <form action={markChangeOrderSentAction}>
+                  <input type="hidden" name="jobId" value={job.id} />
+                  <input type="hidden" name="changeOrderId" value={changeOrder.id} />
+                  <button
+                    type="submit"
+                    className="rounded px-3 py-1.5 text-sm font-semibold text-[var(--bt-on-primary)]"
+                    style={{ background: "var(--bt-primary)" }}
+                    title="Marks as sent/pending. Does not email anyone."
+                  >
+                    Mark sent
+                  </button>
+                </form>
+              ) : null}
+              <form action={declineChangeOrderAction}>
                 <input type="hidden" name="jobId" value={job.id} />
                 <input type="hidden" name="changeOrderId" value={changeOrder.id} />
-                <button
-                  type="submit"
-                  className="rounded px-3 py-2 text-sm font-semibold text-[var(--bt-on-primary)]"
-                  style={{ background: "var(--bt-primary)" }}
-                  title="Marks as sent/pending. Does not email anyone."
-                >
-                  Mark sent
+                <button type="submit" className="rounded border px-3 py-1.5 text-sm font-semibold" style={{ borderColor: "var(--bt-border)" }}>
+                  Decline
                 </button>
               </form>
-            ) : null}
-            <form action={declineChangeOrderAction}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <input type="hidden" name="changeOrderId" value={changeOrder.id} />
-              <button type="submit" className="rounded border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--bt-border)" }}>
-                Decline
-              </button>
-            </form>
-            <form action={approveChangeOrderAction}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <input type="hidden" name="changeOrderId" value={changeOrder.id} />
-              <button type="submit" className="rounded border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--bt-border)" }}>
-                Approve
-              </button>
-            </form>
-          </div>
-        ) : null}
+              <form action={approveChangeOrderAction}>
+                <input type="hidden" name="jobId" value={job.id} />
+                <input type="hidden" name="changeOrderId" value={changeOrder.id} />
+                <button type="submit" className="rounded border px-3 py-1.5 text-sm font-semibold" style={{ borderColor: "var(--bt-border)" }}>
+                  Approve
+                </button>
+              </form>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
@@ -171,7 +252,7 @@ export default async function ChangeOrderDetailPage({
           <Link
             key={key}
             href={`/jobs/${job.id}/change-orders/${changeOrder.id}${key === "preview" ? "?tab=preview" : ""}`}
-            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium"
+            className="-mb-px border-b-2 px-3 py-2.5 text-sm font-medium"
             style={{
               borderColor: tab === key ? "var(--bt-primary)" : "transparent",
               color: tab === key ? "var(--bt-primary)" : "var(--bt-muted)",
@@ -184,62 +265,150 @@ export default async function ChangeOrderDetailPage({
 
       {tab === "details" ? (
         <>
-          <ChangeOrderDetailForm
-            jobId={job.id}
-            changeOrderId={changeOrder.id}
-            coNumber={coNumber}
-            editable={editable}
-            initial={{
-              title: changeOrder.title,
-              deadline: changeOrder.deadline ? changeOrder.deadline.toISOString().slice(0, 10) : "",
-              notesBuilder: changeOrder.notesBuilder ?? "",
-              notesClient: changeOrder.notesClient ?? "",
-              invoiceOnApproval: changeOrder.invoiceOnApproval,
-            }}
-          />
+          <section>
+            <h2 className="text-sm font-semibold text-[var(--bt-text)]">Required client approvals</h2>
+            <p className="mt-1 text-xs text-[var(--bt-muted)]">
+              All clients you select will be required to sign this Change Order in order for it to be marked approved.
+            </p>
+            <div className="mt-3">
+              <div className="text-xs font-semibold text-[var(--bt-muted)]">Required Approvers</div>
+              <div
+                className="mt-1 flex min-h-[2.25rem] flex-wrap items-center gap-1.5 rounded border px-2 py-1.5"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                {clientName ? (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                    style={{ background: "color-mix(in srgb, var(--bt-primary) 12%, white)", color: "var(--bt-primary)" }}
+                  >
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold">
+                      {clientInitials}
+                    </span>
+                    {clientName}
+                  </span>
+                ) : (
+                  <span className="text-sm text-[var(--bt-muted)]">No client on this job yet.</span>
+                )}
+              </div>
+            </div>
+          </section>
 
-          <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-            <h2 className="text-sm font-semibold text-[var(--bt-text)]">Line items</h2>
-            {lineRows.length === 0 ? (
-              <p className="mt-2 text-sm text-[var(--bt-muted)]">No line items yet. Add line items when creating the change order.</p>
-            ) : (
-              <div className="mt-3 overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
-                <table className="w-full text-left text-sm">
+          <div className="grid gap-4 border-b pb-4 sm:grid-cols-2 lg:grid-cols-4" style={{ borderColor: "var(--bt-border)" }}>
+            <Field label="Title">{changeOrder.title}</Field>
+            <Field label="ID#">{coNumber}</Field>
+            <Field label="Approval Deadline">{changeOrder.deadline ? formatDateUtc(changeOrder.deadline) : "—"}</Field>
+            <Field label="Client Last Viewed">{clientLastViewed}</Field>
+          </div>
+
+          {editable ? (
+            <details className="rounded border" style={{ borderColor: "var(--bt-border)" }}>
+              <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-[var(--bt-primary)]">Edit fields</summary>
+              <div className="border-t p-3" style={{ borderColor: "var(--bt-border)" }}>
+                <ChangeOrderDetailForm
+                  jobId={job.id}
+                  changeOrderId={changeOrder.id}
+                  coNumber={coNumber}
+                  editable={editable}
+                  initial={{
+                    title: changeOrder.title,
+                    deadline: changeOrder.deadline ? changeOrder.deadline.toISOString().slice(0, 10) : "",
+                    notesBuilder: changeOrder.notesBuilder ?? "",
+                    notesClient: changeOrder.notesClient ?? "",
+                    invoiceOnApproval: changeOrder.invoiceOnApproval,
+                  }}
+                />
+              </div>
+            </details>
+          ) : null}
+
+          <section id="co-line-items">
+            <div className="flex overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
+              <div className="min-w-0 flex-1 overflow-x-auto">
+                <table className="w-full min-w-max text-left text-sm">
                   <thead>
-                    <tr className="border-b text-xs uppercase tracking-wide text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+                    <tr
+                      className="border-b text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
+                      style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
+                    >
+                      <th className="px-3 py-2">Items</th>
                       <th className="px-3 py-2">Description</th>
+                      <th className="px-3 py-2">Internal Notes</th>
+                      <th className="px-3 py-2">Cost type</th>
+                      <th className="px-3 py-2 text-right">Unit cost</th>
                       <th className="px-3 py-2 text-right">Qty</th>
-                      <th className="px-3 py-2 text-right">Builder cost</th>
-                      <th className="px-3 py-2 text-right">Client price</th>
+                      <th className="px-3 py-2 text-right">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {lineRows.map((row) => (
-                      <tr key={row.id} className="border-t" style={{ borderColor: "var(--bt-border)" }}>
-                        <td className="px-3 py-2">
-                          {row.title}
-                          {row.code ? <span className="ml-1 text-xs text-[var(--bt-muted)]">({row.code})</span> : null}
+                    {grouped.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-4 text-[var(--bt-muted)]">
+                          No line items yet. Add line items when creating the change order.
                         </td>
-                        <td className="px-3 py-2 text-right">{row.qtyLabel}</td>
-                        <td className="px-3 py-2 text-right">{formatMoney(row.costCents)}</td>
-                        <td className="px-3 py-2 text-right">{formatMoney(row.priceCents)}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      grouped.flatMap((group) => [
+                        <tr key={`g-${group.group}`} className="border-t" style={{ borderColor: "var(--bt-border)" }}>
+                          <td colSpan={7} className="px-3 py-2 text-sm font-semibold text-[var(--bt-text)]">
+                            {group.group}
+                          </td>
+                        </tr>,
+                        ...group.rows.map((row) => (
+                          <tr key={row.id} className="border-t" style={{ borderColor: "var(--bt-border)" }}>
+                            <td className="px-3 py-2">
+                              <div className="text-[var(--bt-text)]">{row.title}</div>
+                              {row.code ? <div className="text-xs text-[var(--bt-muted)]">{row.code}</div> : null}
+                            </td>
+                            <td className="px-3 py-2 text-[var(--bt-muted)]">{row.description || "—"}</td>
+                            <td className="px-3 py-2 text-[var(--bt-muted)]">—</td>
+                            <td className="px-3 py-2 text-[var(--bt-muted)]">{row.costType}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{row.unitCostLabel}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{row.qtyLabel}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{row.amountLabel}</td>
+                          </tr>
+                        )),
+                      ])
+                    )}
+                    {lineRows.length > 0 ? (
+                      <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}>
+                        <td className="px-3 py-2" colSpan={6}>
+                          Totals
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatMoney(clientPrice)}</td>
+                      </tr>
+                    ) : null}
                   </tbody>
                 </table>
               </div>
+              <ChangeOrderLineItemsToolbar editable={editable} />
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-semibold text-[var(--bt-text)]">Scope of Work</h2>
+            {changeOrder.notesClient ? (
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--bt-text)]">{changeOrder.notesClient}</p>
+            ) : (
+              <p className="mt-2 text-sm italic text-[var(--bt-muted)]">No client-facing scope notes yet.</p>
             )}
-            <p className="mt-2 text-xs text-[var(--bt-muted)]">
-              {changeOrder.mode === "FLAT" ? "Flat fee pricing." : "Itemized pricing. Line edits happen on create; use a new change order to revise scope."}
-            </p>
+            {changeOrder.notesBuilder ? (
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Builder notes</h3>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--bt-muted)]">{changeOrder.notesBuilder}</p>
+              </div>
+            ) : null}
           </section>
         </>
       ) : (
         <div className="rounded-xl p-3 sm:p-6" style={{ background: "var(--bt-panel-bg-muted)" }}>
           <p className="mb-4 text-sm text-[var(--bt-muted)]">
-            Preview of what the client sees. Builder notes and builder cost are never shown here. Clients approve from a signed link once marked sent.
+            Preview of what the client sees. Builder notes and builder cost are never shown here. Clients approve from a signed
+            link once marked sent.
           </p>
-          <article className="mx-auto max-w-3xl rounded-lg border bg-white px-4 py-6 text-[#1a1a1a] shadow-sm sm:px-10 sm:py-10 print:shadow-none" style={{ borderColor: "#e5e7eb" }}>
+          <article
+            className="mx-auto max-w-3xl rounded-lg border bg-white px-4 py-6 text-[#1a1a1a] shadow-sm sm:px-10 sm:py-10 print:shadow-none"
+            style={{ borderColor: "#e5e7eb" }}
+          >
             <header className="flex flex-col items-center gap-2 text-center">
               <OutboundBrandMark organizationLogoPath={organization?.logoPath ?? null} className="h-14 w-auto max-w-[14rem] object-contain sm:h-16" />
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6b7280]">
@@ -252,7 +421,10 @@ export default async function ChangeOrderDetailPage({
               <h2 className="mt-1 text-2xl font-semibold tracking-tight">
                 {changeOrder.title} <span className="text-[#6b7280]">#{coNumber}</span>
               </h2>
-              <p className="mt-1 text-sm text-[#6b7280]">{job.name}{jobAddress ? ` · ${jobAddress}` : ""}</p>
+              <p className="mt-1 text-sm text-[#6b7280]">
+                {job.name}
+                {jobAddress ? ` · ${jobAddress}` : ""}
+              </p>
             </div>
 
             <div className="mt-6 grid gap-4 border-t border-[#e5e7eb] pt-5 text-sm sm:grid-cols-2">
