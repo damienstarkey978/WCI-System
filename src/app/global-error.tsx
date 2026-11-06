@@ -33,6 +33,10 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
                   while the tab was open, or the server returned an incomplete reply). Reloading picks up a fresh page —
                   &quot;Try again&quot; won&apos;t help here, since it re-runs the same stale tab instead of loading a new one.
                 </p>
+                <p style={{ marginBottom: "1rem", fontSize: "0.875rem", opacity: 0.85 }}>
+                  If you were creating a daily log with photos, reload first, then create the log again and attach media —
+                  Upload photos and Take photos/videos now both work on the reloaded form.
+                </p>
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
