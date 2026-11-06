@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { OutboundBrandMark } from "@/components/branding/OutboundBrandMark";
-import { CommentThread } from "@/components/comments/CommentThread";
 import {
   ChatIcon,
   CloseIcon,
@@ -56,7 +55,6 @@ export type InvoiceDetailProps = {
   readonly jobName: string;
   readonly jobAddress: string | null;
   readonly invoiceId: string;
-  readonly organizationId: string;
   readonly organizationName: string;
   readonly organizationLogoPath: string | null;
   readonly orgAddressLine1: string | null;
@@ -94,6 +92,8 @@ export type InvoiceDetailProps = {
   readonly hasQboPayment: boolean;
   readonly hasOnlinePayment: boolean;
   readonly initialTab?: "details" | "preview";
+  /** Server-rendered CommentThread slot — never import CommentThread here (pulls db/pg into the browser). */
+  readonly comments: ReactNode;
 };
 
 function EllipsisIcon({ className }: { className?: string }) {
@@ -465,12 +465,7 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
               </section>
 
               <section id="invoice-comments" className="py-5">
-                <CommentThread
-                  organizationId={props.organizationId}
-                  featureType="Invoice"
-                  featureId={props.invoiceId}
-                  revalidate={`/jobs/${props.jobId}/invoices/${props.invoiceId}`}
-                />
+                {props.comments}
               </section>
             </div>
           ) : (

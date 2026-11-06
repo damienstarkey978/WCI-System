@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
+import { CommentThread } from "@/components/comments/CommentThread";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -123,7 +124,6 @@ export default async function InvoiceDetailPage({
       jobName={job.name}
       jobAddress={jobAddress}
       invoiceId={invoice.id}
-      organizationId={user.organizationId}
       organizationName={job.organization.name}
       organizationLogoPath={job.organization.logoPath}
       orgAddressLine1={job.organization.addressLine1}
@@ -195,6 +195,14 @@ export default async function InvoiceDetailPage({
       hasQboPayment={hasQboPayment}
       hasOnlinePayment={hasOnlinePayment}
       initialTab={initialTab}
+      comments={
+        <CommentThread
+          organizationId={user.organizationId}
+          featureType="Invoice"
+          featureId={invoice.id}
+          revalidate={`/jobs/${job.id}/invoices/${invoice.id}`}
+        />
+      }
     />
   );
 }
