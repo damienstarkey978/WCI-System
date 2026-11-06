@@ -230,6 +230,12 @@ export interface UpdateBillInput {
   readonly description?: string | null;
   readonly issuedOn?: Date | null;
   readonly dueOn?: Date | null;
+  /** Pay to — vendor directory id (null clears the link). */
+  readonly vendorId?: string | null;
+  /** Pay to display name when free-typing (used when vendorId is null/omitted). */
+  readonly vendorName?: string | null;
+  /** Against PO — null clears the link. Must belong to the same job. */
+  readonly purchaseOrderId?: string | null;
   readonly sendToQuickBooks?: boolean | null;
   readonly quickBooksSkipReason?: string | null;
   readonly billableToClient?: boolean;
@@ -238,13 +244,13 @@ export interface UpdateBillInput {
 }
 
 /**
- * Edit bill header + QuickBooks / billable intent + optional full cost-line replace.
+ * Edit bill header + Pay to / PO + QuickBooks / billable + optional cost-line replace.
  * Status transitions stay on updateBillStatus. Refuses PAID/VOID.
  */
 export async function updateBill(input: UpdateBillInput) {
   const existing = await db.bill.findFirst({
     where: { id: input.billId, organizationId: input.organizationId },
-    select: { id: true, approvalStatus: true },
+    select: { id: true, jobId: true, approvalStatus: true, vendorName: true },
   });
   if (!existing) throw new BillNotFoundError(input.billId);
   if (
@@ -259,6 +265,45 @@ export async function updateBill(input: UpdateBillInput) {
     input.billNumber === undefined ? undefined : normalizeVendorInvoiceNumber(input.billNumber);
   if (normalizedNumber && isInventedJobPrefixedBillNumber(normalizedNumber)) {
     throw new InventedBillNumberError(normalizedNumber);
+  }
+
+  let resolvedVendorId: string | null | undefined;
+  let resolvedVendorName: string | undefined;
+  if (input.vendorId !== undefined) {
+    if (input.vendorId) {
+      const vendor = await db.vendor.findFirst({
+        where: { id: input.vendorId, organizationId: input.organizationId },
+        select: { id: true, name: true },
+      });
+      if (!vendor) throw new UnknownVendorError(input.vendorId);
+      resolvedVendorId = vendor.id;
+      resolvedVendorName = vendor.name;
+    } else {
+      resolvedVendorId = null;
+      const freeName = input.vendorName?.trim() ?? "";
+      if (freeName) resolvedVendorName = freeName;
+    }
+  } else if (input.vendorName !== undefined) {
+    const freeName = input.vendorName?.trim() ?? "";
+    if (freeName) {
+      resolvedVendorId = null;
+      resolvedVendorName = freeName;
+    }
+  }
+
+  let resolvedPurchaseOrderId: string | null | undefined;
+  if (input.purchaseOrderId !== undefined) {
+    if (input.purchaseOrderId) {
+      const po = await db.purchaseOrder.findFirst({
+        where: { id: input.purchaseOrderId, organizationId: input.organizationId },
+        select: { id: true, jobId: true },
+      });
+      if (!po) throw new UnknownPurchaseOrderError(input.purchaseOrderId);
+      if (po.jobId !== existing.jobId) throw new PurchaseOrderJobMismatchError();
+      resolvedPurchaseOrderId = po.id;
+    } else {
+      resolvedPurchaseOrderId = null;
+    }
   }
 
   let defaultCostTypeById: Map<string, CostType> | undefined;
@@ -301,6 +346,9 @@ export async function updateBill(input: UpdateBillInput) {
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.issuedOn !== undefined ? { issuedOn: input.issuedOn } : {}),
         ...(input.dueOn !== undefined ? { dueOn: input.dueOn } : {}),
+        ...(resolvedVendorId !== undefined ? { vendorId: resolvedVendorId } : {}),
+        ...(resolvedVendorName !== undefined ? { vendorName: resolvedVendorName } : {}),
+        ...(resolvedPurchaseOrderId !== undefined ? { purchaseOrderId: resolvedPurchaseOrderId } : {}),
         ...(input.sendToQuickBooks !== undefined ? { sendToQuickBooks: input.sendToQuickBooks } : {}),
         ...(input.quickBooksSkipReason !== undefined
           ? { quickBooksSkipReason: input.quickBooksSkipReason }

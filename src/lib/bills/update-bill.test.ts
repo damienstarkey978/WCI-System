@@ -1,12 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findFirst, update, transaction, deleteMany, createMany, costCodeFindMany } = vi.hoisted(() => ({
+const {
+  findFirst,
+  update,
+  transaction,
+  deleteMany,
+  createMany,
+  costCodeFindMany,
+  vendorFindFirst,
+  purchaseOrderFindFirst,
+} = vi.hoisted(() => ({
   findFirst: vi.fn(),
   update: vi.fn(),
   transaction: vi.fn(),
   deleteMany: vi.fn(),
   createMany: vi.fn(),
   costCodeFindMany: vi.fn(),
+  vendorFindFirst: vi.fn(),
+  purchaseOrderFindFirst: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -14,6 +25,8 @@ vi.mock("@/lib/db", () => ({
     bill: { findFirst, update },
     billLineItem: { deleteMany, createMany },
     costCode: { findMany: costCodeFindMany },
+    vendor: { findFirst: vendorFindFirst },
+    purchaseOrder: { findFirst: purchaseOrderFindFirst },
     $transaction: transaction,
   },
 }));
@@ -97,7 +110,7 @@ describe("updateBill", () => {
   });
 
   it("replaces cost lines when lineItems provided", async () => {
-    findFirst.mockResolvedValue({ id: "b1", approvalStatus: "IN_REVIEW" });
+    findFirst.mockResolvedValue({ id: "b1", jobId: "job1", approvalStatus: "IN_REVIEW", vendorName: "Acme" });
     costCodeFindMany.mockResolvedValue([{ id: "cc1", defaultCostType: "LABOR" }]);
     deleteMany.mockResolvedValue({ count: 1 });
     createMany.mockResolvedValue({ count: 1 });
@@ -127,6 +140,36 @@ describe("updateBill", () => {
           sortOrder: 0,
         }),
       ],
+    });
+  });
+
+  it("updates Pay to vendor and Against PO on the same job", async () => {
+    findFirst.mockResolvedValue({ id: "b1", jobId: "job1", approvalStatus: "READY_FOR_PAYMENT", vendorName: "Old" });
+    vendorFindFirst.mockResolvedValue({ id: "v1", name: "Value Comfort Service LLC" });
+    purchaseOrderFindFirst.mockResolvedValue({ id: "po1", jobId: "job1" });
+    update.mockResolvedValue({ id: "b1" });
+    transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        billLineItem: { deleteMany, createMany },
+        bill: { update },
+      }),
+    );
+
+    await updateBill({
+      organizationId: "org",
+      billId: "b1",
+      vendorId: "v1",
+      purchaseOrderId: "po1",
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "b1" },
+      data: expect.objectContaining({
+        vendorId: "v1",
+        vendorName: "Value Comfort Service LLC",
+        purchaseOrderId: "po1",
+      }),
+      include: { lineItems: { orderBy: { sortOrder: "asc" } } },
     });
   });
 });
