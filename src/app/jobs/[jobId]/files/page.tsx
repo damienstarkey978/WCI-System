@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { FolderIcon, PaperclipIcon, PhotoIcon } from "@/components/shell/icons";
+import { FilterIcon, FolderIcon, PaperclipIcon, PhotoIcon, SearchIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -53,11 +53,13 @@ export default async function FilesPage({
   const job = await findOrgJobSummary(user.organizationId, jobId);
   if (!job) notFound();
 
-  const { category, folder: folderParam, view: viewParam, page: pageParam } = await searchParams;
+  const { category, folder: folderParam, view: viewParam, page: pageParam, q: qParam } = await searchParams;
   const trashView = viewParam === "trash";
   // Documents is the landing tab, as in Buildertrend; "All" is an explicit tab.
   const activeCategory = typeof category === "string" && CATEGORIES.some((c) => c.value === category) ? category : "DOCUMENT";
   const page = Math.max(1, Number.parseInt(typeof pageParam === "string" ? pageParam : "1", 10) || 1);
+  const q = typeof qParam === "string" ? qParam.trim() : "";
+  const qLower = q.toLowerCase();
 
   // Buildertrend's "Attached Documents": files that belong to another record (a bill, PO,
   // invoice, selection option, daily log, or filled permit-package form) rather than sitting
@@ -90,6 +92,7 @@ export default async function FilesPage({
   const fileWhere = {
     jobId: job.id,
     deletedAt: trashView ? { not: null } : null,
+    ...(q ? { fileName: { contains: q, mode: "insensitive" as const } } : {}),
     ...(trashView
       ? {}
       : openAttached
@@ -131,8 +134,13 @@ export default async function FilesPage({
   const inspectionPhotoCount = inspectionFolders.reduce((sum, folder) => sum + folder.photoCount, 0);
   const inspectionFolderIds = new Set(inspectionFolders.map((folder) => folder.folderId));
   // Keep Inspection: * rows under Inspection Pictures only — not duplicated in Documents.
-  const documentFolders = folders.filter((folder) => !inspectionFolderIds.has(folder.id));
+  const documentFolders = folders
+    .filter((folder) => !inspectionFolderIds.has(folder.id))
+    .filter((folder) => !qLower || folder.name.toLowerCase().includes(qLower));
+  const showInspectionRow = !qLower || "inspection pictures".includes(qLower) || qLower.includes("inspection");
+  const showAttachedRow = attachedCount > 0 && (!qLower || "attached documents".includes(qLower) || qLower.includes("attached"));
   const pageCount = paginateFiles ? Math.max(1, Math.ceil(totalFiles / FILES_PAGE_SIZE)) : 1;
+  const filterCount = q ? 1 : 0;
 
   // One Supabase createSignedUrls call for the whole grid — not N createSignedUrl.
   const signedUrls = await resolveFileUrlsSafe(files.map((file) => file.url));
@@ -156,19 +164,73 @@ export default async function FilesPage({
     if (trashView) params.set("view", "trash");
     if (openAttached) params.set("folder", "attached");
     else if (openFolder) params.set("folder", openFolder.id);
+    if (q) params.set("q", q);
     if (nextPage > 1) params.set("page", String(nextPage));
     const qs = params.toString();
     return `/jobs/${job.id}/files${qs ? `?${qs}` : ""}`;
   };
 
+  const categoryHref = (catValue: string, keepSearch = true) => {
+    const params = new URLSearchParams();
+    if (catValue !== "DOCUMENT") params.set("category", catValue);
+    if (keepSearch && q) params.set("q", q);
+    const qs = params.toString();
+    return `/jobs/${job.id}/files${qs ? `?${qs}` : ""}`;
+  };
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <PageHeader
         jobName={job.name}
         title="Files"
         action={
-          <div className="flex items-center gap-2">
-            <Link href={`/jobs/${job.id}/files${trashView ? "" : "?view=trash"}`} className="rounded border px-3 py-2 text-sm font-medium text-[var(--bt-text)]" style={{ borderColor: "var(--bt-border)" }}>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <form action={`/jobs/${job.id}/files`} className="relative hidden sm:block">
+              {activeCategory !== "DOCUMENT" ? <input type="hidden" name="category" value={activeCategory} /> : null}
+              {trashView ? <input type="hidden" name="view" value="trash" /> : null}
+              {openAttached ? <input type="hidden" name="folder" value="attached" /> : null}
+              {openFolder ? <input type="hidden" name="folder" value={openFolder.id} /> : null}
+              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--bt-muted)]" />
+              <input
+                name="q"
+                defaultValue={q}
+                placeholder="Search"
+                aria-label="Search files and folders"
+                className="h-9 w-44 rounded border bg-[var(--bt-panel-bg)] pl-8 pr-2 text-sm text-[var(--bt-text)] placeholder:text-[var(--bt-muted)]"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
+            </form>
+            {filterCount > 0 ? (
+              <Link
+                href={categoryHref(activeCategory, false)}
+                className="inline-flex h-9 items-center gap-1.5 rounded border bg-[var(--bt-panel-bg)] px-3 text-sm font-medium text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]"
+                style={{ borderColor: "var(--bt-border)" }}
+                title="Clear search"
+              >
+                <FilterIcon className="h-3.5 w-3.5" />
+                Clear
+                <span
+                  className="inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-[var(--bt-on-primary)]"
+                  style={{ background: "var(--bt-primary)" }}
+                >
+                  {filterCount}
+                </span>
+              </Link>
+            ) : (
+              <span
+                className="inline-flex h-9 items-center gap-1.5 rounded border bg-[var(--bt-panel-bg)] px-3 text-sm font-medium text-[var(--bt-muted)]"
+                style={{ borderColor: "var(--bt-border)" }}
+                title="Type in Search to filter folders and file names"
+              >
+                <FilterIcon className="h-3.5 w-3.5" />
+                Filter
+              </span>
+            )}
+            <Link
+              href={`/jobs/${job.id}/files${trashView ? (q ? `?q=${encodeURIComponent(q)}` : "") : `?view=trash${q ? `&q=${encodeURIComponent(q)}` : ""}`}`}
+              className="inline-flex h-9 items-center rounded border bg-[var(--bt-panel-bg)] px-3 text-sm font-medium text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]"
+              style={{ borderColor: "var(--bt-border)" }}
+            >
               {trashView ? "Back to files" : "View trash"}
             </Link>
             <CreateModal triggerLabel="+ Upload" title="Upload a file" variant="secondary">
@@ -181,12 +243,12 @@ export default async function FilesPage({
         }
       />
 
-      <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+      <nav className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: "var(--bt-border)" }}>
         {CATEGORIES.map((cat) => (
           <Link
             key={cat.value}
-            href={`/jobs/${job.id}/files${cat.value === "DOCUMENT" ? "" : `?category=${cat.value}`}`}
-            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+            href={categoryHref(cat.value)}
+            className="-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition"
             style={{
               borderColor: activeCategory === cat.value ? "var(--bt-primary)" : "transparent",
               color: activeCategory === cat.value ? "var(--bt-primary)" : "var(--bt-muted)",
@@ -270,31 +332,33 @@ export default async function FilesPage({
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b" style={{ borderColor: "var(--bt-border)" }}>
-                <td className="px-4 py-3">
-                  <Link
-                    href={`/jobs/${job.id}/files/inspection-pictures`}
-                    className="inline-flex items-center gap-2 font-medium text-[var(--bt-primary)] hover:underline"
-                  >
-                    <PhotoIcon className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
-                    Inspection Pictures
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-xs text-[var(--bt-muted)]">
-                  {inspectionFolders.length === 0
-                    ? "Create folders on Inspection Pictures (or add inspections on Permitting)"
-                    : `${inspectionFolders.length} inspection folder${inspectionFolders.length === 1 ? "" : "s"}`}
-                </td>
-                <td className="px-4 py-3" />
-                <td className="px-4 py-3" />
-                <td className="px-4 py-3 text-right text-[var(--bt-muted)]">{inspectionPhotoCount}</td>
-                <td className="px-4 py-3" />
-              </tr>
-              {attachedCount > 0 ? (
+              {showInspectionRow ? (
                 <tr className="border-b" style={{ borderColor: "var(--bt-border)" }}>
                   <td className="px-4 py-3">
                     <Link
-                      href={`/jobs/${job.id}/files?folder=attached`}
+                      href={`/jobs/${job.id}/files/inspection-pictures`}
+                      className="inline-flex items-center gap-2 font-medium text-[var(--bt-primary)] hover:underline"
+                    >
+                      <PhotoIcon className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
+                      Inspection Pictures
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[var(--bt-muted)]">
+                    {inspectionFolders.length === 0
+                      ? "Create folders on Inspection Pictures (or add inspections on Permitting)"
+                      : `${inspectionFolders.length} inspection folder${inspectionFolders.length === 1 ? "" : "s"}`}
+                  </td>
+                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3 text-right text-[var(--bt-muted)]">{inspectionPhotoCount}</td>
+                  <td className="px-4 py-3" />
+                </tr>
+              ) : null}
+              {showAttachedRow ? (
+                <tr className="border-b" style={{ borderColor: "var(--bt-border)" }}>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/jobs/${job.id}/files?folder=attached${q ? `&q=${encodeURIComponent(q)}` : ""}`}
                       className="inline-flex items-center gap-2 font-medium text-[var(--bt-primary)] hover:underline"
                     >
                       <PaperclipIcon className="h-4 w-4 shrink-0 text-[var(--bt-muted)]" />
