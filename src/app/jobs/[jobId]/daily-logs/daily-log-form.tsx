@@ -82,7 +82,7 @@ export function DailyLogForm({
   }, [state.ok]);
 
   return (
-    <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-3 sm:p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <div>
       {aiEnabled ? <DraftWithAi noteRef={noteRef} /> : null}
 
       <form action={formAction} className="flex flex-col gap-3">

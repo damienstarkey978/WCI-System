@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { AlertIcon, DocumentIcon, VideoIcon } from "@/components/shell/icons";
 import { isImageFile } from "@/lib/files/is-image-file";
 
 import { PhotoLightbox, type LightboxPhoto } from "./PhotoLightbox";
@@ -46,13 +47,13 @@ export function PhotoStrip({ files }: { files: readonly PhotoStripFile[] }) {
               <div
                 key={file.id}
                 title={`${file.fileName} — not found in storage`}
-                className="flex h-16 w-16 items-center justify-center rounded border text-xl"
+                className="flex h-16 w-16 items-center justify-center rounded border text-[var(--bt-muted)]"
                 style={{
                   borderColor: "var(--bt-border)",
                   background: "color-mix(in srgb, var(--bt-hazard) 8%, var(--bt-page-bg))",
                 }}
               >
-                ⚠️
+                <AlertIcon className="h-6 w-6" />
               </div>
             );
           }
@@ -89,8 +90,8 @@ export function PhotoStrip({ files }: { files: readonly PhotoStripFile[] }) {
               className="block h-16 w-16 overflow-hidden rounded border"
               style={{ borderColor: "var(--bt-border)" }}
             >
-              <div className="flex h-full w-full items-center justify-center bg-[var(--bt-page-bg)] text-xl text-[var(--bt-muted)]">
-                {file.category === "VIDEO" ? "🎬" : "📄"}
+              <div className="flex h-full w-full items-center justify-center bg-[var(--bt-page-bg)] text-[var(--bt-muted)]">
+                {file.category === "VIDEO" ? <VideoIcon className="h-6 w-6" /> : <DocumentIcon className="h-6 w-6" />}
               </div>
             </a>
           );
