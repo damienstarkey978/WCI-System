@@ -201,10 +201,10 @@ export function InvoicesListClient({
                         className="border-b text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
                         style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
                       >
-                        {["\u00a0", "Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Date paid"].map(
+                        {["Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Date paid"].map(
                           (col) => (
                             <th key={col} className="whitespace-nowrap px-3 py-2 sm:px-4">
-                              {col}
+                              {col.replace(/^~/, "")}
                             </th>
                           ),
                         )}
@@ -217,14 +217,6 @@ export function InvoicesListClient({
                           className="border-b align-middle last:border-0 hover:bg-black/[0.02]"
                           style={{ borderColor: "var(--bt-border)" }}
                         >
-                          <td className="w-8 px-2 py-2.5 sm:px-3">
-                            <input
-                              type="checkbox"
-                              aria-label={`Select invoice ${invoice.displayId}`}
-                              className="h-3.5 w-3.5 rounded border"
-                              style={{ borderColor: "var(--bt-border)" }}
-                            />
-                          </td>
                           <td className="max-w-[10rem] truncate px-3 py-2.5 text-[var(--bt-muted)] sm:px-4">{jobName}</td>
                           <td className="px-3 py-2.5 font-medium sm:px-4">
                             <Link
@@ -273,7 +265,7 @@ export function InvoicesListClient({
                         className="border-t font-semibold"
                         style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
                       >
-                        <td className="px-3 py-2.5 sm:px-4" colSpan={5}>
+                        <td className="px-3 py-2.5 sm:px-4" colSpan={4}>
                           {activeCount > 0 ? "Filtered totals" : "Totals"}
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums sm:px-4">
