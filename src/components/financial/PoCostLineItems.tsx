@@ -59,13 +59,19 @@ export function PoCostLineItems({
   costCodes,
   addFromSources = [],
   heading = "Cost",
+  initialLines,
 }: {
   costCodes: readonly CostCodeOption[];
   addFromSources?: readonly AddFromSource[];
   heading?: string;
+  /** Prefill for bill/PO edit — amount-only rows become unitCost + qty 1. */
+  initialLines?: readonly Omit<DraftCostLine, "key">[];
 }) {
-  const [lines, setLines] = useState<DraftCostLine[]>([emptyLine(0)]);
-  const [nextKey, setNextKey] = useState(1);
+  const seeded = initialLines?.length
+    ? initialLines.map((line, index) => ({ ...line, key: index }))
+    : [emptyLine(0)];
+  const [lines, setLines] = useState<DraftCostLine[]>(seeded);
+  const [nextKey, setNextKey] = useState(seeded.length);
 
   const totalCents = useMemo(
     () => lines.reduce((sum, line) => sum + moneyCents(line.unitCost, line.quantity), 0),
