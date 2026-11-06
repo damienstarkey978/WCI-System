@@ -46,6 +46,13 @@ export class InvoiceNotSendableError extends Error {
   }
 }
 
+export class InvoiceNotEditableError extends Error {
+  constructor(invoiceId: string, status: string) {
+    super(`Invoice ${invoiceId} is ${status.replace(/_/g, " ").toLowerCase()} and cannot be edited.`);
+    this.name = "InvoiceNotEditableError";
+  }
+}
+
 export class DrawNotFoundError extends Error {
   constructor(drawId: string) {
     super(`Draw ${drawId} not found`);
@@ -186,6 +193,75 @@ export async function createInvoice(input: CreateInvoiceInput) {
   });
 
   return invoice;
+}
+
+export interface UpdateInvoiceInput {
+  readonly organizationId: string;
+  readonly invoiceId: string;
+  readonly title?: string | null;
+  readonly issuedOn?: Date | null;
+  readonly dueOn?: Date | null;
+  readonly paymentTerms?: PaymentTerms;
+  readonly clientMessage?: string | null;
+  /** FLAT drafts only — ignored when the invoice already has line items. */
+  readonly amountCents?: Cents;
+}
+
+/**
+ * Edit a DRAFT invoice's header fields (and flat amount when there are no lines).
+ * Sent / paid / void invoices stay locked — recall isn't implemented yet, so the
+ * office edits before Send rather than mutating a client-facing demand.
+ */
+export async function updateInvoice(input: UpdateInvoiceInput) {
+  const invoice = await db.invoice.findFirst({
+    where: { id: input.invoiceId, organizationId: input.organizationId },
+    include: { lineItems: { select: { id: true } } },
+  });
+  if (!invoice) throw new InvoiceNotFoundError(input.invoiceId);
+  if (invoice.status !== InvoiceStatus.DRAFT) {
+    throw new InvoiceNotEditableError(input.invoiceId, invoice.status);
+  }
+
+  const paymentTerms = input.paymentTerms ?? invoice.paymentTerms;
+  const issuedOn = input.issuedOn !== undefined ? input.issuedOn : invoice.issuedOn;
+  // Explicit dueOn wins; otherwise re-derive from terms when the office changed
+  // terms/issue date and left due blank on CUSTOM we keep whatever was stored.
+  let dueOn = input.dueOn !== undefined ? input.dueOn : invoice.dueOn;
+  if (input.dueOn === undefined && (input.paymentTerms !== undefined || input.issuedOn !== undefined) && issuedOn) {
+    const derived = dueDateFor(paymentTerms, issuedOn);
+    if (derived) dueOn = derived;
+  }
+
+  const data: {
+    title?: string | null;
+    issuedOn?: Date | null;
+    dueOn?: Date | null;
+    paymentTerms?: PaymentTerms;
+    clientMessage?: string | null;
+    amountCents?: number;
+    taxCents?: number;
+  } = {
+    title: input.title !== undefined ? input.title : invoice.title,
+    issuedOn,
+    dueOn,
+    paymentTerms,
+    clientMessage: input.clientMessage !== undefined ? input.clientMessage : invoice.clientMessage,
+  };
+
+  if (
+    input.amountCents !== undefined &&
+    invoice.type === InvoiceType.FLAT &&
+    invoice.lineItems.length === 0
+  ) {
+    data.amountCents = input.amountCents;
+    data.taxCents = 0;
+  }
+
+  return db.invoice.update({
+    where: { id: invoice.id },
+    data,
+    include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+  });
 }
 
 /**

@@ -7,13 +7,21 @@ import { InvoiceType } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import { displayInvoiceId } from "@/lib/invoicing/display";
 import {
+  addChangeOrderLinesToInvoice,
+  ChangeOrderLineFullyInvoicedError,
+  InvoiceNotEditableError as ChangeOrderInvoiceNotEditableError,
+  NoChangeOrderSelectionsError,
+} from "@/lib/invoicing/from-change-orders";
+import {
   createInvoice,
+  InvoiceNotEditableError,
   InvoiceNotFoundError,
   InvoiceVoidedError,
   JobNotFoundError,
   JobNotOpenError,
   recordPayment,
   sendInvoice,
+  updateInvoice,
 } from "@/lib/invoicing/service";
 import { parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
 import { db } from "@/lib/db";
@@ -170,6 +178,104 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
   revalidatePath(`/jobs/${jobId}/invoices`);
   revalidatePath(`/jobs/${jobId}/invoices/${invoiceId}`);
   return { ok: true, invoiceId };
+}
+
+export async function updateInvoiceAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const title = String(formData.get("title") ?? "").trim() || null;
+  const issuedOnRaw = String(formData.get("issuedOn") ?? "").trim();
+  const dueOnRaw = String(formData.get("dueOn") ?? "").trim();
+  const clientMessage = String(formData.get("clientMessage") ?? "").trim() || null;
+  const termsRaw = String(formData.get("paymentTerms") ?? "CUSTOM");
+  const paymentTerms = (PAYMENT_TERMS_VALUES.has(termsRaw) ? termsRaw : "CUSTOM") as PaymentTerms;
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+
+  try {
+    await updateInvoice({
+      organizationId: user.organizationId,
+      invoiceId,
+      title,
+      issuedOn: issuedOnRaw ? new Date(issuedOnRaw) : null,
+      dueOn: dueOnRaw ? new Date(dueOnRaw) : null,
+      paymentTerms,
+      clientMessage,
+      ...(amountRaw ? { amountCents: parseDollarsToCents(amountRaw) } : {}),
+    });
+  } catch (error) {
+    if (
+      error instanceof InvoiceNotFoundError ||
+      error instanceof InvoiceNotEditableError ||
+      (error instanceof Error && error.message.includes("Cannot parse"))
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/invoices`);
+  revalidatePath(`/jobs/${jobId}/invoices/${invoiceId}`);
+  return { ok: true };
+}
+
+export async function addChangeOrderLinesToInvoiceAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  // Parallel arrays from checked rows only: sourceKey is a CO line id, or `flat:{coId}`.
+  const sourceKeys = formData.getAll("sourceKey").map(String);
+  const percents = formData.getAll("invoicePercent").map(String);
+
+  const selections: Array<{
+    changeOrderLineId?: string;
+    changeOrderId?: string;
+    invoicePercentBasisPoints: number;
+  }> = [];
+
+  for (let index = 0; index < sourceKeys.length; index += 1) {
+    const key = sourceKeys[index]!;
+    const percentRaw = percents[index] ?? "100";
+    let invoicePercentBasisPoints: number;
+    try {
+      invoicePercentBasisPoints = parsePercentToBasisPoints(percentRaw || "0");
+    } catch {
+      return { error: `Invalid percent on row ${index + 1}.` };
+    }
+    if (invoicePercentBasisPoints <= 0) continue;
+    if (key.startsWith("flat:")) {
+      selections.push({ changeOrderId: key.slice(5), invoicePercentBasisPoints });
+    } else {
+      selections.push({ changeOrderLineId: key, invoicePercentBasisPoints });
+    }
+  }
+
+  try {
+    await addChangeOrderLinesToInvoice({
+      organizationId: user.organizationId,
+      invoiceId,
+      selections,
+    });
+  } catch (error) {
+    if (
+      error instanceof InvoiceNotFoundError ||
+      error instanceof ChangeOrderInvoiceNotEditableError ||
+      error instanceof ChangeOrderLineFullyInvoicedError ||
+      error instanceof NoChangeOrderSelectionsError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/invoices`);
+  revalidatePath(`/jobs/${jobId}/invoices/${invoiceId}`);
+  return { ok: true };
 }
 
 export async function recordPaymentAction(_previous: ActionState, formData: FormData): Promise<ActionState> {

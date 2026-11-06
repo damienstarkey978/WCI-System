@@ -1827,6 +1827,16 @@ model InvoiceLineItem {
   sourceBillId String?
   sourceBill   Bill?   @relation("BillInvoiceLines", fields: [sourceBillId], references: [id], onDelete: SetNull)
 
+  /// Set when this line was added from a change-order line (BT "Add from → Change
+  /// Orders"). Tracks how much of that CO line has already been invoiced.
+  sourceChangeOrderLineId String?
+  sourceChangeOrderLine   ChangeOrderLineItem? @relation("ChangeOrderInvoiceLines", fields: [sourceChangeOrderLineId], references: [id], onDelete: SetNull)
+
+  /// Set when this line was added from a FLAT change order (no CO line items). Same
+  /// double-bill guard as sourceChangeOrderLineId, at the whole-CO grain.
+  sourceChangeOrderId String?
+  sourceChangeOrder   ChangeOrder? @relation("ChangeOrderInvoiceLinesFlat", fields: [sourceChangeOrderId], references: [id], onDelete: SetNull)
+
   /// Optional cost breakdown, mirroring EstimateLineItem. Present on lines pushed
   /// from an estimate or a budget; null on a line typed straight onto the invoice.
   costCodeId      String?
@@ -1846,6 +1856,8 @@ model InvoiceLineItem {
   @@index([invoiceId, sortOrder])
   @@index([costCodeId])
   @@index([sourceBillId])
+  @@index([sourceChangeOrderLineId])
+  @@index([sourceChangeOrderId])
 }
 
 /// One per job in the common case, though nothing here enforces that — a job could
@@ -2335,7 +2347,8 @@ model ChangeOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lineItems ChangeOrderLineItem[]
+  lineItems    ChangeOrderLineItem[]
+  invoiceLines InvoiceLineItem[]     @relation("ChangeOrderInvoiceLinesFlat")
 
   @@unique([jobId, number])
   @@index([jobId, status])
@@ -2356,6 +2369,8 @@ model ChangeOrderLineItem {
   rateMode        RateMode @default(MARKUP)
   rateBasisPoints Int      @default(0)
   sortOrder       Int      @default(0)
+
+  invoiceLines InvoiceLineItem[] @relation("ChangeOrderInvoiceLines")
 
   @@index([changeOrderId, sortOrder])
 }

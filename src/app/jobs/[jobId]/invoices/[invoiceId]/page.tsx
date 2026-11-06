@@ -5,10 +5,12 @@ import { CommentThread } from "@/components/comments/CommentThread";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
+import { changeOrderLineClientPriceCents } from "@/lib/invoicing/from-change-orders";
 import { effectiveInvoiceStatus, paymentTermsDisplayLabel } from "@/lib/invoicing/terms";
 import { formatBasisPoints } from "@/lib/money";
 import { formatCompanyAddress } from "@/lib/organization/company-defaults";
 
+import type { ChangeOrderAddFromRow } from "./add-from-change-orders-modal";
 import { InvoiceDetailView } from "./invoice-detail-view";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,20 @@ const METHOD_LABEL: Record<string, string> = {
   QBO_SYNC: "QuickBooks",
   MANUAL: "Manual",
 };
+
+const COST_TYPE_LABEL: Record<string, string> = {
+  NONE: "None",
+  LABOR: "Labor",
+  MATERIAL: "Material",
+  EQUIPMENT: "Equipment",
+  SUBCONTRACTOR: "Subcontractor",
+  OTHER: "Other",
+};
+
+function dateInputValue(value: Date | null | undefined): string {
+  if (!value) return "";
+  return value.toISOString().slice(0, 10);
+}
 
 export default async function InvoiceDetailPage({
   params,
@@ -95,8 +111,72 @@ export default async function InvoiceDetailPage({
   const subtotalCents = invoice.amountCents - invoice.taxCents;
   const balanceCents = invoice.amountCents - paidCents - creditedCents;
   const canAct = displayStatus !== "VOID" && displayStatus !== "PAID";
+  const canEdit = invoice.status === "DRAFT";
   const hasOnlinePayment = invoice.payments.some((p) => p.method === "STRIPE_CARD" || p.method === "STRIPE_ACH");
   const hasQboPayment = invoice.payments.some((p) => p.method === "QBO_SYNC");
+
+  const approvedChangeOrders = canEdit
+    ? await db.changeOrder.findMany({
+        where: { jobId: job.id, organizationId: user.organizationId, status: "APPROVED" },
+        orderBy: { number: "asc" },
+        include: {
+          lineItems: {
+            orderBy: { sortOrder: "asc" },
+            include: {
+              costCode: { select: { code: true, name: true } },
+              invoiceLines: {
+                where: { invoice: { status: { not: "VOID" } } },
+                select: { amountCents: true },
+              },
+            },
+          },
+          invoiceLines: {
+            where: { invoice: { status: { not: "VOID" } } },
+            select: { amountCents: true },
+          },
+        },
+      })
+    : [];
+
+  const changeOrderRows: ChangeOrderAddFromRow[] = [];
+  for (const co of approvedChangeOrders) {
+    const groupLabel = `CO ${String(co.number).padStart(4, "0")} — ${co.title}`;
+    if (co.mode === "FLAT") {
+      const clientPriceCents = co.flatClientPriceCents ?? 0;
+      if (clientPriceCents <= 0) continue;
+      const alreadyInvoicedCents = co.invoiceLines.reduce((sum, row) => sum + row.amountCents, 0);
+      const remainingCents = Math.max(0, clientPriceCents - alreadyInvoicedCents);
+      if (remainingCents <= 0) continue;
+      changeOrderRows.push({
+        sourceKey: `flat:${co.id}`,
+        groupLabel,
+        title: co.title,
+        costCodeLabel: "",
+        costTypeLabel: "Flat",
+        clientPriceCents,
+        alreadyInvoicedCents,
+        remainingPercent: Math.round((remainingCents / clientPriceCents) * 1000) / 10,
+      });
+      continue;
+    }
+    for (const line of co.lineItems) {
+      const clientPriceCents = changeOrderLineClientPriceCents(line);
+      if (clientPriceCents <= 0) continue;
+      const alreadyInvoicedCents = line.invoiceLines.reduce((sum, row) => sum + row.amountCents, 0);
+      const remainingCents = Math.max(0, clientPriceCents - alreadyInvoicedCents);
+      if (remainingCents <= 0) continue;
+      changeOrderRows.push({
+        sourceKey: line.id,
+        groupLabel,
+        title: line.title,
+        costCodeLabel: `${line.costCode.code} ${line.costCode.name}`,
+        costTypeLabel: COST_TYPE_LABEL[line.costType] ?? line.costType,
+        clientPriceCents,
+        alreadyInvoicedCents,
+        remainingPercent: Math.round((remainingCents / clientPriceCents) * 1000) / 10,
+      });
+    }
+  }
 
   const client = job.clientAccess[0]?.client ?? null;
   const clientAddress = client
@@ -190,6 +270,17 @@ export default async function InvoiceDetailPage({
         })),
       ]}
       canAct={canAct}
+      canEdit={canEdit}
+      paymentTerms={invoice.paymentTerms}
+      issuedOnValue={dateInputValue(invoice.issuedOn)}
+      dueOnValue={dateInputValue(invoice.dueOn)}
+      amountValue={
+        invoice.type === "FLAT" && invoice.lineItems.length === 0
+          ? (invoice.amountCents / 100).toFixed(2)
+          : null
+      }
+      invoiceType={invoice.type}
+      changeOrderRows={changeOrderRows}
       isQboConnected={isQboConnected}
       qboInvoiceId={invoice.qboInvoiceId}
       hasQboPayment={hasQboPayment}
