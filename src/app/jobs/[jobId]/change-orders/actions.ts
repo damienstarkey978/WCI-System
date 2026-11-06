@@ -5,6 +5,10 @@ import { revalidatePath } from "next/cache";
 import { ChangeOrderMode, RateMode } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import {
+  ChangeOrderClientMissingError,
+  sendChangeOrderForApproval,
+} from "@/lib/change-orders/deliver";
+import {
   approveChangeOrder,
   ChangeOrderNotApprovedError,
   ChangeOrderNotFoundError,
@@ -29,6 +33,9 @@ export interface ActionState {
   readonly ok?: boolean;
   readonly changeOrderId?: string;
   readonly purchaseOrderId?: string;
+  readonly approvalUrl?: string;
+  readonly emailed?: boolean;
+  readonly needsManualDelivery?: boolean;
 }
 
 export async function createChangeOrderAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
@@ -188,6 +195,7 @@ export async function setChangeOrderFlatAction(_previous: ActionState, formData:
   return { ok: true };
 }
 
+/** Internal status flip only (no link / email). Prefer sendChangeOrderForApprovalAction. */
 export async function markChangeOrderSentAction(formData: FormData): Promise<void> {
   const user = await requireAppUser();
   const jobId = String(formData.get("jobId") ?? "");
@@ -200,6 +208,45 @@ export async function markChangeOrderSentAction(formData: FormData): Promise<voi
   }
   revalidatePath(`/jobs/${jobId}/change-orders`);
   revalidatePath(`/jobs/${jobId}/change-orders/${changeOrderId}`);
+}
+
+/**
+ * Buildertrend "Send to client for approval" — mark pending, issue e-sign link,
+ * email when configured. Never pushes QuickBooks.
+ */
+export async function sendChangeOrderForApprovalAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const changeOrderId = String(formData.get("changeOrderId") ?? "");
+
+  try {
+    const result = await sendChangeOrderForApproval({
+      organizationId: user.organizationId,
+      changeOrderId,
+    });
+    revalidatePath(`/jobs/${jobId}/change-orders`);
+    revalidatePath(`/jobs/${jobId}/change-orders/${changeOrderId}`);
+    return {
+      ok: true,
+      changeOrderId,
+      approvalUrl: result.approvalUrl,
+      emailed: result.emailed,
+      needsManualDelivery: result.needsManualDelivery,
+      ...(result.emailError ? { error: result.emailError } : {}),
+    };
+  } catch (error) {
+    if (
+      error instanceof ChangeOrderNotFoundError ||
+      error instanceof ChangeOrderNotPendingError ||
+      error instanceof ChangeOrderClientMissingError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
 }
 
 export async function recallChangeOrderAction(formData: FormData): Promise<void> {

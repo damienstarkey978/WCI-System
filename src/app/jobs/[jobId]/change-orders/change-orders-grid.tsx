@@ -116,7 +116,11 @@ export function ChangeOrdersGrid({ rows }: { rows: readonly ChangeOrderRow[] }) 
               <form action={markChangeOrderSentAction}>
                 <input type="hidden" name="jobId" value={row.jobId} />
                 <input type="hidden" name="changeOrderId" value={row.id} />
-                <button type="submit" className="text-xs font-medium text-[var(--bt-primary)] hover:underline" title="Marks as sent/pending. Does not email.">
+                <button
+                  type="submit"
+                  className="text-xs font-medium text-[var(--bt-primary)] hover:underline"
+                  title="Marks pending only (no email). Use detail Send to client for e-sign link."
+                >
                   Mark sent
                 </button>
               </form>

@@ -11,11 +11,11 @@ import { formatDateUtc, formatMoney } from "@/lib/format";
 import {
   approveChangeOrderAction,
   declineChangeOrderAction,
-  markChangeOrderSentAction,
 } from "../actions";
 import { ChangeOrderDetailChrome } from "./co-detail-chrome";
 import { ChangeOrderDetailForm } from "./detail-form";
 import { ChangeOrderLineItemsEditor } from "./line-items-editor";
+import { SendChangeOrderForApproval } from "./send-for-approval";
 
 export const dynamic = "force-dynamic";
 
@@ -220,20 +220,7 @@ export default async function ChangeOrderDetailPage({
         statusActions={
           editable ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {changeOrder.status === "DRAFT" ? (
-                <form action={markChangeOrderSentAction}>
-                  <input type="hidden" name="jobId" value={job.id} />
-                  <input type="hidden" name="changeOrderId" value={changeOrder.id} />
-                  <button
-                    type="submit"
-                    className="rounded px-3 py-1.5 text-sm font-semibold text-[var(--bt-on-primary)]"
-                    style={{ background: "var(--bt-primary)" }}
-                    title="Marks as sent/pending. Does not email anyone."
-                  >
-                    Mark sent
-                  </button>
-                </form>
-              ) : null}
+              <SendChangeOrderForApproval jobId={job.id} changeOrderId={changeOrder.id} status={changeOrder.status} />
               <form action={declineChangeOrderAction}>
                 <input type="hidden" name="jobId" value={job.id} />
                 <input type="hidden" name="changeOrderId" value={changeOrder.id} />

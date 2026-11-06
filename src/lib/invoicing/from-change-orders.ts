@@ -6,6 +6,10 @@
  * Each resulting invoice line records `sourceChangeOrderLineId` (itemized) or
  * `sourceChangeOrderId` (flat CO) so the same CO scope cannot be billed twice past
  * 100% of its client price.
+ *
+ * Damien (2026-11-06): this path must NEVER call QuickBooks. WCI does not auto-push
+ * CO→Invoice to QBO while Buildertrend still owns QB; staff Sync UI stays on the
+ * invoice itself (paused / defaults OFF) for cutover later.
  */
 
 import { ChangeOrderMode, ChangeOrderStatus, InvoiceStatus, InvoiceType } from "@/generated/prisma/enums";
