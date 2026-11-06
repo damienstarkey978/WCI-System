@@ -12,10 +12,13 @@ export function ScopeRichText({
   name = "scopeOfWork",
   defaultValue,
   label = "Scope of Work",
+  hideLabel = false,
 }: {
   name?: string;
   defaultValue: string;
   label?: string;
+  /** When the parent already renders a BT section header for Scope of Work. */
+  hideLabel?: boolean;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const hiddenRef = useRef<HTMLInputElement>(null);
@@ -48,7 +51,7 @@ export function ScopeRichText({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-sm font-semibold text-[var(--bt-text)]">{label}</span>
+      {hideLabel ? null : <span className="text-sm font-semibold text-[var(--bt-text)]">{label}</span>}
       <div className="overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
         <div
           className="flex flex-wrap gap-0.5 border-b bg-black/[0.03] px-1.5 py-1"
