@@ -28,9 +28,21 @@ const EVENT_LABEL: Record<string, string> = {
   WORK_REOPENED: "Work reopened",
 };
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  children,
+  id,
+}: {
+  title: string;
+  children: React.ReactNode;
+  id?: string;
+}) {
   return (
-    <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+    <section
+      id={id}
+      className="rounded-lg border bg-[var(--bt-panel-bg)] p-4"
+      style={{ borderColor: "var(--bt-border)" }}
+    >
       <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">{title}</h2>
       <div className="mt-3">{children}</div>
     </section>
@@ -368,7 +380,7 @@ export default async function PurchaseOrderDetailPage({
             </div>
           </Panel>
 
-          <Panel title="History">
+          <Panel title="History" id="history">
             <ol className="flex flex-col gap-2">
               {purchaseOrder.events.map((event) => (
                 <li key={event.id} className="text-sm">

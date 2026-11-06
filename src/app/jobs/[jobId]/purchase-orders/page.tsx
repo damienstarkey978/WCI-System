@@ -197,7 +197,8 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
-      <FinancialPageHeader jobName={job.name} title="Purchase Orders" action={createAction} />
+      {/* Create lives in the list toolbar (+ Export / Filter) like Buildertrend — not a second header CTA. */}
+      <FinancialPageHeader jobName={job.name} title="Purchase Orders" />
 
       <PurchaseOrdersBillsTabs jobId={job.id} active="purchase-orders" />
 
@@ -206,6 +207,7 @@ export default async function PurchaseOrdersPage({ params }: PageProps<"/jobs/[j
         vendors={vendors}
         scheduleItems={scheduleItems}
         createAction={createAction}
+        jobName={job.name}
       />
     </div>
   );
