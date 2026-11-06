@@ -1,7 +1,6 @@
 /**
- * Handoff-style "Convert to" dropdown. Proposal is the real conversion path;
- * PDF/CSV export work today; other document types are listed for parity but
- * stay disabled until those modules accept an estimate source.
+ * Handoff-style "Convert to" dropdown. Only working targets are listed —
+ * Proposal conversion plus PDF/CSV export when available.
  */
 
 "use client";
@@ -13,8 +12,7 @@ import { createProposalFromEstimateAction, type ActionState } from "@/app/leads/
 
 type ConvertTarget =
   | { readonly kind: "proposal"; readonly label: string; readonly enabled: boolean }
-  | { readonly kind: "link"; readonly label: string; readonly href: string; readonly enabled: boolean }
-  | { readonly kind: "disabled"; readonly label: string; readonly reason: string };
+  | { readonly kind: "link"; readonly label: string; readonly href: string; readonly enabled: boolean };
 
 export function ConvertToMenu({
   estimateId,
@@ -50,21 +48,13 @@ export function ConvertToMenu({
     };
   }, [open]);
 
+  // Only working convert targets — no decorative "Soon" rows (Damien: omit until wired).
   const targets: ConvertTarget[] = [
     linkedProposalId
       ? { kind: "link", label: "Open Proposal", href: `/leads/proposals/${linkedProposalId}?view=proposal`, enabled: true }
       : { kind: "proposal", label: "Proposal", enabled: canConvertToProposal },
-    pdfHref
-      ? { kind: "link", label: "PDF", href: pdfHref, enabled: true }
-      : { kind: "disabled", label: "PDF", reason: "Convert to a Proposal first to preview/print PDF" },
+    ...(pdfHref ? [{ kind: "link" as const, label: "PDF", href: pdfHref, enabled: true }] : []),
     { kind: "link", label: "CSV", href: csvHref, enabled: true },
-    { kind: "disabled", label: "Invoice", reason: "Available after the job is sold" },
-    { kind: "disabled", label: "Change order", reason: "Available on an open job" },
-    { kind: "disabled", label: "Schedule", reason: "Coming soon from estimate" },
-    { kind: "disabled", label: "Task list", reason: "Coming soon" },
-    { kind: "disabled", label: "Scope of work", reason: "Coming soon" },
-    { kind: "disabled", label: "Material list", reason: "Coming soon" },
-    { kind: "disabled", label: "Work order", reason: "Coming soon" },
   ];
 
   return (
@@ -95,8 +85,7 @@ export function ConvertToMenu({
           className="absolute right-0 top-full z-30 mt-1 w-[min(100vw-2rem,16rem)] overflow-hidden rounded-lg border bg-[var(--bt-panel-bg)] py-1 shadow-lg"
           style={{ borderColor: "var(--bt-border)" }}
         >
-          {targets.map((target, index) => {
-            const showDivider = index === 3;
+          {targets.map((target) => {
             if (target.kind === "proposal") {
               return (
                 <form key="proposal" action={formAction} role="none">
@@ -118,42 +107,18 @@ export function ConvertToMenu({
                 </form>
               );
             }
-            if (target.kind === "link") {
-              return (
-                <div key={target.label}>
-                  {showDivider ? (
-                    <div className="my-1 border-t" style={{ borderColor: "var(--bt-border)" }} role="separator" />
-                  ) : null}
-                  <Link
-                    href={target.href}
-                    role="menuitem"
-                    target={target.label === "PDF" || target.label === "CSV" ? "_blank" : undefined}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]"
-                    onClick={() => setOpen(false)}
-                  >
-                    <ConvertMenuIcon kind={target.label === "PDF" || target.label === "CSV" ? "export" : "doc"} />
-                    {target.label}
-                  </Link>
-                </div>
-              );
-            }
             return (
               <div key={target.label}>
-                {showDivider ? (
-                  <div className="my-1 border-t" style={{ borderColor: "var(--bt-border)" }} role="separator" />
-                ) : null}
-                <div
+                <Link
+                  href={target.href}
                   role="menuitem"
-                  aria-disabled="true"
-                  title={target.reason}
-                  className="flex cursor-not-allowed items-center justify-between gap-2 px-3 py-2 text-sm text-[var(--bt-muted)] opacity-60"
+                  target={target.label === "PDF" || target.label === "CSV" ? "_blank" : undefined}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]"
+                  onClick={() => setOpen(false)}
                 >
-                  <span className="inline-flex items-center gap-2">
-                    <ConvertMenuIcon kind="soon" />
-                    {target.label}
-                  </span>
-                  <span className="text-[10px]">Soon</span>
-                </div>
+                  <ConvertMenuIcon kind={target.label === "PDF" || target.label === "CSV" ? "export" : "doc"} />
+                  {target.label}
+                </Link>
               </div>
             );
           })}
@@ -164,7 +129,7 @@ export function ConvertToMenu({
   );
 }
 
-function ConvertMenuIcon({ kind }: { readonly kind: "proposal" | "export" | "doc" | "soon" }) {
+function ConvertMenuIcon({ kind }: { readonly kind: "proposal" | "export" | "doc" }) {
   const stroke = "currentColor";
   if (kind === "proposal") {
     return (

@@ -42,23 +42,6 @@ function BucketMarkupRow({
   );
 }
 
-function AddSlot({ label }: { readonly label: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-1 text-[13px] text-[var(--bt-text)]">
-      <span>{label}</span>
-      <button
-        type="button"
-        disabled
-        className="rounded px-2.5 py-0.5 text-[11px] font-semibold text-white opacity-80"
-        style={{ background: "#6b7280" }}
-        title="Coming soon"
-      >
-        Add
-      </button>
-    </div>
-  );
-}
-
 export function EstimateBreakdownPanel({
   lines,
   open,
@@ -131,12 +114,10 @@ export function EstimateBreakdownPanel({
         </section>
 
         <section className="flex flex-col gap-1 border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>
-          <AddSlot label="Below the line markup" />
           <div className="flex items-baseline justify-between gap-3 py-1 text-[13px] font-semibold text-[var(--bt-text)]">
             <span>Subtotal</span>
             <span className="tabular-nums">{formatMoney(breakdown.subtotalCents)}</span>
           </div>
-          <AddSlot label="Discount" />
         </section>
 
         <section className="mt-auto flex flex-col gap-2 border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>

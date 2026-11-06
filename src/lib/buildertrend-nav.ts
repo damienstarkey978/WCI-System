@@ -15,9 +15,8 @@ export interface JobNavLink {
 
 export interface JobsMenuItem {
   readonly label: string;
-  /** "global" always works; "job" needs an active job (rendered muted otherwise);
-   *  "soon" is a real Buildertrend item with no WCI OS feature behind it yet. */
-  readonly kind: "global" | "job" | "soon";
+  /** "global" always works; "job" needs an active job (hidden from menus until a job is selected). */
+  readonly kind: "global" | "job";
   /** kind: "global" only. */
   readonly href?: string;
   /** kind: "job" only — appended to `/jobs/{jobId}`. Empty string = the job overview itself. */
@@ -27,11 +26,8 @@ export interface JobsMenuItem {
 /**
  * The "Jobs" dropdown (per Damien's screenshot, 2026-08-29) — a mix of job-scoped
  * items (Job Info, Job Price Summary) and org-wide ones (everything else), unlike
- * Project Management/Files/Financial below, which are entirely job-scoped. "New Job
- * From Template" has no feature behind it yet — Job.isTemplate exists in the schema,
- * but there's no clone-from-template creation flow built on top of it — so it shows
- * as a real Buildertrend item rather than being silently dropped, but stays disabled
- * until that flow exists.
+ * Project Management/Files/Financial below, which are entirely job-scoped.
+ * "New Job From Template" is omitted until clone-from-template ships (no inert chrome).
  */
 export const JOBS_NAV: readonly JobsMenuItem[] = [
   { label: "Summary", kind: "global", href: "/dashboard" },
@@ -43,14 +39,11 @@ export const JOBS_NAV: readonly JobsMenuItem[] = [
   { label: "Calendar", kind: "global", href: "/calendar" },
   { label: "Time Clock", kind: "global", href: "/time-clock" },
   { label: "New Job From Scratch", kind: "global", href: "/jobs/new" },
-  { label: "New Job From Template", kind: "soon" },
 ];
 
 /**
  * The "Sales" dropdown — Buildertrend's CRM surface, none of it scoped to a selected
- * job. Activity Templates is a real Buildertrend item with no
- * WCI OS feature behind it yet — left off rather than linking somewhere dead,
- * matching how "New Job From Template" is handled in JOBS_NAV above.
+ * job. Activity Templates stays off the nav until a real page exists.
  */
 export const SALES_NAV = [
   { label: "Lead Opportunities", href: "/leads" },
@@ -186,18 +179,8 @@ export const QUICK_ADD_NAV: readonly JobsMenuItem[] = [
 ];
 
 /**
- * The top bar's Help (?) menu — Buildertrend's own support surface (its community,
- * learning academy, and support chat are Buildertrend's SaaS resources, not
- * something WCI OS has an equivalent of). Shown for visual parity, same "real BT
- * item with nothing behind it yet" treatment as JOBS_NAV's "New Job From Template" —
- * not silently dropped, but inert until/unless a real destination exists for one.
+ * Buildertrend's Help (?) menu is BT SaaS support (community, academy, chat).
+ * WCI OS has no equivalent destinations yet — the Help control is omitted from
+ * the shell rather than rendered as inert chrome.
  */
-export const HELP_MENU_ITEMS: readonly string[] = [
-  "Contact us",
-  "Support Chat",
-  "Community",
-  "Buildertrend Learning Academy",
-  "Help Center",
-  "Product Feedback",
-  "Legal",
-];
+export const HELP_MENU_ITEMS: readonly string[] = [];

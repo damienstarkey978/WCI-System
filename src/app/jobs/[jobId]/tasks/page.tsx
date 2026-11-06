@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { FunnelIcon, SortArrowsIcon, TaskIcon } from "@/components/shell/icons";
+import { FunnelIcon, TaskIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -130,13 +130,6 @@ export default async function TasksPage({ params, searchParams }: PageProps<"/jo
           ))}
         </nav>
         <div className="flex items-center gap-1 pb-2">
-          <span
-            className="inline-flex h-8 w-8 items-center justify-center rounded text-[var(--bt-muted)]"
-            title="View settings"
-            aria-hidden
-          >
-            <SortArrowsIcon className="h-4 w-4" />
-          </span>
           <details className="relative">
             <summary
               className="inline-flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded text-[var(--bt-primary)] hover:bg-black/5 [&::-webkit-details-marker]:hidden"
@@ -204,13 +197,6 @@ export default async function TasksPage({ params, searchParams }: PageProps<"/jo
             </span>
           </Link>
         ) : null}
-        <span
-          className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium text-[var(--bt-muted)]"
-          style={{ borderColor: "var(--bt-border)" }}
-          title="Additional filters coming soon"
-        >
-          + Filter
-        </span>
         {!showCompleted ? (
           <Link href={href(tab, true)} className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
             Clear all

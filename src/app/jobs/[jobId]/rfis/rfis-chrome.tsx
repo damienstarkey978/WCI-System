@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-import { InfoIcon } from "@/components/shell/icons";
 import {
   FilterField,
   filterControlClassName,
@@ -21,10 +20,10 @@ const STATUS_OPTIONS = [
 ] as const;
 
 /**
- * Buildertrend RFIs list chrome: multi-color Help/Settings/Export/Info + Filter
- * drawer (status + keyword) beside + RFI. Filters apply via URL search params so
- * the server page keeps owning the query. Remount with a key when URL filters
- * change so draft state resets without an effect.
+ * Buildertrend RFIs list chrome: working Filter drawer (status + keyword) beside
+ * + RFI. Decorative Help/Settings/Export/Info icons are omitted until wired.
+ * Filters apply via URL search params so the server page keeps owning the query.
+ * Remount with a key when URL filters change so draft state resets without an effect.
  */
 export function RfisChrome({
   jobId,
@@ -66,16 +65,6 @@ export function RfisChrome({
           filterOpen={filterOpen}
           filterActiveCount={activeCount}
           onFilterClick={() => setFilterOpen((open) => !open)}
-          extraIcons={
-            <span
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white"
-              style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-info, #0ea5e9)" }}
-              title="Info"
-              aria-hidden
-            >
-              <InfoIcon className="h-4 w-4" />
-            </span>
-          }
           primaryAction={createAction}
         />
       </div>

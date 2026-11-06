@@ -94,24 +94,11 @@ function MixedSection({
               </Link>
             );
           }
-          if (item.kind === "job") {
-            if (!activeJobId) {
-              return (
-                <span key={item.label} className="block px-6 py-2 text-sm text-[var(--bt-muted)]">
-                  {item.label}
-                </span>
-              );
-            }
-            return (
-              <Link key={item.label} href={`/jobs/${activeJobId}${item.jobPath}`} onClick={onNavigate} className={SECTION_ITEM_CLASS}>
-                {item.label}
-              </Link>
-            );
-          }
+          if (!activeJobId) return null;
           return (
-            <span key={item.label} className="block px-6 py-2 text-sm text-[var(--bt-muted)]" title="Coming soon">
+            <Link key={item.label} href={`/jobs/${activeJobId}${item.jobPath}`} onClick={onNavigate} className={SECTION_ITEM_CLASS}>
               {item.label}
-            </span>
+            </Link>
           );
         })}
       </div>

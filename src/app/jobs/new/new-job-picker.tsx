@@ -45,10 +45,8 @@ export function NewJobPicker() {
       <div className="flex flex-col gap-4">
         <h1 className="text-xl font-semibold text-[var(--bt-text)]">New job</h1>
         <p className="text-sm text-[var(--bt-muted)]">How would you like to set up your new job?</p>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-1 sm:max-w-md">
           <PickerCard title="From scratch" description="Start with a blank job and fill in details yourself." onClick={() => setMode("scratch")} />
-          <PickerCard title="From a template" description="Coming soon — clone a working template job." disabled />
-          <PickerCard title="Recommended templates" description="Coming soon — pick from suggested starting points." disabled />
         </div>
       </div>
     );
