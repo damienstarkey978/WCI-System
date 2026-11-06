@@ -2,9 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { CreateModal } from "@/components/shell/CreateModal";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { DocumentIcon, PaymentCardIcon, ReceiptIcon } from "@/components/shell/icons";
+import { PaymentCardIcon, ReceiptIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -12,8 +11,8 @@ import { computeDrawAmountCents } from "@/lib/invoicing/calc";
 import { displayInvoiceId } from "@/lib/invoicing/display";
 import { daysOverdue, effectiveInvoiceStatus, paymentTermsDisplayLabel } from "@/lib/invoicing/terms";
 import { findOrgJobSummary } from "@/lib/jobs/request-job";
+import { formatCompanyAddress } from "@/lib/organization/company-defaults";
 
-import { CreateInvoiceForm } from "./create-invoice-form";
 import {
   CreateCreditMemoForm,
   CreateDepositForm,
@@ -22,8 +21,7 @@ import {
   type OpenInvoiceOption,
 } from "./credit-deposit-panels";
 import { CreateDrawScheduleForm, GenerateDrawInvoiceButton } from "./draw-panels";
-import { FinancialPageHeader } from "../financial-tabs";
-import { InvoicesToolbar } from "./invoices-toolbar";
+import { InvoicesListClient, type InvoiceListRow } from "./invoices-list-client";
 
 export const dynamic = "force-dynamic";
 
@@ -201,7 +199,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
 
   const activeTab: TabKey = isTabKey(typeof tab === "string" ? tab : undefined) ? (tab as TabKey) : "invoices";
 
-  const [invoices, creditMemos, deposits, drawSchedules, budgetLines] = await Promise.all([
+  const [invoices, creditMemos, deposits, drawSchedules, budgetLines, organization, clientAccess] = await Promise.all([
     db.invoice.findMany({
       where: { jobId: job.id },
       orderBy: { createdAt: "desc" },
@@ -215,6 +213,33 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
       include: { draws: { orderBy: { sortOrder: "asc" }, include: { invoice: { select: { id: true, invoiceNumber: true, status: true } } } } },
     }),
     db.budgetLine.findMany({ where: { jobId: job.id }, select: { revisedClientPriceCents: true } }),
+    db.organization.findFirst({
+      where: { id: user.organizationId },
+      select: {
+        name: true,
+        logoPath: true,
+        addressLine1: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        contactPhone: true,
+        slogan: true,
+      },
+    }),
+    db.clientJobAccess.findFirst({
+      where: { jobId: job.id },
+      include: {
+        client: {
+          select: {
+            name: true,
+            addressLine1: true,
+            city: true,
+            state: true,
+            postalCode: true,
+          },
+        },
+      },
+    }),
   ]);
 
   const contractPriceCents = budgetLines.reduce((total, line) => total + line.revisedClientPriceCents, 0);
@@ -252,155 +277,87 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
     .flatMap((invoice) => invoice.payments.map((payment) => ({ payment, invoice })))
     .sort((a, b) => b.payment.receivedAt.getTime() - a.payment.receivedAt.getTime());
 
-  return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-3 p-4 sm:gap-4 sm:p-6">
-      <FinancialPageHeader
-        jobName={job.name}
-        title="Invoices"
-        action={<InvoicesToolbar jobId={job.id} scheduleActive={activeTab === "schedule"} />}
-      />
+  const client = clientAccess?.client;
+  const clientAddress = client
+    ? formatCompanyAddress({
+        addressLine1: client.addressLine1,
+        city: client.city,
+        state: client.state,
+        postalCode: client.postalCode,
+      })
+    : null;
 
-      <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
-        {TABS.map((entry) => {
-          const isActive = entry.key === activeTab;
-          return (
-            <Link
-              key={entry.key}
-              href={`/jobs/${job.id}/invoices?tab=${entry.key}`}
-              className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
-              style={{
-                borderColor: isActive ? "var(--bt-primary)" : "transparent",
-                color: isActive ? "var(--bt-primary)" : "var(--bt-muted)",
-              }}
-            >
-              {entry.label}
+  const invoiceRows: InvoiceListRow[] = invoicesForTable.map((invoice) => {
+    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
+    const credited = invoice.creditMemos.reduce((sum, memo) => sum + memo.amountCents, 0);
+    const balance = invoice.amountCents - paid - credited;
+    const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paid);
+    const termsLabel = paymentTermsDisplayLabel(invoice.paymentTerms);
+    const late = displayStatus !== "PAID" && displayStatus !== "DRAFT" && daysOverdue(invoice.dueOn, now);
+    const paidOn = displayStatus === "PAID" || paid > 0 ? datePaidFor(invoice) : null;
+    const displayId = displayInvoiceId(invoice.invoiceNumber);
+    return {
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      displayId,
+      title: invoice.title,
+      displayStatus,
+      termsLabel,
+      totalLabel: formatMoney(invoice.amountCents),
+      paidLabel: formatMoney(paid),
+      balanceLabel: formatMoney(balance),
+      balanceCents: balance,
+      datePaidLabel: formatDate(paidOn),
+      datePaidIso: paidOn ? paidOn.toISOString() : null,
+      lateDays: late || null,
+      searchText: `${displayId} ${invoice.invoiceNumber} ${invoice.title ?? ""} ${displayStatus}`.toLowerCase(),
+    };
+  });
+
+  const tabs = (
+    <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
+      {TABS.map((entry) => {
+        const isActive = entry.key === activeTab;
+        return (
+          <Link
+            key={entry.key}
+            href={`/jobs/${job.id}/invoices?tab=${entry.key}`}
+            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition"
+            style={{
+              borderColor: isActive ? "var(--bt-primary)" : "transparent",
+              color: isActive ? "var(--bt-primary)" : "var(--bt-muted)",
+            }}
+          >
+            {entry.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
+  const voidedNotice =
+    activeTab === "invoices" && voided.length > 0 ? (
+      <p className="text-sm text-[var(--bt-muted)]">
+        {showVoided ? (
+          <>
+            Showing {voided.length} voided invoice{voided.length === 1 ? "" : "s"} (prefix duplicates from migration).{" "}
+            <Link href={`/jobs/${job.id}/invoices`} className="font-semibold text-[var(--bt-primary)] hover:underline">
+              Hide voided
             </Link>
-          );
-        })}
-      </nav>
+          </>
+        ) : (
+          <>
+            Hiding {voided.length} voided invoice{voided.length === 1 ? "" : "s"} (not in billed/paid totals).{" "}
+            <Link href={`/jobs/${job.id}/invoices?showVoid=1`} className="font-semibold text-[var(--bt-primary)] hover:underline">
+              Show voided
+            </Link>
+          </>
+        )}
+      </p>
+    ) : null;
 
-      {activeTab === "invoices" || activeTab === "payments" || activeTab === "credits" || activeTab === "deposits" ? (
-        <ContractEquation contractPriceCents={contractPriceCents} paidCents={paidCents} />
-      ) : null}
-
-      {activeTab === "invoices" ? (
-        <>
-          {live.length === 0 && voided.length === 0 ? (
-            <EmptyState
-              icon={<DocumentIcon className="h-10 w-10" />}
-              title="No invoices yet"
-              description="Create an invoice or draw for this job's client."
-              action={
-                <CreateModal triggerLabel="+ Invoice" title="New invoice">
-                  <CreateInvoiceForm jobId={job.id} />
-                </CreateModal>
-              }
-            />
-          ) : (
-            <>
-            {voided.length > 0 ? (
-              <p className="text-sm text-[var(--bt-muted)]">
-                {showVoided ? (
-                  <>
-                    Showing {voided.length} voided invoice{voided.length === 1 ? "" : "s"} (prefix duplicates from migration).{" "}
-                    <Link href={`/jobs/${job.id}/invoices`} className="font-semibold text-[var(--bt-primary)] hover:underline">
-                      Hide voided
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    Hiding {voided.length} voided invoice{voided.length === 1 ? "" : "s"} (not in billed/paid totals).{" "}
-                    <Link
-                      href={`/jobs/${job.id}/invoices?showVoid=1`}
-                      className="font-semibold text-[var(--bt-primary)] hover:underline"
-                    >
-                      Show voided
-                    </Link>
-                  </>
-                )}
-              </p>
-            ) : null}
-            {invoicesForTable.length === 0 ? (
-              <EmptyState
-                icon={<DocumentIcon className="h-10 w-10" />}
-                title="No active invoices"
-                description="All invoices on this job are voided. Show voided to review migration duplicates."
-              />
-            ) : (
-            <Panel>
-              <Head columns={["\u00a0", "Job", "Invoice ID", "Title", "Status", "~Total price", "~Amount paid", "~Balance due", "Date paid"]} />
-              <tbody>
-                {invoicesForTable.map((invoice) => {
-                  const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
-                  const credited = invoice.creditMemos.reduce((sum, memo) => sum + memo.amountCents, 0);
-                  const balance = invoice.amountCents - paid - credited;
-                  const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paid);
-                  const termsLabel = paymentTermsDisplayLabel(invoice.paymentTerms);
-                  const late = displayStatus !== "PAID" && displayStatus !== "DRAFT" && daysOverdue(invoice.dueOn, now);
-                  const paidOn = displayStatus === "PAID" || paid > 0 ? datePaidFor(invoice) : null;
-                  return (
-                    <tr key={invoice.id} className="border-b align-middle last:border-0 hover:bg-black/[0.02]" style={{ borderColor: "var(--bt-border)" }}>
-                      <td className="w-8 px-2 py-2.5 sm:px-3">
-                        <input type="checkbox" aria-label={`Select invoice ${invoice.invoiceNumber}`} className="h-3.5 w-3.5 rounded border" style={{ borderColor: "var(--bt-border)" }} />
-                      </td>
-                      <td className="max-w-[10rem] truncate px-3 py-2.5 text-[var(--bt-muted)] sm:px-4">{job.name}</td>
-                      <td className="px-3 py-2.5 font-medium sm:px-4">
-                        <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
-                          {displayInvoiceId(invoice.invoiceNumber)}
-                        </Link>
-                        {termsLabel ? (
-                          <div className="mt-0.5 text-[10px] text-[var(--bt-muted)]">{termsLabel}</div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2.5 sm:px-4">
-                        <Link href={`/jobs/${job.id}/invoices/${invoice.id}`} className="text-[var(--bt-primary)] hover:underline">
-                          {invoice.title ?? "—"}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2.5 sm:px-4">
-                        <Badge status={displayStatus} />
-                      </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(invoice.amountCents)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(paid)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">
-                        {formatMoney(balance)}
-                        {late ? (
-                          <div className="text-[10px] font-semibold" style={{ color: "var(--bt-danger)" }}>
-                            {late}d late
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2.5 tabular-nums text-[var(--bt-muted)] sm:px-4">{formatDate(paidOn)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}>
-                  <td className="px-3 py-2.5 sm:px-4" colSpan={5}>
-                    Totals
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(billedCents)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(paidCents)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-[var(--bt-text)] sm:px-4">{formatMoney(billedCents - paidCents - creditedCents)}</td>
-                  <td className="px-3 py-2.5 sm:px-4" />
-                </tr>
-              </tfoot>
-            </Panel>
-            )}
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--bt-muted)]">
-              <span>Standard View</span>
-              <span>
-                {invoicesForTable.length === 0
-                  ? "0 items"
-                  : `1-${invoicesForTable.length} of ${invoicesForTable.length} items`}
-              </span>
-            </div>
-            </>
-          )}
-        </>
-      ) : null}
-
+  const otherTabContent = (
+    <>
       {activeTab === "schedule" ? (
         <>
           {drawSchedules.length === 0 ? (
@@ -574,6 +531,45 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
           )}
         </>
       ) : null}
-    </div>
+    </>
+  );
+
+  return (
+    <InvoicesListClient
+      jobId={job.id}
+      jobName={job.name}
+      scheduleActive={activeTab === "schedule"}
+      branding={{
+        organizationName: organization?.name ?? "World Construction Inc",
+        organizationLogoPath: organization?.logoPath ?? null,
+        orgAddressLine1: organization?.addressLine1 ?? null,
+        orgCity: organization?.city ?? null,
+        orgState: organization?.state ?? null,
+        orgPostalCode: organization?.postalCode ?? null,
+        orgPhone: organization?.contactPhone ?? null,
+        orgSlogan: organization?.slogan ?? null,
+        clientName: client?.name ?? null,
+        clientAddress,
+        jobAddress: null,
+      }}
+      rows={invoiceRows}
+      totals={{
+        totalLabel: formatMoney(billedCents),
+        paidLabel: formatMoney(paidCents),
+        balanceLabel: formatMoney(billedCents - paidCents - creditedCents),
+      }}
+      voidedNotice={voidedNotice}
+      emptyTitle={live.length === 0 && voided.length === 0 ? "No invoices yet" : "No active invoices"}
+      emptyDescription={
+        live.length === 0 && voided.length === 0
+          ? "Use + Invoice above to create a draft, or set up a payment schedule."
+          : "All invoices on this job are voided. Show voided to review migration duplicates."
+      }
+      tabs={tabs}
+      contractEquation={<ContractEquation contractPriceCents={contractPriceCents} paidCents={paidCents} />}
+      otherTabContent={otherTabContent}
+      activeIsInvoices={activeTab === "invoices"}
+      showEquation={activeTab === "invoices" || activeTab === "payments" || activeTab === "credits" || activeTab === "deposits"}
+    />
   );
 }
