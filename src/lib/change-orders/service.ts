@@ -170,6 +170,87 @@ export async function updateChangeOrder(input: UpdateChangeOrderInput) {
   });
 }
 
+export interface ReplaceChangeOrderLinesInput {
+  readonly organizationId: string;
+  readonly changeOrderId: string;
+  readonly lineItems: readonly CreateChangeOrderLineItemInput[];
+}
+
+/**
+ * Replace all line items on a draft/pending ITEMIZED change order (Buildertrend
+ * "+ Add line item" on detail). Clears flat fields when switching into ITEMIZED.
+ */
+export async function replaceChangeOrderLines(input: ReplaceChangeOrderLinesInput) {
+  if (input.lineItems.length === 0) throw new EmptyChangeOrderError(input.changeOrderId);
+
+  const existing = await db.changeOrder.findFirst({
+    where: { id: input.changeOrderId, organizationId: input.organizationId },
+  });
+  if (!existing) throw new ChangeOrderNotFoundError(input.changeOrderId);
+  if (existing.status === ChangeOrderStatus.APPROVED || existing.status === ChangeOrderStatus.DECLINED) {
+    throw new ChangeOrderNotPendingError(input.changeOrderId, existing.status);
+  }
+
+  return db.$transaction(async (tx) => {
+    await tx.changeOrderLineItem.deleteMany({ where: { changeOrderId: existing.id } });
+    return tx.changeOrder.update({
+      where: { id: existing.id },
+      data: {
+        mode: ChangeOrderMode.ITEMIZED,
+        flatCostCodeId: null,
+        flatCostCents: null,
+        flatClientPriceCents: null,
+        lineItems: {
+          create: input.lineItems.map((line, index) => ({
+            costCodeId: line.costCodeId,
+            costType: line.costType ?? "NONE",
+            title: line.title,
+            quantityMilli: line.quantityMilli,
+            unitCostCents: line.unitCostCents,
+            rateMode: line.rateMode,
+            rateBasisPoints: line.rateBasisPoints,
+            sortOrder: index,
+          })),
+        },
+      },
+      include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+    });
+  });
+}
+
+export interface SetChangeOrderFlatInput {
+  readonly organizationId: string;
+  readonly changeOrderId: string;
+  readonly flatCostCodeId: string;
+  readonly flatCostCents: Cents;
+  readonly flatClientPriceCents: Cents;
+}
+
+/** Convert a draft/pending CO to FLAT (Buildertrend "+ Add flat fee"). */
+export async function setChangeOrderFlat(input: SetChangeOrderFlatInput) {
+  const existing = await db.changeOrder.findFirst({
+    where: { id: input.changeOrderId, organizationId: input.organizationId },
+  });
+  if (!existing) throw new ChangeOrderNotFoundError(input.changeOrderId);
+  if (existing.status === ChangeOrderStatus.APPROVED || existing.status === ChangeOrderStatus.DECLINED) {
+    throw new ChangeOrderNotPendingError(input.changeOrderId, existing.status);
+  }
+
+  return db.$transaction(async (tx) => {
+    await tx.changeOrderLineItem.deleteMany({ where: { changeOrderId: existing.id } });
+    return tx.changeOrder.update({
+      where: { id: existing.id },
+      data: {
+        mode: ChangeOrderMode.FLAT,
+        flatCostCodeId: input.flatCostCodeId,
+        flatCostCents: input.flatCostCents,
+        flatClientPriceCents: input.flatClientPriceCents,
+      },
+      include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+    });
+  });
+}
+
 /** Mark a draft as sent/pending without emailing (no provider yet). */
 export async function markChangeOrderSent(organizationId: string, changeOrderId: string) {
   const changeOrder = await db.changeOrder.findFirst({ where: { id: changeOrderId, organizationId } });

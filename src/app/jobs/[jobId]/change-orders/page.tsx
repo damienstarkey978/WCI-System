@@ -107,6 +107,7 @@ export default async function ChangeOrdersPage({ params, searchParams }: PagePro
       createdAt: co.createdAt.toISOString(),
       statusChangedAt: co.statusChangedAt.toISOString(),
       deadline: co.deadline ? co.deadline.toISOString() : null,
+      clientName,
       builderCostCents: builderCostCents(co),
       clientPriceCents: clientPriceCents(co),
       pastDue,

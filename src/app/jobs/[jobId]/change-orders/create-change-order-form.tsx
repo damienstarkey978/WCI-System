@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 
 import { CostCodeLineItems, type CostCodeOption } from "@/components/financial/CostCodeLineItems";
+import { ScopeRichText } from "@/components/financial/ScopeRichText";
 import { CloseIcon } from "@/components/shell/icons";
 
 import { createChangeOrderAction, type ActionState } from "./actions";
@@ -36,7 +37,6 @@ export function CreateChangeOrderForm({
   const [mode, setMode] = useState<"FLAT" | "ITEMIZED">("ITEMIZED");
   const [tab, setTab] = useState<"details" | "preview">("details");
   const [title, setTitle] = useState("");
-  const [notesClient, setNotesClient] = useState("");
 
   useEffect(() => {
     if (state.ok && state.changeOrderId) {
@@ -203,17 +203,7 @@ export function CreateChangeOrderForm({
           <span className="text-xs font-medium text-[var(--bt-muted)]">Builder notes</span>
           <textarea name="notesBuilder" rows={3} className={fieldClass} style={fieldStyle} />
         </label>
-        <label className="grid gap-1 text-sm">
-          <span className="text-xs font-medium text-[var(--bt-muted)]">Scope of work</span>
-          <textarea
-            name="notesClient"
-            rows={4}
-            value={notesClient}
-            onChange={(event) => setNotesClient(event.target.value)}
-            className={fieldClass}
-            style={fieldStyle}
-          />
-        </label>
+        <ScopeRichText name="notesClient" defaultValue="" label="Scope of Work" />
         <label className="flex items-center gap-2 text-sm text-[var(--bt-text)]">
           <input type="checkbox" name="invoiceOnApproval" />
           Invoice client upon approval
@@ -225,16 +215,9 @@ export function CreateChangeOrderForm({
           <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--bt-muted)]">Client preview</div>
           <h3 className="mt-1 text-lg font-semibold text-[var(--bt-text)]">{title.trim() || "Untitled change order"}</h3>
           <p className="mt-1 text-xs text-[var(--bt-muted)]">{jobName}</p>
-          <div className="mt-4">
-            <div className="text-xs font-semibold text-[var(--bt-muted)]">Scope of work</div>
-            {notesClient.trim() ? (
-              <p className="mt-1 whitespace-pre-wrap text-[var(--bt-text)]">{notesClient}</p>
-            ) : (
-              <p className="mt-1 italic text-[var(--bt-muted)]">No scope notes yet — add them on Details.</p>
-            )}
-          </div>
           <p className="mt-4 text-xs text-[var(--bt-muted)]">
-            Line prices and approval controls appear after save. Builder notes are never shown to the client.
+            Scope, line prices, and approval controls appear on the saved change order. Builder notes are never shown to the
+            client.
           </p>
         </div>
       ) : null}
