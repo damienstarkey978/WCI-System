@@ -9,6 +9,7 @@ import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 import { computeDrawAmountCents } from "@/lib/invoicing/calc";
+import { displayInvoiceId } from "@/lib/invoicing/display";
 import { daysOverdue, effectiveInvoiceStatus, paymentTermsDisplayLabel } from "@/lib/invoicing/terms";
 import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
@@ -179,15 +180,6 @@ function datePaidFor(invoice: {
   if (invoice.paidAt) return invoice.paidAt;
   const latest = invoice.payments[0];
   return latest?.receivedAt ?? null;
-}
-
-/** BT list shows short ids (0005); strip migration JOB_* / *-INV-* prefixes for display only. */
-function displayInvoiceId(invoiceNumber: string): string {
-  const jobPrefixed = invoiceNumber.match(/^JOB_[A-Za-z0-9]+-(.+)$/i);
-  if (jobPrefixed?.[1]) return jobPrefixed[1];
-  const invPrefixed = invoiceNumber.match(/^[A-Z0-9]+-INV-(.+)$/i);
-  if (invPrefixed?.[1]) return invPrefixed[1];
-  return invoiceNumber;
 }
 
 export default async function InvoicesPage({ params, searchParams }: PageProps<"/jobs/[jobId]/invoices">) {
