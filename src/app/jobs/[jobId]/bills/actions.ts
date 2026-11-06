@@ -18,6 +18,11 @@ import {
 import { requireAppUser } from "@/lib/auth";
 import { extendedCostCents } from "@/lib/budget/funnel";
 import { isQuickBooksBillPushEnabled } from "@/lib/env";
+import {
+  BillNotFoundForFileError,
+  JobNotFoundError as FileJobNotFoundError,
+  uploadAndRegisterFile,
+} from "@/lib/files/service";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
 import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
 import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
@@ -31,6 +36,51 @@ import {
   BillQuickBooksSyncDeclinedError,
   syncBillToQuickBooks,
 } from "@/lib/quickbooks/sync/bills";
+import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+async function attachBillFiles(params: {
+  readonly organizationId: string;
+  readonly jobId: string;
+  readonly billId: string;
+  readonly uploadedByUserId: string;
+  readonly files: readonly File[];
+}): Promise<string | null> {
+  if (params.files.length === 0) return null;
+  const totalBytes = params.files.reduce((total, file) => total + file.size, 0);
+  if (totalBytes > MAX_ATTACHMENT_BYTES) {
+    return `Attachments are ${(totalBytes / 1024 / 1024).toFixed(1)}MB. Keep under 20MB per save.`;
+  }
+  try {
+    for (const file of params.files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await uploadAndRegisterFile({
+        organizationId: params.organizationId,
+        jobId: params.jobId,
+        uploadedByUserId: params.uploadedByUserId,
+        fileName: file.name,
+        bytes,
+        mimeType: file.type || null,
+        sizeBytes: file.size,
+        category: "DOCUMENT",
+        clientVisible: false,
+        subVisible: true,
+        billId: params.billId,
+      });
+    }
+  } catch (error) {
+    if (
+      error instanceof StorageNotConfiguredError ||
+      error instanceof FileJobNotFoundError ||
+      error instanceof BillNotFoundForFileError
+    ) {
+      return error.message;
+    }
+    throw error;
+  }
+  return null;
+}
 
 export interface ActionState {
   readonly error?: string;
@@ -135,6 +185,21 @@ export async function createBillAction(_previous: ActionState, formData: FormDat
       });
     }
 
+    const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    const attachError = await attachBillFiles({
+      organizationId: user.organizationId,
+      jobId,
+      billId: created.id,
+      uploadedByUserId: user.id,
+      files,
+    });
+    if (attachError) {
+      // Bill already exists — surface the attach failure but still open the detail.
+      revalidatePath(`/jobs/${jobId}/bills`);
+      revalidatePath(`/jobs/${jobId}/bills/${created.id}`);
+      return { ok: true, billId: created.id, error: attachError };
+    }
+
     // "Immediately upon save" only attempts a live push when Ready + intent true + global pause off.
     if (saveIntent === "ready" && sendToQuickBooks === true && isQuickBooksBillPushEnabled()) {
       try {
@@ -161,6 +226,7 @@ export async function createBillAction(_previous: ActionState, formData: FormDat
     }
 
     revalidatePath(`/jobs/${jobId}/bills`);
+    revalidatePath(`/jobs/${jobId}/bills/${created.id}`);
     return { ok: true, billId: created.id };
   } catch (error) {
     if (

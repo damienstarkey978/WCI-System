@@ -37,8 +37,16 @@ import {
   updateBillStatus,
 } from "@/lib/bills/service";
 import { extendedCostCents } from "@/lib/budget/funnel";
+import {
+  BillNotFoundForFileError,
+  JobNotFoundError as FileJobNotFoundError,
+  uploadAndRegisterFile,
+} from "@/lib/files/service";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
 import { NotDiscardableError, RecordNotFoundError, deleteBill } from "@/lib/financials/discard";
+import { StorageNotConfiguredError } from "@/lib/storage/supabase-storage";
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 export interface BillActionState {
   readonly error?: string;
@@ -255,4 +263,53 @@ export async function addToInvoiceAction(_previous: BillActionState, formData: F
   );
   revalidatePath(`/jobs/${jobId}/invoices`);
   return state;
+}
+
+/** Attach receipts/invoices to an existing bill (BT Document rail Add). */
+export async function attachBillFilesAction(
+  _previous: BillActionState,
+  formData: FormData,
+): Promise<BillActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const billId = String(formData.get("billId") ?? "");
+  const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  if (files.length === 0) return { error: "Choose at least one file." };
+
+  const totalBytes = files.reduce((total, file) => total + file.size, 0);
+  if (totalBytes > MAX_ATTACHMENT_BYTES) {
+    return { error: `Attachments are ${(totalBytes / 1024 / 1024).toFixed(1)}MB. Keep under 20MB.` };
+  }
+
+  try {
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await uploadAndRegisterFile({
+        organizationId: user.organizationId,
+        jobId,
+        uploadedByUserId: user.id,
+        fileName: file.name,
+        bytes,
+        mimeType: file.type || null,
+        sizeBytes: file.size,
+        category: "DOCUMENT",
+        clientVisible: false,
+        subVisible: true,
+        billId,
+      });
+    }
+  } catch (error) {
+    if (
+      error instanceof StorageNotConfiguredError ||
+      error instanceof FileJobNotFoundError ||
+      error instanceof BillNotFoundForFileError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/bills/${billId}`);
+  revalidatePath(`/jobs/${jobId}/files`);
+  return { ok: true };
 }

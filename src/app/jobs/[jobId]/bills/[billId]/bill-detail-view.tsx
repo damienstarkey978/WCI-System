@@ -16,6 +16,7 @@ import {
   LienWaiverPanel,
   StatusActions,
 } from "./bill-panels";
+import { AttachBillFiles } from "./attach-bill-files";
 import {
   applyLienWaiverAction,
   deleteBillAction,
@@ -264,9 +265,7 @@ export function BillDetailView(props: BillDetailProps) {
             {documentOpen ? (
               <div className="space-y-2 border-t p-3 text-xs" style={{ borderColor: "var(--bt-border)" }}>
                 {props.files.length === 0 ? (
-                  <p className="text-[var(--bt-muted)]">
-                    No attachment. Receipts land here when a bill arrives by upload or email.
-                  </p>
+                  <p className="text-[var(--bt-muted)]">No attachments yet.</p>
                 ) : (
                   <ul className="flex flex-col gap-1.5">
                     {props.files.map((file) => (
@@ -284,6 +283,7 @@ export function BillDetailView(props: BillDetailProps) {
                     ))}
                   </ul>
                 )}
+                <AttachBillFiles jobId={props.jobId} billId={props.billId} />
                 <Link href={`/jobs/${props.jobId}/files`} className="inline-block hover:underline" style={{ color: BT_LINK }}>
                   Open Files
                 </Link>

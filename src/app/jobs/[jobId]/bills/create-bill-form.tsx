@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { PoCostLineItems } from "@/components/financial/PoCostLineItems";
@@ -72,6 +72,8 @@ export function CreateBillForm({
   const [completionMode, setCompletionMode] = useState<"none" | "schedule">("none");
   const [linkedScheduleItemId, setLinkedScheduleItemId] = useState("");
   const [documentOpen, setDocumentOpen] = useState(false);
+  const [chosenFiles, setChosenFiles] = useState<readonly string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [approverIds, setApproverIds] = useState<string[]>([]);
   const [lienConditional, setLienConditional] = useState(false);
   const [lienUnconditional, setLienUnconditional] = useState(false);
@@ -171,8 +173,40 @@ export function CreateBillForm({
             {documentOpen ? "Document ▾" : "Document ›"}
           </button>
           {documentOpen ? (
-            <div className="space-y-2 border-t p-3 text-xs text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-              <p>Attach receipts after save on the bill detail page, or forward to Email to Inbox.</p>
+            <div className="space-y-2 border-t p-3 text-xs" style={{ borderColor: "var(--bt-border)" }}>
+              <p className="text-[var(--bt-muted)]">Receipts &amp; invoices attach on Save.</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                name="files"
+                multiple
+                accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
+                onChange={(event) => {
+                  const names = Array.from(event.target.files ?? []).map((file) => file.name);
+                  setChosenFiles(names);
+                  if (names.length > 0) setDocumentOpen(true);
+                }}
+                className="block w-full text-[11px] text-[var(--bt-muted)] file:mr-2 file:rounded file:border file:px-2 file:py-1 file:text-[11px] file:font-semibold"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
+              {chosenFiles.length > 0 ? (
+                <ul className="max-h-28 space-y-1 overflow-y-auto text-[11px] text-[var(--bt-text)]">
+                  {chosenFiles.map((name) => (
+                    <li key={name} className="truncate">
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="font-medium hover:underline"
+                  style={{ color: BT_LINK }}
+                >
+                  + Add files
+                </button>
+              )}
             </div>
           ) : null}
         </div>
