@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import {
   amendAction,
@@ -35,6 +35,7 @@ function ActionForm({
   withReason = false,
   confirmMessage,
   extra,
+  onSuccess,
 }: {
   action: (previous: ActionState, formData: FormData) => Promise<ActionState>;
   jobId: string;
@@ -44,9 +45,14 @@ function ActionForm({
   withReason?: boolean;
   confirmMessage?: string;
   extra?: Record<string, string>;
+  onSuccess?: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL);
   const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (state.ok && !state.error) onSuccess?.();
+  }, [state.ok, state.error, onSuccess]);
 
   const needsConfirm = Boolean(confirmMessage);
   const showSubmit = !needsConfirm || armed;
@@ -146,15 +152,23 @@ export function WorkflowButtons({
   purchaseOrderId,
   status,
   workComplete,
+  /** Pencil modal already has footer Send — omit duplicate in the ⋯ menu. */
+  hideSend = false,
+  /** Pencil modal already has Work Status sidebar — omit duplicate in the ⋯ menu. */
+  hideWorkStatus = false,
+  onSuccess,
 }: {
   jobId: string;
   purchaseOrderId: string;
   status: string;
   workComplete: boolean;
+  hideSend?: boolean;
+  hideWorkStatus?: boolean;
+  onSuccess?: () => void;
 }) {
   // Mirrors ALLOWED_TRANSITIONS in src/lib/purchase-orders/workflow.ts. The server
   // re-checks regardless — this only decides which buttons are worth showing.
-  const canSend = status === "DRAFT" || status === "DECLINED";
+  const canSend = !hideSend && (status === "DRAFT" || status === "DECLINED");
   const canApproveOrDecline = status === "PENDING_APPROVAL";
   const canAmend = status !== "CANCELLED";
   const canRecall = status !== "CANCELLED";
@@ -168,6 +182,7 @@ export function WorkflowButtons({
           purchaseOrderId={purchaseOrderId}
           label="Send"
           variant="primary"
+          onSuccess={onSuccess}
         />
       ) : null}
 
@@ -179,6 +194,7 @@ export function WorkflowButtons({
             purchaseOrderId={purchaseOrderId}
             label="Approve internally"
             variant="primary"
+            onSuccess={onSuccess}
           />
           <ActionForm
             action={declineAction}
@@ -186,17 +202,21 @@ export function WorkflowButtons({
             purchaseOrderId={purchaseOrderId}
             label="Decline"
             withReason
+            onSuccess={onSuccess}
           />
         </>
       ) : null}
 
-      <ActionForm
-        action={setWorkStatusAction}
-        jobId={jobId}
-        purchaseOrderId={purchaseOrderId}
-        label={workComplete ? "Reopen work" : "Mark work complete"}
-        extra={{ workComplete: workComplete ? "false" : "true" }}
-      />
+      {!hideWorkStatus ? (
+        <ActionForm
+          action={setWorkStatusAction}
+          jobId={jobId}
+          purchaseOrderId={purchaseOrderId}
+          label={workComplete ? "Reopen work" : "Mark work complete"}
+          extra={{ workComplete: workComplete ? "false" : "true" }}
+          onSuccess={onSuccess}
+        />
+      ) : null}
 
       {canAmend ? (
         <ActionForm
@@ -206,6 +226,7 @@ export function WorkflowButtons({
           label="Amend"
           withReason
           confirmMessage="Bumps the version, clears the vendor's acceptance, and sends this PO back for approval."
+          onSuccess={onSuccess}
         />
       ) : null}
 
@@ -217,6 +238,7 @@ export function WorkflowButtons({
           label="Recall"
           withReason
           confirmMessage="Voids this PO permanently and removes it from committed cost. This cannot be undone."
+          onSuccess={onSuccess}
         />
       ) : null}
     </div>

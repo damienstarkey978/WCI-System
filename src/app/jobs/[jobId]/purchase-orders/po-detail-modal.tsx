@@ -23,6 +23,7 @@ import {
   updatePurchaseOrderAction,
   type ActionState,
 } from "./actions";
+import { WorkflowButtons } from "./[purchaseOrderId]/workflow-buttons";
 import type { ScheduleOption, VendorOption } from "./create-po-form";
 import { purchaseOrderDetailHref, type PurchaseOrderRow } from "./purchase-orders-grid";
 import { PO_STATUS_STYLE, WORK_STATUS_STYLE } from "./status-styles";
@@ -33,6 +34,17 @@ function SendIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
       <path d="M3.1 2.3a1 1 0 0 1 1.08-.12l13 6.5a1 1 0 0 1 0 1.84l-13 6.5A1 1 0 0 1 2 16.5v-4.3a1 1 0 0 1 .7-.95l6.55-2.05a.25.25 0 0 0 0-.48L2.7 6.67A1 1 0 0 1 2 5.72V3.1a1 1 0 0 1 1.1-.8Z" />
+    </svg>
+  );
+}
+
+/** Buildertrend footer ⋯ — opens real workflow actions (not a decorative control). */
+function EllipsisIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className={className} aria-hidden>
+      <circle cx="4.5" cy="10" r="1.5" />
+      <circle cx="10" cy="10" r="1.5" />
+      <circle cx="15.5" cy="10" r="1.5" />
     </svg>
   );
 }
@@ -98,12 +110,15 @@ export function PurchaseOrderDetailModal({
     row.linkedScheduleItemId ? "schedule" : "date",
   );
   const [linkedScheduleItemId, setLinkedScheduleItemId] = useState(row.linkedScheduleItemId ?? "");
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const statusStyle = PO_STATUS_STYLE[row.status] ?? PO_STATUS_STYLE.DRAFT;
   const workStyle = WORK_STATUS_STYLE[row.workStatus] ?? WORK_STATUS_STYLE.NOT_COMPLETE;
   const workComplete = row.workStatus === "WORK_COMPLETE";
   const canEdit = row.status === "DRAFT" || row.status === "DECLINED" || row.status === "PENDING_APPROVAL";
   const canSend = row.status === "DRAFT" || row.status === "DECLINED";
+  /** ⋯ menu: Amend/Recall (and Approve/Decline when pending). Cancelled has no actions left. */
+  const canMoreActions = row.status !== "CANCELLED";
   const selectedVendor = vendors.find((vendor) => vendor.id === vendorId) ?? null;
   const displayPo = formatPoNumberDisplay(row.poNumber, row.poSuffix);
   const detailHref = purchaseOrderDetailHref(row);
@@ -475,10 +490,17 @@ export function PurchaseOrderDetailModal({
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {/*
-                Footer ⋯ (Amend / Recall / …) stays on the full detail page WorkflowButtons
-                until those actions are wired into the pencil modal — no duplicate pop-out menu.
-              */}
+              {canMoreActions ? (
+                <button
+                  type="button"
+                  aria-label="More actions"
+                  aria-expanded={moreOpen}
+                  onClick={() => setMoreOpen((open) => !open)}
+                  className="rounded p-2 text-[var(--bt-muted)] hover:bg-black/5"
+                >
+                  <EllipsisIcon className="h-4 w-4" />
+                </button>
+              ) : null}
               <button
                 type="submit"
                 disabled={pending || !canEdit}
@@ -501,6 +523,45 @@ export function PurchaseOrderDetailModal({
             </div>
           </footer>
         </form>
+
+        {/*
+          Workflow forms must sit outside the Save/Send form (no nested <form>).
+          ⋯ opens Approve / Decline / Amend / Recall — same server actions as the detail page.
+        */}
+        {moreOpen ? (
+          <div
+            className="absolute bottom-16 right-4 z-10 max-h-[50vh] w-[min(100%-2rem,22rem)] overflow-y-auto rounded-lg border bg-white p-3 shadow-xl"
+            style={{ borderColor: "var(--bt-border)" }}
+            role="menu"
+            aria-label="Purchase order actions"
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">
+                Actions
+              </span>
+              <button
+                type="button"
+                className="text-xs text-[var(--bt-muted)] hover:underline"
+                onClick={() => setMoreOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <WorkflowButtons
+              jobId={row.jobId}
+              purchaseOrderId={row.id}
+              status={row.status}
+              workComplete={workComplete}
+              hideSend
+              hideWorkStatus
+              onSuccess={() => {
+                setMoreOpen(false);
+                router.refresh();
+                onClose();
+              }}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
