@@ -214,6 +214,68 @@ export class BillNotFoundError extends Error {
   }
 }
 
+/** PAID/VOID bills are settled records — edit would rewrite payment history. */
+export class BillNotEditableError extends Error {
+  constructor(billId: string, status: string) {
+    super(`Bill ${billId} is ${status} and cannot be edited.`);
+    this.name = "BillNotEditableError";
+  }
+}
+
+export interface UpdateBillInput {
+  readonly organizationId: string;
+  readonly billId: string;
+  readonly title?: string | null;
+  readonly billNumber?: string | null;
+  readonly description?: string | null;
+  readonly issuedOn?: Date | null;
+  readonly dueOn?: Date | null;
+  readonly sendToQuickBooks?: boolean | null;
+  readonly quickBooksSkipReason?: string | null;
+  readonly billableToClient?: boolean;
+}
+
+/**
+ * Edit bill header + QuickBooks / billable intent. Line items stay on create for now;
+ * status transitions stay on updateBillStatus. Refuses PAID/VOID.
+ */
+export async function updateBill(input: UpdateBillInput) {
+  const existing = await db.bill.findFirst({
+    where: { id: input.billId, organizationId: input.organizationId },
+    select: { id: true, approvalStatus: true },
+  });
+  if (!existing) throw new BillNotFoundError(input.billId);
+  if (
+    existing.approvalStatus === BillApprovalStatus.PAID ||
+    existing.approvalStatus === BillApprovalStatus.VOID
+  ) {
+    throw new BillNotEditableError(input.billId, existing.approvalStatus);
+  }
+
+  const { isInventedJobPrefixedBillNumber, normalizeVendorInvoiceNumber } = await import("@/lib/bills/bill-number");
+  const normalizedNumber =
+    input.billNumber === undefined ? undefined : normalizeVendorInvoiceNumber(input.billNumber);
+  if (normalizedNumber && isInventedJobPrefixedBillNumber(normalizedNumber)) {
+    throw new InventedBillNumberError(normalizedNumber);
+  }
+
+  return db.bill.update({
+    where: { id: existing.id },
+    data: {
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(normalizedNumber !== undefined ? { billNumber: normalizedNumber } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.issuedOn !== undefined ? { issuedOn: input.issuedOn } : {}),
+      ...(input.dueOn !== undefined ? { dueOn: input.dueOn } : {}),
+      ...(input.sendToQuickBooks !== undefined ? { sendToQuickBooks: input.sendToQuickBooks } : {}),
+      ...(input.quickBooksSkipReason !== undefined
+        ? { quickBooksSkipReason: input.quickBooksSkipReason }
+        : {}),
+      ...(input.billableToClient !== undefined ? { billableToClient: input.billableToClient } : {}),
+    },
+  });
+}
+
 export class IllegalBillTransitionError extends Error {
   constructor(
     public readonly currentStatus: BillApprovalStatus,

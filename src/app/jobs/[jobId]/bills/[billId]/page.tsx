@@ -83,8 +83,8 @@ export default async function BillDetailPage({
       }
       purchaseOrderHref={bill.purchaseOrder ? `/jobs/${jobId}/purchase-orders/${bill.purchaseOrder.id}` : null}
       scheduleItemTitle={bill.linkedScheduleItem?.title ?? null}
-      issuedOnLabel={bill.issuedOn ? formatDate(bill.issuedOn) : "—"}
-      dueOnLabel={bill.dueOn ? formatDate(bill.dueOn) : "—"}
+      issuedOnValue={bill.issuedOn ? bill.issuedOn.toISOString().slice(0, 10) : ""}
+      dueOnValue={bill.dueOn ? bill.dueOn.toISOString().slice(0, 10) : ""}
       paidAtLabel={bill.paidAt ? formatDate(bill.paidAt) : "—"}
       description={bill.description}
       approvalStatus={bill.approvalStatus}
