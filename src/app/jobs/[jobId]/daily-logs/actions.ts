@@ -71,6 +71,11 @@ export async function draftDailyLogNoteAction(_previous: DraftDailyLogActionStat
   }
 }
 
+/**
+ * Server-Action create path kept for compatibility (tests / older callers).
+ * The staff create modal uses POST /api/staff/daily-logs (+ /files) instead so
+ * create+attach does not depend on a build-time Server Action hash across deploys.
+ */
 export async function createDailyLogAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const jobId = String(formData.get("jobId") ?? "");
   const note = String(formData.get("note") ?? "").trim();
