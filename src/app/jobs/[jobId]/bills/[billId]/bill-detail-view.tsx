@@ -4,13 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  ChatIcon,
-  CloseIcon,
-  HelpIcon,
-  MaximizeIcon,
-  ShareIcon,
-} from "@/components/shell/icons";
+import { CloseIcon } from "@/components/shell/icons";
 import { displayBillNumber } from "@/lib/bills/bill-number";
 import { formatMoney } from "@/lib/format";
 
@@ -20,10 +14,16 @@ import {
   LienWaiverPanel,
   StatusActions,
 } from "./bill-panels";
-import { deleteBillAction, type BillActionState } from "./actions";
+import {
+  applyLienWaiverAction,
+  deleteBillAction,
+  updateBillAction,
+  type BillActionState,
+} from "./actions";
 
 const BT_LINK = "#1F4ECD";
 const BT_NAVY = "#163a8a";
+const EDIT_FORM_ID = "bill-edit-form";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   INBOX: { bg: "#e5e7eb", text: "#374151", label: "Inbox" },
@@ -33,6 +33,12 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   PAID: { bg: "#dcfce7", text: "#15803d", label: "Paid" },
   VOID: { bg: "#fee2e2", text: "#b91c1c", label: "Void" },
 };
+
+const LIEN_TEMPLATES = [
+  { key: "conditional", label: "Conditional", templateName: "Conditional" },
+  { key: "unconditional", label: "Unconditional", templateName: "Unconditional" },
+  { key: "final", label: "Final unconditional", templateName: "Final unconditional" },
+] as const;
 
 export type BillDetailLine = {
   readonly id: string;
@@ -78,8 +84,8 @@ export type BillDetailProps = {
   readonly purchaseOrderLabel: string | null;
   readonly purchaseOrderHref: string | null;
   readonly scheduleItemTitle: string | null;
-  readonly issuedOnLabel: string;
-  readonly dueOnLabel: string;
+  readonly issuedOnValue: string;
+  readonly dueOnValue: string;
   readonly paidAtLabel: string;
   readonly description: string | null;
   readonly approvalStatus: string;
@@ -101,31 +107,8 @@ export type BillDetailProps = {
   readonly initialTab?: "bill" | "lien";
 };
 
-function FieldShell({
-  label,
-  info,
-  children,
-}: {
-  label: string;
-  info?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-[var(--bt-muted)]">
-        {label}
-        {info ? (
-          <span
-            className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-sky-100 text-[9px] font-bold text-sky-600"
-            title={label}
-          >
-            i
-          </span>
-        ) : null}
-      </div>
-      {children}
-    </div>
-  );
+function FieldLabel({ label }: { label: string }) {
+  return <div className="mb-1 text-xs font-medium text-[var(--bt-muted)]">{label}</div>;
 }
 
 function ReadField({ value }: { value: React.ReactNode }) {
@@ -139,36 +122,40 @@ function ReadField({ value }: { value: React.ReactNode }) {
   );
 }
 
-const INITIAL_DELETE: BillActionState = {};
+const fieldClass =
+  "w-full min-h-[2.5rem] rounded-md border bg-[var(--bt-panel-bg)] px-3 py-2 text-sm text-[var(--bt-text)] outline-none focus:border-[var(--bt-link,#1F4ECD)]";
+
+const INITIAL: BillActionState = {};
 
 /**
- * Buildertrend Bill detail chrome: modal shell, Document rail, Bill / Lien Waiver
- * tabs, general field grid, Costs / Approvals / Lien / QuickBooks sections, and
- * footer status actions. Fields are display-only — no invented edit/save path.
+ * Buildertrend Bill detail — editable when not PAID/VOID. Every visible control
+ * either works (Save, QB, billable, lien apply, status, delete) or is absent.
  */
 export function BillDetailView(props: BillDetailProps) {
   const router = useRouter();
   const [tab, setTab] = useState<"bill" | "lien">(props.initialTab ?? "bill");
   const [documentOpen, setDocumentOpen] = useState(props.files.length > 0);
-  const [deleteState, deleteAction, deleting] = useActionState(deleteBillAction, INITIAL_DELETE);
+  const [deleteState, deleteAction, deleting] = useActionState(deleteBillAction, INITIAL);
+  const [saveState, saveAction, saving] = useActionState(updateBillAction, INITIAL);
+  const [lienState, lienAction, applyingLien] = useActionState(applyLienWaiverAction, INITIAL);
 
+  const editable = props.approvalStatus !== "PAID" && props.approvalStatus !== "VOID";
   const listHref = `/jobs/${props.jobId}/bills`;
   const statusStyle = STATUS_STYLE[props.approvalStatus] ?? STATUS_STYLE.IN_REVIEW;
   const totalCents = props.lines.reduce((sum, line) => sum + line.amountCents, 0);
   const displayNumber = displayBillNumber(props.billNumber) ?? props.billNumber;
   const canDelete = props.approvalStatus === "INBOX" || props.approvalStatus === "IN_REVIEW";
+  const waiverReleased = props.waiver?.status === "RELEASED";
   const waiverTemplate = props.waiver?.templateName ?? "";
-  const lienChecked = {
-    conditional: /conditional/i.test(waiverTemplate) && !/unconditional/i.test(waiverTemplate),
-    unconditional: /^unconditional$/i.test(waiverTemplate.trim()) || waiverTemplate === "Unconditional",
-    final: /final/i.test(waiverTemplate),
-  };
+
+  const [sendToQuickBooks, setSendToQuickBooks] = useState(props.sendToQuickBooks === true);
+  const [billableToClient, setBillableToClient] = useState(props.billableToClient);
 
   const qbStatusLabel = (() => {
     if (props.qboBillId) return "Synced";
-    if (props.sendToQuickBooks === false) return "Not Billed";
-    if (props.sendToQuickBooks === true) return props.isQboConnected ? "Marked to send" : "Not connected";
-    return "Not Billed";
+    if (!sendToQuickBooks) return "Not Billed";
+    if (!props.isQboConnected) return "Not connected";
+    return "Marked to send";
   })();
 
   function close() {
@@ -181,6 +168,14 @@ export function BillDetailView(props: BillDetailProps) {
       router.refresh();
     }
   }, [deleteState.ok, listHref, router]);
+
+  useEffect(() => {
+    if (saveState.ok) router.refresh();
+  }, [saveState.ok, router]);
+
+  useEffect(() => {
+    if (lienState.ok) router.refresh();
+  }, [lienState.ok, router]);
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center sm:p-3">
@@ -199,33 +194,9 @@ export function BillDetailView(props: BillDetailProps) {
             <div className="truncate text-xs text-[var(--bt-muted)]">{props.jobName}</div>
             <h1 className="text-lg font-semibold text-[var(--bt-text)]">Bill</h1>
           </div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            <span className="rounded p-1.5 text-[#16a34a]" title="Share" aria-hidden>
-              <ShareIcon className="h-4 w-4" />
-            </span>
-            <a
-              href="#bill-approvals"
-              className="rounded p-1.5 text-[#0ea5e9] hover:bg-sky-50"
-              title="Comments"
-              aria-label="Comments"
-            >
-              <ChatIcon className="h-4 w-4" />
-            </a>
-            <span className="rounded p-1.5 text-[#8b5cf6]" title="Help" aria-hidden>
-              <HelpIcon className="h-4 w-4" />
-            </span>
-            <Link
-              href={listHref}
-              className="rounded p-1.5 text-[#0ea5e9] hover:bg-sky-50"
-              title="Back to list"
-              aria-label="Back to list"
-            >
-              <MaximizeIcon className="h-4 w-4" />
-            </Link>
-            <button type="button" onClick={close} aria-label="Close" className="rounded p-1.5 text-[var(--bt-muted)] hover:bg-black/5">
-              <CloseIcon className="h-4 w-4" />
-            </button>
-          </div>
+          <button type="button" onClick={close} aria-label="Close" className="rounded p-1.5 text-[var(--bt-muted)] hover:bg-black/5">
+            <CloseIcon className="h-4 w-4" />
+          </button>
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -323,83 +294,200 @@ export function BillDetailView(props: BillDetailProps) {
                     </p>
                   ) : null}
 
-                  <section className="flex flex-col gap-3">
-                    <FieldShell label="Type">
-                      <ReadField value="Bill" />
-                    </FieldShell>
+                  <form id={EDIT_FORM_ID} action={saveAction} className="flex flex-col gap-5">
+                    <input type="hidden" name="jobId" value={props.jobId} />
+                    <input type="hidden" name="billId" value={props.billId} />
+                    <input type="hidden" name="sendToQuickBooks" value={sendToQuickBooks ? "true" : "false"} />
+                    <input type="hidden" name="billableToClient" value={billableToClient ? "true" : "false"} />
+                    {!sendToQuickBooks ? (
+                      <input
+                        type="hidden"
+                        name="quickBooksSkipReason"
+                        value={props.quickBooksSkipReason ?? "Skipped QuickBooks on save"}
+                      />
+                    ) : null}
 
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <FieldShell label="Job">
-                        <ReadField value={props.jobName} />
-                      </FieldShell>
-                      <FieldShell label="Title">
-                        <ReadField value={props.title} />
-                      </FieldShell>
-                      <FieldShell label="Bill #" info>
-                        <ReadField value={displayNumber} />
-                      </FieldShell>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <FieldShell label="Pay to">
-                        <ReadField
-                          value={
-                            props.vendorHref ? (
-                              <Link href={props.vendorHref} className="hover:underline" style={{ color: BT_LINK }}>
-                                {props.vendorName}
-                              </Link>
-                            ) : (
-                              props.vendorName
-                            )
-                          }
-                        />
-                      </FieldShell>
-                      <FieldShell label="Name">
-                        <ReadField value={props.vendorName} />
-                      </FieldShell>
-                      <FieldShell label="Purchase Order">
-                        <ReadField
-                          value={
-                            props.purchaseOrderHref && props.purchaseOrderLabel ? (
-                              <Link href={props.purchaseOrderHref} className="hover:underline" style={{ color: BT_LINK }}>
-                                {props.purchaseOrderLabel}
-                              </Link>
-                            ) : (
-                              props.purchaseOrderLabel ?? "-- None Selected --"
-                            )
-                          }
-                        />
-                      </FieldShell>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <FieldShell label="Invoice date">
-                        <ReadField value={props.issuedOnLabel} />
-                      </FieldShell>
-                      <FieldShell label="Due date">
-                        <ReadField value={props.dueOnLabel} />
-                        {props.scheduleItemTitle ? (
-                          <p className="mt-1 text-xs" style={{ color: BT_LINK }}>
-                            Linked: {props.scheduleItemTitle}
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-xs text-[var(--bt-muted)]">Link schedule item</p>
-                        )}
-                      </FieldShell>
-                      <FieldShell label="Date paid">
-                        <ReadField value={props.paidAtLabel} />
-                      </FieldShell>
-                    </div>
-
-                    <FieldShell label="Description">
-                      <div
-                        className="min-h-[5rem] whitespace-pre-wrap rounded-md border px-3 py-2 text-sm text-[var(--bt-text)]"
-                        style={{ borderColor: "var(--bt-border)" }}
-                      >
-                        {props.description || <span className="text-[var(--bt-muted)]">—</span>}
+                    <section className="flex flex-col gap-3">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <FieldLabel label="Job" />
+                          <ReadField value={props.jobName} />
+                        </div>
+                        <div>
+                          <FieldLabel label="Title" />
+                          {editable ? (
+                            <input
+                              name="title"
+                              defaultValue={props.title ?? ""}
+                              className={fieldClass}
+                              style={{ borderColor: "var(--bt-border)" }}
+                            />
+                          ) : (
+                            <ReadField value={props.title} />
+                          )}
+                        </div>
+                        <div>
+                          <FieldLabel label="Bill #" />
+                          {editable ? (
+                            <input
+                              name="billNumber"
+                              defaultValue={displayNumber ?? ""}
+                              placeholder="Vendor invoice #"
+                              className={fieldClass}
+                              style={{ borderColor: "var(--bt-border)" }}
+                            />
+                          ) : (
+                            <ReadField value={displayNumber} />
+                          )}
+                        </div>
                       </div>
-                    </FieldShell>
-                  </section>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <FieldLabel label="Pay to" />
+                          <ReadField
+                            value={
+                              props.vendorHref ? (
+                                <Link href={props.vendorHref} className="hover:underline" style={{ color: BT_LINK }}>
+                                  {props.vendorName}
+                                </Link>
+                              ) : (
+                                props.vendorName
+                              )
+                            }
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel label="Purchase Order" />
+                          <ReadField
+                            value={
+                              props.purchaseOrderHref && props.purchaseOrderLabel ? (
+                                <Link href={props.purchaseOrderHref} className="hover:underline" style={{ color: BT_LINK }}>
+                                  {props.purchaseOrderLabel}
+                                </Link>
+                              ) : (
+                                props.purchaseOrderLabel ?? "-- None Selected --"
+                              )
+                            }
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel label="Date paid" />
+                          <ReadField value={props.paidAtLabel} />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <FieldLabel label="Invoice date" />
+                          {editable ? (
+                            <input
+                              type="date"
+                              name="issuedOn"
+                              defaultValue={props.issuedOnValue}
+                              className={fieldClass}
+                              style={{ borderColor: "var(--bt-border)" }}
+                            />
+                          ) : (
+                            <ReadField value={props.issuedOnValue || "—"} />
+                          )}
+                        </div>
+                        <div>
+                          <FieldLabel label="Due date" />
+                          {editable ? (
+                            <input
+                              type="date"
+                              name="dueOn"
+                              defaultValue={props.dueOnValue}
+                              className={fieldClass}
+                              style={{ borderColor: "var(--bt-border)" }}
+                            />
+                          ) : (
+                            <ReadField value={props.dueOnValue || "—"} />
+                          )}
+                          {props.scheduleItemTitle ? (
+                            <p className="mt-1 text-xs" style={{ color: BT_LINK }}>
+                              Linked: {props.scheduleItemTitle}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div>
+                        <FieldLabel label="Description" />
+                        {editable ? (
+                          <textarea
+                            name="description"
+                            rows={3}
+                            defaultValue={props.description ?? ""}
+                            className={fieldClass}
+                            style={{ borderColor: "var(--bt-border)" }}
+                          />
+                        ) : (
+                          <div
+                            className="min-h-[5rem] whitespace-pre-wrap rounded-md border px-3 py-2 text-sm text-[var(--bt-text)]"
+                            style={{ borderColor: "var(--bt-border)" }}
+                          >
+                            {props.description || <span className="text-[var(--bt-muted)]">—</span>}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    <section className="flex flex-col gap-3">
+                      <h2 className="text-sm font-semibold text-[var(--bt-text)]">QuickBooks</h2>
+                      <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+                        <div className="space-y-2">
+                          <label
+                            className={`flex items-start gap-2 text-sm text-[var(--bt-text)] ${editable ? "cursor-pointer" : "cursor-default"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={sendToQuickBooks || Boolean(props.qboBillId)}
+                              disabled={!editable || Boolean(props.qboBillId)}
+                              onChange={(e) => setSendToQuickBooks(e.target.checked)}
+                              className="mt-0.5"
+                              style={{ accentColor: BT_LINK }}
+                            />
+                            <span>
+                              Send to QuickBooks immediately upon save
+                              <span className="mt-0.5 block text-[11px] text-[var(--bt-muted)]">
+                                Check for labor/unpaid services; leave unchecked for materials already spent.
+                              </span>
+                            </span>
+                          </label>
+                          <label
+                            className={`flex items-center gap-2 text-sm text-[var(--bt-text)] ${editable ? "cursor-pointer" : "cursor-default"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={billableToClient}
+                              disabled={!editable}
+                              onChange={(e) => setBillableToClient(e.target.checked)}
+                              style={{ accentColor: BT_LINK }}
+                            />
+                            Mark as Billable to Client
+                          </label>
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium text-[var(--bt-muted)]">QuickBooks Status</div>
+                          <span
+                            className="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                            style={
+                              props.qboBillId
+                                ? { background: "#dcfce7", color: "#15803d" }
+                                : { background: "#eef0f3", color: "#374151" }
+                            }
+                          >
+                            {qbStatusLabel}
+                          </span>
+                          {props.qboBillId ? (
+                            <div className="mt-1 text-[11px] text-[var(--bt-muted)]">Bill ID {props.qboBillId}</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </section>
+                  </form>
 
                   <section className="flex flex-col gap-2">
                     <h2 className="text-sm font-semibold text-[var(--bt-text)]">Costs</h2>
@@ -446,12 +534,7 @@ export function BillDetailView(props: BillDetailProps) {
                   </section>
 
                   <section id="bill-approvals" className="flex flex-col gap-2">
-                    <h2 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]">
-                      Approvals
-                      <span className="text-[var(--bt-hazard)]" title="Who must sign before payment" aria-hidden>
-                        💡
-                      </span>
-                    </h2>
+                    <h2 className="text-sm font-semibold text-[var(--bt-text)]">Approvals</h2>
                     <div className="rounded-md border p-3" style={{ borderColor: "var(--bt-border)" }}>
                       <ApproversPanel
                         jobId={props.jobId}
@@ -464,26 +547,50 @@ export function BillDetailView(props: BillDetailProps) {
                   </section>
 
                   <section className="flex flex-col gap-2">
-                    <h2 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]">
-                      Lien waivers
-                      <span className="text-[var(--bt-hazard)]" title="Only for assigned subs/vendors" aria-hidden>
-                        💡
-                      </span>
-                    </h2>
+                    <h2 className="text-sm font-semibold text-[var(--bt-text)]">Lien waivers</h2>
                     <p className="text-xs text-[var(--bt-muted)]">You can only send lien waivers to assigned subs/vendors</p>
                     <div className="space-y-2 rounded-md border p-3" style={{ borderColor: "var(--bt-border)" }}>
-                      <label className="flex items-center gap-2 text-sm text-[var(--bt-text)]">
-                        <input type="checkbox" checked={lienChecked.conditional} readOnly disabled style={{ accentColor: BT_LINK }} />
-                        Conditional
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-[var(--bt-text)]">
-                        <input type="checkbox" checked={lienChecked.unconditional} readOnly disabled style={{ accentColor: BT_LINK }} />
-                        Unconditional
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-[var(--bt-text)]">
-                        <input type="checkbox" checked={lienChecked.final} readOnly disabled style={{ accentColor: BT_LINK }} />
-                        Final unconditional
-                      </label>
+                      {LIEN_TEMPLATES.map((item) => {
+                        const checked =
+                          waiverTemplate === item.templateName ||
+                          (item.key === "conditional" && /^conditional$/i.test(waiverTemplate)) ||
+                          (item.key === "final" && /final/i.test(waiverTemplate)) ||
+                          (item.key === "unconditional" &&
+                            /unconditional/i.test(waiverTemplate) &&
+                            !/final/i.test(waiverTemplate));
+                        return (
+                          <form key={item.key} action={lienAction} className="flex items-center gap-2">
+                            <input type="hidden" name="jobId" value={props.jobId} />
+                            <input type="hidden" name="billId" value={props.billId} />
+                            <input type="hidden" name="templateName" value={item.templateName} />
+                            <button
+                              type="submit"
+                              disabled={!editable || waiverReleased || applyingLien || checked}
+                              className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm text-[var(--bt-text)] hover:bg-black/5 disabled:cursor-default disabled:hover:bg-transparent"
+                              aria-pressed={checked}
+                            >
+                              <span
+                                className="inline-flex h-4 w-4 items-center justify-center rounded border"
+                                style={{
+                                  borderColor: BT_LINK,
+                                  background: checked ? BT_LINK : "transparent",
+                                  color: "#fff",
+                                  fontSize: 10,
+                                }}
+                                aria-hidden
+                              >
+                                {checked ? "✓" : ""}
+                              </span>
+                              {item.label}
+                            </button>
+                          </form>
+                        );
+                      })}
+                      {lienState.error ? (
+                        <p role="alert" className="text-xs text-red-600">
+                          {lienState.error}
+                        </p>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => setTab("lien")}
@@ -492,59 +599,6 @@ export function BillDetailView(props: BillDetailProps) {
                       >
                         Manage on Lien Waiver tab →
                       </button>
-                    </div>
-                  </section>
-
-                  <section className="flex flex-col gap-3">
-                    <h2 className="text-sm font-semibold text-[var(--bt-text)]">QuickBooks</h2>
-                    <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-                      <div className="space-y-2">
-                        <label className="flex cursor-default items-start gap-2 text-sm text-[var(--bt-text)]">
-                          <input
-                            type="checkbox"
-                            checked={props.sendToQuickBooks === true || Boolean(props.qboBillId)}
-                            readOnly
-                            disabled
-                            className="mt-0.5"
-                            style={{ accentColor: BT_LINK }}
-                          />
-                          <span>
-                            Send to QuickBooks immediately upon save
-                            <span className="ml-1 text-[var(--bt-hazard)]" aria-hidden>
-                              💡
-                            </span>
-                            {props.sendToQuickBooks === false && props.quickBooksSkipReason ? (
-                              <span className="mt-0.5 block text-[11px] text-[var(--bt-muted)]">{props.quickBooksSkipReason}</span>
-                            ) : null}
-                          </span>
-                        </label>
-                        <label className="flex cursor-default items-center gap-2 text-sm text-[var(--bt-text)]">
-                          <input
-                            type="checkbox"
-                            checked={props.billableToClient}
-                            readOnly
-                            disabled
-                            style={{ accentColor: BT_LINK }}
-                          />
-                          Mark as Billable to Client
-                        </label>
-                      </div>
-                      <div>
-                        <div className="text-xs font-medium text-[var(--bt-muted)]">QuickBooks Status</div>
-                        <span
-                          className="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
-                          style={
-                            props.qboBillId
-                              ? { background: "#dcfce7", color: "#15803d" }
-                              : { background: "#eef0f3", color: "#374151" }
-                          }
-                        >
-                          {qbStatusLabel}
-                        </span>
-                        {props.qboBillId ? (
-                          <div className="mt-1 text-[11px] text-[var(--bt-muted)]">Bill ID {props.qboBillId}</div>
-                        ) : null}
-                      </div>
                     </div>
                   </section>
 
@@ -591,10 +645,12 @@ export function BillDetailView(props: BillDetailProps) {
               style={{ borderColor: "var(--bt-border)" }}
             >
               <div className="min-h-[1.25rem] text-xs">
-                {deleteState.error ? (
+                {deleteState.error || saveState.error ? (
                   <p role="alert" className="text-red-600">
-                    {deleteState.error}
+                    {deleteState.error ?? saveState.error}
                   </p>
+                ) : saveState.ok ? (
+                  <span className="text-[var(--bt-success,#15803d)]">Saved</span>
                 ) : (
                   <span className="text-[var(--bt-muted)]">Total {formatMoney(totalCents)}</span>
                 )}
@@ -621,28 +677,15 @@ export function BillDetailView(props: BillDetailProps) {
                 >
                   Close
                 </button>
-                {props.approvalStatus !== "PAID" && props.approvalStatus !== "VOID" ? (
+                {editable ? (
                   <button
-                    type="button"
-                    onClick={() => {
-                      if (tab !== "bill") setTab("bill");
-                      requestAnimationFrame(() => {
-                        document.getElementById("bill-status-actions")?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "center",
-                        });
-                      });
-                    }}
-                    className="rounded-md px-3 py-2 text-sm font-semibold text-white"
+                    type="submit"
+                    form={EDIT_FORM_ID}
+                    disabled={saving}
+                    className="rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     style={{ background: props.approvalStatus === "APPROVED" ? BT_NAVY : BT_LINK }}
                   >
-                    {props.approvalStatus === "APPROVED"
-                      ? "Mark Ready for Payment"
-                      : props.approvalStatus === "READY_FOR_PAYMENT"
-                        ? "Mark paid"
-                        : props.approvalStatus === "INBOX"
-                          ? "Start review"
-                          : "Approve"}
+                    {saving ? "Saving…" : "Save"}
                   </button>
                 ) : null}
               </div>

@@ -24,9 +24,12 @@ import {
 } from "@/lib/bills/to-invoice";
 import { parsePercentToBasisPoints } from "@/lib/money";
 import {
+  BillNotEditableError,
   BillNotFoundError,
   BillQuickBooksIntentRequiredError,
   IllegalBillTransitionError,
+  InventedBillNumberError,
+  updateBill,
   updateBillStatus,
 } from "@/lib/bills/service";
 import { NotDiscardableError, RecordNotFoundError, deleteBill } from "@/lib/financials/discard";
@@ -34,6 +37,13 @@ import { NotDiscardableError, RecordNotFoundError, deleteBill } from "@/lib/fina
 export interface BillActionState {
   readonly error?: string;
   readonly ok?: boolean;
+}
+
+function parseOptionalDate(raw: string): Date | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const date = new Date(`${trimmed}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 /**
@@ -53,6 +63,8 @@ async function run(
   } catch (error) {
     if (
       error instanceof BillNotFoundError ||
+      error instanceof BillNotEditableError ||
+      error instanceof InventedBillNumberError ||
       error instanceof IllegalBillTransitionError ||
       error instanceof BillQuickBooksIntentRequiredError ||
       error instanceof ApprovalsIncompleteError ||
@@ -74,6 +86,39 @@ async function run(
   revalidatePath(`/jobs/${jobId}/bills`);
   revalidatePath(`/jobs/${jobId}/bills/${billId}`);
   return { ok: true };
+}
+
+/** Save bill header + QuickBooks / billable checkboxes (BT detail edit). */
+export async function updateBillAction(_previous: BillActionState, formData: FormData): Promise<BillActionState> {
+  const jobId = String(formData.get("jobId") ?? "");
+  const billId = String(formData.get("billId") ?? "");
+  const title = String(formData.get("title") ?? "").trim() || null;
+  const billNumber = String(formData.get("billNumber") ?? "").trim() || null;
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const issuedOn = parseOptionalDate(String(formData.get("issuedOn") ?? ""));
+  const dueOn = parseOptionalDate(String(formData.get("dueOn") ?? ""));
+  const sendRaw = String(formData.get("sendToQuickBooks") ?? "").trim();
+  const sendToQuickBooks = sendRaw === "true" ? true : sendRaw === "false" ? false : null;
+  const billableToClient = String(formData.get("billableToClient") ?? "") === "true";
+  const quickBooksSkipReason =
+    sendToQuickBooks === false
+      ? String(formData.get("quickBooksSkipReason") ?? "").trim() || "Skipped QuickBooks on save"
+      : null;
+
+  return run(jobId, billId, (organizationId) =>
+    updateBill({
+      organizationId,
+      billId,
+      title,
+      billNumber,
+      description,
+      issuedOn,
+      dueOn,
+      sendToQuickBooks,
+      quickBooksSkipReason,
+      billableToClient,
+    }),
+  );
 }
 
 export async function setBillStatusAction(_previous: BillActionState, formData: FormData): Promise<BillActionState> {

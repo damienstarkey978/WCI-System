@@ -3,15 +3,12 @@
 import Link from "next/link";
 import { type ReactNode } from "react";
 
-import { GearIcon, HelpIcon, UploadIcon } from "./icons";
 import { ListFilterButton } from "./ListFilterSidebar";
 
 /**
- * Buildertrend list toolbar chrome: icon cluster (help / settings / export /
- * filter-with-badge) plus primary/secondary action buttons on the right.
- *
- * Icon glyphs use BT's multi-color affordances (blue / violet / green / sky),
- * not a monochrome brand-teal wash — primary CTA still uses WCI `--bt-primary`.
+ * Buildertrend list toolbar: working Filter (+ optional extraIcons) and
+ * primary/secondary actions. Decorative Help/Settings/Export placeholders are
+ * omitted until those actions are implemented (Damien: zero inert UI).
  */
 export function ListToolbar({
   filterOpen,
@@ -31,30 +28,6 @@ export function ListToolbar({
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
       <div className="flex items-center gap-1">
-        <span
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white"
-          style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-help, #3b82f6)" }}
-          title="Help"
-          aria-hidden
-        >
-          <HelpIcon className="h-4 w-4" />
-        </span>
-        <span
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white"
-          style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-settings, #8b5cf6)" }}
-          title="Settings"
-          aria-hidden
-        >
-          <GearIcon className="h-4 w-4" />
-        </span>
-        <span
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white"
-          style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-export, #16a34a)" }}
-          title="Export"
-          aria-hidden
-        >
-          <UploadIcon className="h-4 w-4" />
-        </span>
         {extraIcons}
         <ListFilterButton activeCount={filterActiveCount} open={filterOpen} onClick={onFilterClick} />
       </div>

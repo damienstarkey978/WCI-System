@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { PoCostLineItems } from "@/components/financial/PoCostLineItems";
 import type { CostCodeOption } from "@/components/financial/CostCodeLineItems";
-import { ChatIcon, CloseIcon, HelpIcon, MaximizeIcon } from "@/components/shell/icons";
+import { CloseIcon } from "@/components/shell/icons";
 
 import { createBillAction, type ActionState } from "./actions";
 
@@ -146,15 +146,6 @@ export function CreateBillForm({
           <h2 className="text-base font-semibold text-[var(--bt-text)]">Bill</h2>
         </div>
         <div className="flex items-center gap-1">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--bt-chrome-export,#16a34a)]" title="Pop out" aria-hidden>
-            <MaximizeIcon className="h-4 w-4" />
-          </span>
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--bt-chrome-help,#3b82f6)]" title="Comments" aria-hidden>
-            <ChatIcon className="h-4 w-4" />
-          </span>
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--bt-chrome-settings,#8b5cf6)]" title="Help" aria-hidden>
-            <HelpIcon className="h-4 w-4" />
-          </span>
           {onClose ? (
             <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1.5 text-[var(--bt-muted)] hover:bg-black/5">
               <CloseIcon className="h-4 w-4" />
