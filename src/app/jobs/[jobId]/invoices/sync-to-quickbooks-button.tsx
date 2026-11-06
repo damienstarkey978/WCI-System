@@ -6,7 +6,18 @@ import { syncInvoiceToQuickBooksAction, type ActionState } from "./actions";
 
 const INITIAL: ActionState = {};
 
-export function SyncToQuickBooksButton({ jobId, invoiceId, label }: { jobId: string; invoiceId: string; label: string }) {
+export function SyncToQuickBooksButton({
+  jobId,
+  invoiceId,
+  label,
+  pushPaused = false,
+}: {
+  jobId: string;
+  invoiceId: string;
+  label: string;
+  /** When true, Sync stays available but shows cutover pause copy; server still refuses. */
+  pushPaused?: boolean;
+}) {
   const [state, formAction, pending] = useActionState(syncInvoiceToQuickBooksAction, INITIAL);
 
   return (
@@ -21,6 +32,11 @@ export function SyncToQuickBooksButton({ jobId, invoiceId, label }: { jobId: str
       >
         {pending ? "Syncing…" : label}
       </button>
+      {pushPaused ? (
+        <p className="max-w-[18rem] text-[10px] leading-snug text-[var(--bt-muted)]">
+          Paused — Buildertrend owns QB until cutover (`QBO_INVOICE_PUSH_ENABLED`).
+        </p>
+      ) : null}
       {state.error ? (
         <p role="alert" className="text-xs text-red-600">
           {state.error}

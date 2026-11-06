@@ -160,6 +160,7 @@ export default async function BillsPage({ params, searchParams }: PageProps<"/jo
         counts={counts}
         rows={rows}
         isQboConnected={isQboConnected}
+        qboBillPushEnabled={qboBillPushEnabled}
         emptyAction={createBill}
         headerActions={headerActions}
         tabs={<PurchaseOrdersBillsTabs jobId={job.id} active="bills" />}

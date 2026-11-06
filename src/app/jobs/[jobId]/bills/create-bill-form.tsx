@@ -434,9 +434,10 @@ export function CreateBillForm({
                     />
                     Mark as Billable to Client
                   </label>
-                  {qbPaused && sendToQuickBooks ? (
+                  {qbPaused ? (
                     <p className="rounded-md border px-2 py-1.5 text-[11px] text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-hazard)", background: "color-mix(in srgb, var(--bt-hazard) 8%, transparent)" }}>
-                      QuickBooks bill push is paused (`QBO_BILL_PUSH_ENABLED`). Your intent is saved; nothing is pushed until Money re-enables push.
+                      QuickBooks bill push is paused while Buildertrend owns QB (`QBO_BILL_PUSH_ENABLED`). Leave
+                      unchecked for now — checking saves intent only; nothing is pushed until Damien re-enables after cutover.
                     </p>
                   ) : null}
                   {!isQboConnected && sendToQuickBooks ? (

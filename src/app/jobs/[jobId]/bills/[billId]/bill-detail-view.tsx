@@ -114,6 +114,7 @@ export type BillDetailProps = {
   readonly quickBooksSkipReason: string | null;
   readonly qboBillId: string | null;
   readonly isQboConnected: boolean;
+  readonly qboBillPushEnabled?: boolean;
   readonly createdByLabel: string;
   readonly lines: readonly BillDetailLine[];
   readonly costCodes: readonly CostCodeOption[];
@@ -560,10 +561,17 @@ export function BillDetailView(props: BillDetailProps) {
                             <span>
                               Send to QuickBooks immediately upon save
                               <span className="mt-0.5 block text-[11px] text-[var(--bt-muted)]">
-                                Leave unchecked while Buildertrend owns QuickBooks. Opt in only when WCI should push.
+                                Default off while Buildertrend owns QB. After cutover, check for labor/unpaid
+                                services; leave unchecked for materials already spent.
                               </span>
                             </span>
                           </label>
+                          {props.isQboConnected && props.qboBillPushEnabled !== true ? (
+                            <p className="text-[11px] leading-snug text-[var(--bt-muted)]">
+                              Live bill push is paused (`QBO_BILL_PUSH_ENABLED`). Intent is saved; nothing posts to
+                              QuickBooks until Damien re-enables after cutover.
+                            </p>
+                          ) : null}
                           <label
                             className={`flex items-center gap-2 text-sm text-[var(--bt-text)] ${editable ? "cursor-pointer" : "cursor-default"}`}
                           >
@@ -730,6 +738,7 @@ export function BillDetailView(props: BillDetailProps) {
                       billId={props.billId}
                       status={props.approvalStatus}
                       isQboConnected={props.isQboConnected}
+                      qboBillPushEnabled={props.qboBillPushEnabled === true}
                       lineItems={props.lines.map((line) => ({
                         costType: line.costType,
                         amountCents: line.amountCents,

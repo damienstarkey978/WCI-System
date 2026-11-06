@@ -54,7 +54,7 @@ export class BillQuickBooksSyncDeclinedError extends Error {
 export class BillQuickBooksPushPausedError extends Error {
   constructor() {
     super(
-      "QuickBooks bill push is paused (QBO_BILL_PUSH_ENABLED is not \"true\"). No bills are sent to QuickBooks until that env var is set to true on Netlify and the site is redeployed/env-reloaded.",
+      'QuickBooks bill push is paused (QBO_BILL_PUSH_ENABLED is not "true"). Buildertrend still owns QB pushes until cutover — nothing is sent from WCI OS until that env var is set to true on Netlify and the site is redeployed/env-reloaded.',
     );
     this.name = "BillQuickBooksPushPausedError";
   }

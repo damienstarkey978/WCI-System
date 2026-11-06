@@ -25,9 +25,14 @@ import {
 } from "@/lib/invoicing/service";
 import { parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
 import { db } from "@/lib/db";
+import { isQuickBooksInvoicePushEnabled } from "@/lib/env";
 import { QuickBooksApiError, QuickBooksNotConfiguredError } from "@/lib/quickbooks/client";
 import { QuickBooksNotConnectedError } from "@/lib/quickbooks/connection-service";
-import { InvoiceHasNoClientError, syncInvoiceToQuickBooks } from "@/lib/quickbooks/sync/invoices";
+import {
+  InvoiceHasNoClientError,
+  InvoiceQuickBooksPushPausedError,
+  syncInvoiceToQuickBooks,
+} from "@/lib/quickbooks/sync/invoices";
 
 export interface ActionState {
   readonly error?: string;
@@ -150,9 +155,9 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
 
     if (intent === "send") {
       await sendInvoice(user.organizationId, invoiceId);
-      // Opt-in only: create UI defaults invoiceToQbo OFF while BT owns QuickBooks.
-      // Do not auto-push; only sync when the operator explicitly checked the box.
-      if (invoiceToQbo) {
+      // Opt-in + org pause: create UI defaults OFF; live push also requires
+      // QBO_INVOICE_PUSH_ENABLED=true (unset while Buildertrend owns QB).
+      if (invoiceToQbo && isQuickBooksInvoicePushEnabled()) {
         try {
           await syncInvoiceToQuickBooks(user.organizationId, invoiceId);
         } catch (error) {
@@ -161,6 +166,7 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
             !(error instanceof QuickBooksNotConnectedError) &&
             !(error instanceof QuickBooksNotConfiguredError) &&
             !(error instanceof InvoiceHasNoClientError) &&
+            !(error instanceof InvoiceQuickBooksPushPausedError) &&
             !(error instanceof QuickBooksApiError)
           ) {
             throw error;
@@ -345,6 +351,7 @@ export async function syncInvoiceToQuickBooksAction(_previous: ActionState, form
       error instanceof QuickBooksNotConfiguredError ||
       error instanceof QuickBooksNotConnectedError ||
       error instanceof InvoiceHasNoClientError ||
+      error instanceof InvoiceQuickBooksPushPausedError ||
       error instanceof QuickBooksApiError
     ) {
       return { error: error.message };

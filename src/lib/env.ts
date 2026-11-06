@@ -197,13 +197,24 @@ export function quickBooksWebhookVerifierToken(): string | undefined {
 /**
  * Global kill switch for WCI → QuickBooks **bill** creates/updates
  * (`syncBillToQuickBooks`). Defaults to **paused** unless this env var is
- * exactly `"true"`. Invoice/vendor/customer sync and QBO→WCI payment webhooks
- * are unaffected. Set on Netlify (site `idyllic-faun-929087`) when Money is
- * ready to resume labor/unpaid-services bill posts — leave unset or any other
- * value to keep the pause.
+ * exactly `"true"`. Vendor/customer sync and QBO→WCI payment webhooks are
+ * unaffected. Leave unset while Buildertrend still owns QB pushes — set on
+ * Netlify (site `idyllic-faun-929087`) only when Damien re-enables OS→QBO
+ * after BT cutover.
  */
 export function isQuickBooksBillPushEnabled(): boolean {
   return optional("QBO_BILL_PUSH_ENABLED") === "true";
+}
+
+/**
+ * Global kill switch for WCI → QuickBooks **invoice** creates/updates
+ * (`syncInvoiceToQuickBooks`). Same contract as bill push: defaults to
+ * **paused** unless `QBO_INVOICE_PUSH_ENABLED` is exactly `"true"`. Keeps the
+ * Sync button + "Invoice to QuickBooks on Send" checkbox in the UI; live
+ * pushes refuse until Damien flips the env after Buildertrend cutover.
+ */
+export function isQuickBooksInvoicePushEnabled(): boolean {
+  return optional("QBO_INVOICE_PUSH_ENABLED") === "true";
 }
 
 /**

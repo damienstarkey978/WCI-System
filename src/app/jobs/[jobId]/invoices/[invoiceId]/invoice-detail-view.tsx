@@ -107,6 +107,7 @@ export type InvoiceDetailProps = {
   readonly invoiceType: string;
   readonly changeOrderRows: readonly ChangeOrderAddFromRow[];
   readonly isQboConnected: boolean;
+  readonly qboInvoicePushEnabled?: boolean;
   readonly qboInvoiceId: string | null;
   readonly hasQboPayment: boolean;
   readonly hasOnlinePayment: boolean;
@@ -624,9 +625,16 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
                       jobId={props.jobId}
                       invoiceId={props.invoiceId}
                       label={props.qboInvoiceId ? "Re-sync" : "Sync to QuickBooks"}
+                      pushPaused={props.qboInvoicePushEnabled !== true}
                     />
                   ) : null}
                 </div>
+                {props.isQboConnected && props.qboInvoicePushEnabled !== true ? (
+                  <p className="mt-2 text-sm text-[var(--bt-muted)]">
+                    Invoice push is paused while Buildertrend owns QuickBooks. Sync stays ready for cutover —
+                    live pushes need `QBO_INVOICE_PUSH_ENABLED=true`.
+                  </p>
+                ) : null}
                 {!props.isQboConnected ? (
                   <p className="mt-2 text-sm text-[var(--bt-muted)]">
                     QuickBooks isn&apos;t connected —{" "}

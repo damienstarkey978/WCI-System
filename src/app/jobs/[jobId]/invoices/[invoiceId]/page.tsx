@@ -4,6 +4,7 @@ import { SetupNotice } from "@/app/admin/setup-notice";
 import { CommentThread } from "@/components/comments/CommentThread";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isQuickBooksInvoicePushEnabled } from "@/lib/env";
 import { formatDate, formatMoney } from "@/lib/format";
 import { changeOrderLineClientPriceCents } from "@/lib/invoicing/from-change-orders";
 import { effectiveInvoiceStatus, paymentTermsDisplayLabel } from "@/lib/invoicing/terms";
@@ -101,6 +102,7 @@ export default async function InvoiceDetailPage({
 
   const qboConnection = await db.quickBooksConnection.findUnique({ where: { organizationId: user.organizationId } });
   const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
+  const qboInvoicePushEnabled = isQuickBooksInvoicePushEnabled();
 
   const paidCents = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
   const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paidCents);
@@ -282,6 +284,7 @@ export default async function InvoiceDetailPage({
       invoiceType={invoice.type}
       changeOrderRows={changeOrderRows}
       isQboConnected={isQboConnected}
+      qboInvoicePushEnabled={qboInvoicePushEnabled}
       qboInvoiceId={invoice.qboInvoiceId}
       hasQboPayment={hasQboPayment}
       hasOnlinePayment={hasOnlinePayment}
