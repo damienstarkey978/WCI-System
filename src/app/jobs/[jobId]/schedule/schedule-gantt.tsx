@@ -78,7 +78,8 @@ function shiftedItem(item: GanttItem, shiftDays: number): { start: Date; end: Da
 }
 
 function assigneeLabel(ids: readonly string[], staff: readonly StaffOption[]): string {
-  if (ids.length === 0) return "—";
+  // Buildertrend empty assignees render as ASCII "--" (not an em dash).
+  if (ids.length === 0) return "--";
   const names = ids.map((id) => staff.find((s) => s.id === id)?.name ?? id);
   return names.join(", ");
 }
@@ -523,8 +524,18 @@ export function ScheduleGantt({
                 );
               })}
               {todayOffset >= 0 && todayOffset < totalDays ? (
-                <div className="pointer-events-none absolute top-0 z-10" style={{ left: todayOffset * px + px / 2 - 5 }}>
+                <div
+                  className="pointer-events-none absolute top-0 z-10"
+                  style={{ left: todayOffset * px + px / 2 - 5 }}
+                  data-testid="gantt-today-flag"
+                  title="Today"
+                >
+                  {/* BT today marker: filled circle + downward triangle flag */}
                   <div className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--bt-primary)" }} />
+                  <div
+                    className="mx-auto h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent"
+                    style={{ borderTopColor: "var(--bt-primary)" }}
+                  />
                 </div>
               ) : null}
             </div>
@@ -547,8 +558,13 @@ export function ScheduleGantt({
                 <div className="pointer-events-none absolute bottom-0 top-0 z-10 w-px" style={{ left: todayOffset * px + px / 2, background: "var(--bt-primary)" }} />
               ) : null}
 
-              {/* Locked dependency links with BT-style end/start nodes */}
+              {/* Locked dependency links with BT-style end/start nodes + arrowheads */}
               <svg className="pointer-events-none absolute inset-0 z-[5] h-full w-full overflow-visible" aria-hidden data-testid="gantt-dependency-links">
+                <defs>
+                  <marker id="gantt-dep-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L6,3 L0,6 Z" fill="#6b7280" />
+                  </marker>
+                </defs>
                 {items.flatMap((item) => {
                   const visualIdx = visualIndexById.get(item.id) ?? 0;
                   const itemShift = shifts[item.id] ?? 0;
@@ -567,7 +583,13 @@ export function ScheduleGantt({
                     const mid = x1 + Math.max(10, (x2 - x1) / 2);
                     return (
                       <g key={`${predId}-${item.id}`}>
-                        <path d={`M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`} fill="none" stroke="#6b7280" strokeWidth="1.25" />
+                        <path
+                          d={`M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`}
+                          fill="none"
+                          stroke="#6b7280"
+                          strokeWidth="1.25"
+                          markerEnd="url(#gantt-dep-arrow)"
+                        />
                         <circle cx={x1} cy={y1} r="3.5" fill="#fff" stroke="#6b7280" strokeWidth="1.25" />
                         <circle cx={x2} cy={y2} r="3.5" fill="#fff" stroke="#6b7280" strokeWidth="1.25" />
                       </g>
@@ -617,7 +639,7 @@ export function ScheduleGantt({
                       data-testid={`gantt-bar-${item.id}`}
                       data-gantt-bar={item.id}
                       aria-label={`${item.title} ${formatDateUtc(start)} to ${formatDateUtc(end)}`}
-                      className={`absolute top-3 flex h-4 items-center overflow-visible rounded-sm ${unlocked ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
+                      className={`absolute top-2.5 flex h-5 items-center overflow-visible rounded-sm ${unlocked ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
                       style={{
                         left,
                         width,
@@ -633,7 +655,7 @@ export function ScheduleGantt({
                       onPointerUp={onBarPointerUp}
                       onPointerCancel={onBarPointerUp}
                     >
-                      {labelInside ? <span className="truncate px-1.5 text-[10px] font-medium text-white pointer-events-none">{item.title}</span> : null}
+                      {labelInside ? <span className="truncate px-1.5 text-[11px] font-medium leading-none text-white pointer-events-none">{item.title}</span> : null}
                       {isHover ? (
                         <>
                           <span className="pointer-events-none absolute -left-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border border-[#6b7280] bg-white" />
@@ -642,7 +664,7 @@ export function ScheduleGantt({
                       ) : null}
                     </div>
                     {!labelInside ? (
-                      <span className="pointer-events-none absolute top-2.5 truncate text-[10px] text-[var(--bt-muted)]" style={{ left: left + width + 6, maxWidth: 140 }}>
+                      <span className="pointer-events-none absolute top-2.5 truncate text-[11px] text-[var(--bt-muted)]" style={{ left: left + width + 6, maxWidth: 140 }}>
                         {item.title}
                       </span>
                     ) : null}
