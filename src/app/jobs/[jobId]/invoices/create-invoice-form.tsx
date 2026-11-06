@@ -126,7 +126,8 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
   const [clientMessage, setClientMessage] = useState("");
   const [description, setDescription] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
-  const [invoiceToQbo, setInvoiceToQbo] = useState(true);
+  // BT still owns QuickBooks — OS pushes duplicate invoices. Default OFF; never auto-push.
+  const [invoiceToQbo, setInvoiceToQbo] = useState(false);
   const [paymentHistoryOpen, setPaymentHistoryOpen] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const [shareNote, setShareNote] = useState<string | null>(null);
