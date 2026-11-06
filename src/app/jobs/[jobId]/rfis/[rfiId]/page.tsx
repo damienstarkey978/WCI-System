@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatDateUtc } from "@/lib/format";
@@ -59,8 +58,9 @@ export default async function RfiDetailPage({ params }: PageProps<"/jobs/[jobId]
           <Link href={`/jobs/${job.id}/rfis`} className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
             ← RFIs
           </Link>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <PageHeader jobName={job.name} title="RFI" />
+          <div className="mt-1 text-xs text-[var(--bt-muted)]">{job.name}</div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold text-[var(--bt-text)]">RFI</h1>
             <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: badge.bg, color: badge.text }}>
               {badge.label}
             </span>
@@ -99,15 +99,15 @@ export default async function RfiDetailPage({ params }: PageProps<"/jobs/[jobId]
       />
 
       {rfi.answer ? (
-        <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="text-sm font-semibold text-[var(--bt-text)]">Answer</h2>
           <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--bt-text)]">{rfi.answer}</p>
-        </div>
+        </section>
       ) : rfi.status === "OPEN" ? (
-        <div className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
+        <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
           <h2 className="mb-2 text-sm font-semibold text-[var(--bt-text)]">Answer</h2>
           <AnswerRfiForm jobId={job.id} rfiId={rfi.id} />
-        </div>
+        </section>
       ) : null}
     </div>
   );
