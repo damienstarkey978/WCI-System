@@ -150,11 +150,13 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
 
     if (intent === "send") {
       await sendInvoice(user.organizationId, invoiceId);
+      // Opt-in only: create UI defaults invoiceToQbo OFF while BT owns QuickBooks.
+      // Do not auto-push; only sync when the operator explicitly checked the box.
       if (invoiceToQbo) {
         try {
           await syncInvoiceToQuickBooks(user.organizationId, invoiceId);
         } catch (error) {
-          // Create + send already succeeded — QB is best-effort on Send (BT toggle).
+          // Create + send already succeeded — QB is best-effort on Send.
           if (
             !(error instanceof QuickBooksNotConnectedError) &&
             !(error instanceof QuickBooksNotConfiguredError) &&
