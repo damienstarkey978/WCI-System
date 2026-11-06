@@ -183,11 +183,15 @@ export function ScheduleToolbar({
                 href={viewQs(v.key)}
                 role="tab"
                 aria-selected={active}
-                className="px-3 py-1.5 text-sm font-medium"
+                className="px-3.5 py-1.5 text-sm font-medium"
                 style={
                   active
-                    ? { color: "var(--bt-primary)", boxShadow: "inset 0 -2px 0 var(--bt-primary)", background: "color-mix(in srgb, var(--bt-primary) 6%, transparent)" }
-                    : { color: "var(--bt-muted)" }
+                    ? {
+                        // BT segmented control: solid primary fill + on-primary text
+                        color: "var(--bt-on-primary)",
+                        background: "var(--bt-primary)",
+                      }
+                    : { color: "var(--bt-text)", background: "var(--bt-panel-bg)" }
                 }
               >
                 {v.label}
