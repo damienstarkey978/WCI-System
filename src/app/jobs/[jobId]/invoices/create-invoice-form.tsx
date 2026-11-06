@@ -32,6 +32,8 @@ export type CreateInvoiceModalProps = {
   readonly clientName?: string | null;
   readonly clientAddress?: string | null;
   readonly jobAddress?: string | null;
+  /** False while `QBO_INVOICE_PUSH_ENABLED` is unset — checkbox stays, live push refuses. */
+  readonly qboInvoicePushEnabled?: boolean;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 };
@@ -128,6 +130,7 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
   const [internalNotes, setInternalNotes] = useState("");
   // BT still owns QuickBooks — OS pushes duplicate invoices. Default OFF; never auto-push.
   const [invoiceToQbo, setInvoiceToQbo] = useState(false);
+  const qboInvoicePushEnabled = props.qboInvoicePushEnabled === true;
   const [paymentHistoryOpen, setPaymentHistoryOpen] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const [shareNote, setShareNote] = useState<string | null>(null);
@@ -593,6 +596,12 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
                       />
                       <span>Invoice to QuickBooks on Send</span>
                     </label>
+                    {!qboInvoicePushEnabled ? (
+                      <p className="mt-2 text-[11px] leading-snug text-[var(--bt-muted)]">
+                        QuickBooks invoice push is paused while Buildertrend owns QB. Leave unchecked —
+                        checking saves intent only until `QBO_INVOICE_PUSH_ENABLED=true` after cutover.
+                      </p>
+                    ) : null}
                   </div>
                 </section>
 

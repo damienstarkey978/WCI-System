@@ -784,8 +784,15 @@ Record every architectural decision that departs from the above, with the reason
   other value = paused. READY_FOR_PAYMENT still records the per-bill send/skip
   choice (materials UX unchanged); the global pause overrides the send path.
   PAID/VOID/`paidAt` bills are also refused in the push path so they cannot
-  reappear as unpaid QBO bills. Invoice/vendor sync and QBO→WCI payment webhooks
-  are unchanged. See `docs/qbo-bill-push-pause-2026-11-02.md` in the project store.
+  reappear as unpaid QBO bills. Vendor sync and QBO→WCI payment webhooks are
+  unchanged. See `docs/qbo-bill-push-pause-2026-11-02.md` in the project store.
+- **OS→QBO frozen while Buildertrend owns QB (2026-11-06):** Damien — do not push
+  bills/invoices from WCI OS until BT cutover (duplicates). Keep Sync buttons and
+  send-to-QB checkboxes in the product; defaults stay **unchecked**, create/save/send
+  auto-push is gated by the pause flags, and `syncInvoiceToQuickBooks` requires
+  `QBO_INVOICE_PUSH_ENABLED=true` (same exact-`"true"` contract as bills). No bulk
+  re-push invented. Re-enable per env on Netlify after BT is off QB. Store note:
+  `docs/os-qbo-push-frozen-while-bt-owns-qb.md`.
 - **Money QBO bill-push rules 1–6 (2026-11-02):** push also requires
   `READY_FOR_PAYMENT` + `sendToQuickBooks === true`, refuses blank/`JOB_*`
   invoice numbers, duplicate-checks OS (+ QBO DocNumber when connected) and

@@ -48,7 +48,15 @@ const DEFAULT_HIDDEN = ["po", "status", "qbo"] as const;
 const BT_LINK = "#1F4ECD";
 
 /** The client half of the Bills page — see purchase-orders-grid.tsx's doc comment for why this split exists. */
-export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; isQboConnected: boolean }) {
+export function BillsGrid({
+  rows,
+  isQboConnected,
+  qboBillPushEnabled = false,
+}: {
+  rows: readonly BillRow[];
+  isQboConnected: boolean;
+  qboBillPushEnabled?: boolean;
+}) {
   const amountTotal = formatMoney(rows.reduce((sum, row) => sum + row.totalCents, 0));
   const columns: DataGridColumn<BillRow>[] = [
     {
@@ -154,9 +162,15 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
               if (row.sendToQuickBooks === false) {
                 return <span className="text-xs text-[var(--bt-muted)]">Skipped</span>;
               }
-              // Sync control stays in product for cutover; live push still gated by
-              // QBO_BILL_PUSH_ENABLED (paused while Buildertrend owns QuickBooks).
-              return <SyncToQuickBooksButton jobId={row.jobId} billId={row.id} label="Sync" />;
+              // Sync stays in product for cutover; live push gated by QBO_BILL_PUSH_ENABLED.
+              return (
+                <SyncToQuickBooksButton
+                  jobId={row.jobId}
+                  billId={row.id}
+                  label="Sync"
+                  pushPaused={!qboBillPushEnabled}
+                />
+              );
             },
           },
         ]

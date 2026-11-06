@@ -5,6 +5,7 @@ import { actorSummaryText } from "@/components/actor-attribution";
 import { currentAppUser } from "@/lib/auth";
 import { TEMPLATE_NAMES } from "@/lib/bills/lien-waivers";
 import { db } from "@/lib/db";
+import { isQuickBooksBillPushEnabled } from "@/lib/env";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { BillDetailView } from "./bill-detail-view";
@@ -78,6 +79,7 @@ export default async function BillDetailPage({
   // cost is legitimately still to be recovered.
   const billedOnLine = bill.invoiceLines.find((line) => line.invoice.status !== "VOID") ?? null;
   const isQboConnected = Boolean(qboConnection && !qboConnection.disconnectedAt);
+  const qboBillPushEnabled = isQuickBooksBillPushEnabled();
   const waiver = bill.lienWaivers[0] ?? null;
 
   return (
@@ -117,6 +119,7 @@ export default async function BillDetailPage({
       quickBooksSkipReason={bill.quickBooksSkipReason}
       qboBillId={bill.qboBillId}
       isQboConnected={isQboConnected}
+      qboBillPushEnabled={qboBillPushEnabled}
       createdByLabel={
         bill.createdByUser || bill.createdByApiKey
           ? actorSummaryText({ user: bill.createdByUser, apiKey: bill.createdByApiKey })

@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { PaymentCardIcon, ReceiptIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isQuickBooksInvoicePushEnabled } from "@/lib/env";
 import { formatDate, formatMoney } from "@/lib/format";
 import { computeDrawAmountCents } from "@/lib/invoicing/calc";
 import { displayInvoiceId } from "@/lib/invoicing/display";
@@ -551,6 +552,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps<"
         clientName: client?.name ?? null,
         clientAddress,
         jobAddress: null,
+        qboInvoicePushEnabled: isQuickBooksInvoicePushEnabled(),
       }}
       rows={invoiceRows}
       totals={{

@@ -47,6 +47,7 @@ export function BillsListClient({
   counts,
   rows,
   isQboConnected,
+  qboBillPushEnabled = false,
   emptyAction,
   headerActions,
   tabs,
@@ -57,6 +58,7 @@ export function BillsListClient({
   counts: Readonly<Partial<Record<TabKey, number>> & { ALL?: number }>;
   rows: readonly BillRow[];
   isQboConnected: boolean;
+  qboBillPushEnabled?: boolean;
   emptyAction: ReactNode;
   /** Email to Inbox / + Bill — sits with BT's colorful icon cluster. */
   headerActions: ReactNode;
@@ -161,7 +163,7 @@ export function BillsListClient({
               description="Clear filters or adjust Keyword / Pay to / Invoice date."
             />
           ) : (
-            <BillsGrid rows={filtered} isQboConnected={isQboConnected} />
+            <BillsGrid rows={filtered} isQboConnected={isQboConnected} qboBillPushEnabled={qboBillPushEnabled} />
           )}
         </div>
 

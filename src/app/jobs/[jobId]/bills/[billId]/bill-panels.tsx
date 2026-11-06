@@ -49,22 +49,27 @@ export function StatusActions({
   status,
   lineItems,
   isQboConnected,
+  qboBillPushEnabled = false,
 }: {
   jobId: string;
   billId: string;
   status: string;
   lineItems: readonly BillLineCostTypeInput[];
   isQboConnected: boolean;
+  /** False while `QBO_BILL_PUSH_ENABLED` is unset — radios stay, live push refuses. */
+  qboBillPushEnabled?: boolean;
 }) {
   const [claimState, claimAction, claiming] = useActionState(claimFromInboxAction, INITIAL);
   const [statusState, statusAction, changing] = useActionState(setBillStatusAction, INITIAL);
 
   const suggestion = suggestSendToQuickBooks(lineItems);
   // Always start unchecked — never auto-select Send from cost-type suggestion.
+  // Org pause still blocks live push if staff opts in while BT owns QB.
   const [sendToQuickBooks, setSendToQuickBooks] = useState(false);
   const [skipReason, setSkipReason] = useState(
     defaultSkipReasonForSuggestion({ ...suggestion, suggestedSend: false }),
   );
+  const qbPaused = isQboConnected && !qboBillPushEnabled;
 
   const next: { label: string; value: string; primary?: boolean }[] = [];
   if (status === "IN_REVIEW") next.push({ label: "Approve", value: "APPROVED", primary: true });
@@ -96,6 +101,12 @@ export function StatusActions({
             <p className="mt-1 text-[11px] leading-snug text-[var(--bt-muted)]">
               Defaults to Don&apos;t send while Buildertrend owns QuickBooks. {suggestion.reason}
             </p>
+            {qbPaused ? (
+              <p className="mt-1 text-[11px] leading-snug text-[var(--bt-muted)]">
+                QuickBooks bill push is paused (`QBO_BILL_PUSH_ENABLED`). Opting in saves intent only until
+                re-enabled after cutover.
+              </p>
+            ) : null}
             {!isQboConnected ? (
               <p className="mt-1 text-[11px] leading-snug text-[var(--bt-muted)]">
                 QuickBooks isn&apos;t connected yet. Your choice is still saved; a send will wait until QB is connected.

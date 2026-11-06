@@ -14,6 +14,7 @@
  */
 
 import { db } from "@/lib/db";
+import { isQuickBooksInvoicePushEnabled } from "@/lib/env";
 import { accountingRequest } from "@/lib/quickbooks/client";
 import { getValidAccessToken, type ValidQuickBooksAccess } from "@/lib/quickbooks/connection-service";
 import { recordSyncAttempt } from "@/lib/quickbooks/sync-log";
@@ -32,6 +33,16 @@ export class InvoiceHasNoClientError extends Error {
   constructor(invoiceId: string) {
     super(`Invoice ${invoiceId}'s job has no client with portal access — nothing to bill in QuickBooks.`);
     this.name = "InvoiceHasNoClientError";
+  }
+}
+
+/** Global QBO_INVOICE_PUSH_ENABLED pause — no WCI → QBO invoice creates/updates while unset/false. */
+export class InvoiceQuickBooksPushPausedError extends Error {
+  constructor() {
+    super(
+      'QuickBooks invoice push is paused (QBO_INVOICE_PUSH_ENABLED is not "true"). Buildertrend still owns QB pushes until cutover — nothing is sent from WCI OS until that env var is set to true on Netlify and the site is redeployed/env-reloaded.',
+    );
+    this.name = "InvoiceQuickBooksPushPausedError";
   }
 }
 
@@ -65,6 +76,11 @@ async function ensureServiceItemId(access: ValidQuickBooksAccess): Promise<strin
 
 /** Push one Invoice to QuickBooks, creating or updating as needed. Returns the QBO Invoice id. */
 export async function syncInvoiceToQuickBooks(organizationId: string, invoiceId: string): Promise<string> {
+  // Global pause first — blocks Send-on-create auto-push, Sync button, and any agent script.
+  if (!isQuickBooksInvoicePushEnabled()) {
+    throw new InvoiceQuickBooksPushPausedError();
+  }
+
   const invoice = await db.invoice.findFirst({
     where: { id: invoiceId, organizationId },
     include: { lineItems: { orderBy: { sortOrder: "asc" } }, job: true },
