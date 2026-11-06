@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
@@ -127,6 +128,13 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
   const [internalNotes, setInternalNotes] = useState("");
   const [invoiceToQbo, setInvoiceToQbo] = useState(true);
   const [paymentHistoryOpen, setPaymentHistoryOpen] = useState(true);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [shareNote, setShareNote] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [taxHint, setTaxHint] = useState(false);
+
+  const filesHref = `/jobs/${props.jobId}/files`;
+  const scheduleHref = `/jobs/${props.jobId}/schedule`;
 
   const companyAddress = useMemo(
     () =>
@@ -153,6 +161,31 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate once per successful create
   }, [state.ok, state.invoiceId, props.jobId, props.onOpenChange, router]);
 
+  useEffect(() => {
+    if (!shareNote) return;
+    const timer = window.setTimeout(() => setShareNote(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [shareNote]);
+
+  async function shareInvoiceDraft() {
+    const url = `${window.location.origin}/jobs/${props.jobId}/invoices`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${props.jobName} — Invoice`, url });
+        setShareNote("Shared");
+        return;
+      }
+    } catch {
+      /* clipboard fallback */
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareNote("Link copied");
+    } catch {
+      setShareNote("Copy failed");
+    }
+  }
+
   if (!props.open) return null;
 
   const fieldClass =
@@ -168,7 +201,7 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
         onClick={() => props.onOpenChange(false)}
       />
       <div
-        className="relative flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-lg bg-[var(--bt-panel-bg)] shadow-xl sm:max-h-[92vh] sm:rounded-lg"
+        className={`relative flex max-h-[96vh] w-full flex-col overflow-hidden rounded-t-lg bg-[var(--bt-panel-bg)] shadow-xl sm:max-h-[92vh] sm:rounded-lg ${expanded ? "max-w-[min(100vw-1rem,80rem)]" : "max-w-5xl"}`}
         role="dialog"
         aria-modal="true"
         aria-label="Invoice"
@@ -189,16 +222,59 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
               <div className="truncate text-xs text-[var(--bt-muted)]">{props.jobName}</div>
               <h1 className="text-lg font-semibold text-[var(--bt-text)]">Invoice</h1>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <span className="rounded p-1.5 text-[#64748b]" title="Share" aria-hidden>
+            <div className="relative flex shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => void shareInvoiceDraft()}
+                aria-label="Share"
+                title="Share"
+                className="rounded p-1.5 text-[#16a34a] hover:bg-black/5"
+              >
                 <ShareIcon className="h-4 w-4" />
-              </span>
-              <span className="rounded p-1.5 text-[#64748b]" title="Help" aria-hidden>
+              </button>
+              {shareNote ? (
+                <span className="absolute right-24 top-full z-10 mt-1 whitespace-nowrap rounded bg-[#111827] px-2 py-1 text-[11px] text-white" role="status">
+                  {shareNote}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setHelpOpen((open) => !open)}
+                aria-expanded={helpOpen}
+                aria-label="Help"
+                title="Help"
+                className="rounded p-1.5 text-[#3b82f6] hover:bg-black/5"
+              >
                 <HelpIcon className="h-4 w-4" />
-              </span>
-              <span className="rounded p-1.5 text-[#0ea5e9]" title="Expand" aria-hidden>
+              </button>
+              {helpOpen ? (
+                <div
+                  className="absolute right-0 top-full z-20 mt-1 w-[min(18rem,calc(100vw-2rem))] rounded-md border bg-white p-3 text-sm shadow-lg"
+                  style={{ borderColor: "var(--bt-border)" }}
+                  role="dialog"
+                  aria-label="Create invoice help"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-[var(--bt-text)]">Create invoice</h3>
+                    <button type="button" aria-label="Close help" className="rounded p-0.5 text-[var(--bt-muted)] hover:bg-black/5" onClick={() => setHelpOpen(false)}>
+                      <CloseIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-[var(--bt-muted)]">
+                    Fill Details, check Client preview, then Save (draft) or Send. ID # auto-assigns when blank. Attachments open this job&apos;s Files.
+                  </p>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                aria-pressed={expanded}
+                aria-label={expanded ? "Exit full width" : "Expand"}
+                title={expanded ? "Exit full width" : "Expand"}
+                className="rounded p-1.5 text-[#0ea5e9] hover:bg-black/5"
+              >
                 <MaximizeIcon className="h-4 w-4" />
-              </span>
+              </button>
               <button
                 type="button"
                 onClick={() => props.onOpenChange(false)}
@@ -281,7 +357,11 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
                   </div>
                   {dueMode === "schedule" ? (
                     <p className="mt-2 text-xs text-[var(--bt-muted)]">
-                      Schedule linking is not available yet — set Invoice date and Due date below.
+                      Due dates still save on this invoice. Open the schedule to pick milestone dates:{" "}
+                      <Link href={scheduleHref} className="font-medium text-[var(--bt-primary)] hover:underline" onClick={() => props.onOpenChange(false)}>
+                        Open Schedule
+                      </Link>
+                      .
                     </p>
                   ) : null}
 
@@ -348,10 +428,22 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
                             <option value="none">No Tax</option>
                           </select>
                         )}
-                        <button type="button" className="text-sm font-medium text-[var(--bt-primary)] hover:underline">
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-[var(--bt-primary)] hover:underline"
+                          onClick={() => {
+                            setType("LINE_ITEM");
+                            setTaxHint(true);
+                          }}
+                        >
                           Manage
                         </button>
                       </div>
+                      {taxHint ? (
+                        <p className="mt-1 text-xs text-[var(--bt-muted)]">
+                          Tax is set per invoice via Line items + tax rate % (and Tax on each line). Company tax presets are not configured yet.
+                        </p>
+                      ) : null}
                     </label>
 
                     <Segmented
@@ -564,21 +656,26 @@ export function CreateInvoiceForm(props: CreateInvoiceModalProps) {
 
                 <section className="py-4">
                   <h2 className="text-sm font-semibold text-[var(--bt-text)]">Attachments</h2>
+                  <p className="mt-1 text-xs text-[var(--bt-muted)]">
+                    Files live on the job Documents library until invoice-linked attachments ship.
+                  </p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
+                    <Link
+                      href={filesHref}
                       className="rounded border px-3 py-1.5 text-sm font-medium text-[var(--bt-text)] hover:bg-black/5"
                       style={{ borderColor: "var(--bt-border)" }}
+                      onClick={() => props.onOpenChange(false)}
                     >
                       Add
-                    </button>
-                    <button
-                      type="button"
+                    </Link>
+                    <Link
+                      href={filesHref}
                       className="rounded border px-3 py-1.5 text-sm font-medium text-[var(--bt-text)] hover:bg-black/5"
                       style={{ borderColor: "var(--bt-border)" }}
+                      onClick={() => props.onOpenChange(false)}
                     >
                       Create new doc
-                    </button>
+                    </Link>
                   </div>
                 </section>
               </div>
