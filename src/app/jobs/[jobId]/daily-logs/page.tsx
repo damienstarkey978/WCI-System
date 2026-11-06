@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { actorSummaryText } from "@/components/actor-attribution";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { ChatIcon, HeartIcon, NoteIcon } from "@/components/shell/icons";
+import { ChatIcon, FilterIcon, HeartIcon, NoteIcon, SearchIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -115,18 +115,47 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
   const filterCount = [q, from, to].filter(Boolean).length;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
       <PageHeader
         jobName={job.name}
         title="Daily Logs"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <form action={`/jobs/${job.id}/daily-logs`} className="relative hidden sm:block">
+              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--bt-muted)]" />
+              <input
+                name="q"
+                defaultValue={q}
+                placeholder="Search"
+                aria-label="Search daily logs"
+                className="h-9 w-44 rounded border bg-[var(--bt-panel-bg)] pl-8 pr-2 text-sm text-[var(--bt-text)] placeholder:text-[var(--bt-muted)]"
+                style={{ borderColor: "var(--bt-border)" }}
+              />
+              {from ? <input type="hidden" name="from" value={from} /> : null}
+              {to ? <input type="hidden" name="to" value={to} /> : null}
+            </form>
             <PrintButton />
             <details className="relative">
-              <summary className="cursor-pointer list-none rounded border px-3 py-2 text-sm font-medium text-[var(--bt-text)]" style={{ borderColor: "var(--bt-border)" }}>
-                Filter{filterCount > 0 ? ` (${filterCount})` : ""}
+              <summary
+                className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded border bg-[var(--bt-panel-bg)] px-3 text-sm font-medium text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)] [&::-webkit-details-marker]:hidden"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                <FilterIcon className="h-3.5 w-3.5" />
+                Filter
+                {filterCount > 0 ? (
+                  <span
+                    className="inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-[var(--bt-on-primary)]"
+                    style={{ background: "var(--bt-primary)" }}
+                  >
+                    {filterCount}
+                  </span>
+                ) : null}
               </summary>
-              <form action={`/jobs/${job.id}/daily-logs`} className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-3 rounded-lg border bg-[var(--bt-panel-bg)] p-4 shadow-lg" style={{ borderColor: "var(--bt-border)" }}>
+              <form
+                action={`/jobs/${job.id}/daily-logs`}
+                className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-3 rounded-lg border bg-[var(--bt-panel-bg)] p-4 shadow-lg"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
                 <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--bt-muted)]">
                   Search title and notes
                   <input name="q" defaultValue={q} className="rounded border px-2 py-1.5 text-sm font-normal" style={{ borderColor: "var(--bt-border)" }} />
