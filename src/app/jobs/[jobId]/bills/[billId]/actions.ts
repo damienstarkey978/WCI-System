@@ -29,6 +29,7 @@ import {
   IllegalBillTransitionError,
   updateBillStatus,
 } from "@/lib/bills/service";
+import { NotDiscardableError, RecordNotFoundError, deleteBill } from "@/lib/financials/discard";
 
 export interface BillActionState {
   readonly error?: string;
@@ -59,7 +60,9 @@ async function run(
       error instanceof LienWaiverAlreadyReleasedError ||
       error instanceof BillNotBillableError ||
       error instanceof BillAlreadyInvoicedError ||
-      error instanceof InvoiceNotEditableError
+      error instanceof InvoiceNotEditableError ||
+      error instanceof NotDiscardableError ||
+      error instanceof RecordNotFoundError
     ) {
       return { error: error.message };
     }
@@ -132,6 +135,17 @@ export async function releaseLienWaiverAction(_previous: BillActionState, formDa
  * Bill the vendor's cost to the client at a markup. Revalidates the invoices screen
  * too, since that is where the resulting draft shows up.
  */
+/** Delete an inbox / in-review bill (BT footer Delete on Draft). */
+export async function deleteBillAction(_previous: BillActionState, formData: FormData): Promise<BillActionState> {
+  const jobId = String(formData.get("jobId") ?? "");
+  const billId = String(formData.get("billId") ?? "");
+  const state = await run(jobId, billId, (organizationId) => deleteBill(organizationId, billId));
+  if (state.ok) {
+    revalidatePath(`/jobs/${jobId}/bills`);
+  }
+  return state;
+}
+
 export async function addToInvoiceAction(_previous: BillActionState, formData: FormData): Promise<BillActionState> {
   const jobId = String(formData.get("jobId") ?? "");
   const billId = String(formData.get("billId") ?? "");
