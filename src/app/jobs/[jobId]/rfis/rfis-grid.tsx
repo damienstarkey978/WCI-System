@@ -83,6 +83,7 @@ export function RfisGrid({ rows }: { rows: readonly RfiRow[] }) {
       rows={rows}
       rowKey={(row) => row.id}
       viewKey="rfis"
+      sortToolbarInFooter
       selectable
       rowActions={(row) =>
         row.status !== "CLOSED" ? (

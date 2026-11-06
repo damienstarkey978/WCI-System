@@ -456,6 +456,27 @@ export function ClipboardIcon({ className }: IconProps) {
   );
 }
 
+/** RFI empty-state — speech bubble with question mark (BT metaphor). */
+export function RfiIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M10 10.5h28A3.5 3.5 0 0 1 41.5 14v16A3.5 3.5 0 0 1 38 33.5H24.5L16 40.5v-7H10A3.5 3.5 0 0 1 6.5 30V14A3.5 3.5 0 0 1 10 10.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M20.2 19.2a4 4 0 1 1 5.9 3.5c-1.2.75-1.9 1.55-1.9 3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <circle cx="24.2" cy="29.2" r="1.35" fill="currentColor" />
+    </svg>
+  );
+}
+
 /** Warranty claim shield. */
 export function ShieldIcon({ className }: IconProps) {
   return (
