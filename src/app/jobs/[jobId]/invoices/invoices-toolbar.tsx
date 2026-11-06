@@ -3,27 +3,38 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { CreateModal } from "@/components/shell/CreateModal";
-import { ChevronDownIcon, FilterIcon, HelpIcon, ShareIcon } from "@/components/shell/icons";
+import { ChevronDownIcon, CloseIcon, HelpIcon, ShareIcon } from "@/components/shell/icons";
+import { ListFilterButton } from "@/components/shell/ListFilterSidebar";
 
-import { CreateInvoiceForm } from "./create-invoice-form";
+import { CreateInvoiceForm, type CreateInvoiceModalProps } from "./create-invoice-form";
+
+export type InvoiceCreateBranding = Omit<CreateInvoiceModalProps, "open" | "onOpenChange" | "jobId" | "jobName">;
 
 /**
- * Buildertrend Invoices header chrome: multi-color help / share / filter icons,
- * outlined "+ Payment schedule", and split "+ Invoice" primary (main click opens
- * create modal; chevron offers New invoice + Payment schedule).
- *
- * Kept invoices-local so PO/Bills ListToolbar chrome stays owned by those pages.
+ * Buildertrend Invoices header chrome: Help / Share / Filter (working), outlined
+ * "+ Payment schedule", and split "+ Invoice" opening the full Create Invoice modal.
  */
 export function InvoicesToolbar({
   jobId,
+  jobName,
   scheduleActive,
+  filterOpen,
+  filterActiveCount,
+  onFilterClick,
+  branding,
 }: {
   jobId: string;
+  jobName: string;
   scheduleActive: boolean;
+  filterOpen: boolean;
+  filterActiveCount: number;
+  onFilterClick: () => void;
+  branding: InvoiceCreateBranding;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [shareNote, setShareNote] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,18 +46,91 @@ export function InvoicesToolbar({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (!shareNote) return;
+    const timer = window.setTimeout(() => setShareNote(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [shareNote]);
+
+  async function sharePage() {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${jobName} — Invoices`, url });
+        setShareNote("Shared");
+        return;
+      }
+    } catch {
+      /* fall through to clipboard */
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareNote("Link copied");
+    } catch {
+      setShareNote("Copy failed — copy the URL from the address bar");
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <div className="flex items-center gap-1">
-        <IconHit title="Help" color="#3b82f6">
+      <div className="relative flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setHelpOpen((open) => !open)}
+          aria-expanded={helpOpen}
+          aria-label="Help"
+          className="inline-flex h-9 w-9 items-center justify-center rounded border bg-[var(--bt-panel-bg)] hover:bg-black/5"
+          style={{ borderColor: helpOpen ? "var(--bt-primary)" : "var(--bt-border)", color: "#3b82f6" }}
+          title="Help"
+        >
           <HelpIcon className="h-4 w-4" />
-        </IconHit>
-        <IconHit title="Share" color="#16a34a">
+        </button>
+        {helpOpen ? (
+          <div
+            className="absolute right-0 top-full z-30 mt-1 w-[min(20rem,calc(100vw-2rem))] rounded-md border bg-white p-3 text-sm shadow-lg"
+            style={{ borderColor: "var(--bt-border)" }}
+            role="dialog"
+            aria-label="Invoices help"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-sm font-semibold text-[var(--bt-text)]">Invoices</h3>
+              <button
+                type="button"
+                aria-label="Close help"
+                className="rounded p-0.5 text-[var(--bt-muted)] hover:bg-black/5"
+                onClick={() => setHelpOpen(false)}
+              >
+                <CloseIcon className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--bt-muted)]">
+              Create drafts with <span className="font-medium text-[var(--bt-text)]">+ Invoice</span>, review Details and
+              Client preview, then Save or Send. Use Filter to narrow by keyword, status, or date paid. Payment schedule
+              bills the contract in milestones.
+            </p>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => void sharePage()}
+          aria-label="Share"
+          className="inline-flex h-9 w-9 items-center justify-center rounded border bg-[var(--bt-panel-bg)] hover:bg-black/5"
+          style={{ borderColor: "var(--bt-border)", color: "#16a34a" }}
+          title="Share"
+        >
           <ShareIcon className="h-4 w-4" />
-        </IconHit>
-        <IconHit title="Filter" color="#0ea5e9">
-          <FilterIcon className="h-4 w-4" />
-        </IconHit>
+        </button>
+        {shareNote ? (
+          <span
+            className="absolute -bottom-7 right-10 whitespace-nowrap rounded bg-[#111827] px-2 py-1 text-[11px] text-white"
+            role="status"
+          >
+            {shareNote}
+          </span>
+        ) : null}
+
+        <ListFilterButton activeCount={filterActiveCount} open={filterOpen} onClick={onFilterClick} />
       </div>
 
       <Link
@@ -111,28 +195,13 @@ export function InvoicesToolbar({
         ) : null}
       </div>
 
-      <CreateModal
-        triggerLabel="+ Invoice"
-        title="New invoice"
+      <CreateInvoiceForm
+        jobId={jobId}
+        jobName={jobName}
         open={invoiceOpen}
         onOpenChange={setInvoiceOpen}
-        hideTrigger
-      >
-        <CreateInvoiceForm jobId={jobId} />
-      </CreateModal>
+        {...branding}
+      />
     </div>
-  );
-}
-
-function IconHit({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
-  return (
-    <span
-      className="inline-flex h-9 w-9 items-center justify-center rounded border bg-[var(--bt-panel-bg)]"
-      style={{ borderColor: "var(--bt-border)", color }}
-      title={title}
-      aria-hidden
-    >
-      {children}
-    </span>
   );
 }

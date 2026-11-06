@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 
-import type { PaymentMethod } from "@/generated/prisma/enums";
+import type { PaymentMethod, PaymentTerms } from "@/generated/prisma/enums";
 import { InvoiceType } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
+import { displayInvoiceId } from "@/lib/invoicing/display";
 import {
   createInvoice,
   InvoiceNotFoundError,
@@ -12,6 +13,7 @@ import {
   JobNotFoundError,
   JobNotOpenError,
   recordPayment,
+  sendInvoice,
 } from "@/lib/invoicing/service";
 import { parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
 import { db } from "@/lib/db";
@@ -22,37 +24,74 @@ import { InvoiceHasNoClientError, syncInvoiceToQuickBooks } from "@/lib/quickboo
 export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
+  readonly invoiceId?: string;
+}
+
+const PAYMENT_TERMS_VALUES = new Set<string>([
+  "DUE_ON_RECEIPT",
+  "NET_15",
+  "NET_30",
+  "NET_45",
+  "NET_60",
+  "CUSTOM",
+]);
+
+/** Next short display id for the job (0001, 0002, …) — matches BT “(Auto assign)”. */
+async function nextAutoInvoiceNumber(organizationId: string, jobId: string): Promise<string> {
+  const existing = await db.invoice.findMany({
+    where: { organizationId, jobId },
+    select: { invoiceNumber: true },
+  });
+  let max = 0;
+  for (const row of existing) {
+    const display = displayInvoiceId(row.invoiceNumber);
+    const match = display.match(/(\d+)\s*$/);
+    if (!match) continue;
+    const value = Number.parseInt(match[1]!, 10);
+    if (Number.isFinite(value) && value > max) max = value;
+  }
+  return String(max + 1).padStart(4, "0");
 }
 
 export async function createInvoiceAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireAppUser();
 
   const jobId = String(formData.get("jobId") ?? "");
-  const invoiceNumber = String(formData.get("invoiceNumber") ?? "").trim();
+  let invoiceNumber = String(formData.get("invoiceNumber") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim() || null;
   const typeRaw = String(formData.get("type") ?? "FLAT");
   const type = typeRaw === "LINE_ITEM" ? InvoiceType.LINE_ITEM : InvoiceType.FLAT;
   const dueOnRaw = String(formData.get("dueOn") ?? "");
+  const issuedOnRaw = String(formData.get("issuedOn") ?? "");
+  const clientMessage = String(formData.get("clientMessage") ?? "").trim() || null;
+  const intent = String(formData.get("intent") ?? "save") === "send" ? "send" : "save";
+  const termsRaw = String(formData.get("paymentTerms") ?? "CUSTOM");
+  const paymentTerms = (PAYMENT_TERMS_VALUES.has(termsRaw) ? termsRaw : "CUSTOM") as PaymentTerms;
+  const invoiceToQbo = String(formData.get("invoiceToQbo") ?? "") === "1";
 
   if (!invoiceNumber) {
-    return { error: "Invoice number is required." };
+    invoiceNumber = await nextAutoInvoiceNumber(user.organizationId, jobId);
   }
 
+  let invoiceId: string;
   try {
     if (type === InvoiceType.FLAT) {
-      const amountRaw = String(formData.get("amount") ?? "");
-      if (!amountRaw) return { error: "Amount is required for a flat invoice." };
+      const amountRaw = String(formData.get("amount") ?? "0").trim() || "0";
       const amountCents = parseDollarsToCents(amountRaw);
 
-      await createInvoice({
+      const invoice = await createInvoice({
         organizationId: user.organizationId,
         jobId,
         type,
         invoiceNumber,
         title,
+        issuedOn: issuedOnRaw ? new Date(issuedOnRaw) : null,
         dueOn: dueOnRaw ? new Date(dueOnRaw) : null,
+        paymentTerms,
+        clientMessage,
         amountCents,
       });
+      invoiceId = invoice.id;
     } else {
       const titles = formData.getAll("lineItemTitle").map(String);
       const amounts = formData.getAll("lineItemAmount").map(String);
@@ -63,8 +102,8 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
       const taxableKeys = new Set(formData.getAll("lineItemTaxable").map(String));
 
       const lineItems = titles
-        .map((title, index) => ({
-          title: title.trim(),
+        .map((lineTitle, index) => ({
+          title: lineTitle.trim(),
           amountRaw: amounts[index] ?? "",
           taxable: taxableKeys.has(keys[index] ?? ""),
         }))
@@ -85,16 +124,39 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
         return { error: "A tax rate is set but no line is marked taxable. Tick Tax on the lines it applies to." };
       }
 
-      await createInvoice({
+      const invoice = await createInvoice({
         organizationId: user.organizationId,
         jobId,
         type,
         invoiceNumber,
         title,
+        issuedOn: issuedOnRaw ? new Date(issuedOnRaw) : null,
         dueOn: dueOnRaw ? new Date(dueOnRaw) : null,
+        paymentTerms,
+        clientMessage,
         taxRateBasisPoints,
         lineItems,
       });
+      invoiceId = invoice.id;
+    }
+
+    if (intent === "send") {
+      await sendInvoice(user.organizationId, invoiceId);
+      if (invoiceToQbo) {
+        try {
+          await syncInvoiceToQuickBooks(user.organizationId, invoiceId);
+        } catch (error) {
+          // Create + send already succeeded — QB is best-effort on Send (BT toggle).
+          if (
+            !(error instanceof QuickBooksNotConnectedError) &&
+            !(error instanceof QuickBooksNotConfiguredError) &&
+            !(error instanceof InvoiceHasNoClientError) &&
+            !(error instanceof QuickBooksApiError)
+          ) {
+            throw error;
+          }
+        }
+      }
     }
   } catch (error) {
     if (error instanceof JobNotFoundError || error instanceof JobNotOpenError) return { error: error.message };
@@ -106,7 +168,8 @@ export async function createInvoiceAction(_previous: ActionState, formData: Form
   }
 
   revalidatePath(`/jobs/${jobId}/invoices`);
-  return { ok: true };
+  revalidatePath(`/jobs/${jobId}/invoices/${invoiceId}`);
+  return { ok: true, invoiceId };
 }
 
 export async function recordPaymentAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
