@@ -415,6 +415,9 @@ export class ChangeOrderNotApprovedError extends Error {
  * PO/Bid/Invoice/Schedule updates via the same explicit conversion action
  * pattern"). Creates one PO line per change-order line (or one line for a FLAT
  * CO), tagged with sourceType CHANGE_ORDER and sourceId back to the CO.
+ *
+ * Damien (2026-11-06): never pushes to QuickBooks. No CO→PO→QB or CO→Bill auto
+ * sync while Buildertrend still owns QB.
  */
 export async function pushChangeOrderToPurchaseOrder(
   organizationId: string,
