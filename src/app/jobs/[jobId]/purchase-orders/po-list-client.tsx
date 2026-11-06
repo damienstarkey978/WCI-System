@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/shell/EmptyState";
-import { PurchaseOrderIcon } from "@/components/shell/icons";
+import { PurchaseOrderIcon, SearchIcon, UploadIcon } from "@/components/shell/icons";
 import {
   FilterField,
   filterControlClassName,
@@ -18,6 +18,7 @@ import {
   matchesDatePreset,
   MultiSelectChips,
 } from "@/components/shell/list-filter-fields";
+import { downloadPurchaseOrdersCsv } from "@/lib/purchase-orders/export-csv";
 
 import type { ScheduleOption, VendorOption } from "./create-po-form";
 import { PurchaseOrderDetailModal } from "./po-detail-modal";
@@ -54,16 +55,20 @@ export function PurchaseOrdersListClient({
   vendors,
   scheduleItems,
   createAction,
+  jobName,
 }: {
   rows: readonly PurchaseOrderRow[];
   vendors: readonly VendorOption[];
   scheduleItems: readonly ScheduleOption[];
   createAction: React.ReactNode;
+  jobName: string;
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [draft, setDraft] = useState<DraftFilters>(EMPTY);
   const [applied, setApplied] = useState<DraftFilters>(EMPTY);
   const [editing, setEditing] = useState<PurchaseOrderRow | null>(null);
+  /** Instant list search (BT keyword) — applied without opening the filter drawer. */
+  const [quickSearch, setQuickSearch] = useState("");
 
   const vendorOptions = useMemo(() => {
     const set = new Set<string>();
@@ -84,7 +89,7 @@ export function PurchaseOrdersListClient({
   }, [rows]);
 
   const filtered = useMemo(() => {
-    const kw = applied.keyword.trim().toLowerCase();
+    const kw = (quickSearch.trim() || applied.keyword.trim()).toLowerCase();
     return rows.filter((row) => {
       if (!applied.includeCancelled && row.status === "CANCELLED") return false;
       if (kw) {
@@ -96,23 +101,53 @@ export function PurchaseOrdersListClient({
       if (!matchesDatePreset(row.createdAt, applied.datePreset)) return false;
       return true;
     });
-  }, [rows, applied]);
+  }, [rows, applied, quickSearch]);
 
   const activeCount = countTruthyFilters([
-    Boolean(applied.keyword.trim()),
+    Boolean(applied.keyword.trim()) || Boolean(quickSearch.trim()),
     applied.statuses.length > 0,
     applied.vendors.length > 0,
     applied.datePreset !== "all",
     applied.includeCancelled,
   ]);
 
+  function exportCsv() {
+    const safe = jobName.replace(/[^\w.-]+/g, "_").slice(0, 40) || "purchase-orders";
+    downloadPurchaseOrdersCsv(filtered, `${safe}-purchase-orders.csv`);
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-end gap-2">
+        <label className="relative hidden sm:block">
+          <span className="sr-only">Search purchase orders</span>
+          <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--bt-muted)]" />
+          <input
+            value={quickSearch}
+            onChange={(event) => setQuickSearch(event.target.value)}
+            placeholder="Search"
+            aria-label="Search purchase orders"
+            className="h-8 w-44 rounded border bg-[var(--bt-panel-bg)] pl-8 pr-2 text-sm text-[var(--bt-text)] placeholder:text-[var(--bt-muted)]"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
         <ListToolbar
           filterOpen={filterOpen}
           filterActiveCount={activeCount}
           onFilterClick={() => setFilterOpen((o) => !o)}
+          extraIcons={
+            <button
+              type="button"
+              onClick={exportCsv}
+              aria-label="Export"
+              title="Export"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white hover:bg-black/5"
+              style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-export, #16a34a)" }}
+            >
+              <UploadIcon className="h-4 w-4" />
+            </button>
+          }
+          primaryAction={createAction}
         />
       </div>
 
@@ -142,9 +177,11 @@ export function PurchaseOrdersListClient({
           onClearAll={() => {
             setDraft(EMPTY);
             setApplied(EMPTY);
+            setQuickSearch("");
           }}
           onApply={() => {
             setApplied(draft);
+            setQuickSearch(draft.keyword);
             setFilterOpen(false);
           }}
         >

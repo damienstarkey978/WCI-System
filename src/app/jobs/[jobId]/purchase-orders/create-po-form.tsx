@@ -237,36 +237,10 @@ export function CreatePoForm({
 
           <ScopeRichText defaultValue={defaultScopeOfWork} />
 
-          <section className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <h3 className="text-sm font-semibold text-[var(--bt-text)]">Plans and Specs</h3>
-              <p className="mt-1 text-xs text-[var(--bt-muted)]">Save to add plans and specs.</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-[var(--bt-text)]">Attachments</h3>
-              <div className="mt-1 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled
-                  title="Save the purchase order first, then attach files on the detail page."
-                  className="rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)] opacity-60"
-                  style={{ borderColor: "var(--bt-border)" }}
-                >
-                  Add
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  title="Save the purchase order first."
-                  className="rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)] opacity-60"
-                  style={{ borderColor: "var(--bt-border)" }}
-                >
-                  Create new doc
-                </button>
-              </div>
-              <p className="mt-1 text-[10px] text-[var(--bt-muted)]">Save to attach files — they open on the PO detail page.</p>
-            </div>
-          </section>
+          {/*
+            Plans / Attachments upload lives on the saved PO detail page (working Add
+            control there). Do not show disabled Add / Create new doc placeholders here.
+          */}
 
           <label className="flex items-center gap-2 text-sm text-[var(--bt-text)]">
             <input

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 import { ScopeRichText } from "@/components/financial/ScopeRichText";
 import {
-  ChatIcon,
   CloseIcon,
   HistoryIcon,
   InfoIcon,
@@ -34,17 +33,6 @@ function SendIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
       <path d="M3.1 2.3a1 1 0 0 1 1.08-.12l13 6.5a1 1 0 0 1 0 1.84l-13 6.5A1 1 0 0 1 2 16.5v-4.3a1 1 0 0 1 .7-.95l6.55-2.05a.25.25 0 0 0 0-.48L2.7 6.67A1 1 0 0 1 2 5.72V3.1a1 1 0 0 1 1.1-.8Z" />
-    </svg>
-  );
-}
-
-/** Buildertrend footer ⋯ (horizontal ellipsis), not the hamburger MenuIcon. */
-function EllipsisIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" className={className} aria-hidden>
-      <circle cx="4.5" cy="10" r="1.5" />
-      <circle cx="10" cy="10" r="1.5" />
-      <circle cx="15.5" cy="10" r="1.5" />
     </svg>
   );
 }
@@ -110,7 +98,6 @@ export function PurchaseOrderDetailModal({
     row.linkedScheduleItemId ? "schedule" : "date",
   );
   const [linkedScheduleItemId, setLinkedScheduleItemId] = useState(row.linkedScheduleItemId ?? "");
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const statusStyle = PO_STATUS_STYLE[row.status] ?? PO_STATUS_STYLE.DRAFT;
   const workStyle = WORK_STATUS_STYLE[row.workStatus] ?? WORK_STATUS_STYLE.NOT_COMPLETE;
@@ -177,13 +164,7 @@ export function PurchaseOrderDetailModal({
               >
                 <HistoryIcon className="h-4 w-4" />
               </Link>
-              <span
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--bt-chrome-help,#3b82f6)]"
-                title="Comments"
-                aria-hidden
-              >
-                <ChatIcon className="h-4 w-4" />
-              </span>
+              {/* Comments / chat deferred until a working PO comments thread ships — no inert icon. */}
               <button
                 type="button"
                 onClick={onClose}
@@ -493,25 +474,11 @@ export function PurchaseOrderDetailModal({
               ) : null}
             </div>
 
-            <div className="relative flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                aria-label="More actions"
-                onClick={() => setMenuOpen((open) => !open)}
-                className="rounded p-2 text-[var(--bt-muted)] hover:bg-black/5"
-              >
-                <EllipsisIcon className="h-4 w-4" />
-              </button>
-              {menuOpen ? (
-                <div
-                  className="absolute bottom-full right-0 mb-1 min-w-[10rem] rounded border bg-white py-1 text-sm shadow-lg"
-                  style={{ borderColor: "var(--bt-border)" }}
-                >
-                  <Link href={detailHref} className="block px-3 py-1.5 hover:bg-black/5" onClick={onClose}>
-                    Open full page
-                  </Link>
-                </div>
-              ) : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {/*
+                Footer ⋯ (Amend / Recall / …) stays on the full detail page WorkflowButtons
+                until those actions are wired into the pencil modal — no duplicate pop-out menu.
+              */}
               <button
                 type="submit"
                 disabled={pending || !canEdit}
