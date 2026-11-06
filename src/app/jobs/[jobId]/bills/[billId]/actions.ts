@@ -29,7 +29,10 @@ import {
   BillQuickBooksIntentRequiredError,
   IllegalBillTransitionError,
   InventedBillNumberError,
+  PurchaseOrderJobMismatchError,
   UnknownCostCodeError,
+  UnknownPurchaseOrderError,
+  UnknownVendorError,
   updateBill,
   updateBillStatus,
 } from "@/lib/bills/service";
@@ -69,6 +72,9 @@ async function run(
       error instanceof BillNotEditableError ||
       error instanceof InventedBillNumberError ||
       error instanceof UnknownCostCodeError ||
+      error instanceof UnknownVendorError ||
+      error instanceof UnknownPurchaseOrderError ||
+      error instanceof PurchaseOrderJobMismatchError ||
       error instanceof IllegalBillTransitionError ||
       error instanceof BillQuickBooksIntentRequiredError ||
       error instanceof ApprovalsIncompleteError ||
@@ -92,7 +98,7 @@ async function run(
   return { ok: true };
 }
 
-/** Save bill header + QuickBooks / billable checkboxes (BT detail edit). */
+/** Save bill header + Pay to / PO + QuickBooks / billable (BT detail edit). */
 export async function updateBillAction(_previous: BillActionState, formData: FormData): Promise<BillActionState> {
   const jobId = String(formData.get("jobId") ?? "");
   const billId = String(formData.get("billId") ?? "");
@@ -101,6 +107,9 @@ export async function updateBillAction(_previous: BillActionState, formData: For
   const description = String(formData.get("description") ?? "").trim() || null;
   const issuedOn = parseOptionalDate(String(formData.get("issuedOn") ?? ""));
   const dueOn = parseOptionalDate(String(formData.get("dueOn") ?? ""));
+  const vendorId = String(formData.get("vendorId") ?? "").trim() || null;
+  const vendorName = String(formData.get("vendorName") ?? "").trim() || null;
+  const purchaseOrderId = String(formData.get("purchaseOrderId") ?? "").trim() || null;
   const sendRaw = String(formData.get("sendToQuickBooks") ?? "").trim();
   const sendToQuickBooks = sendRaw === "true" ? true : sendRaw === "false" ? false : null;
   const billableToClient = String(formData.get("billableToClient") ?? "") === "true";
@@ -108,6 +117,10 @@ export async function updateBillAction(_previous: BillActionState, formData: For
     sendToQuickBooks === false
       ? String(formData.get("quickBooksSkipReason") ?? "").trim() || "Skipped QuickBooks on save"
       : null;
+
+  if (!vendorId && !vendorName) {
+    return { error: "Pay to is required — pick a vendor or type a name." };
+  }
 
   const hasCostLines = formData.getAll("lineCostCodeId").length > 0;
   let lineItems: Parameters<typeof updateBill>[0]["lineItems"];
@@ -138,6 +151,9 @@ export async function updateBillAction(_previous: BillActionState, formData: For
       description,
       issuedOn,
       dueOn,
+      vendorId,
+      vendorName,
+      purchaseOrderId,
       sendToQuickBooks,
       quickBooksSkipReason,
       billableToClient,

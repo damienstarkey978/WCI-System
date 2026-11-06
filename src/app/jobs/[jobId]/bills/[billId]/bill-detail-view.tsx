@@ -74,6 +74,18 @@ export type BillDetailWaiver = {
   readonly body: string | null;
 };
 
+export type BillVendorOption = {
+  readonly id: string;
+  readonly name: string;
+};
+
+export type BillPurchaseOrderOption = {
+  readonly id: string;
+  readonly label: string;
+  readonly vendorId: string | null;
+  readonly vendorName: string | null;
+};
+
 export type BillDetailProps = {
   readonly jobId: string;
   readonly jobName: string;
@@ -84,8 +96,11 @@ export type BillDetailProps = {
   readonly vendorName: string;
   readonly vendorId: string | null;
   readonly vendorHref: string | null;
+  readonly vendors: readonly BillVendorOption[];
+  readonly purchaseOrderId: string | null;
   readonly purchaseOrderLabel: string | null;
   readonly purchaseOrderHref: string | null;
+  readonly purchaseOrders: readonly BillPurchaseOrderOption[];
   readonly scheduleItemTitle: string | null;
   readonly issuedOnValue: string;
   readonly dueOnValue: string;
@@ -148,6 +163,31 @@ export function BillDetailView(props: BillDetailProps) {
   const statusStyle = STATUS_STYLE[props.approvalStatus] ?? STATUS_STYLE.IN_REVIEW;
   const totalCents = props.lines.reduce((sum, line) => sum + line.amountCents, 0);
   const displayNumber = displayBillNumber(props.billNumber) ?? props.billNumber;
+  const [vendorId, setVendorId] = useState(props.vendorId ?? "");
+  const [vendorName, setVendorName] = useState(props.vendorName);
+  const [purchaseOrderId, setPurchaseOrderId] = useState(props.purchaseOrderId ?? "");
+
+  function onVendorChange(nextId: string) {
+    setVendorId(nextId);
+    if (nextId) {
+      const match = props.vendors.find((vendor) => vendor.id === nextId);
+      if (match) setVendorName(match.name);
+    }
+  }
+
+  function onPurchaseOrderChange(nextId: string) {
+    setPurchaseOrderId(nextId);
+    if (!nextId) return;
+    const po = props.purchaseOrders.find((row) => row.id === nextId);
+    if (!po) return;
+    if (po.vendorId) {
+      setVendorId(po.vendorId);
+      setVendorName(po.vendorName ?? props.vendorName);
+    } else if (po.vendorName) {
+      setVendorId("");
+      setVendorName(po.vendorName);
+    }
+  }
   const canDelete = props.approvalStatus === "INBOX" || props.approvalStatus === "IN_REVIEW";
   const waiverReleased = props.waiver?.status === "RELEASED";
   const waiverTemplate = props.waiver?.templateName ?? "";
@@ -349,31 +389,80 @@ export function BillDetailView(props: BillDetailProps) {
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div>
                           <FieldLabel label="Pay to" />
-                          <ReadField
-                            value={
-                              props.vendorHref ? (
-                                <Link href={props.vendorHref} className="hover:underline" style={{ color: BT_LINK }}>
-                                  {props.vendorName}
-                                </Link>
+                          {editable ? (
+                            <div className="flex flex-col gap-1">
+                              <select
+                                name="vendorId"
+                                value={vendorId}
+                                onChange={(event) => onVendorChange(event.target.value)}
+                                className={fieldClass}
+                                style={{ borderColor: "var(--bt-border)" }}
+                              >
+                                <option value="">Type or pick vendor…</option>
+                                {props.vendors.map((vendor) => (
+                                  <option key={vendor.id} value={vendor.id}>
+                                    {vendor.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {!vendorId ? (
+                                <input
+                                  name="vendorName"
+                                  value={vendorName}
+                                  onChange={(event) => setVendorName(event.target.value)}
+                                  placeholder="Vendor name"
+                                  required
+                                  className={fieldClass}
+                                  style={{ borderColor: "var(--bt-border)" }}
+                                />
                               ) : (
-                                props.vendorName
-                              )
-                            }
-                          />
+                                <input type="hidden" name="vendorName" value={vendorName} />
+                              )}
+                            </div>
+                          ) : (
+                            <ReadField
+                              value={
+                                props.vendorHref ? (
+                                  <Link href={props.vendorHref} className="hover:underline" style={{ color: BT_LINK }}>
+                                    {props.vendorName}
+                                  </Link>
+                                ) : (
+                                  props.vendorName
+                                )
+                              }
+                            />
+                          )}
                         </div>
                         <div>
                           <FieldLabel label="Purchase Order" />
-                          <ReadField
-                            value={
-                              props.purchaseOrderHref && props.purchaseOrderLabel ? (
-                                <Link href={props.purchaseOrderHref} className="hover:underline" style={{ color: BT_LINK }}>
-                                  {props.purchaseOrderLabel}
-                                </Link>
-                              ) : (
-                                props.purchaseOrderLabel ?? "-- None Selected --"
-                              )
-                            }
-                          />
+                          {editable ? (
+                            <select
+                              name="purchaseOrderId"
+                              value={purchaseOrderId}
+                              onChange={(event) => onPurchaseOrderChange(event.target.value)}
+                              className={fieldClass}
+                              style={{ borderColor: "var(--bt-border)" }}
+                            >
+                              <option value="">-- None Selected --</option>
+                              {props.purchaseOrders.map((po) => (
+                                <option key={po.id} value={po.id}>
+                                  {po.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <ReadField
+                              value={
+                                props.purchaseOrderHref && props.purchaseOrderLabel ? (
+                                  <Link href={props.purchaseOrderHref} className="hover:underline" style={{ color: BT_LINK }}>
+                                    {props.purchaseOrderLabel}
+                                  </Link>
+                                ) : (
+                                  props.purchaseOrderLabel ?? "-- None Selected --"
+                                )
+                              }
+                            />
+                          )}
                         </div>
                         <div>
                           <FieldLabel label="Date paid" />

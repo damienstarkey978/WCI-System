@@ -45,7 +45,7 @@ export default async function BillDetailPage({
   });
   if (!bill) notFound();
 
-  const [staff, qboConnection, draftInvoices, costCodes] = await Promise.all([
+  const [staff, qboConnection, draftInvoices, costCodes, vendors, purchaseOrders] = await Promise.all([
     db.user.findMany({
       where: { organizationId: user.organizationId, isActive: true },
       orderBy: { name: "asc" },
@@ -61,6 +61,16 @@ export default async function BillDetailPage({
       where: { organizationId: user.organizationId, isActive: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, code: true, name: true },
+    }),
+    db.vendor.findMany({
+      where: { organizationId: user.organizationId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    db.purchaseOrder.findMany({
+      where: { jobId, organizationId: user.organizationId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, poNumber: true, title: true, vendorId: true, vendorName: true },
     }),
   ]);
 
@@ -81,12 +91,20 @@ export default async function BillDetailPage({
       vendorName={bill.vendor?.name ?? bill.vendorName}
       vendorId={bill.vendor?.id ?? null}
       vendorHref={bill.vendor ? `/vendors/${bill.vendor.id}` : null}
+      vendors={vendors}
+      purchaseOrderId={bill.purchaseOrder?.id ?? null}
       purchaseOrderLabel={
         bill.purchaseOrder
           ? `${bill.purchaseOrder.poNumber}${bill.purchaseOrder.title ? ` — ${bill.purchaseOrder.title}` : ""}`
           : null
       }
       purchaseOrderHref={bill.purchaseOrder ? `/jobs/${jobId}/purchase-orders/${bill.purchaseOrder.id}` : null}
+      purchaseOrders={purchaseOrders.map((po) => ({
+        id: po.id,
+        label: `${po.poNumber}${po.title ? ` — ${po.title}` : ""}`,
+        vendorId: po.vendorId,
+        vendorName: po.vendorName,
+      }))}
       scheduleItemTitle={bill.linkedScheduleItem?.title ?? null}
       issuedOnValue={bill.issuedOn ? bill.issuedOn.toISOString().slice(0, 10) : ""}
       dueOnValue={bill.dueOn ? bill.dueOn.toISOString().slice(0, 10) : ""}

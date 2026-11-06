@@ -317,12 +317,7 @@ export function CreateBillForm({
             <PoCostLineItems costCodes={costCodes} heading="Costs" />
 
             <section className="flex flex-col gap-2">
-              <h3 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]">
-                Approvals
-                <span className="text-[var(--bt-hazard)]" title="Who must sign before payment" aria-hidden>
-                  💡
-                </span>
-              </h3>
+              <h3 className="text-sm font-semibold text-[var(--bt-text)]">Approvals</h3>
               <div className="rounded-md border p-3" style={{ borderColor: "var(--bt-border)" }}>
                 <div className="mb-2 text-xs font-semibold text-[var(--bt-muted)]">Approvers</div>
                 {staffUsers.length === 0 ? (
@@ -359,12 +354,7 @@ export function CreateBillForm({
             </section>
 
             <section className="flex flex-col gap-2">
-              <h3 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]">
-                Lien waivers
-                <span className="text-[var(--bt-hazard)]" title="Only for assigned subs/vendors" aria-hidden>
-                  💡
-                </span>
-              </h3>
+              <h3 className="text-sm font-semibold text-[var(--bt-text)]">Lien waivers</h3>
               <p className="text-xs text-[var(--bt-muted)]">You can only send lien waivers to assigned subs/vendors</p>
               <div className="space-y-2 rounded-md border p-3" style={{ borderColor: "var(--bt-border)" }}>
                 <label className="flex items-center gap-2 text-sm text-[var(--bt-text)]">
@@ -396,9 +386,6 @@ export function CreateBillForm({
                     />
                     <span>
                       Send to QuickBooks immediately upon save
-                      <span className="ml-1 text-[var(--bt-hazard)]" title="Materials often stay off; labor often on" aria-hidden>
-                        💡
-                      </span>
                       <span className="mt-0.5 block text-[11px] text-[var(--bt-muted)]">
                         Check for labor/unpaid services; leave unchecked for materials already spent.
                       </span>
@@ -486,8 +473,14 @@ export function CreateBillForm({
             disabled={pending}
             className="rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
             style={{ background: BT_NAVY }}
+            title="Mark Ready for Payment"
           >
-            {pending ? "Saving…" : "Mark Ready for Payment"}
+            {pending ? "Saving…" : (
+              <>
+                <span className="sm:hidden">Ready for Payment</span>
+                <span className="hidden sm:inline">Mark Ready for Payment</span>
+              </>
+            )}
           </button>
         </div>
       </footer>
