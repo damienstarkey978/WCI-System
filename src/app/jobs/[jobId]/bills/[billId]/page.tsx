@@ -45,7 +45,7 @@ export default async function BillDetailPage({
   });
   if (!bill) notFound();
 
-  const [staff, qboConnection, draftInvoices] = await Promise.all([
+  const [staff, qboConnection, draftInvoices, costCodes] = await Promise.all([
     db.user.findMany({
       where: { organizationId: user.organizationId, isActive: true },
       orderBy: { name: "asc" },
@@ -56,6 +56,11 @@ export default async function BillDetailPage({
       where: { jobId, organizationId: user.organizationId, status: "DRAFT" },
       orderBy: { createdAt: "desc" },
       select: { id: true, invoiceNumber: true, amountCents: true },
+    }),
+    db.costCode.findMany({
+      where: { organizationId: user.organizationId, isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, code: true, name: true },
     }),
   ]);
 
@@ -102,11 +107,13 @@ export default async function BillDetailPage({
       lines={bill.lineItems.map((item) => ({
         id: item.id,
         title: item.title,
+        costCodeId: item.costCodeId,
         costCodeLabel: `${item.costCode.code} ${item.costCode.name}`,
         costType: item.costType,
         costTypeLabel: item.costType.replace(/_/g, " "),
         amountCents: item.amountCents,
       }))}
+      costCodes={costCodes}
       files={bill.files}
       staff={staff.map((person) => ({ id: person.id, label: person.name ?? person.email }))}
       approvals={bill.approvals.map((approval) => ({

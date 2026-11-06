@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { PoCostLineItems } from "@/components/financial/PoCostLineItems";
+import type { CostCodeOption } from "@/components/financial/CostCodeLineItems";
 import { CloseIcon } from "@/components/shell/icons";
 import { displayBillNumber } from "@/lib/bills/bill-number";
 import { formatMoney } from "@/lib/format";
@@ -43,6 +45,7 @@ const LIEN_TEMPLATES = [
 export type BillDetailLine = {
   readonly id: string;
   readonly title: string;
+  readonly costCodeId: string;
   readonly costCodeLabel: string;
   readonly costType: string;
   readonly costTypeLabel: string;
@@ -97,6 +100,7 @@ export type BillDetailProps = {
   readonly isQboConnected: boolean;
   readonly createdByLabel: string;
   readonly lines: readonly BillDetailLine[];
+  readonly costCodes: readonly CostCodeOption[];
   readonly files: readonly BillDetailFile[];
   readonly staff: readonly { id: string; label: string }[];
   readonly approvals: readonly BillDetailApproval[];
@@ -434,6 +438,21 @@ export function BillDetailView(props: BillDetailProps) {
                       </div>
                     </section>
 
+                    {editable ? (
+                      <PoCostLineItems
+                        costCodes={props.costCodes}
+                        heading="Costs"
+                        initialLines={props.lines.map((line) => ({
+                          title: line.title,
+                          costCodeId: line.costCodeId,
+                          costType: line.costType || "NONE",
+                          unitCost: (line.amountCents / 100).toFixed(2),
+                          quantity: "1",
+                          unit: "",
+                        }))}
+                      />
+                    ) : null}
+
                     <section className="flex flex-col gap-3">
                       <h2 className="text-sm font-semibold text-[var(--bt-text)]">QuickBooks</h2>
                       <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
@@ -489,49 +508,51 @@ export function BillDetailView(props: BillDetailProps) {
                     </section>
                   </form>
 
-                  <section className="flex flex-col gap-2">
-                    <h2 className="text-sm font-semibold text-[var(--bt-text)]">Costs</h2>
-                    <div className="overflow-x-auto rounded-md border" style={{ borderColor: "var(--bt-border)" }}>
-                      <table className="w-full min-w-[40rem] text-left text-sm">
-                        <thead>
-                          <tr className="border-b bg-[#f9fafb] text-xs font-semibold text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-                            <th className="px-3 py-2">Title</th>
-                            <th className="px-3 py-2">Cost code</th>
-                            <th className="px-3 py-2">Cost type</th>
-                            <th className="px-3 py-2 text-right">Builder cost</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {props.lines.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="px-3 py-4 text-center text-xs text-[var(--bt-muted)]">
-                                No cost lines on this bill.
-                              </td>
+                  {!editable ? (
+                    <section className="flex flex-col gap-2">
+                      <h2 className="text-sm font-semibold text-[var(--bt-text)]">Costs</h2>
+                      <div className="overflow-x-auto rounded-md border" style={{ borderColor: "var(--bt-border)" }}>
+                        <table className="w-full min-w-[40rem] text-left text-sm">
+                          <thead>
+                            <tr className="border-b bg-[#f9fafb] text-xs font-semibold text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+                              <th className="px-3 py-2">Title</th>
+                              <th className="px-3 py-2">Cost code</th>
+                              <th className="px-3 py-2">Cost type</th>
+                              <th className="px-3 py-2 text-right">Builder cost</th>
                             </tr>
-                          ) : (
-                            props.lines.map((line) => (
-                              <tr key={line.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                                <td className="px-3 py-2 text-[var(--bt-text)]">{line.title}</td>
-                                <td className="px-3 py-2 text-[var(--bt-muted)]">{line.costCodeLabel}</td>
-                                <td className="px-3 py-2 text-[var(--bt-muted)]">{line.costTypeLabel}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-[var(--bt-text)]">
-                                  {formatMoney(line.amountCents)}
+                          </thead>
+                          <tbody>
+                            {props.lines.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="px-3 py-4 text-center text-xs text-[var(--bt-muted)]">
+                                  No cost lines on this bill.
                                 </td>
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-[#f3f4f6] font-semibold text-[var(--bt-text)]">
-                            <td className="px-3 py-2" colSpan={3}>
-                              Total
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">{formatMoney(totalCents)}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </section>
+                            ) : (
+                              props.lines.map((line) => (
+                                <tr key={line.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
+                                  <td className="px-3 py-2 text-[var(--bt-text)]">{line.title}</td>
+                                  <td className="px-3 py-2 text-[var(--bt-muted)]">{line.costCodeLabel}</td>
+                                  <td className="px-3 py-2 text-[var(--bt-muted)]">{line.costTypeLabel}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums text-[var(--bt-text)]">
+                                    {formatMoney(line.amountCents)}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-[#f3f4f6] font-semibold text-[var(--bt-text)]">
+                              <td className="px-3 py-2" colSpan={3}>
+                                Total
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums">{formatMoney(totalCents)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </section>
+                  ) : null}
 
                   <section id="bill-approvals" className="flex flex-col gap-2">
                     <h2 className="text-sm font-semibold text-[var(--bt-text)]">Approvals</h2>

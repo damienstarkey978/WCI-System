@@ -233,11 +233,13 @@ export interface UpdateBillInput {
   readonly sendToQuickBooks?: boolean | null;
   readonly quickBooksSkipReason?: string | null;
   readonly billableToClient?: boolean;
+  /** When set, replaces all cost lines (at least one required). */
+  readonly lineItems?: readonly CreateBillLineItemInput[];
 }
 
 /**
- * Edit bill header + QuickBooks / billable intent. Line items stay on create for now;
- * status transitions stay on updateBillStatus. Refuses PAID/VOID.
+ * Edit bill header + QuickBooks / billable intent + optional full cost-line replace.
+ * Status transitions stay on updateBillStatus. Refuses PAID/VOID.
  */
 export async function updateBill(input: UpdateBillInput) {
   const existing = await db.bill.findFirst({
@@ -259,20 +261,54 @@ export async function updateBill(input: UpdateBillInput) {
     throw new InventedBillNumberError(normalizedNumber);
   }
 
-  return db.bill.update({
-    where: { id: existing.id },
-    data: {
-      ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(normalizedNumber !== undefined ? { billNumber: normalizedNumber } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.issuedOn !== undefined ? { issuedOn: input.issuedOn } : {}),
-      ...(input.dueOn !== undefined ? { dueOn: input.dueOn } : {}),
-      ...(input.sendToQuickBooks !== undefined ? { sendToQuickBooks: input.sendToQuickBooks } : {}),
-      ...(input.quickBooksSkipReason !== undefined
-        ? { quickBooksSkipReason: input.quickBooksSkipReason }
-        : {}),
-      ...(input.billableToClient !== undefined ? { billableToClient: input.billableToClient } : {}),
-    },
+  let defaultCostTypeById: Map<string, CostType> | undefined;
+  if (input.lineItems !== undefined) {
+    if (input.lineItems.length === 0) {
+      throw new Error("Add at least one line item.");
+    }
+    const costCodeIds = [...new Set(input.lineItems.map((item) => item.costCodeId))];
+    const known = await db.costCode.findMany({
+      where: { id: { in: costCodeIds }, organizationId: input.organizationId },
+      select: { id: true, defaultCostType: true },
+    });
+    if (known.length !== costCodeIds.length) {
+      const knownIds = new Set(known.map((code) => code.id));
+      throw new UnknownCostCodeError(costCodeIds.filter((id) => !knownIds.has(id)));
+    }
+    defaultCostTypeById = new Map(known.map((code) => [code.id, code.defaultCostType]));
+  }
+
+  return db.$transaction(async (tx) => {
+    if (input.lineItems !== undefined && defaultCostTypeById) {
+      await tx.billLineItem.deleteMany({ where: { billId: existing.id } });
+      await tx.billLineItem.createMany({
+        data: input.lineItems.map((item, index) => ({
+          billId: existing.id,
+          costCodeId: item.costCodeId,
+          costType: item.costType ?? defaultCostTypeById!.get(item.costCodeId) ?? "NONE",
+          title: item.title,
+          amountCents: item.amountCents,
+          sortOrder: index,
+        })),
+      });
+    }
+
+    return tx.bill.update({
+      where: { id: existing.id },
+      data: {
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(normalizedNumber !== undefined ? { billNumber: normalizedNumber } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.issuedOn !== undefined ? { issuedOn: input.issuedOn } : {}),
+        ...(input.dueOn !== undefined ? { dueOn: input.dueOn } : {}),
+        ...(input.sendToQuickBooks !== undefined ? { sendToQuickBooks: input.sendToQuickBooks } : {}),
+        ...(input.quickBooksSkipReason !== undefined
+          ? { quickBooksSkipReason: input.quickBooksSkipReason }
+          : {}),
+        ...(input.billableToClient !== undefined ? { billableToClient: input.billableToClient } : {}),
+      },
+      include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+    });
   });
 }
 

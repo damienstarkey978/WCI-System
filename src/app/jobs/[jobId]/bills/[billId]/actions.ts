@@ -29,9 +29,12 @@ import {
   BillQuickBooksIntentRequiredError,
   IllegalBillTransitionError,
   InventedBillNumberError,
+  UnknownCostCodeError,
   updateBill,
   updateBillStatus,
 } from "@/lib/bills/service";
+import { extendedCostCents } from "@/lib/budget/funnel";
+import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
 import { NotDiscardableError, RecordNotFoundError, deleteBill } from "@/lib/financials/discard";
 
 export interface BillActionState {
@@ -65,6 +68,7 @@ async function run(
       error instanceof BillNotFoundError ||
       error instanceof BillNotEditableError ||
       error instanceof InventedBillNumberError ||
+      error instanceof UnknownCostCodeError ||
       error instanceof IllegalBillTransitionError ||
       error instanceof BillQuickBooksIntentRequiredError ||
       error instanceof ApprovalsIncompleteError ||
@@ -105,6 +109,26 @@ export async function updateBillAction(_previous: BillActionState, formData: For
       ? String(formData.get("quickBooksSkipReason") ?? "").trim() || "Skipped QuickBooks on save"
       : null;
 
+  const hasCostLines = formData.getAll("lineCostCodeId").length > 0;
+  let lineItems: Parameters<typeof updateBill>[0]["lineItems"];
+  if (hasCostLines) {
+    try {
+      const parsed = parseCostCodeLineItems(formData);
+      if (parsed.length === 0) return { error: "Add at least one line item." };
+      lineItems = parsed.map((item) => ({
+        costCodeId: item.costCodeId,
+        title: item.title,
+        amountCents: extendedCostCents(item.quantityMilli, item.unitCostCents),
+        ...(item.costType ? { costType: item.costType } : {}),
+      }));
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Cannot parse")) {
+        return { error: error.message };
+      }
+      throw error;
+    }
+  }
+
   return run(jobId, billId, (organizationId) =>
     updateBill({
       organizationId,
@@ -117,6 +141,7 @@ export async function updateBillAction(_previous: BillActionState, formData: For
       sendToQuickBooks,
       quickBooksSkipReason,
       billableToClient,
+      ...(lineItems ? { lineItems } : {}),
     }),
   );
 }
