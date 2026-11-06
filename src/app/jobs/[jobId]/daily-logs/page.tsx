@@ -4,8 +4,7 @@ import { notFound } from "next/navigation";
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { actorSummaryText } from "@/components/actor-attribution";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { ChatIcon, FilterIcon, HeartIcon, NoteIcon, SearchIcon } from "@/components/shell/icons";
-import { PageHeader } from "@/components/shell/PageHeader";
+import { ChatIcon, HeartIcon, NoteIcon } from "@/components/shell/icons";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isAnthropicConfigured } from "@/lib/env";
@@ -15,10 +14,10 @@ import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
 import { toggleDailyLogLikeAction } from "./actions";
 import { DailyLogCreateModal } from "./daily-log-create-modal";
+import { DailyLogsChrome } from "./daily-logs-chrome";
 import { logHeading, weatherSummary } from "@/lib/daily-logs/display";
 
 import { LogGallery } from "./log-gallery";
-import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
@@ -113,79 +112,11 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
     return `/jobs/${job.id}/daily-logs?${params.toString()}`;
   };
   const filterCount = [q, from, to].filter(Boolean).length;
+  const createModal = <DailyLogCreateModal jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
-      <PageHeader
-        jobName={job.name}
-        title="Daily Logs"
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <form action={`/jobs/${job.id}/daily-logs`} className="relative hidden sm:block">
-              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--bt-muted)]" />
-              <input
-                name="q"
-                defaultValue={q}
-                placeholder="Search"
-                aria-label="Search daily logs"
-                className="h-9 w-44 rounded border bg-[var(--bt-panel-bg)] pl-8 pr-2 text-sm text-[var(--bt-text)] placeholder:text-[var(--bt-muted)]"
-                style={{ borderColor: "var(--bt-border)" }}
-              />
-              {from ? <input type="hidden" name="from" value={from} /> : null}
-              {to ? <input type="hidden" name="to" value={to} /> : null}
-            </form>
-            <PrintButton />
-            <details className="relative">
-              <summary
-                className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded border bg-[var(--bt-panel-bg)] px-3 text-sm font-medium text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)] [&::-webkit-details-marker]:hidden"
-                style={{ borderColor: "var(--bt-border)" }}
-              >
-                <FilterIcon className="h-3.5 w-3.5" />
-                Filter
-                {filterCount > 0 ? (
-                  <span
-                    className="inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-[var(--bt-on-primary)]"
-                    style={{ background: "var(--bt-primary)" }}
-                  >
-                    {filterCount}
-                  </span>
-                ) : null}
-              </summary>
-              <form
-                action={`/jobs/${job.id}/daily-logs`}
-                className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-3 rounded-lg border bg-[var(--bt-panel-bg)] p-4 shadow-lg"
-                style={{ borderColor: "var(--bt-border)" }}
-              >
-                <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--bt-muted)]">
-                  Search title and notes
-                  <input name="q" defaultValue={q} className="rounded border px-2 py-1.5 text-sm font-normal" style={{ borderColor: "var(--bt-border)" }} />
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--bt-muted)]">
-                    From
-                    <input type="date" name="from" defaultValue={from} className="rounded border px-2 py-1.5 text-sm font-normal" style={{ borderColor: "var(--bt-border)" }} />
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--bt-muted)]">
-                    To
-                    <input type="date" name="to" defaultValue={to} className="rounded border px-2 py-1.5 text-sm font-normal" style={{ borderColor: "var(--bt-border)" }} />
-                  </label>
-                </div>
-                <div className="flex items-center justify-between">
-                  <Link href={`/jobs/${job.id}/daily-logs`} className="text-xs font-medium text-[var(--bt-muted)] hover:underline">
-                    Clear
-                  </Link>
-                  <button type="submit" className="rounded px-3 py-1.5 text-sm font-semibold text-[var(--bt-on-primary)]" style={{ background: "var(--bt-primary)" }}>
-                    Apply
-                  </button>
-                </div>
-              </form>
-            </details>
-            <DailyLogCreateModal jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />
-          </div>
-        }
-      />
-
-      <div className="flex flex-col gap-4">
+      <DailyLogsChrome key={`${q}|${from}|${to}`} jobId={job.id} jobName={job.name} q={q} from={from} to={to} createAction={createModal}>
         {cards.length === 0 ? (
           <EmptyState
             icon={<NoteIcon className="h-10 w-10" />}
@@ -195,7 +126,7 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
                 ? "Try clearing search or date filters."
                 : "Use + Daily Log to add the first one — notes, photos, and weather for the day."
             }
-            action={filterCount > 0 ? undefined : <DailyLogCreateModal jobId={job.id} aiEnabled={isAnthropicConfigured() && isJarvisUiEnabled()} />}
+            action={filterCount > 0 ? undefined : createModal}
           />
         ) : (
           cards.map(({ log, files }) => {
@@ -250,7 +181,7 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
                     </Link>
                   </div>
                   {weather ? (
-                    <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: "var(--bt-border)" }}>
                       {weather.condition ? <span>{weather.condition}</span> : null}
                       {weather.tempF !== null ? <span className="font-medium text-[var(--bt-text)]">{weather.tempF}°F</span> : null}
                     </span>
@@ -263,31 +194,31 @@ export default async function DailyLogsPage({ params, searchParams }: PageProps<
             );
           })
         )}
-      </div>
 
-      <div className="flex items-center justify-end gap-3 text-sm text-[var(--bt-muted)]">
-        <span>
-          {total === 0 ? "0 items" : `${(page - 1) * size + 1}-${Math.min(total, page * size)} of ${total} items`}
-        </span>
-        {page > 1 ? (
-          <Link href={href({ page: page - 1 })} className="rounded border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>
-            Prev
-          </Link>
-        ) : null}
-        {page < pageCount ? (
-          <Link href={href({ page: page + 1 })} className="rounded border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>
-            Next
-          </Link>
-        ) : null}
-        <span className="flex items-center gap-1">
-          {PAGE_SIZES.map((n) => (
-            <Link key={n} href={href({ page: 1, size: n })} className="rounded px-1.5 py-0.5" style={n === size ? { background: "var(--bt-panel-bg-muted)", color: "var(--bt-text)", fontWeight: 600 } : undefined}>
-              {n}
+        <div className="flex items-center justify-end gap-3 text-sm text-[var(--bt-muted)]">
+          <span>
+            {total === 0 ? "0 items" : `${(page - 1) * size + 1}-${Math.min(total, page * size)} of ${total} items`}
+          </span>
+          {page > 1 ? (
+            <Link href={href({ page: page - 1 })} className="rounded border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>
+              Prev
             </Link>
-          ))}
-          / page
-        </span>
-      </div>
+          ) : null}
+          {page < pageCount ? (
+            <Link href={href({ page: page + 1 })} className="rounded border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>
+              Next
+            </Link>
+          ) : null}
+          <span className="flex items-center gap-1">
+            {PAGE_SIZES.map((n) => (
+              <Link key={n} href={href({ page: 1, size: n })} className="rounded px-1.5 py-0.5" style={n === size ? { background: "var(--bt-panel-bg-muted)", color: "var(--bt-text)", fontWeight: 600 } : undefined}>
+                {n}
+              </Link>
+            ))}
+            / page
+          </span>
+        </div>
+      </DailyLogsChrome>
     </div>
   );
 }

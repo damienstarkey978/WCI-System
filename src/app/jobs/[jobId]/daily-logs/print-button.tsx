@@ -1,6 +1,6 @@
 "use client";
 
-/** BT Daily Logs toolbar — secondary outline Print control. */
+/** Outlined Print control — matches ListToolbar secondary chrome. */
 export function PrintButton() {
   return (
     <button

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { actorSummaryText } from "@/components/actor-attribution";
-import { ChatIcon, DocumentIcon, HeartIcon, VideoIcon } from "@/components/shell/icons";
+import { ChatIcon, GearIcon, HeartIcon, InfoIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { listComments } from "@/lib/comments/service";
@@ -14,10 +14,16 @@ import { formatDate } from "@/lib/format";
 import { findOrgJobSummary } from "@/lib/jobs/request-job";
 
 import { toggleDailyLogLikeAction } from "../actions";
+import { LogPhotoGrid } from "../log-photo-grid";
 import { PrintButton } from "../print-button";
 import { LogCommentForm } from "./comment-form";
 
 export const dynamic = "force-dynamic";
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase() || "?";
+}
 
 /** One daily log opened: every photo and file, the notes, and its comment thread (Buildertrend's log detail). */
 export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[jobId]/daily-logs/[logId]">) {
@@ -75,52 +81,61 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
 
   const weather = weatherSummary(log.weather);
   const liked = log.likes.length > 0;
+  const author = actorSummaryText({ user: log.authorUser, apiKey: log.authorApiKey });
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-      <PageHeader jobName={job.name} title={logHeading(log.createdAt, log.title)} action={<PrintButton />} />
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
+      <PageHeader
+        jobName={job.name}
+        title={logHeading(log.createdAt, log.title)}
+        action={
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <span
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white"
+                style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-info, #0ea5e9)" }}
+                title="Info"
+                aria-hidden
+              >
+                <InfoIcon className="h-4 w-4" />
+              </span>
+              <span
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white"
+                style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-settings, #8b5cf6)" }}
+                title="Settings"
+                aria-hidden
+              >
+                <GearIcon className="h-4 w-4" />
+              </span>
+            </div>
+            <PrintButton />
+          </div>
+        }
+      />
       <Link href={`/jobs/${job.id}/daily-logs`} className="text-sm font-medium text-[var(--bt-primary)] hover:underline">
         ← All daily logs
       </Link>
 
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-5" style={{ borderColor: "var(--bt-border)" }}>
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[var(--bt-text)]">
-          <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>
-            {actorSummaryText({ user: log.authorUser, apiKey: log.authorApiKey })}
+          <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>
+            <span className="flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold" style={{ background: "var(--bt-status-open-bg)", color: "var(--bt-status-open-text)" }}>
+              {initials(author)}
+            </span>
+            {author}
           </span>
           {log.clientVisible ? <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>Client</span> : null}
           {log.subVisible ? <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>Subs</span> : null}
           <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--bt-border)" }}>Internal</span>
           {weather ? (
-            <span className="ml-auto text-[var(--bt-muted)]">
-              {weather.condition ?? ""} {weather.tempF !== null ? `${weather.tempF}°F` : ""}
+            <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
+              {weather.condition ? <span>{weather.condition}</span> : null}
+              {weather.tempF !== null ? <span className="font-medium text-[var(--bt-text)]">{weather.tempF}°F</span> : null}
             </span>
           ) : null}
         </div>
 
-        {files.length > 0 ? (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {files.map((file) =>
-              file.url ? (
-                <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="block aspect-[4/3] overflow-hidden rounded bg-[var(--bt-page-bg)]" title={file.fileName}>
-                  {file.category === "PHOTO" ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and per-request, not suited to next/image's caching
-                    <img src={file.url} alt={file.fileName} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--bt-muted)]">
-                      {file.category === "VIDEO" ? <VideoIcon className="h-8 w-8" /> : <DocumentIcon className="h-8 w-8" />}
-                      <span className="max-w-full truncate px-2 text-xs">{file.fileName}</span>
-                    </div>
-                  )}
-                </a>
-              ) : (
-                <div key={file.id} className="flex aspect-[4/3] items-center justify-center rounded text-xs text-[var(--bt-muted)]" style={{ background: "var(--bt-panel-bg-muted)" }}>
-                  {file.fileName} is unavailable
-                </div>
-              ),
-            )}
-          </div>
-        ) : null}
+        <LogPhotoGrid files={files} />
 
         <div className="mt-4 flex items-center gap-4 border-b pb-3 text-sm text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
           <form action={toggleDailyLogLikeAction}>
@@ -143,7 +158,13 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
       <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-5" style={{ borderColor: "var(--bt-border)" }}>
         <h2 className="mb-3 text-sm font-semibold text-[var(--bt-text)]">Comments ({comments.length})</h2>
         <div className="mb-4 flex flex-col gap-3">
-          {comments.length === 0 ? <p className="text-sm text-[var(--bt-muted)]">No comments yet.</p> : null}
+          {comments.length === 0 ? (
+            <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+              <ChatIcon className="h-9 w-9 text-[var(--bt-muted)]" />
+              <p className="text-sm font-semibold text-[var(--bt-text)]">No comments yet</p>
+              <p className="max-w-sm text-xs text-[var(--bt-muted)]">Internal discussion on this daily log.</p>
+            </div>
+          ) : null}
           {comments.map((comment) => (
             <div key={comment.id} className="rounded border px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
               <div className="flex items-center justify-between text-xs text-[var(--bt-muted)]">
