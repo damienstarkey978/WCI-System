@@ -39,8 +39,9 @@ function Err({ state }: { state: BillActionState }) {
  * READY_FOR_PAYMENT while approvals are outstanding — that refusal surfaces here as
  * the action's error rather than being pre-empted, so the office sees *why*.
  *
- * Marking READY_FOR_PAYMENT requires an explicit QuickBooks send vs skip choice
- * (materials stay WCI-only; labor/unpaid services may send).
+ * Marking READY_FOR_PAYMENT requires an explicit QuickBooks send vs skip choice.
+ * Default is always Don't send — Buildertrend still owns QuickBooks; WCI must not
+ * push unless staff deliberately opts in (and QBO_BILL_PUSH_ENABLED is on).
  */
 export function StatusActions({
   jobId,
@@ -59,8 +60,11 @@ export function StatusActions({
   const [statusState, statusAction, changing] = useActionState(setBillStatusAction, INITIAL);
 
   const suggestion = suggestSendToQuickBooks(lineItems);
-  const [sendToQuickBooks, setSendToQuickBooks] = useState(suggestion.suggestedSend);
-  const [skipReason, setSkipReason] = useState(defaultSkipReasonForSuggestion(suggestion));
+  // Always start unchecked — never auto-select Send from cost-type suggestion.
+  const [sendToQuickBooks, setSendToQuickBooks] = useState(false);
+  const [skipReason, setSkipReason] = useState(
+    defaultSkipReasonForSuggestion({ ...suggestion, suggestedSend: false }),
+  );
 
   const next: { label: string; value: string; primary?: boolean }[] = [];
   if (status === "IN_REVIEW") next.push({ label: "Approve", value: "APPROVED", primary: true });
@@ -89,7 +93,9 @@ export function StatusActions({
 
           <div>
             <div className="text-xs font-semibold text-[var(--bt-text)]">Ready for payment — QuickBooks</div>
-            <p className="mt-1 text-[11px] leading-snug text-[var(--bt-muted)]">{suggestion.reason}</p>
+            <p className="mt-1 text-[11px] leading-snug text-[var(--bt-muted)]">
+              Defaults to Don&apos;t send while Buildertrend owns QuickBooks. {suggestion.reason}
+            </p>
             {!isQboConnected ? (
               <p className="mt-1 text-[11px] leading-snug text-[var(--bt-muted)]">
                 QuickBooks isn&apos;t connected yet. Your choice is still saved; a send will wait until QB is connected.
