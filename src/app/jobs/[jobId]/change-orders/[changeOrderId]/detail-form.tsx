@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { ScopeRichText } from "@/components/financial/ScopeRichText";
+
 import { updateChangeOrderAction, type ActionState } from "../actions";
 
 const INITIAL: ActionState = {};
@@ -83,17 +85,21 @@ export function ChangeOrderDetailForm({
           style={{ borderColor: "var(--bt-border)" }}
         />
       </label>
-      <label className="grid gap-1 text-sm">
-        <span className="text-xs font-medium text-[var(--bt-muted)]">Scope of work</span>
-        <textarea
-          name="notesClient"
-          rows={4}
-          defaultValue={initial.notesClient}
-          disabled={!editable}
-          className="rounded border px-3 py-2 text-sm disabled:opacity-60"
-          style={{ borderColor: "var(--bt-border)" }}
-        />
-      </label>
+      {editable ? (
+        <ScopeRichText name="notesClient" defaultValue={initial.notesClient} label="Scope of Work" />
+      ) : (
+        <label className="grid gap-1 text-sm">
+          <span className="text-xs font-medium text-[var(--bt-muted)]">Scope of work</span>
+          <textarea
+            name="notesClient"
+            rows={4}
+            defaultValue={initial.notesClient}
+            disabled
+            className="rounded border px-3 py-2 text-sm opacity-60"
+            style={{ borderColor: "var(--bt-border)" }}
+          />
+        </label>
+      )}
 
       {state.error ? <p className="text-xs text-red-600">{state.error}</p> : null}
       {state.ok ? <p className="text-xs text-green-700">Saved.</p> : null}

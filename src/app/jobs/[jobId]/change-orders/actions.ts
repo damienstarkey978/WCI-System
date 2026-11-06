@@ -11,11 +11,14 @@ import {
   ChangeOrderNotPendingError,
   createChangeOrder,
   declineChangeOrder,
+  EmptyChangeOrderError,
   JobNotFoundError,
   JobNotOpenError,
   markChangeOrderSent,
   pushChangeOrderToPurchaseOrder,
   recallChangeOrder,
+  replaceChangeOrderLines,
+  setChangeOrderFlat,
   updateChangeOrder,
 } from "@/lib/change-orders/service";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
@@ -114,6 +117,69 @@ export async function updateChangeOrderAction(_previous: ActionState, formData: 
     if (error instanceof ChangeOrderNotFoundError || error instanceof ChangeOrderNotPendingError) {
       return { error: error.message };
     }
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/change-orders`);
+  revalidatePath(`/jobs/${jobId}/change-orders/${changeOrderId}`);
+  return { ok: true };
+}
+
+export async function replaceChangeOrderLinesAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const changeOrderId = String(formData.get("changeOrderId") ?? "");
+  const rateMode = String(formData.get("rateMode") ?? "MARKUP") === "MARGIN" ? RateMode.MARGIN : RateMode.MARKUP;
+  const rateBasisPoints = parsePercentToBasisPoints(String(formData.get("rate") ?? "0") || "0");
+  const lineItems = parseCostCodeLineItems(formData).map((item) => ({ ...item, rateMode, rateBasisPoints }));
+  if (lineItems.length === 0) return { error: "Add at least one line item." };
+
+  try {
+    await replaceChangeOrderLines({
+      organizationId: user.organizationId,
+      changeOrderId,
+      lineItems,
+    });
+  } catch (error) {
+    if (
+      error instanceof ChangeOrderNotFoundError ||
+      error instanceof ChangeOrderNotPendingError ||
+      error instanceof EmptyChangeOrderError
+    ) {
+      return { error: error.message };
+    }
+    if (error instanceof Error && error.message.includes("Cannot parse")) return { error: error.message };
+    throw error;
+  }
+
+  revalidatePath(`/jobs/${jobId}/change-orders`);
+  revalidatePath(`/jobs/${jobId}/change-orders/${changeOrderId}`);
+  return { ok: true };
+}
+
+export async function setChangeOrderFlatAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const changeOrderId = String(formData.get("changeOrderId") ?? "");
+  const flatCostCodeId = String(formData.get("flatCostCodeId") ?? "");
+  const flatCostRaw = String(formData.get("flatCost") ?? "");
+  const flatClientPriceRaw = String(formData.get("flatClientPrice") ?? "");
+  if (!flatCostCodeId) return { error: "Choose a cost code." };
+  if (!flatCostRaw || !flatClientPriceRaw) return { error: "Cost and client price are required." };
+
+  try {
+    await setChangeOrderFlat({
+      organizationId: user.organizationId,
+      changeOrderId,
+      flatCostCodeId,
+      flatCostCents: parseDollarsToCents(flatCostRaw),
+      flatClientPriceCents: parseDollarsToCents(flatClientPriceRaw),
+    });
+  } catch (error) {
+    if (error instanceof ChangeOrderNotFoundError || error instanceof ChangeOrderNotPendingError) {
+      return { error: error.message };
+    }
+    if (error instanceof Error && error.message.includes("Cannot parse")) return { error: error.message };
     throw error;
   }
 

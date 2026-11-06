@@ -15,6 +15,7 @@ import {
 } from "../actions";
 import { ChangeOrderDetailChrome } from "./co-detail-chrome";
 import { ChangeOrderDetailForm } from "./detail-form";
+import { ChangeOrderLineItemsEditor } from "./line-items-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -95,15 +96,22 @@ export default async function ChangeOrderDetailPage({
   ]);
   if (!job) notFound();
 
-  const changeOrder = await db.changeOrder.findFirst({
-    where: { id: changeOrderId, jobId: job.id, organizationId: user.organizationId },
-    include: {
-      lineItems: {
-        include: { costCode: { select: { code: true, name: true } } },
-        orderBy: { sortOrder: "asc" },
+  const [changeOrder, costCodes] = await Promise.all([
+    db.changeOrder.findFirst({
+      where: { id: changeOrderId, jobId: job.id, organizationId: user.organizationId },
+      include: {
+        lineItems: {
+          include: { costCode: { select: { code: true, name: true } } },
+          orderBy: { sortOrder: "asc" },
+        },
       },
-    },
-  });
+    }),
+    db.costCode.findMany({
+      where: { organizationId: user.organizationId, isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, code: true, name: true },
+    }),
+  ]);
   if (!changeOrder) notFound();
 
   const jobAddress = [job.addressLine1, job.city, job.state, job.postalCode].filter(Boolean).join(", ") || null;
@@ -318,33 +326,27 @@ export default async function ChangeOrderDetailPage({
             <Field label="Client Last Viewed">{clientLastViewed}</Field>
           </div>
 
-          <section id="co-line-items">
-            <div className="overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
-              <div className="min-w-0 overflow-x-auto">
-                <table className="w-full min-w-max text-left text-sm">
-                  <thead>
-                    <tr
-                      className="border-b text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
-                      style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
-                    >
-                      <th className="px-3 py-2">Items</th>
-                      <th className="px-3 py-2">Description</th>
-                      <th className="px-3 py-2">Internal Notes</th>
-                      <th className="px-3 py-2">Cost type</th>
-                      <th className="px-3 py-2 text-right">Unit cost</th>
-                      <th className="px-3 py-2 text-right">Qty</th>
-                      <th className="px-3 py-2 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {grouped.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-3 py-4 text-[var(--bt-muted)]">
-                          No line items yet. Add line items when creating the change order.
-                        </td>
+          <section id="co-line-items" className="flex flex-col gap-3">
+            {lineRows.length > 0 ? (
+              <div className="overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
+                <div className="min-w-0 overflow-x-auto">
+                  <table className="w-full min-w-max text-left text-sm">
+                    <thead>
+                      <tr
+                        className="border-b text-[10px] font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
+                        style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}
+                      >
+                        <th className="px-3 py-2">Items</th>
+                        <th className="px-3 py-2">Description</th>
+                        <th className="px-3 py-2">Internal Notes</th>
+                        <th className="px-3 py-2">Cost type</th>
+                        <th className="px-3 py-2 text-right">Unit cost</th>
+                        <th className="px-3 py-2 text-right">Qty</th>
+                        <th className="px-3 py-2 text-right">Amount</th>
                       </tr>
-                    ) : (
-                      grouped.flatMap((group) => [
+                    </thead>
+                    <tbody>
+                      {grouped.flatMap((group) => [
                         <tr key={`g-${group.group}`} className="border-t" style={{ borderColor: "var(--bt-border)" }}>
                           <td colSpan={7} className="px-3 py-2 text-sm font-semibold text-[var(--bt-text)]">
                             {group.group}
@@ -364,26 +366,41 @@ export default async function ChangeOrderDetailPage({
                             <td className="px-3 py-2 text-right tabular-nums">{row.amountLabel}</td>
                           </tr>
                         )),
-                      ])
-                    )}
-                    {lineRows.length > 0 ? (
+                      ])}
                       <tr className="border-t font-semibold" style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg-muted)" }}>
                         <td className="px-3 py-2" colSpan={6}>
                           Totals
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatMoney(clientPrice)}</td>
                       </tr>
-                    ) : null}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            ) : null}
+            {editable ? (
+              <ChangeOrderLineItemsEditor
+                jobId={job.id}
+                changeOrderId={changeOrder.id}
+                costCodes={costCodes}
+                hasLines={lineRows.length > 0}
+              />
+            ) : lineRows.length === 0 ? (
+              <p className="text-sm text-[var(--bt-muted)]">No line items on this change order.</p>
+            ) : null}
           </section>
 
           <section>
             <h2 className="text-sm font-semibold text-[var(--bt-text)]">Scope of Work</h2>
             {changeOrder.notesClient ? (
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--bt-text)]">{changeOrder.notesClient}</p>
+              changeOrder.notesClient.includes("<") ? (
+                <div
+                  className="prose prose-sm mt-2 max-w-none text-[var(--bt-text)]"
+                  dangerouslySetInnerHTML={{ __html: changeOrder.notesClient }}
+                />
+              ) : (
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--bt-text)]">{changeOrder.notesClient}</p>
+              )
             ) : (
               <p className="mt-2 text-sm italic text-[var(--bt-muted)]">No client-facing scope notes yet.</p>
             )}

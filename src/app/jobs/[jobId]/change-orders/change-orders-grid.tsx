@@ -24,6 +24,7 @@ export interface ChangeOrderRow {
   readonly createdAt: string;
   readonly statusChangedAt: string;
   readonly deadline: string | null;
+  readonly clientName: string | null;
   readonly builderCostCents: number;
   readonly clientPriceCents: number;
   readonly pastDue: boolean;
@@ -55,6 +56,12 @@ export function ChangeOrdersGrid({ rows }: { rows: readonly ChangeOrderRow[] }) 
           {row.title}
         </Link>
       ),
+    },
+    {
+      key: "clientName",
+      header: "Client",
+      sortable: true,
+      render: (row) => row.clientName ?? "—",
     },
     { key: "createdAt", header: "Created", sortable: true, render: (row) => formatDate(new Date(row.createdAt)) },
     {
