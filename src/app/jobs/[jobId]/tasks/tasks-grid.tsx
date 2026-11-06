@@ -21,13 +21,11 @@ export interface TaskRow {
 /** Client half of the Tasks page; see purchase-orders-grid.tsx for why the split exists. */
 export function TasksGrid({
   rows,
-  emptyMessage,
   jobId,
   jobName,
   staff,
 }: {
   rows: readonly TaskRow[];
-  emptyMessage: string;
   jobId: string;
   jobName: string;
   staff: readonly StaffOption[];
@@ -61,7 +59,7 @@ export function TasksGrid({
       sortable: true,
       render: (row) => (
         <TaskDetailDrawer jobId={jobId} jobName={jobName} staff={staff} initial={row.detail}>
-          <span className={row.status === "DONE" ? "text-[var(--bt-muted)] line-through" : "font-medium text-[var(--bt-primary)]"}>
+          <span className={row.status === "DONE" ? "text-[var(--bt-muted)] line-through" : "font-medium text-[var(--bt-text)]"}>
             {row.title}
           </span>
         </TaskDetailDrawer>
@@ -77,5 +75,16 @@ export function TasksGrid({
     },
   ];
 
-  return <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} viewKey="tasks" selectable emptyMessage={emptyMessage} />;
+  return (
+    <DataGrid
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      viewKey="tasks"
+      selectable
+      /* BT My/All default columns: Task / Due date / Assign — Type & Priority via Standard View */
+      defaultHiddenKeys={["category", "priority"]}
+      emptyMessage="No tasks to show."
+    />
+  );
 }

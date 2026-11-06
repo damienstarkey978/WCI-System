@@ -18,15 +18,15 @@ export function QuickAddTask({ jobId }: { jobId: string }) {
         await formAction(formData);
         formRef.current?.reset();
       }}
-      className="flex items-center gap-2 rounded-lg border px-3 py-2"
-      style={{ borderColor: "var(--bt-border)", background: "var(--bt-panel-bg)" }}
+      className="flex items-center gap-2 px-1 py-0.5"
     >
       <input type="hidden" name="jobId" value={jobId} />
       <input
         name="title"
         required
-        placeholder="Add a task…"
-        className="flex-1 border-0 bg-transparent text-sm outline-none"
+        placeholder="Add task..."
+        aria-label="Add task"
+        className="flex-1 border-0 bg-transparent py-1.5 text-sm text-[var(--bt-text)] outline-none placeholder:text-[var(--bt-muted)]"
       />
       <button type="submit" disabled={pending} className="text-sm font-semibold text-[var(--bt-primary)] hover:underline disabled:opacity-50">
         {pending ? "Adding…" : "Add"}

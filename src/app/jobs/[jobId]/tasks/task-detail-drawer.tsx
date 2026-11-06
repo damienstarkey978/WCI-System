@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useActionState, useRef, useState, type ReactNode } from "react";
 
-import { CloseIcon } from "@/components/shell/icons";
+import { CalendarIcon, ChatIcon, CloseIcon, TaskIcon } from "@/components/shell/icons";
 import { formatDate } from "@/lib/format";
 
 import { saveTodoAction, setTodoStatusAction, type ActionState } from "./actions";
@@ -27,6 +28,24 @@ export interface StaffOption {
   readonly name: string;
 }
 
+function EllipsisIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className={className} aria-hidden>
+      <circle cx="4" cy="10" r="1.5" />
+      <circle cx="10" cy="10" r="1.5" />
+      <circle cx="16" cy="10" r="1.5" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden>
+      <path d="M5.5 8l4.5 4.5L14.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function TaskDetailDrawer({
   jobId,
   jobName,
@@ -44,6 +63,8 @@ export function TaskDetailDrawer({
   const [state, formAction, pending] = useActionState(saveTodoAction, INITIAL);
   const [subtasks, setSubtasks] = useState(initial.checklist.map((item) => item.title));
   const [newSubtask, setNewSubtask] = useState("");
+  const [category, setCategory] = useState(initial.category ?? "");
+  const dateRef = useRef<HTMLInputElement>(null);
   const done = initial.status === "DONE";
 
   return (
@@ -64,19 +85,27 @@ export function TaskDetailDrawer({
             <form action={formAction} className="flex h-full flex-col">
               <input type="hidden" name="jobId" value={jobId} />
               <input type="hidden" name="todoId" value={initial.id} />
+              <input type="hidden" name="category" value={category} />
               {subtasks.map((title, index) => (
                 <input key={`${title}-${index}`} type="hidden" name="checklistItems" value={title} />
               ))}
 
-              <div className="flex items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: "var(--bt-border)" }}>
-                <p className="truncate text-xs text-[var(--bt-muted)]">{jobName}</p>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded p-1 text-[var(--bt-muted)] hover:bg-black/5">
-                    <CloseIcon className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="border-b px-4 py-2" style={{ borderColor: "var(--bt-border)" }}>
+              {/* BT header: ⋯ · chat · Mark complete · X */}
+              <div className="flex items-center justify-end gap-1 border-b px-3 py-2" style={{ borderColor: "var(--bt-border)" }}>
+                <span
+                  className="inline-flex h-8 w-8 items-center justify-center rounded text-[var(--bt-muted)]"
+                  title="More"
+                  aria-hidden
+                >
+                  <EllipsisIcon className="h-4 w-4" />
+                </span>
+                <span
+                  className="inline-flex h-8 w-8 items-center justify-center rounded text-[var(--bt-muted)]"
+                  title="Comments"
+                  aria-hidden
+                >
+                  <ChatIcon className="h-4 w-4" />
+                </span>
                 <button
                   type="submit"
                   formAction={async () => {
@@ -87,21 +116,36 @@ export function TaskDetailDrawer({
                     await setTodoStatusAction(data);
                     setOpen(false);
                   }}
-                  className="rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]"
+                  className="ml-1 inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs font-semibold text-[var(--bt-on-primary)]"
                   style={{ background: "var(--bt-primary)" }}
                 >
                   {done ? "Reopen" : "Mark complete"}
+                  <ChevronDownIcon className="h-3 w-3 opacity-80" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className="rounded p-1.5 text-[var(--bt-muted)] hover:bg-black/5"
+                >
+                  <CloseIcon className="h-4 w-4" />
                 </button>
               </div>
 
               <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-                <input
-                  name="title"
-                  required
-                  defaultValue={initial.title}
-                  className="w-full border-0 border-b bg-transparent pb-2 text-lg font-semibold text-[var(--bt-text)] outline-none focus:border-[var(--bt-primary)]"
-                  style={{ borderColor: "var(--bt-border)" }}
-                />
+                <Link href={`/jobs/${jobId}`} className="text-xs font-medium text-[var(--bt-primary)] hover:underline">
+                  {jobName}
+                </Link>
+
+                <div className="flex items-start gap-2">
+                  <TaskIcon className="mt-1 h-5 w-5 shrink-0 text-[var(--bt-primary)]" />
+                  <input
+                    name="title"
+                    required
+                    defaultValue={initial.title}
+                    className="w-full border-0 bg-transparent text-lg font-semibold uppercase tracking-wide text-[var(--bt-text)] outline-none"
+                  />
+                </div>
                 <p className="text-xs text-[var(--bt-muted)]">Created {formatDate(new Date(initial.createdAt))}</p>
 
                 <label className="grid gap-1 text-sm">
@@ -121,28 +165,43 @@ export function TaskDetailDrawer({
                   </select>
                 </label>
 
-                <label className="grid gap-1 text-sm">
+                <div className="grid gap-2">
                   <span className="text-xs font-medium text-[var(--bt-muted)]">Due date</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => dateRef.current?.showPicker?.() ?? dateRef.current?.focus()}
+                      className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-primary)] hover:bg-black/5"
+                      style={{ borderColor: "color-mix(in srgb, var(--bt-primary) 40%, var(--bt-border))" }}
+                    >
+                      <CalendarIcon className="h-3.5 w-3.5" />
+                      Choose date
+                    </button>
+                    <span
+                      className="inline-flex cursor-default items-center rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)]"
+                      style={{ borderColor: "var(--bt-border)" }}
+                      title="Coming soon"
+                    >
+                      Link to Schedule
+                    </span>
+                  </div>
                   <input
+                    ref={dateRef}
                     type="date"
                     name="dueDate"
                     defaultValue={initial.dueDate ?? ""}
                     className="rounded border px-3 py-2 text-sm"
                     style={{ borderColor: "var(--bt-border)" }}
                   />
-                </label>
+                </div>
 
-                <label className="grid gap-1 text-sm">
-                  <span className="text-xs font-medium text-[var(--bt-muted)]">Tags / Type</span>
-                  <input
-                    name="category"
-                    defaultValue={initial.category ?? ""}
-                    placeholder="Punch list, inspection, …"
-                    className="rounded border px-3 py-2 text-sm"
-                    style={{ borderColor: "var(--bt-border)" }}
-                  />
-                  <span className="text-[11px] text-[var(--bt-muted)]">Use “punch” to show this task on the Punch list tab.</span>
-                </label>
+                <div className="grid gap-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[var(--bt-muted)]">Tags</span>
+                    <span className="text-[11px] font-medium text-[var(--bt-primary)]">Add</span>
+                  </div>
+                  <p className="text-xs text-[var(--bt-muted)]">Add tags</p>
+                </div>
 
                 <label className="grid gap-1 text-sm">
                   <span className="text-xs font-medium text-[var(--bt-muted)]">Description</span>
@@ -155,27 +214,64 @@ export function TaskDetailDrawer({
                   />
                 </label>
 
-                <label className="grid gap-1 text-sm">
-                  <span className="text-xs font-medium text-[var(--bt-muted)]">Priority</span>
-                  <select
-                    name="priority"
-                    defaultValue={initial.priority}
-                    className="rounded border px-3 py-2 text-sm"
-                    style={{ borderColor: "var(--bt-border)" }}
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                  </select>
-                </label>
+                <div className="grid gap-3 border-t pt-3" style={{ borderColor: "var(--bt-border)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]">Fields</p>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-xs font-medium text-[var(--bt-muted)]">Priority</span>
+                    <select
+                      name="priority"
+                      defaultValue={initial.priority}
+                      className="rounded border px-3 py-2 text-sm"
+                      style={{ borderColor: "var(--bt-border)" }}
+                    >
+                      <option value="LOW">Low</option>
+                      <option value="MEDIUM">Medium</option>
+                      <option value="HIGH">High</option>
+                    </select>
+                  </label>
+
+                  <div className="grid gap-1 text-sm">
+                    <span className="text-xs font-medium text-[var(--bt-muted)]">Type</span>
+                    {category ? (
+                      <span
+                        className="inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium text-[var(--bt-text)]"
+                        style={{ borderColor: "var(--bt-border)", background: "color-mix(in srgb, var(--bt-border) 35%, white)" }}
+                      >
+                        {category}
+                        <button
+                          type="button"
+                          aria-label="Clear type"
+                          className="text-[var(--bt-muted)] hover:text-red-600"
+                          onClick={() => setCategory("")}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ) : (
+                      <input
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        placeholder="Punch list, inspection, …"
+                        className="rounded border px-3 py-2 text-sm"
+                        style={{ borderColor: "var(--bt-border)" }}
+                      />
+                    )}
+                    <span className="text-[11px] text-[var(--bt-muted)]">Use “punch” to show this task on the Punch list tab.</span>
+                  </div>
+                </div>
 
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-[var(--bt-text)]">Subtasks</h3>
+                    <span className="text-xs font-medium text-[var(--bt-primary)]">+ Add</span>
                   </div>
                   <ul className="space-y-1">
                     {subtasks.map((title, index) => (
-                      <li key={`${title}-${index}`} className="flex items-center justify-between rounded border px-2 py-1.5 text-sm" style={{ borderColor: "var(--bt-border)" }}>
+                      <li
+                        key={`${title}-${index}`}
+                        className="flex items-center justify-between rounded border px-2 py-1.5 text-sm"
+                        style={{ borderColor: "var(--bt-border)" }}
+                      >
                         <span>{title}</span>
                         <button
                           type="button"
@@ -210,8 +306,27 @@ export function TaskDetailDrawer({
                   </div>
                 </div>
 
-                <div className="rounded border px-3 py-4 text-xs text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-                  Attachments: add files from the job Files page. Linking files to a task is coming next.
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-[var(--bt-text)]">Attachments</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span
+                      className="inline-flex cursor-default items-center rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)]"
+                      style={{ borderColor: "var(--bt-border)" }}
+                      title="Add files from the job Files page"
+                    >
+                      Add
+                    </span>
+                    <span
+                      className="inline-flex cursor-default items-center rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)]"
+                      style={{ borderColor: "var(--bt-border)" }}
+                      title="Coming soon"
+                    >
+                      Create new doc
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[var(--bt-muted)]">Add files from the job Files page. Linking files to a task is coming next.</p>
                 </div>
 
                 {state.error ? <p className="text-xs text-red-600">{state.error}</p> : null}
