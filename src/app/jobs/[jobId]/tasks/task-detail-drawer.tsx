@@ -177,13 +177,6 @@ export function TaskDetailDrawer({
                       <CalendarIcon className="h-3.5 w-3.5" />
                       Choose date
                     </button>
-                    <span
-                      className="inline-flex cursor-default items-center rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)]"
-                      style={{ borderColor: "var(--bt-border)" }}
-                      title="Coming soon"
-                    >
-                      Link to Schedule
-                    </span>
                   </div>
                   <input
                     ref={dateRef}
@@ -310,23 +303,13 @@ export function TaskDetailDrawer({
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-[var(--bt-text)]">Attachments</h3>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <span
-                      className="inline-flex cursor-default items-center rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)]"
-                      style={{ borderColor: "var(--bt-border)" }}
-                      title="Add files from the job Files page"
-                    >
-                      Add
-                    </span>
-                    <span
-                      className="inline-flex cursor-default items-center rounded border px-3 py-1.5 text-xs font-semibold text-[var(--bt-muted)]"
-                      style={{ borderColor: "var(--bt-border)" }}
-                      title="Coming soon"
-                    >
-                      Create new doc
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[var(--bt-muted)]">Add files from the job Files page. Linking files to a task is coming next.</p>
+                  <p className="text-[11px] text-[var(--bt-muted)]">
+                    Attachments: open the job{" "}
+                    <a href={`/jobs/${jobId}/files`} className="font-medium text-[var(--bt-primary)] hover:underline">
+                      Files
+                    </a>{" "}
+                    page. Linking files directly onto a task will land here when that flow ships.
+                  </p>
                 </div>
 
                 {state.error ? <p className="text-xs text-red-600">{state.error}</p> : null}

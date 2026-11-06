@@ -11,7 +11,6 @@ import { useDismissible } from "./use-dismissible";
 import {
   FILES_NAV,
   FINANCIAL_NAV,
-  HELP_MENU_ITEMS,
   JOBS_NAV,
   MESSAGING_NAV,
   PEOPLE_NAV,
@@ -34,7 +33,6 @@ import {
   ChevronDownIcon,
   ClientHomeIcon,
   HammerIcon,
-  HelpIcon,
   MenuIcon,
   PeopleIcon,
   PlusIcon,
@@ -239,7 +237,8 @@ function FlatNavDropdown({ label, items }: { label: string; items: readonly { la
  * hasn't built yet ("soon" — shown, not silently dropped, so the menu still visually
  * matches Buildertrend's, but disabled until the feature exists).
  */
-/** One row in a JobsMenuItem dropdown — shared by MixedNavDropdown and QuickAddMenu below. */
+/** One row in a JobsMenuItem dropdown — shared by MixedNavDropdown and QuickAddMenu below.
+ * Job-scoped rows are omitted (not muted) when no job is selected — no inert chrome. */
 function JobsMenuItemRow({ item, activeJobId, onNavigate }: { item: JobsMenuItem; activeJobId?: string; onNavigate?: () => void }) {
   if (item.kind === "global") {
     return (
@@ -248,24 +247,11 @@ function JobsMenuItemRow({ item, activeJobId, onNavigate }: { item: JobsMenuItem
       </Link>
     );
   }
-  if (item.kind === "job") {
-    if (!activeJobId) {
-      return (
-        <span key={item.label} className="block px-3 py-2 text-[var(--bt-muted)]" title="Select a job first">
-          {item.label}
-        </span>
-      );
-    }
-    return (
-      <Link key={item.label} href={`/jobs/${activeJobId}${item.jobPath}`} onClick={onNavigate} className="block px-3 py-2 hover:bg-black/5">
-        {item.label}
-      </Link>
-    );
-  }
+  if (!activeJobId) return null;
   return (
-    <span key={item.label} className="block px-3 py-2 text-[var(--bt-muted)]" title="Coming soon">
+    <Link key={item.label} href={`/jobs/${activeJobId}${item.jobPath}`} onClick={onNavigate} className="block px-3 py-2 hover:bg-black/5">
       {item.label}
-    </span>
+    </Link>
   );
 }
 
@@ -329,35 +315,6 @@ function QuickAddMenu({ activeJobId }: { activeJobId?: string }) {
   );
 }
 
-/** The top bar's Help (?) menu — HELP_MENU_ITEMS' own doc comment explains why none of these have a real destination yet. */
-function HelpMenu() {
-  const { open, setOpen, rootRef } = useDismissible();
-
-  return (
-    <div className="relative hidden sm:block" ref={rootRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="rounded p-2 transition hover:bg-white/10"
-        aria-label="Help"
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        <HelpIcon className="h-4.5 w-4.5" />
-      </button>
-      {open ? (
-        <div role="menu" className="absolute right-0 top-full z-30 mt-2 w-48 rounded-lg border border-black/10 bg-[var(--bt-panel-bg)] py-2 text-sm text-[var(--bt-text)] shadow-lg">
-          {HELP_MENU_ITEMS.map((label) => (
-            <span key={label} className="block px-4 py-2 text-[var(--bt-muted)]" title="Coming soon">
-              {label}
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 /**
  * Buildertrend's dark-teal top bar: brand mark, primary nav, the job-scoped
  * mega-dropdowns (Project Management, Files, Financial — meaningful only once
@@ -367,6 +324,7 @@ function HelpMenu() {
  * job-scoped section, including Files and Financial, lives in a top-level
  * dropdown here (confirmed against Damien's screenshots, 2026-08-28). Client
  * component only for the dropdowns' open state and the active-link highlight.
+ * Help (?) is omitted until WCI has real support destinations (no inert menu).
  */
 export function TopNav({
   activeJobId,
@@ -453,7 +411,7 @@ export function TopNav({
         <GlobalSearch variant="pill" className="w-full max-w-sm lg:max-w-md" />
       </div>
 
-      {/* Right: + · bell · chat · people · help · avatar (BT). Jarvis is WCI-only, kept after chat. */}
+      {/* Right: + · bell · chat · people · avatar. Jarvis is WCI-only, kept after chat. Help omitted until wired. */}
       <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
         <div className="md:hidden">
           <GlobalSearch variant="compact" />
@@ -470,11 +428,7 @@ export function TopNav({
           >
             <ChatIcon className="h-4.5 w-4.5" />
           </Link>
-        ) : (
-          <span className="hidden rounded p-2 text-white/40 sm:block" aria-label="Messages" title="Select a job first">
-            <ChatIcon className="h-4.5 w-4.5" />
-          </span>
-        )}
+        ) : null}
         {isJarvisUiEnabled() ? (
           <Link
             href="/jarvis"
@@ -487,7 +441,6 @@ export function TopNav({
           </Link>
         ) : null}
         <PeopleDropdown pathname={pathname} />
-        <HelpMenu />
         <StaffUserMenu
           name={userName}
           email={userEmail}

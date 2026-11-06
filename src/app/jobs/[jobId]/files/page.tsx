@@ -216,16 +216,7 @@ export default async function FilesPage({
                   {filterCount}
                 </span>
               </Link>
-            ) : (
-              <span
-                className="inline-flex h-9 items-center gap-1.5 rounded border bg-[var(--bt-panel-bg)] px-3 text-sm font-medium text-[var(--bt-muted)]"
-                style={{ borderColor: "var(--bt-border)" }}
-                title="Type in Search to filter folders and file names"
-              >
-                <FilterIcon className="h-3.5 w-3.5" />
-                Filter
-              </span>
-            )}
+            ) : null}
             <Link
               href={`/jobs/${job.id}/files${trashView ? (q ? `?q=${encodeURIComponent(q)}` : "") : `?view=trash${q ? `&q=${encodeURIComponent(q)}` : ""}`}`}
               className="inline-flex h-9 items-center rounded border bg-[var(--bt-panel-bg)] px-3 text-sm font-medium text-[var(--bt-text)] hover:bg-[var(--bt-panel-bg-muted)]"

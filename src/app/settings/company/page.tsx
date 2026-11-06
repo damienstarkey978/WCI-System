@@ -27,25 +27,9 @@ function SettingsLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-/** Not built yet — shown honestly rather than linking somewhere misleading. */
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <span className="text-[var(--bt-muted)]" title="Coming soon">
-      {label}
-    </span>
-  );
-}
-
 /**
- * Company Settings — admin only, reached from the avatar menu. Mirrors Buildertrend's
- * grouped-card layout (per Damien's screenshot, 2026-08-29) with one deliberate
- * omission: no Integrations group — WCI OS is building this functionality itself
- * rather than integrating a marketplace of external tools into it. Each item below
- * either links to a real, already-built page or — where Buildertrend's equivalent is
- * genuine org-level configuration WCI OS hasn't built a settings screen for yet
- * (schedule/daily-log/change-order templates, default job permissions, tax rates,
- * role permission editing, etc.) — shows as a plain "coming soon" label instead of a
- * dead link.
+ * Company Settings — admin only. Only links that land on real pages are listed;
+ * BT settings destinations without a WCI screen yet are omitted (no inert chrome).
  */
 export default async function CompanySettingsPage() {
   let user;
@@ -99,34 +83,14 @@ export default async function CompanySettingsPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <SettingsGroup title="Client settings">
-          <ComingSoon label="Default job permissions" />
-        </SettingsGroup>
-
         <SettingsGroup title="Sales">
           <SettingsLink href="/leads" label="Sales" />
           <SettingsLink href="/leads" label="Lead Generation" />
           <SettingsLink href="/leads/proposal-templates" label="Proposal templates" />
         </SettingsGroup>
 
-        <SettingsGroup title="Files">
-          <ComingSoon label="Files" />
-        </SettingsGroup>
-
         <SettingsGroup title="Project management">
           <SettingsLink href="/settings/permitting" label="Permitting" />
-          <ComingSoon label="Schedule" />
-          <ComingSoon label="Daily Logs" />
-          <ComingSoon label="Change Orders" />
-          <ComingSoon label="Selections" />
-          <ComingSoon label="Warranty" />
-          <ComingSoon label="Time Clock" />
-          <ComingSoon label="Client Updates" />
-        </SettingsGroup>
-
-        <SettingsGroup title="Messaging">
-          <ComingSoon label="Surveys" />
-          <ComingSoon label="RFIs" />
         </SettingsGroup>
 
         <SettingsGroup title="Financials">
@@ -134,18 +98,11 @@ export default async function CompanySettingsPage() {
           <SettingsLink href="/materials" label="Catalog" />
           <SettingsLink href="/settings/quickbooks" label="QuickBooks" />
           <SettingsLink href="/admin/inbound-email" label="Inbound email (receipts)" />
-          <ComingSoon label="Bids" />
-          <ComingSoon label="Estimates" />
-          <ComingSoon label="Bills / POs / Budget" />
-          <ComingSoon label="Invoices" />
-          <ComingSoon label="Online Payments" />
-          <ComingSoon label="Taxes" />
         </SettingsGroup>
 
         <SettingsGroup title="Integrations">
           <SettingsLink href="/settings/quickbooks" label="QuickBooks" />
           <SettingsLink href="/settings/connections" label="Connected applications" />
-          <ComingSoon label="Gusto" />
         </SettingsGroup>
 
         <SettingsGroup title="Directory">

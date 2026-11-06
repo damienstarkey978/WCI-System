@@ -421,15 +421,6 @@ export default async function JobOverviewPage({ params }: PageProps<"/jobs/[jobI
             <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)] sm:text-sm sm:normal-case sm:tracking-normal sm:text-[var(--bt-text)]">
               Recent Activity From Your Team
             </h2>
-            <button
-              type="button"
-              className="rounded border px-2.5 py-1 text-xs font-semibold text-[var(--bt-text)] hover:bg-black/5"
-              style={{ borderColor: "var(--bt-border)" }}
-              disabled
-              title="Activity filters coming soon"
-            >
-              Filter
-            </button>
           </header>
           <div className="divide-y" style={{ borderColor: "var(--bt-border)" }}>
             {activity.length === 0 ? (

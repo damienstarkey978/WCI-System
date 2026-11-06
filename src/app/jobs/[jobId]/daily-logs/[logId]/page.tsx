@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
 import { actorSummaryText } from "@/components/actor-attribution";
-import { ChatIcon, GearIcon, HeartIcon, InfoIcon } from "@/components/shell/icons";
+import { ChatIcon, HeartIcon } from "@/components/shell/icons";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { currentAppUser } from "@/lib/auth";
 import { listComments } from "@/lib/comments/service";
@@ -88,29 +88,7 @@ export default async function DailyLogDetailPage({ params }: PageProps<"/jobs/[j
       <PageHeader
         jobName={job.name}
         title={logHeading(log.createdAt, log.title)}
-        action={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <span
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white"
-                style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-info, #0ea5e9)" }}
-                title="Info"
-                aria-hidden
-              >
-                <InfoIcon className="h-4 w-4" />
-              </span>
-              <span
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border bg-white"
-                style={{ borderColor: "var(--bt-border)", color: "var(--bt-chrome-settings, #8b5cf6)" }}
-                title="Settings"
-                aria-hidden
-              >
-                <GearIcon className="h-4 w-4" />
-              </span>
-            </div>
-            <PrintButton />
-          </div>
-        }
+        action={<PrintButton />}
       />
       <Link href={`/jobs/${job.id}/daily-logs`} className="text-sm font-medium text-[var(--bt-primary)] hover:underline">
         ← All daily logs

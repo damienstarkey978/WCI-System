@@ -6,9 +6,6 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   ChevronDownIcon,
   ExpandColumnsIcon,
-  FilterIcon,
-  GearIcon,
-  HistoryIcon,
   MaximizeIcon,
   UploadIcon,
 } from "@/components/shell/icons";
@@ -200,13 +197,6 @@ export function ScheduleToolbar({
           })}
         </div>
 
-        <IconBtn label="Schedule settings">
-          <GearIcon className="h-4 w-4" />
-        </IconBtn>
-        <IconBtn label="Schedule history">
-          <HistoryIcon className="h-4 w-4" />
-        </IconBtn>
-
         <div className="hidden items-center gap-3 sm:flex">
           <ScheduleSwitch
             jobId={jobId}
@@ -229,18 +219,7 @@ export function ScheduleToolbar({
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Menu label="More Actions" align="right">
-            <MenuItem disabled>Print</MenuItem>
             <MenuItem onClick={() => dispatchScheduleChrome("export")}>Export PDF</MenuItem>
-            <MenuItem disabled>Duplicate items…</MenuItem>
-            <MenuItem disabled>Shift schedule…</MenuItem>
-          </Menu>
-          <Menu label="Filter" icon={<FilterIcon className="h-3.5 w-3.5" />} align="right">
-            <MenuItem disabled>Assigned to me</MenuItem>
-            <MenuItem disabled>Unconfirmed</MenuItem>
-            <MenuItem disabled>Critical path only</MenuItem>
-            <div className="border-t px-3 py-2 text-xs text-[var(--bt-muted)]" style={{ borderColor: "var(--bt-border)" }}>
-              Filters apply once wired to the schedule query.
-            </div>
           </Menu>
           {newItemSlot}
         </div>

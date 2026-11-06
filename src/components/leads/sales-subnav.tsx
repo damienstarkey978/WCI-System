@@ -4,13 +4,12 @@ import Link from "next/link";
 
 /**
  * Buildertrend Lead Activities surface tabs (List / Activity / Calendar / …).
- * Activity templates has no WCI page yet — rendered disabled rather than a dead link.
+ * Activity templates omitted until a real page exists (no inert tab).
  */
 export const LEAD_ACTIVITIES_TABS = [
   { key: "list", label: "List view", href: "/leads/activities?view=list" },
   { key: "activity", label: "Activity view", href: "/leads/activities" },
   { key: "calendar", label: "Activity calendar", href: "/leads/calendar" },
-  { key: "templates", label: "Activity templates", href: null },
   { key: "proposals", label: "Lead proposals", href: "/leads/proposals" },
   { key: "proposal-templates", label: "Proposal templates", href: "/leads/proposal-templates" },
   { key: "map", label: "Map", href: "/leads/map" },
@@ -33,13 +32,6 @@ export function LeadActivitiesSubnav({ active }: { active: LeadActivitiesTabKey 
           borderColor: isActive ? "var(--bt-primary)" : "transparent",
           color: isActive ? "var(--bt-primary)" : "var(--bt-muted)",
         };
-        if (!tab.href) {
-          return (
-            <span key={tab.key} className={`${className} cursor-not-allowed opacity-50`} style={style} title="Coming soon">
-              {tab.label}
-            </span>
-          );
-        }
         return (
           <Link key={tab.key} href={tab.href} className={className} style={style} aria-current={isActive ? "page" : undefined}>
             {tab.label}

@@ -23,6 +23,7 @@ export function ListToolbar({
   onFilterClick: () => void;
   secondaryAction?: ReactNode;
   primaryAction?: ReactNode;
+  /** Only pass controls that do something (buttons/links with real handlers). */
   extraIcons?: ReactNode;
 }) {
   return (
