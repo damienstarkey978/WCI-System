@@ -183,6 +183,19 @@ export async function markChangeOrderSent(organizationId: string, changeOrderId:
   });
 }
 
+/** Buildertrend Recall — return a sent/pending change order to draft. */
+export async function recallChangeOrder(organizationId: string, changeOrderId: string) {
+  const changeOrder = await db.changeOrder.findFirst({ where: { id: changeOrderId, organizationId } });
+  if (!changeOrder) throw new ChangeOrderNotFoundError(changeOrderId);
+  if (changeOrder.status !== ChangeOrderStatus.PENDING_APPROVAL) {
+    throw new ChangeOrderNotPendingError(changeOrderId, changeOrder.status);
+  }
+  return db.changeOrder.update({
+    where: { id: changeOrder.id },
+    data: { status: ChangeOrderStatus.DRAFT, statusChangedAt: new Date() },
+  });
+}
+
 function deltasFor(changeOrder: {
   id: string;
   mode: ChangeOrderMode;

@@ -13,9 +13,8 @@ import {
   declineChangeOrderAction,
   markChangeOrderSentAction,
 } from "../actions";
-import { ChangeOrderHeaderActions } from "./co-header-actions";
+import { ChangeOrderDetailChrome } from "./co-detail-chrome";
 import { ChangeOrderDetailForm } from "./detail-form";
-import { ChangeOrderLineItemsToolbar } from "./line-items-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -187,27 +186,31 @@ export default async function ChangeOrderDetailPage({
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link
-            href={`/jobs/${job.id}/change-orders`}
-            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--bt-muted)] hover:text-[var(--bt-primary)]"
-            aria-label="Back to change orders"
-          >
-            <span aria-hidden>←</span>
-            <span className="truncate">{job.name}</span>
-          </Link>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold text-[var(--bt-text)]">Change Order</h1>
-            <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: badge.bg, color: badge.text }}>
-              {badge.label}
-            </span>
+      <ChangeOrderDetailChrome
+        jobId={job.id}
+        changeOrderId={changeOrder.id}
+        status={changeOrder.status}
+        editable={editable}
+        titleBlock={
+          <div className="min-w-0">
+            <Link
+              href={`/jobs/${job.id}/change-orders`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-[var(--bt-muted)] hover:text-[var(--bt-primary)]"
+              aria-label="Back to change orders"
+            >
+              <span aria-hidden>←</span>
+              <span className="truncate">{job.name}</span>
+            </Link>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold text-[var(--bt-text)]">Change Order</h1>
+              <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: badge.bg, color: badge.text }}>
+                {badge.label}
+              </span>
+            </div>
           </div>
-        </div>
-
-        <div className="flex flex-col items-end gap-2">
-          <ChangeOrderHeaderActions jobId={job.id} changeOrderId={changeOrder.id} editable={editable} />
-          {editable ? (
+        }
+        statusActions={
+          editable ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
               {changeOrder.status === "DRAFT" ? (
                 <form action={markChangeOrderSentAction}>
@@ -238,9 +241,24 @@ export default async function ChangeOrderDetailPage({
                 </button>
               </form>
             </div>
-          ) : null}
-        </div>
-      </div>
+          ) : null
+        }
+        editForm={
+          <ChangeOrderDetailForm
+            jobId={job.id}
+            changeOrderId={changeOrder.id}
+            coNumber={coNumber}
+            editable={editable}
+            initial={{
+              title: changeOrder.title,
+              deadline: changeOrder.deadline ? changeOrder.deadline.toISOString().slice(0, 10) : "",
+              notesBuilder: changeOrder.notesBuilder ?? "",
+              notesClient: changeOrder.notesClient ?? "",
+              invoiceOnApproval: changeOrder.invoiceOnApproval,
+            }}
+          />
+        }
+      />
 
       <nav className="flex gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
         {(
@@ -300,30 +318,9 @@ export default async function ChangeOrderDetailPage({
             <Field label="Client Last Viewed">{clientLastViewed}</Field>
           </div>
 
-          {editable ? (
-            <details className="rounded border" style={{ borderColor: "var(--bt-border)" }}>
-              <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-[var(--bt-primary)]">Edit fields</summary>
-              <div className="border-t p-3" style={{ borderColor: "var(--bt-border)" }}>
-                <ChangeOrderDetailForm
-                  jobId={job.id}
-                  changeOrderId={changeOrder.id}
-                  coNumber={coNumber}
-                  editable={editable}
-                  initial={{
-                    title: changeOrder.title,
-                    deadline: changeOrder.deadline ? changeOrder.deadline.toISOString().slice(0, 10) : "",
-                    notesBuilder: changeOrder.notesBuilder ?? "",
-                    notesClient: changeOrder.notesClient ?? "",
-                    invoiceOnApproval: changeOrder.invoiceOnApproval,
-                  }}
-                />
-              </div>
-            </details>
-          ) : null}
-
           <section id="co-line-items">
-            <div className="flex overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
-              <div className="min-w-0 flex-1 overflow-x-auto">
+            <div className="overflow-hidden rounded border" style={{ borderColor: "var(--bt-border)" }}>
+              <div className="min-w-0 overflow-x-auto">
                 <table className="w-full min-w-max text-left text-sm">
                   <thead>
                     <tr
@@ -380,7 +377,6 @@ export default async function ChangeOrderDetailPage({
                   </tbody>
                 </table>
               </div>
-              <ChangeOrderLineItemsToolbar editable={editable} />
             </div>
           </section>
 

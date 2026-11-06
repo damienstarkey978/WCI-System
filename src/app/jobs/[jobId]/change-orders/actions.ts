@@ -6,6 +6,7 @@ import { ChangeOrderMode, RateMode } from "@/generated/prisma/enums";
 import { requireAppUser } from "@/lib/auth";
 import {
   approveChangeOrder,
+  ChangeOrderNotApprovedError,
   ChangeOrderNotFoundError,
   ChangeOrderNotPendingError,
   createChangeOrder,
@@ -13,6 +14,8 @@ import {
   JobNotFoundError,
   JobNotOpenError,
   markChangeOrderSent,
+  pushChangeOrderToPurchaseOrder,
+  recallChangeOrder,
   updateChangeOrder,
 } from "@/lib/change-orders/service";
 import { parseCostCodeLineItems } from "@/lib/financial/parse-line-items";
@@ -21,6 +24,8 @@ import { parseDollarsToCents, parsePercentToBasisPoints } from "@/lib/money";
 export interface ActionState {
   readonly error?: string;
   readonly ok?: boolean;
+  readonly changeOrderId?: string;
+  readonly purchaseOrderId?: string;
 }
 
 export async function createChangeOrderAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
@@ -37,6 +42,7 @@ export async function createChangeOrderAction(_previous: ActionState, formData: 
   if (!title) return { error: "Title is required." };
 
   try {
+    let created;
     if (mode === ChangeOrderMode.FLAT) {
       const flatCostCodeId = String(formData.get("flatCostCodeId") ?? "");
       const flatCostRaw = String(formData.get("flatCost") ?? "");
@@ -44,7 +50,7 @@ export async function createChangeOrderAction(_previous: ActionState, formData: 
       if (!flatCostCodeId) return { error: "Choose a cost code." };
       if (!flatCostRaw || !flatClientPriceRaw) return { error: "Cost and client price are required." };
 
-      await createChangeOrder({
+      created = await createChangeOrder({
         organizationId: user.organizationId,
         jobId,
         title,
@@ -63,7 +69,7 @@ export async function createChangeOrderAction(_previous: ActionState, formData: 
       const lineItems = parseCostCodeLineItems(formData).map((item) => ({ ...item, rateMode, rateBasisPoints }));
       if (lineItems.length === 0) return { error: "Add at least one line item." };
 
-      await createChangeOrder({
+      created = await createChangeOrder({
         organizationId: user.organizationId,
         jobId,
         title,
@@ -75,14 +81,14 @@ export async function createChangeOrderAction(_previous: ActionState, formData: 
         invoiceOnApproval,
       });
     }
+
+    revalidatePath(`/jobs/${jobId}/change-orders`);
+    return { ok: true, changeOrderId: created.id };
   } catch (error) {
     if (error instanceof JobNotFoundError || error instanceof JobNotOpenError) return { error: error.message };
     if (error instanceof Error && error.message.includes("Cannot parse")) return { error: error.message };
     throw error;
   }
-
-  revalidatePath(`/jobs/${jobId}/change-orders`);
-  return { ok: true };
 }
 
 export async function updateChangeOrderAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
@@ -130,6 +136,20 @@ export async function markChangeOrderSentAction(formData: FormData): Promise<voi
   revalidatePath(`/jobs/${jobId}/change-orders/${changeOrderId}`);
 }
 
+export async function recallChangeOrderAction(formData: FormData): Promise<void> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const changeOrderId = String(formData.get("changeOrderId") ?? "");
+  try {
+    await recallChangeOrder(user.organizationId, changeOrderId);
+  } catch (error) {
+    if (error instanceof ChangeOrderNotFoundError || error instanceof ChangeOrderNotPendingError) return;
+    throw error;
+  }
+  revalidatePath(`/jobs/${jobId}/change-orders`);
+  revalidatePath(`/jobs/${jobId}/change-orders/${changeOrderId}`);
+}
+
 export async function approveChangeOrderAction(formData: FormData): Promise<void> {
   const user = await requireAppUser();
 
@@ -162,4 +182,31 @@ export async function declineChangeOrderAction(formData: FormData): Promise<void
 
   revalidatePath(`/jobs/${jobId}/change-orders`);
   revalidatePath(`/jobs/${jobId}/change-orders/${changeOrderId}`);
+}
+
+export async function pushChangeOrderToPoAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireAppUser();
+  const jobId = String(formData.get("jobId") ?? "");
+  const changeOrderId = String(formData.get("changeOrderId") ?? "");
+  const poNumber = String(formData.get("poNumber") ?? "").trim();
+  const vendorName = String(formData.get("vendorName") ?? "").trim();
+  if (!poNumber) return { error: "PO number is required." };
+  if (!vendorName) return { error: "Vendor name is required." };
+
+  try {
+    const po = await pushChangeOrderToPurchaseOrder(user.organizationId, changeOrderId, poNumber, vendorName);
+    revalidatePath(`/jobs/${jobId}/change-orders`);
+    revalidatePath(`/jobs/${jobId}/change-orders/${changeOrderId}`);
+    revalidatePath(`/jobs/${jobId}/purchase-orders`);
+    return { ok: true, purchaseOrderId: po.id };
+  } catch (error) {
+    if (
+      error instanceof ChangeOrderNotFoundError ||
+      error instanceof ChangeOrderNotApprovedError ||
+      error instanceof ChangeOrderNotPendingError
+    ) {
+      return { error: error.message };
+    }
+    throw error;
+  }
 }
