@@ -154,6 +154,8 @@ export function BillsGrid({ rows, isQboConnected }: { rows: readonly BillRow[]; 
               if (row.sendToQuickBooks === false) {
                 return <span className="text-xs text-[var(--bt-muted)]">Skipped</span>;
               }
+              // Sync control stays in product for cutover; live push still gated by
+              // QBO_BILL_PUSH_ENABLED (paused while Buildertrend owns QuickBooks).
               return <SyncToQuickBooksButton jobId={row.jobId} billId={row.id} label="Sync" />;
             },
           },

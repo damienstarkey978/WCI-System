@@ -560,7 +560,7 @@ export function BillDetailView(props: BillDetailProps) {
                             <span>
                               Send to QuickBooks immediately upon save
                               <span className="mt-0.5 block text-[11px] text-[var(--bt-muted)]">
-                                Check for labor/unpaid services; leave unchecked for materials already spent.
+                                Leave unchecked while Buildertrend owns QuickBooks. Opt in only when WCI should push.
                               </span>
                             </span>
                           </label>
