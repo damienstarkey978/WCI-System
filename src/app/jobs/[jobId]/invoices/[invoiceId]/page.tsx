@@ -1,29 +1,16 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { CommentThread } from "@/components/comments/CommentThread";
 import { currentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
-import { daysOverdue, effectiveInvoiceStatus, paymentTermsDisplayLabel } from "@/lib/invoicing/terms";
+import { effectiveInvoiceStatus, paymentTermsDisplayLabel } from "@/lib/invoicing/terms";
 import { formatBasisPoints } from "@/lib/money";
+import { formatCompanyAddress } from "@/lib/organization/company-defaults";
 
-import { RecordPaymentForm } from "../record-payment-form";
-import { SyncToQuickBooksButton } from "../sync-to-quickbooks-button";
-import { VoidInvoiceButton } from "../void-invoice-button";
-import { ClientPreview } from "./client-preview";
-import { SendInvoiceButtons } from "./send-buttons";
+import { InvoiceDetailView } from "./invoice-detail-view";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  DRAFT: { bg: "#e5e7eb", text: "#374151" },
-  SENT: { bg: "color-mix(in srgb, var(--bt-primary) 14%, transparent)", text: "var(--bt-primary)" },
-  PARTIALLY_PAID: { bg: "color-mix(in srgb, var(--bt-hazard) 14%, transparent)", text: "var(--bt-hazard)" },
-  PAID: { bg: "var(--bt-status-open-bg)", text: "var(--bt-status-open-text)" },
-  VOID: { bg: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", text: "var(--bt-danger)" },
-};
 
 const METHOD_LABEL: Record<string, string> = {
   STRIPE_CARD: "Card (online)",
@@ -32,8 +19,13 @@ const METHOD_LABEL: Record<string, string> = {
   MANUAL: "Manual",
 };
 
-export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jobId]/invoices/[invoiceId]">) {
+export default async function InvoiceDetailPage({
+  params,
+  searchParams,
+}: PageProps<"/jobs/[jobId]/invoices/[invoiceId]">) {
   const { jobId, invoiceId } = await params;
+  const { tab: tabParam } = await searchParams;
+  const initialTab = tabParam === "preview" ? "preview" : "details";
 
   let user;
   try {
@@ -48,10 +40,32 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
   const job = await db.job.findFirst({
     where: { id: jobId, organizationId: user.organizationId },
     include: {
-      organization: { select: { name: true, logoPath: true } },
-      // A job reaches its client through ClientJobAccess, not a direct relation —
-      // the portal is per-client-per-job. The first one is who the invoice is billed to.
-      clientAccess: { take: 1, include: { client: { select: { name: true } } } },
+      organization: {
+        select: {
+          name: true,
+          logoPath: true,
+          addressLine1: true,
+          city: true,
+          state: true,
+          postalCode: true,
+          contactPhone: true,
+          slogan: true,
+        },
+      },
+      clientAccess: {
+        take: 1,
+        include: {
+          client: {
+            select: {
+              name: true,
+              addressLine1: true,
+              city: true,
+              state: true,
+              postalCode: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!job) notFound();
@@ -73,301 +87,114 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/jobs/[jo
 
   const paidCents = invoice.payments.reduce((sum, payment) => sum + payment.amountCents, 0);
   const displayStatus = effectiveInvoiceStatus(invoice.status, invoice.amountCents, paidCents);
-  const style = STATUS_STYLE[displayStatus] ?? STATUS_STYLE.DRAFT;
-  const termsLabel = paymentTermsDisplayLabel(invoice.paymentTerms);
+  const termsLabel = paymentTermsDisplayLabel(invoice.paymentTerms) ?? "";
   const creditedCents = invoice.creditMemos
     .filter((memo) => memo.status === "APPLIED")
     .reduce((sum, memo) => sum + memo.amountCents, 0);
   const subtotalCents = invoice.amountCents - invoice.taxCents;
   const balanceCents = invoice.amountCents - paidCents - creditedCents;
-  const lateDays =
-    displayStatus === "PAID" || displayStatus === "DRAFT" || displayStatus === "VOID"
-      ? 0
-      : daysOverdue(invoice.dueOn, new Date());
   const canAct = displayStatus !== "VOID" && displayStatus !== "PAID";
   const hasOnlinePayment = invoice.payments.some((p) => p.method === "STRIPE_CARD" || p.method === "STRIPE_ACH");
   const hasQboPayment = invoice.payments.some((p) => p.method === "QBO_SYNC");
 
+  const client = job.clientAccess[0]?.client ?? null;
+  const clientAddress = client
+    ? formatCompanyAddress({
+        addressLine1: client.addressLine1,
+        city: client.city,
+        state: client.state,
+        postalCode: client.postalCode,
+      })
+    : null;
+  const jobAddress = [job.addressLine1, job.city, job.state].filter(Boolean).join(", ") || null;
+
+  const taxLabel =
+    invoice.taxCents > 0 || invoice.taxRateBasisPoints > 0
+      ? `Sales tax (${formatBasisPoints(invoice.taxRateBasisPoints)})`
+      : "No Tax";
+
+  const sentByLabel = invoice.lastSentAt
+    ? `Sent${invoice.sendCount > 1 ? ` (${invoice.sendCount}×)` : ""} on ${formatDate(invoice.lastSentAt)}`
+    : null;
+
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
-      <div>
-        <Link href={`/jobs/${job.id}/invoices`} className="text-xs text-[var(--bt-muted)] hover:underline">
-          ← Back to invoices
-        </Link>
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold text-[var(--bt-text)]">Invoice {invoice.invoiceNumber}</h1>
-          <div className="flex flex-wrap items-center gap-2">
-            {lateDays > 0 ? (
-              <span
-                className="rounded px-1.5 py-0.5 text-xs font-semibold"
-                style={{ background: "color-mix(in srgb, var(--bt-danger) 14%, transparent)", color: "var(--bt-danger)" }}
-              >
-                {lateDays} days overdue
-              </span>
-            ) : null}
-            <span className="rounded px-1.5 py-0.5 text-xs font-semibold" style={{ background: style.bg, color: style.text }}>
-              {displayStatus.replace(/_/g, " ")}
-            </span>
-            <SendInvoiceButtons jobId={job.id} invoiceId={invoice.id} status={displayStatus} />
-          </div>
-        </div>
-      </div>
-
-      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-        <h2 className="text-sm font-semibold text-[var(--bt-text)]">Details</h2>
-        <dl className="mt-3 grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
-          <div>
-            <dt className="text-xs text-[var(--bt-muted)]">Type</dt>
-            <dd className="text-sm text-[var(--bt-text)]">{invoice.type.replace(/_/g, " ")}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--bt-muted)]">Terms</dt>
-            <dd className="text-sm text-[var(--bt-text)]">{termsLabel ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--bt-muted)]">Issued</dt>
-            <dd className="text-sm text-[var(--bt-text)]">{formatDate(invoice.issuedOn)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--bt-muted)]">Due</dt>
-            <dd className="text-sm text-[var(--bt-text)]">{formatDate(invoice.dueOn)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--bt-muted)]">Paid</dt>
-            <dd className="text-sm text-[var(--bt-text)]">{formatDate(invoice.paidAt)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--bt-muted)]">Sent</dt>
-            <dd className="text-sm text-[var(--bt-text)]">
-              {invoice.lastSentAt ? formatDate(invoice.lastSentAt) : "—"}
-              {invoice.sendCount > 1 ? (
-                <span className="ml-1 text-xs text-[var(--bt-muted)]">({invoice.sendCount}×)</span>
-              ) : null}
-            </dd>
-          </div>
-          <div>
-            {/* Whether the client has actually opened it is the first thing to check
-                before chasing a payment — a client who never saw the invoice isn't late
-                for the same reason as one who did. */}
-            <dt className="text-xs text-[var(--bt-muted)]">Client viewed</dt>
-            <dd className="text-sm text-[var(--bt-text)]">
-              {invoice.clientLastViewedAt ? formatDate(invoice.clientLastViewedAt) : "Never opened"}
-            </dd>
-          </div>
-          {invoice.draw ? (
-            <div>
-              <dt className="text-xs text-[var(--bt-muted)]">Draw</dt>
-              <dd className="text-sm text-[var(--bt-text)]">{invoice.draw.title}</dd>
-            </div>
-          ) : null}
-        </dl>
-
-        {invoice.lineItems.length > 0 ? (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-max text-left text-sm">
-              <thead>
-                <tr
-                  className="border-b text-xs font-semibold uppercase tracking-wide text-[var(--bt-muted)]"
-                  style={{ borderColor: "var(--bt-border)" }}
-                >
-                  <th className="py-2 pr-4">Item</th>
-                  <th className="py-2 pr-4">Cost code</th>
-                  <th className="py-2 pr-4 text-right">Qty</th>
-                  <th className="py-2 pr-4 text-right">Unit cost</th>
-                  <th className="py-2 pr-4 text-right">Markup</th>
-                  <th className="py-2 pr-4 text-center">Tax</th>
-                  <th className="py-2 text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoice.lineItems.map((item) => (
-                  <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--bt-border)" }}>
-                    <td className="py-2 pr-4">
-                      <div className="text-[var(--bt-text)]">{item.title}</div>
-                      {item.description ? <div className="text-xs text-[var(--bt-muted)]">{item.description}</div> : null}
-                    </td>
-                    <td className="py-2 pr-4 text-[var(--bt-muted)]">
-                      {item.costCode ? `${item.costCode.code} ${item.costCode.name}` : "—"}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-[var(--bt-muted)]">
-                      {item.quantityMilli === null ? "—" : (item.quantityMilli / 1000).toString()}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-[var(--bt-muted)]">
-                      {item.unitCostCents === null ? "—" : formatMoney(item.unitCostCents)}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-[var(--bt-muted)]">
-                      {item.rateBasisPoints === null
-                        ? "—"
-                        : `${formatBasisPoints(item.rateBasisPoints)} ${item.rateMode === "MARGIN" ? "margin" : "markup"}`}
-                    </td>
-                    <td className="py-2 pr-4 text-center text-[var(--bt-muted)]">{item.taxable ? "Yes" : "—"}</td>
-                    <td className="py-2 text-right text-[var(--bt-text)]">{formatMoney(item.amountCents)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-
-        <div className="mt-4 flex flex-col items-end gap-1 border-t pt-3 text-sm" style={{ borderColor: "var(--bt-border)" }}>
-          <div className="flex w-56 justify-between">
-            <span className="text-[var(--bt-muted)]">Subtotal</span>
-            <span className="text-[var(--bt-text)]">{formatMoney(subtotalCents)}</span>
-          </div>
-          {invoice.taxCents > 0 || invoice.taxRateBasisPoints > 0 ? (
-            <div className="flex w-56 justify-between">
-              <span className="text-[var(--bt-muted)]">Sales tax ({formatBasisPoints(invoice.taxRateBasisPoints)})</span>
-              <span className="text-[var(--bt-text)]">{formatMoney(invoice.taxCents)}</span>
-            </div>
-          ) : null}
-          <div className="flex w-56 justify-between">
-            <span className="text-[var(--bt-muted)]">Total</span>
-            <span className="text-[var(--bt-text)]">{formatMoney(invoice.amountCents)}</span>
-          </div>
-          <div className="flex w-56 justify-between">
-            <span className="text-[var(--bt-muted)]">Paid</span>
-            <span className="text-[var(--bt-text)]">{formatMoney(paidCents)}</span>
-          </div>
-          {creditedCents > 0 ? (
-            <div className="flex w-56 justify-between">
-              <span className="text-[var(--bt-muted)]">Credited</span>
-              <span className="text-[var(--bt-text)]">{formatMoney(creditedCents)}</span>
-            </div>
-          ) : null}
-          <div className="flex w-56 justify-between font-semibold">
-            <span className="text-[var(--bt-text)]">Balance</span>
-            <span className="text-[var(--bt-text)]">{formatMoney(balanceCents)}</span>
-          </div>
-        </div>
-
-        {invoice.clientMessage ? (
-          <p className="mt-4 whitespace-pre-wrap border-t pt-3 text-sm text-[var(--bt-text)]" style={{ borderColor: "var(--bt-border)" }}>
-            {invoice.clientMessage}
-          </p>
-        ) : null}
-      </section>
-
-      <ClientPreview
-        data={{
-          organizationName: job.organization.name,
-          organizationLogoPath: job.organization.logoPath,
-          clientName: job.clientAccess[0]?.client.name ?? null,
-          jobName: job.name,
-          jobAddress: [job.addressLine1, job.city, job.state].filter(Boolean).join(", ") || null,
-          invoiceNumber: invoice.invoiceNumber,
-          issuedOn: formatDate(invoice.issuedOn),
-          dueOn: formatDate(invoice.dueOn),
-          terms: termsLabel ?? "",
-          lines: invoice.lineItems.map((item) => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            amount: formatMoney(item.amountCents),
-          })),
-          subtotal: formatMoney(subtotalCents),
-          taxLabel: invoice.taxCents > 0 ? `Sales tax (${formatBasisPoints(invoice.taxRateBasisPoints)})` : null,
-          tax: formatMoney(invoice.taxCents),
-          total: formatMoney(invoice.amountCents),
-          paid: formatMoney(paidCents + creditedCents),
-          balance: formatMoney(balanceCents),
-          message: invoice.clientMessage,
-        }}
-      />
-
-      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[var(--bt-text)]">Payments</h2>
-          {canAct ? <RecordPaymentForm jobId={job.id} invoiceId={invoice.id} /> : null}
-        </div>
-        {invoice.payments.length === 0 ? (
-          <p className="mt-2 text-sm text-[var(--bt-muted)]">No payments recorded yet.</p>
-        ) : (
-          <div className="mt-3 divide-y" style={{ borderColor: "var(--bt-border)" }}>
-            {invoice.payments.map((payment) => (
-              <div key={payment.id} className="flex items-center justify-between py-2 text-sm">
-                <div>
-                  <span className="text-[var(--bt-text)]">{METHOD_LABEL[payment.method] ?? payment.method}</span>
-                  {payment.reference ? <span className="ml-2 text-xs text-[var(--bt-muted)]">Ref {payment.reference}</span> : null}
-                  <div className="text-xs text-[var(--bt-muted)]">{formatDate(payment.receivedAt)}</div>
-                </div>
-                <span className="text-[var(--bt-text)]">{formatMoney(payment.amountCents)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {canAct ? (
-          <div className="mt-3">
-            <VoidInvoiceButton jobId={job.id} invoiceId={invoice.id} />
-          </div>
-        ) : null}
-      </section>
-
-      {invoice.creditMemos.length > 0 || invoice.deposits.length > 0 ? (
-        <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-          <h2 className="text-sm font-semibold text-[var(--bt-text)]">Credits and deposits</h2>
-          <div className="mt-3 divide-y" style={{ borderColor: "var(--bt-border)" }}>
-            {invoice.creditMemos.map((memo) => (
-              <div key={memo.id} className="flex items-center justify-between py-2 text-sm">
-                <div>
-                  <span className="text-[var(--bt-text)]">Credit {memo.memoNumber}</span>
-                  <div className="text-xs text-[var(--bt-muted)]">
-                    {memo.status.replace(/_/g, " ")}
-                    {memo.reason ? ` — ${memo.reason}` : ""}
-                  </div>
-                </div>
-                <span className="text-[var(--bt-text)]">−{formatMoney(memo.amountCents)}</span>
-              </div>
-            ))}
-            {invoice.deposits.map((deposit) => (
-              <div key={deposit.id} className="flex items-center justify-between py-2 text-sm">
-                <div>
-                  <span className="text-[var(--bt-text)]">Deposit — {deposit.title}</span>
-                  <div className="text-xs text-[var(--bt-muted)]">{deposit.status.replace(/_/g, " ")}</div>
-                </div>
-                <span className="text-[var(--bt-text)]">{formatMoney(deposit.amountCents)}</span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-[var(--bt-muted)]">
-            An applied deposit also appears above as a payment — that is the row that settles the invoice.
-          </p>
-        </section>
-      ) : null}
-
-      <section className="rounded-lg border bg-[var(--bt-panel-bg)] p-4" style={{ borderColor: "var(--bt-border)" }}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[var(--bt-text)]">QuickBooks status</h2>
-          {isQboConnected ? (
-            <SyncToQuickBooksButton jobId={job.id} invoiceId={invoice.id} label={invoice.qboInvoiceId ? "Re-sync" : "Sync to QuickBooks"} />
-          ) : null}
-        </div>
-        {!isQboConnected ? (
-          <p className="mt-2 text-sm text-[var(--bt-muted)]">
-            QuickBooks isn&apos;t connected for this organization —{" "}
-            <Link href="/settings/quickbooks" className="text-[var(--bt-primary)] hover:underline">
-              connect it in Settings
-            </Link>{" "}
-            to sync invoices.
-          </p>
-        ) : invoice.qboInvoiceId ? (
-          <p className="mt-2 text-sm text-[var(--bt-text)]">
-            Synced to QuickBooks as Invoice <span className="font-mono">{invoice.qboInvoiceId}</span>.
-          </p>
-        ) : (
-          <p className="mt-2 text-sm text-[var(--bt-muted)]">Not sent to QuickBooks yet.</p>
-        )}
-        {hasQboPayment ? (
-          <p className="mt-1 text-xs text-[var(--bt-muted)]">A payment on this invoice was recorded via QuickBooks sync.</p>
-        ) : null}
-        {hasOnlinePayment ? <p className="mt-1 text-xs text-[var(--bt-muted)]">This invoice has an online (Stripe) payment recorded.</p> : null}
-      </section>
-
-      <CommentThread
-        organizationId={user.organizationId}
-        featureType="Invoice"
-        featureId={invoice.id}
-        revalidate={`/jobs/${job.id}/invoices/${invoice.id}`}
-      />
-    </div>
+    <InvoiceDetailView
+      jobId={job.id}
+      jobName={job.name}
+      jobAddress={jobAddress}
+      invoiceId={invoice.id}
+      organizationId={user.organizationId}
+      organizationName={job.organization.name}
+      organizationLogoPath={job.organization.logoPath}
+      orgAddressLine1={job.organization.addressLine1}
+      orgCity={job.organization.city}
+      orgState={job.organization.state}
+      orgPostalCode={job.organization.postalCode}
+      orgPhone={job.organization.contactPhone}
+      orgSlogan={job.organization.slogan}
+      clientName={client?.name ?? null}
+      clientAddress={clientAddress}
+      invoiceNumber={invoice.invoiceNumber}
+      title={invoice.title ?? invoice.draw?.title ?? null}
+      displayStatus={displayStatus}
+      termsLabel={termsLabel}
+      issuedOnLabel={formatDate(invoice.issuedOn)}
+      dueOnLabel={formatDate(invoice.dueOn)}
+      paidAtLabel={formatDate(invoice.paidAt)}
+      lastSentAtLabel={formatDate(invoice.lastSentAt)}
+      sentByLabel={sentByLabel}
+      clientViewedLabel={invoice.clientLastViewedAt ? formatDate(invoice.clientLastViewedAt) : "Never"}
+      taxLabel={taxLabel}
+      subtotalLabel={formatMoney(subtotalCents)}
+      taxAmountLabel={formatMoney(invoice.taxCents)}
+      totalLabel={formatMoney(invoice.amountCents)}
+      paidLabel={formatMoney(paidCents)}
+      creditedLabel={creditedCents > 0 ? formatMoney(creditedCents) : null}
+      balanceLabel={formatMoney(balanceCents)}
+      clientMessage={invoice.clientMessage}
+      lines={invoice.lineItems.map((item) => ({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        costCodeLabel: item.costCode ? `${item.costCode.code} ${item.costCode.name}` : null,
+        qtyLabel: item.quantityMilli === null ? "—" : (item.quantityMilli / 1000).toString(),
+        unitCostLabel: item.unitCostCents === null ? "—" : formatMoney(item.unitCostCents),
+        markupLabel:
+          item.rateBasisPoints === null
+            ? "—"
+            : `${formatBasisPoints(item.rateBasisPoints)} ${item.rateMode === "MARGIN" ? "margin" : "markup"}`,
+        taxable: item.taxable,
+        amountLabel: formatMoney(item.amountCents),
+      }))}
+      payments={invoice.payments.map((payment) => ({
+        id: payment.id,
+        methodLabel: METHOD_LABEL[payment.method] ?? payment.method,
+        reference: payment.reference,
+        receivedAtLabel: formatDate(payment.receivedAt),
+        amountLabel: formatMoney(payment.amountCents),
+      }))}
+      creditsAndDeposits={[
+        ...invoice.creditMemos.map((memo) => ({
+          id: memo.id,
+          kind: "credit" as const,
+          label: `Credit ${memo.memoNumber}`,
+          detail: `${memo.status.replace(/_/g, " ")}${memo.reason ? ` — ${memo.reason}` : ""}`,
+          amountLabel: `−${formatMoney(memo.amountCents)}`,
+        })),
+        ...invoice.deposits.map((deposit) => ({
+          id: deposit.id,
+          kind: "deposit" as const,
+          label: `Deposit — ${deposit.title}`,
+          detail: deposit.status.replace(/_/g, " "),
+          amountLabel: formatMoney(deposit.amountCents),
+        })),
+      ]}
+      canAct={canAct}
+      isQboConnected={isQboConnected}
+      qboInvoiceId={invoice.qboInvoiceId}
+      hasQboPayment={hasQboPayment}
+      hasOnlinePayment={hasOnlinePayment}
+      initialTab={initialTab}
+    />
   );
 }
