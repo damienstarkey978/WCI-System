@@ -1,9 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SetupNotice } from "@/app/admin/setup-notice";
-import { CreateModal } from "@/components/shell/CreateModal";
-import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { DocumentIcon } from "@/components/shell/icons";
 import { JarvisChatPanel } from "@/components/jarvis/JarvisChatPanel";
@@ -13,8 +10,9 @@ import { extendedCostCents, priceWithRate } from "@/lib/budget/funnel";
 import { isAnthropicConfigured } from "@/lib/env";
 import { isJarvisUiEnabled } from "@/lib/feature-flags";
 
+import { ChangeOrdersChrome } from "./change-orders-chrome";
 import { ChangeOrdersGrid } from "./change-orders-grid";
-import { CreateChangeOrderForm } from "./create-change-order-form";
+import { CreateChangeOrderModal } from "./create-change-order-modal";
 
 export const dynamic = "force-dynamic";
 
@@ -49,10 +47,15 @@ function builderCostCents(changeOrder: {
   return changeOrder.lineItems.reduce((total, item) => total + extendedCostCents(item.quantityMilli, item.unitCostCents), 0);
 }
 
+function formatCoNumber(n: number): string {
+  return String(n).padStart(4, "0");
+}
+
 export default async function ChangeOrdersPage({ params, searchParams }: PageProps<"/jobs/[jobId]/change-orders">) {
   const { jobId } = await params;
-  const { status: statusParam } = await searchParams;
+  const { status: statusParam, q: qParam } = await searchParams;
   const statusFilter: StatusFilter = STATUS_FILTERS.some((f) => f.key === statusParam) ? (statusParam as StatusFilter) : "all";
+  const q = typeof qParam === "string" ? qParam.trim() : "";
 
   let user;
   try {
@@ -64,8 +67,18 @@ export default async function ChangeOrdersPage({ params, searchParams }: PagePro
     return <SetupNotice detail="No organization found. Seed the database, then reload." />;
   }
 
-  const job = await db.job.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
+  const job = await db.job.findFirst({
+    where: { id: jobId, organizationId: user.organizationId },
+    include: {
+      clientAccess: {
+        take: 1,
+        include: { client: { select: { name: true } } },
+      },
+    },
+  });
   if (!job) notFound();
+
+  const clientName = job.clientAccess[0]?.client.name ?? null;
 
   const [changeOrders, costCodes] = await Promise.all([
     db.changeOrder.findMany({
@@ -101,6 +114,10 @@ export default async function ChangeOrdersPage({ params, searchParams }: PagePro
   });
 
   const filtered = rows.filter((row) => {
+    if (q) {
+      const haystack = `${formatCoNumber(row.number)} ${row.title}`.toLowerCase();
+      if (!haystack.includes(q.toLowerCase())) return false;
+    }
     switch (statusFilter) {
       case "not_sent":
         return row.status === "DRAFT";
@@ -117,59 +134,37 @@ export default async function ChangeOrdersPage({ params, searchParams }: PagePro
     }
   });
 
+  const createAction = (
+    <CreateChangeOrderModal jobId={job.id} jobName={job.name} costCodes={costCodes} clientName={clientName} />
+  );
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
-      <PageHeader
-        jobName={job.name}
-        title="Change Orders"
-        action={
-          <div className="flex items-center gap-2">
-            <CreateModal triggerLabel="+ Change Order" title="New change order" size="lg">
-              <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
-            </CreateModal>
-          </div>
-        }
-      />
+      <ChangeOrdersChrome jobId={job.id} jobName={job.name} status={statusFilter} q={q} createAction={createAction}>
+        {isAnthropicConfigured() && isJarvisUiEnabled() ? (
+          <JarvisChatPanel
+            context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "change_orders" }}
+            storageKey={`job-change-orders:${job.id}`}
+            emptyStateHint="Describe what changed — added scope, a client request, a field condition — and Jarvis drafts a full itemized change order against this job's catalog. Attach photos and it'll factor those in too."
+            heightClassName="h-96"
+          />
+        ) : null}
 
-      {isAnthropicConfigured() && isJarvisUiEnabled() ? (
-        <JarvisChatPanel
-          context={{ page: "job_detail", jobId: job.id, jobName: job.name, section: "change_orders" }}
-          storageKey={`job-change-orders:${job.id}`}
-          emptyStateHint="Describe what changed — added scope, a client request, a field condition — and Jarvis drafts a full itemized change order against this job's catalog. Attach photos and it'll factor those in too."
-          heightClassName="h-96"
-        />
-      ) : null}
-
-      <nav className="flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--bt-border)" }}>
-        {STATUS_FILTERS.map((filter) => (
-          <Link
-            key={filter.key}
-            href={filter.key === "all" ? `/jobs/${job.id}/change-orders` : `/jobs/${job.id}/change-orders?status=${filter.key}`}
-            className="-mb-px border-b-2 px-3 py-2 text-sm font-medium"
-            style={{
-              borderColor: statusFilter === filter.key ? "var(--bt-primary)" : "transparent",
-              color: statusFilter === filter.key ? "var(--bt-primary)" : "var(--bt-muted)",
-            }}
-          >
-            {filter.label}
-          </Link>
-        ))}
-      </nav>
-
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={<DocumentIcon className="h-10 w-10" />}
-          title="No change orders yet"
-          description="Change orders created for this job will appear here."
-          action={
-            <CreateModal triggerLabel="+ Change Order" title="New change order" size="lg">
-              <CreateChangeOrderForm jobId={job.id} costCodes={costCodes} />
-            </CreateModal>
-          }
-        />
-      ) : (
-        <ChangeOrdersGrid rows={filtered} />
-      )}
+        {filtered.length === 0 ? (
+          <EmptyState
+            icon={<DocumentIcon className="h-10 w-10" />}
+            title={q || statusFilter !== "all" ? "No matching change orders" : "No change orders yet"}
+            description={
+              q || statusFilter !== "all"
+                ? "Try clearing search or status filters."
+                : "Change orders created for this job will appear here."
+            }
+            action={createAction}
+          />
+        ) : (
+          <ChangeOrdersGrid rows={filtered} />
+        )}
+      </ChangeOrdersChrome>
     </div>
   );
 }
