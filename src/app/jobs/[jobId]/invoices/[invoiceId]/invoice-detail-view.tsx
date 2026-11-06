@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { OutboundBrandMark } from "@/components/branding/OutboundBrandMark";
@@ -16,11 +16,22 @@ import {
 import { displayInvoiceId, INVOICE_STATUS_STYLE, invoiceStatusLabel } from "@/lib/invoicing/display";
 import { formatCompanyAddress, resolveCompanySlogan, WCI_COMPANY_DEFAULTS } from "@/lib/organization/company-defaults";
 
+import { updateInvoiceAction, type ActionState } from "../actions";
 import { RecordPaymentForm } from "../record-payment-form";
 import { SyncToQuickBooksButton } from "../sync-to-quickbooks-button";
 import { VoidInvoiceButton } from "../void-invoice-button";
+import {
+  AddFromChangeOrdersModal,
+  type ChangeOrderAddFromRow,
+} from "./add-from-change-orders-modal";
 import { InvoiceClientPreviewPane } from "./client-preview";
 import { SendInvoiceButtons } from "./send-buttons";
+
+const EDIT_INITIAL: ActionState = {};
+
+const fieldClass =
+  "mt-0.5 w-full rounded border bg-white px-2 py-1.5 text-sm text-[var(--bt-text)] outline-none focus:border-[var(--bt-primary)]";
+const fieldStyle = { borderColor: "var(--bt-border)" } as const;
 
 export type InvoiceDetailLine = {
   readonly id: string;
@@ -87,6 +98,14 @@ export type InvoiceDetailProps = {
   readonly payments: readonly InvoiceDetailPayment[];
   readonly creditsAndDeposits: readonly InvoiceDetailCreditOrDeposit[];
   readonly canAct: boolean;
+  /** DRAFT invoices can edit header fields and add lines from change orders. */
+  readonly canEdit: boolean;
+  readonly paymentTerms: string;
+  readonly issuedOnValue: string;
+  readonly dueOnValue: string;
+  readonly amountValue: string | null;
+  readonly invoiceType: string;
+  readonly changeOrderRows: readonly ChangeOrderAddFromRow[];
   readonly isQboConnected: boolean;
   readonly qboInvoiceId: string | null;
   readonly hasQboPayment: boolean;
@@ -132,10 +151,43 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
   const [tab, setTab] = useState<"details" | "preview">(props.initialTab ?? "details");
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [addFromOpen, setAddFromOpen] = useState(false);
+  const [addFromMenuOpen, setAddFromMenuOpen] = useState(false);
+  const [editPending, startEditTransition] = useTransition();
+  const [editError, setEditError] = useState<string | null>(null);
+  const [title, setTitle] = useState(props.title ?? "");
+  const [issuedOn, setIssuedOn] = useState(props.issuedOnValue);
+  const [dueOn, setDueOn] = useState(props.dueOnValue);
+  const [paymentTerms, setPaymentTerms] = useState(props.paymentTerms || "CUSTOM");
+  const [clientMessage, setClientMessage] = useState(props.clientMessage ?? "");
+  const [amount, setAmount] = useState(props.amountValue ?? "");
+
+  function saveEdit() {
+    setEditError(null);
+    const formData = new FormData();
+    formData.set("jobId", props.jobId);
+    formData.set("invoiceId", props.invoiceId);
+    formData.set("title", title);
+    formData.set("issuedOn", issuedOn);
+    formData.set("dueOn", dueOn);
+    formData.set("paymentTerms", paymentTerms);
+    formData.set("clientMessage", clientMessage);
+    if (showFlatAmount) formData.set("amount", amount);
+    startEditTransition(async () => {
+      const result = await updateInvoiceAction(EDIT_INITIAL, formData);
+      if (result.error) {
+        setEditError(result.error);
+        return;
+      }
+      setEditing(false);
+      router.refresh();
+    });
+  }
 
   const shortId = displayInvoiceId(props.invoiceNumber);
   const statusStyle = INVOICE_STATUS_STYLE[props.displayStatus] ?? INVOICE_STATUS_STYLE.DRAFT;
   const listHref = `/jobs/${props.jobId}/invoices`;
+  const showFlatAmount = props.canEdit && props.invoiceType === "FLAT" && props.lines.length === 0;
 
   const companyAddress = useMemo(
     () =>
@@ -154,6 +206,21 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
     router.push(listHref);
   }
 
+  function toggleEdit() {
+    if (!props.canEdit) return;
+    if (editing) {
+      setEditing(false);
+      setTitle(props.title ?? "");
+      setIssuedOn(props.issuedOnValue);
+      setDueOn(props.dueOnValue);
+      setPaymentTerms(props.paymentTerms || "CUSTOM");
+      setClientMessage(props.clientMessage ?? "");
+      setAmount(props.amountValue ?? "");
+      return;
+    }
+    setEditing(true);
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center sm:p-3">
       <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close invoice" onClick={close} />
@@ -169,9 +236,26 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
             <h1 className="text-lg font-semibold text-[var(--bt-text)]">Invoice</h1>
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
-            <span className="rounded p-1.5 text-[#64748b]" title="Share" aria-hidden>
+            <button
+              type="button"
+              className="rounded p-1.5 text-[#64748b] hover:bg-black/5"
+              title="Share"
+              aria-label="Share invoice link"
+              onClick={async () => {
+                const url = window.location.href;
+                try {
+                  if (navigator.share) {
+                    await navigator.share({ title: `Invoice ${shortId}`, url });
+                    return;
+                  }
+                  await navigator.clipboard.writeText(url);
+                } catch {
+                  // User cancelled share or clipboard blocked — leave silently.
+                }
+              }}
+            >
               <ShareIcon className="h-4 w-4" />
-            </span>
+            </button>
             <a
               href="#invoice-comments"
               className="rounded p-1.5 text-[#0ea5e9] hover:bg-sky-50"
@@ -244,7 +328,13 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
                 <div className="mt-4 grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
                   <Field label="Title">
                     {editing ? (
-                      <span className="text-[var(--bt-muted)]">{props.title ?? "—"}</span>
+                      <input
+                        value={title}
+                        onChange={(event) => setTitle(event.target.value)}
+                        className={fieldClass}
+                        style={fieldStyle}
+                        placeholder="Optional title"
+                      />
                     ) : (
                       props.title ?? "—"
                     )}
@@ -254,19 +344,104 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
                   </Field>
                   <Field label="Client last viewed">{props.clientViewedLabel}</Field>
                   <Field label="Date paid">{props.paidAtLabel}</Field>
-                  <Field label="Invoice date">{props.issuedOnLabel}</Field>
-                  <Field label="Payment terms" info>
-                    {props.termsLabel || "—"}
+                  <Field label="Invoice date">
+                    {editing ? (
+                      <input
+                        type="date"
+                        value={issuedOn}
+                        onChange={(event) => setIssuedOn(event.target.value)}
+                        className={fieldClass}
+                        style={fieldStyle}
+                      />
+                    ) : (
+                      props.issuedOnLabel
+                    )}
                   </Field>
-                  <Field label="Due date">{props.dueOnLabel}</Field>
+                  <Field label="Payment terms" info>
+                    {editing ? (
+                      <select
+                        value={paymentTerms}
+                        onChange={(event) => setPaymentTerms(event.target.value)}
+                        className={fieldClass}
+                        style={fieldStyle}
+                      >
+                        <option value="CUSTOM">None</option>
+                        <option value="DUE_ON_RECEIPT">Due on receipt</option>
+                        <option value="NET_15">Net 15</option>
+                        <option value="NET_45">Net 45</option>
+                        <option value="NET_60">Net 60</option>
+                      </select>
+                    ) : (
+                      props.termsLabel || "—"
+                    )}
+                  </Field>
+                  <Field label="Due date">
+                    {editing ? (
+                      <input
+                        type="date"
+                        value={dueOn}
+                        onChange={(event) => setDueOn(event.target.value)}
+                        className={fieldClass}
+                        style={fieldStyle}
+                      />
+                    ) : (
+                      props.dueOnLabel
+                    )}
+                  </Field>
                 </div>
               </section>
 
               <section className="border-b py-5" style={{ borderColor: "var(--bt-border)" }}>
-                <h2 className="text-sm font-semibold text-[var(--bt-text)]">Client price</h2>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-[var(--bt-text)]">Client price</h2>
+                  {props.canEdit ? (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setAddFromMenuOpen((open) => !open)}
+                        className="rounded border px-2.5 py-1.5 text-xs font-medium text-[var(--bt-primary)] hover:bg-sky-50"
+                        style={{ borderColor: "var(--bt-border)" }}
+                      >
+                        Add from ▾
+                      </button>
+                      {addFromMenuOpen ? (
+                        <div
+                          className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded border bg-white py-1 text-sm shadow-lg"
+                          style={{ borderColor: "var(--bt-border)" }}
+                        >
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left hover:bg-sky-50"
+                            onClick={() => {
+                              setAddFromMenuOpen(false);
+                              setAddFromOpen(true);
+                            }}
+                          >
+                            Change Orders
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
                 <div className="mt-4 grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
                   <Field label="Taxes">{props.taxLabel}</Field>
-                  <Field label="Client price">{props.totalLabel}</Field>
+                  <Field label="Client price">
+                    {editing && showFlatAmount ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[var(--bt-muted)]">$</span>
+                        <input
+                          value={amount}
+                          onChange={(event) => setAmount(event.target.value)}
+                          inputMode="decimal"
+                          className={fieldClass}
+                          style={fieldStyle}
+                        />
+                      </div>
+                    ) : (
+                      props.totalLabel
+                    )}
+                  </Field>
                   <Field label="Total price">
                     <span className="font-semibold">{props.totalLabel}</span>
                   </Field>
@@ -362,7 +537,18 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
                     Thank you for the opportunity to work with you on your project. Please contact our office with any
                     questions about this invoice.
                   </p>
-                  {props.clientMessage ? (
+                  {editing ? (
+                    <label className="mt-4 grid gap-1 border-t pt-3 text-sm" style={{ borderColor: "#e5e7eb" }}>
+                      <span className="text-xs font-medium text-[var(--bt-muted)]">Message to client</span>
+                      <textarea
+                        value={clientMessage}
+                        onChange={(event) => setClientMessage(event.target.value)}
+                        rows={3}
+                        className={fieldClass}
+                        style={fieldStyle}
+                      />
+                    </label>
+                  ) : props.clientMessage ? (
                     <div className="mt-4 whitespace-pre-wrap border-t pt-3 text-sm text-[#374151]" style={{ borderColor: "#e5e7eb" }}>
                       {props.clientMessage}
                     </div>
@@ -537,17 +723,37 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
                 ) : null}
               </div>
             ) : null}
+            {props.canEdit ? (
+              <button
+                type="button"
+                aria-label="Edit"
+                title={editing ? "Cancel edit" : "Edit"}
+                onClick={toggleEdit}
+                className="rounded p-2 text-[var(--bt-muted)] hover:bg-black/5"
+                style={editing ? { color: "var(--bt-primary)" } : undefined}
+              >
+                <PencilIcon className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+
+          {editError ? (
+            <p role="alert" className="mr-auto text-xs text-red-600 sm:mr-0">
+              {editError}
+            </p>
+          ) : null}
+
+          {editing && props.canEdit ? (
             <button
               type="button"
-              aria-label="Edit"
-              title={editing ? "Done" : "Edit"}
-              onClick={() => setEditing((value) => !value)}
-              className="rounded p-2 text-[var(--bt-muted)] hover:bg-black/5"
-              style={editing ? { color: "var(--bt-primary)" } : undefined}
+              onClick={saveEdit}
+              disabled={editPending}
+              className="rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: "var(--bt-primary)" }}
             >
-              <PencilIcon className="h-4 w-4" />
+              {editPending ? "Saving…" : "Save"}
             </button>
-          </div>
+          ) : null}
 
           {tab === "preview" && props.canAct ? (
             <RecordPaymentForm jobId={props.jobId} invoiceId={props.invoiceId} />
@@ -555,6 +761,14 @@ export function InvoiceDetailView(props: InvoiceDetailProps) {
           <SendInvoiceButtons jobId={props.jobId} invoiceId={props.invoiceId} status={props.displayStatus} variant="bt" />
         </footer>
       </div>
+
+      <AddFromChangeOrdersModal
+        jobId={props.jobId}
+        invoiceId={props.invoiceId}
+        rows={props.changeOrderRows}
+        open={addFromOpen}
+        onClose={() => setAddFromOpen(false)}
+      />
     </div>
   );
 }
