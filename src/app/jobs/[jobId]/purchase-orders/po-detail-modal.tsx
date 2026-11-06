@@ -1,17 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { ScopeRichText } from "@/components/financial/ScopeRichText";
 import {
+  ChatIcon,
   CloseIcon,
-  GearIcon,
   HistoryIcon,
   InfoIcon,
   MaximizeIcon,
-  MenuIcon,
 } from "@/components/shell/icons";
 import { calendarDateEastern, formatMoney } from "@/lib/format";
 import {
@@ -39,6 +38,17 @@ function SendIcon() {
   );
 }
 
+/** Buildertrend footer ⋯ (horizontal ellipsis), not the hamburger MenuIcon. */
+function EllipsisIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className={className} aria-hidden>
+      <circle cx="4.5" cy="10" r="1.5" />
+      <circle cx="10" cy="10" r="1.5" />
+      <circle cx="15.5" cy="10" r="1.5" />
+    </svg>
+  );
+}
+
 function toDateInputValue(iso: string | null): string {
   if (!iso) return "";
   try {
@@ -48,10 +58,33 @@ function toDateInputValue(iso: string | null): string {
   }
 }
 
+function SectionHeader({
+  title,
+  info,
+  trailing,
+}: {
+  title: string;
+  info?: boolean;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between gap-2 border-b bg-[#eef0f2] px-3 py-2"
+      style={{ borderColor: "var(--bt-border)" }}
+    >
+      <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--bt-text)]">
+        {title}
+        {info ? <InfoIcon className="h-3.5 w-3.5 text-sky-500" /> : null}
+      </h3>
+      {trailing}
+    </div>
+  );
+}
+
 /**
- * Buildertrend pencil-modal for an existing Purchase Order — General / Scope on
- * the left, Work Status + PO Status + Internal Notes on the right, Save + Send
- * in the footer. Pop-out opens the full detail page.
+ * Buildertrend pencil-modal for an existing Purchase Order — General Information /
+ * Scope of Work on the left, Work Status + PO Status + Internal Notes on the right,
+ * Save + Send in the footer. Pop-out opens the full detail page.
  *
  * Color language follows BT (grey Draft, green Approved, amber Work Incomplete,
  * green Work Complete) rather than monochrome teal.
@@ -98,6 +131,10 @@ export function PurchaseOrderDetailModal({
     if (intent === "save" && !state.error) onClose();
   }, [state.ok, state.error, intent, onClose, router]);
 
+  const fieldClass =
+    "rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-link,#1F4ECD)] disabled:opacity-60";
+  const labelClass = "text-xs font-semibold text-[var(--bt-text)]";
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-3">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -128,7 +165,7 @@ export function PurchaseOrderDetailModal({
                 href={detailHref}
                 aria-label="Open full page"
                 title="Open full page"
-                className="rounded p-1.5 text-[#0ea5e9] hover:bg-sky-50"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--bt-chrome-export,#16a34a)] hover:bg-black/5"
               >
                 <MaximizeIcon className="h-4 w-4" />
               </Link>
@@ -136,114 +173,128 @@ export function PurchaseOrderDetailModal({
                 href={`${detailHref}#history`}
                 aria-label="History"
                 title="History"
-                className="rounded p-1.5 text-[#d97706] hover:bg-amber-50"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[#d97706] hover:bg-amber-50"
               >
                 <HistoryIcon className="h-4 w-4" />
               </Link>
-              <span className="rounded p-1.5 text-[#64748b]" title="Settings" aria-hidden>
-                <GearIcon className="h-4 w-4" />
+              <span
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--bt-chrome-help,#3b82f6)]"
+                title="Comments"
+                aria-hidden
+              >
+                <ChatIcon className="h-4 w-4" />
               </span>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="rounded p-1.5 text-[var(--bt-muted)] hover:bg-black/5"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--bt-muted)] hover:bg-black/5"
               >
                 <CloseIcon className="h-4 w-4" />
               </button>
             </div>
           </header>
 
-          <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_15rem]">
-            <div className="flex flex-col gap-5 p-4 sm:p-5">
-              <section className="relative flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-[var(--bt-text)]">General</h3>
-                  <span
-                    className="rounded px-2 py-0.5 text-[10px] font-semibold"
-                    style={{ background: statusStyle.bg, color: statusStyle.text }}
-                  >
-                    {formatPoStatusLabel(row.status)}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <label className="grid min-w-[8rem] gap-1 text-sm">
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--bt-muted)]">
-                      Purchase Order # <InfoIcon className="h-3 w-3 text-sky-500" />
-                    </span>
-                    <input
-                      name="poNumber"
-                      defaultValue={displayPo}
-                      disabled={!canEdit}
-                      className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)] disabled:opacity-60"
-                      style={{ borderColor: "var(--bt-border)" }}
-                    />
-                  </label>
-                  <div className="text-right">
-                    <div className="text-xs font-medium text-[var(--bt-muted)]">Total Cost</div>
-                    <div className="text-base font-semibold text-[var(--bt-text)]">{formatMoney(row.totalCents)}</div>
-                  </div>
-                </div>
-
-                <label className="grid gap-1 text-sm">
-                  <span className="text-xs font-medium text-[var(--bt-muted)]">Title</span>
-                  <input
-                    name="title"
-                    defaultValue={row.title ?? ""}
-                    disabled={!canEdit}
-                    className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)] disabled:opacity-60"
-                    style={{ borderColor: "var(--bt-border)" }}
-                  />
-                </label>
-
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                  <label className="grid gap-1 text-sm">
-                    <span className="text-xs font-medium text-[var(--bt-muted)]">Assigned to</span>
-                    <select
-                      name="vendorId"
-                      value={vendorId}
-                      onChange={(event) => setVendorId(event.target.value)}
-                      disabled={!canEdit}
-                      className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)] disabled:opacity-60"
-                      style={{ borderColor: "var(--bt-border)" }}
+          <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_17rem]">
+            <div className="flex flex-col gap-4 p-4 sm:p-5">
+              <section
+                className="overflow-hidden rounded border bg-white"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                <SectionHeader
+                  title="General Information"
+                  trailing={
+                    <span
+                      className="rounded px-2 py-0.5 text-[10px] font-semibold"
+                      style={{ background: statusStyle.bg, color: statusStyle.text }}
                     >
-                      <option value="">Unassigned</option>
-                      {vendors.map((vendor) => (
-                        <option key={vendor.id} value={vendor.id}>
-                          {vendor.name}
-                          {vendor.email ? "" : " (no email)"}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 pb-2 text-sm text-[var(--bt-text)]">
+                      {formatPoStatusLabel(row.status)}
+                    </span>
+                  }
+                />
+
+                <div className="flex flex-col gap-4 p-3 sm:p-4">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <label className="grid min-w-[9rem] flex-1 gap-1 text-sm sm:max-w-[14rem]">
+                      <span className={`inline-flex items-center gap-1 ${labelClass}`}>
+                        Purchase Order # <InfoIcon className="h-3 w-3 text-sky-500" />
+                      </span>
+                      <input
+                        name="poNumber"
+                        defaultValue={displayPo}
+                        disabled={!canEdit}
+                        className={fieldClass}
+                        style={{ borderColor: "var(--bt-border)" }}
+                      />
+                    </label>
+                    <div className="pb-0.5 text-right">
+                      <div className={labelClass}>Total Cost</div>
+                      <div className="text-base font-semibold text-[var(--bt-text)]">
+                        {formatMoney(row.totalCents)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <label className="grid gap-1 text-sm">
+                    <span className={labelClass}>Title</span>
                     <input
-                      type="checkbox"
-                      name="materialsOnly"
-                      value="true"
-                      checked={materialsOnly}
+                      name="title"
+                      defaultValue={row.title ?? ""}
                       disabled={!canEdit}
-                      onChange={(event) => setMaterialsOnly(event.target.checked)}
-                      className="rounded border"
+                      className={fieldClass}
                       style={{ borderColor: "var(--bt-border)" }}
                     />
-                    Materials Only
                   </label>
-                </div>
 
-                <div className="grid gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-[var(--bt-muted)]">Scheduled Completion</span>
-                    <div className="inline-flex rounded border p-0.5" style={{ borderColor: "var(--bt-border)" }}>
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                    <label className="grid gap-1 text-sm">
+                      <span className={labelClass}>Assigned to</span>
+                      <select
+                        name="vendorId"
+                        value={vendorId}
+                        onChange={(event) => setVendorId(event.target.value)}
+                        disabled={!canEdit}
+                        className={fieldClass}
+                        style={{ borderColor: "var(--bt-border)" }}
+                      >
+                        <option value="">Unassigned</option>
+                        {vendors.map((vendor) => (
+                          <option key={vendor.id} value={vendor.id}>
+                            {vendor.name}
+                            {vendor.email ? "" : " (no email)"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 pb-2 text-sm text-[var(--bt-text)]">
+                      <input
+                        type="checkbox"
+                        name="materialsOnly"
+                        value="true"
+                        checked={materialsOnly}
+                        disabled={!canEdit}
+                        onChange={(event) => setMaterialsOnly(event.target.checked)}
+                        className="rounded border"
+                        style={{ borderColor: "var(--bt-border)" }}
+                      />
+                      Materials Only
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className={labelClass}>Scheduled Completion</span>
                       <button
                         type="button"
                         disabled={!canEdit}
                         onClick={() => setCompletionMode("date")}
-                        className="rounded px-2.5 py-1 text-xs font-semibold disabled:opacity-50"
+                        className="text-sm font-medium disabled:opacity-50"
                         style={{
-                          background: completionMode === "date" ? "var(--bt-primary)" : "transparent",
-                          color: completionMode === "date" ? "var(--bt-on-primary)" : "var(--bt-text)",
+                          color:
+                            completionMode === "date"
+                              ? "var(--bt-link,#1F4ECD)"
+                              : "var(--bt-muted)",
+                          textDecoration: completionMode === "date" ? "underline" : "none",
                         }}
                       >
                         Choose date
@@ -252,77 +303,97 @@ export function PurchaseOrderDetailModal({
                         type="button"
                         disabled={!canEdit}
                         onClick={() => setCompletionMode("schedule")}
-                        className="rounded px-2.5 py-1 text-xs font-semibold disabled:opacity-50"
+                        className="text-sm font-medium disabled:opacity-50"
                         style={{
-                          background: completionMode === "schedule" ? "var(--bt-primary)" : "transparent",
-                          color: completionMode === "schedule" ? "var(--bt-on-primary)" : "var(--bt-text)",
+                          color:
+                            completionMode === "schedule"
+                              ? "var(--bt-link,#1F4ECD)"
+                              : "var(--bt-muted)",
+                          textDecoration: completionMode === "schedule" ? "underline" : "none",
                         }}
                       >
                         Link to Schedule
                       </button>
                     </div>
-                  </div>
 
-                  {completionMode === "date" ? (
-                    <label className="grid max-w-xs gap-1 text-sm">
-                      <span className="text-xs font-medium text-[var(--bt-muted)]">Completion Date</span>
-                      <input
-                        type="date"
-                        name="scheduledCompletionOn"
-                        defaultValue={toDateInputValue(row.scheduledCompletionOn)}
-                        disabled={!canEdit}
-                        className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)] disabled:opacity-60"
-                        style={{ borderColor: "var(--bt-border)" }}
-                      />
-                      <input type="hidden" name="completedOn" defaultValue={toDateInputValue(row.completedOn)} />
-                    </label>
-                  ) : (
-                    <label className="grid max-w-md gap-1 text-sm">
-                      <span className="text-xs font-medium text-[var(--bt-muted)]">Schedule item</span>
-                      <select
-                        name="linkedScheduleItemId"
-                        value={linkedScheduleItemId}
-                        onChange={(event) => setLinkedScheduleItemId(event.target.value)}
-                        disabled={!canEdit}
-                        className="rounded border px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)] disabled:opacity-60"
-                        style={{ borderColor: "var(--bt-border)" }}
-                      >
-                        <option value="">Choose schedule item…</option>
-                        {scheduleItems.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.title}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
+                    {completionMode === "date" ? (
+                      <label className="grid max-w-xs gap-1 text-sm">
+                        <span className={labelClass}>Completion Date</span>
+                        <input
+                          type="date"
+                          name="scheduledCompletionOn"
+                          defaultValue={toDateInputValue(row.scheduledCompletionOn)}
+                          disabled={!canEdit}
+                          className={fieldClass}
+                          style={{ borderColor: "var(--bt-border)" }}
+                        />
+                        <input
+                          type="hidden"
+                          name="completedOn"
+                          defaultValue={toDateInputValue(row.completedOn)}
+                        />
+                      </label>
+                    ) : (
+                      <label className="grid max-w-md gap-1 text-sm">
+                        <span className={labelClass}>Schedule item</span>
+                        <select
+                          name="linkedScheduleItemId"
+                          value={linkedScheduleItemId}
+                          onChange={(event) => setLinkedScheduleItemId(event.target.value)}
+                          disabled={!canEdit}
+                          className={fieldClass}
+                          style={{ borderColor: "var(--bt-border)" }}
+                        >
+                          <option value="">Choose schedule item…</option>
+                          {scheduleItems.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
                 </div>
               </section>
 
-              {canEdit ? (
-                <ScopeRichText defaultValue={row.scopeOfWork ?? ""} />
-              ) : (
-                <section className="grid gap-1">
-                  <h3 className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--bt-text)]">
-                    Scope of Work <InfoIcon className="h-3.5 w-3.5 text-sky-500" />
-                  </h3>
-                  <div
-                    className="min-h-[10rem] whitespace-pre-wrap rounded border px-3 py-2 text-sm text-[var(--bt-text)]"
-                    style={{ borderColor: "var(--bt-border)" }}
-                  >
-                    {row.scopeOfWork?.trim() ? row.scopeOfWork : <span className="text-[var(--bt-muted)]">—</span>}
+              <section
+                className="overflow-hidden rounded border bg-white"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                <SectionHeader title="Scope of Work" info />
+                <div className="p-3 sm:p-4">
+                  {canEdit ? (
+                    <ScopeRichText defaultValue={row.scopeOfWork ?? ""} hideLabel />
+                  ) : (
+                    <div
+                      className="min-h-[10rem] whitespace-pre-wrap rounded border px-3 py-2 text-sm text-[var(--bt-text)]"
+                      style={{ borderColor: "var(--bt-border)" }}
+                    >
+                      {row.scopeOfWork?.trim() ? (
+                        row.scopeOfWork
+                      ) : (
+                        <span className="text-[var(--bt-muted)]">—</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="mt-2">
+                    <InfoIcon className="h-4 w-4 text-sky-500" />
                   </div>
-                </section>
-              )}
+                </div>
+              </section>
             </div>
 
             <aside
-              className="flex flex-col gap-4 border-t bg-[#f3f4f6] p-4 lg:border-l lg:border-t-0"
+              className="flex flex-col gap-3 border-t bg-[#f3f4f6] p-3 sm:p-4 lg:border-l lg:border-t-0"
               style={{ borderColor: "var(--bt-border)" }}
             >
-              <section className="rounded border bg-white p-3" style={{ borderColor: "var(--bt-border)" }}>
-                <h3 className="text-sm font-semibold text-[var(--bt-text)]">Work Status</h3>
-                <div className="mt-2">
+              <section
+                className="overflow-hidden rounded border bg-white"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                <SectionHeader title="Work Status" />
+                <div className="p-3">
                   <span
                     className="inline-block rounded px-2 py-0.5 text-[10px] font-semibold"
                     style={{
@@ -332,56 +403,71 @@ export function PurchaseOrderDetailModal({
                   >
                     {workComplete ? formatWorkStatusLabel("WORK_COMPLETE") : "Work Incomplete"}
                   </span>
-                </div>
-                {/* formAction routes this submit to setWorkStatusAction without a nested <form>. */}
-                <button
-                  type="submit"
-                  formAction={workAction}
-                  name="workComplete"
-                  value={workComplete ? "false" : "true"}
-                  disabled={workPending}
-                  className="mt-3 w-full rounded border bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bt-text)] disabled:opacity-50 hover:bg-black/5"
-                  style={{ borderColor: "var(--bt-border)" }}
-                >
-                  {workPending ? "Working…" : workComplete ? "Reopen Work" : "Mark Work Complete"}
-                </button>
-              </section>
-
-              <section className="rounded border bg-white p-3" style={{ borderColor: "var(--bt-border)" }}>
-                <h3 className="text-sm font-semibold text-[var(--bt-text)]">Purchase Order Status</h3>
-                <div className="mt-3 h-2.5 w-full overflow-hidden rounded-sm bg-[#d1d5db]">
-                  <div
-                    className="h-full"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, row.billedPercent))}%`,
-                      background: row.billedPercent > 0 ? "var(--bt-badge-qb-bg)" : "transparent",
-                    }}
-                  />
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-2 rounded border border-[#e5e7eb] bg-[#f9fafb] px-2 py-1.5 text-xs">
-                  <span className="font-semibold text-[var(--bt-text)]">{row.billedPercent}%</span>
-                  <span className="text-[var(--bt-muted)]">Outstanding: {formatMoney(row.outstandingCents)}</span>
-                </div>
-                <p className="mt-2 text-[10px] text-[var(--bt-muted)]">
-                  {row.billedPercent === 0
-                    ? "No Payments have been made or requested."
-                    : `${row.billedPercent}% billed against this purchase order.`}
-                </p>
-              </section>
-
-              <section>
-                <h3 className="text-sm font-semibold text-[var(--bt-text)]">Internal Only</h3>
-                <label className="mt-2 grid gap-1 text-sm">
-                  <span className="text-xs text-[var(--bt-muted)]">Internal Notes</span>
-                  <textarea
-                    name="internalNotes"
-                    rows={5}
-                    defaultValue={row.internalNotes ?? ""}
-                    disabled={!canEdit}
-                    className="w-full rounded border bg-white px-3 py-2 text-sm outline-none focus:border-[var(--bt-primary)] disabled:opacity-60"
+                  {/* formAction routes this submit to setWorkStatusAction without a nested <form>. */}
+                  <button
+                    type="submit"
+                    formAction={workAction}
+                    name="workComplete"
+                    value={workComplete ? "false" : "true"}
+                    disabled={workPending}
+                    className="mt-3 w-full rounded border bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bt-text)] hover:bg-black/5 disabled:opacity-50"
                     style={{ borderColor: "var(--bt-border)" }}
-                  />
-                </label>
+                  >
+                    {workPending ? "Working…" : workComplete ? "Reopen Work" : "Mark Work Complete"}
+                  </button>
+                </div>
+              </section>
+
+              <section
+                className="overflow-hidden rounded border bg-white"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                <SectionHeader title="Purchase Order Status" />
+                <div className="p-3">
+                  <div className="h-2.5 w-full overflow-hidden rounded-sm bg-[#d1d5db]">
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, row.billedPercent))}%`,
+                        background: row.billedPercent > 0 ? "var(--bt-badge-qb-bg)" : "transparent",
+                      }}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-xs">
+                    <span className="rounded border border-[#e5e7eb] bg-[#f9fafb] px-2 py-1 font-semibold text-[var(--bt-text)]">
+                      {row.billedPercent}%
+                    </span>
+                    <span className="text-[var(--bt-muted)]">
+                      <span className="font-semibold text-[var(--bt-text)]">Outstanding:</span>{" "}
+                      {formatMoney(row.outstandingCents)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[10px] text-[var(--bt-muted)]">
+                    {row.billedPercent === 0
+                      ? "No Payments have been made or requested."
+                      : `${row.billedPercent}% billed against this purchase order.`}
+                  </p>
+                </div>
+              </section>
+
+              <section
+                className="overflow-hidden rounded border bg-white"
+                style={{ borderColor: "var(--bt-border)" }}
+              >
+                <SectionHeader title="Internal Only" />
+                <div className="p-3">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-xs text-[var(--bt-muted)]">Internal Notes</span>
+                    <textarea
+                      name="internalNotes"
+                      rows={5}
+                      defaultValue={row.internalNotes ?? ""}
+                      disabled={!canEdit}
+                      className="w-full rounded border bg-white px-3 py-2 text-sm outline-none focus:border-[var(--bt-link,#1F4ECD)] disabled:opacity-60"
+                      style={{ borderColor: "var(--bt-border)" }}
+                    />
+                  </label>
+                </div>
               </section>
             </aside>
           </div>
@@ -397,7 +483,11 @@ export function PurchaseOrderDetailModal({
                   {state.error ?? workState.error}
                 </p>
               ) : state.acceptUrl ? (
-                <a href={state.acceptUrl} className="break-all underline" style={{ color: "var(--bt-primary)" }}>
+                <a
+                  href={state.acceptUrl}
+                  className="break-all underline"
+                  style={{ color: "var(--bt-primary)" }}
+                >
                   Accept link
                 </a>
               ) : null}
@@ -410,7 +500,7 @@ export function PurchaseOrderDetailModal({
                 onClick={() => setMenuOpen((open) => !open)}
                 className="rounded p-2 text-[var(--bt-muted)] hover:bg-black/5"
               >
-                <MenuIcon className="h-4 w-4" />
+                <EllipsisIcon className="h-4 w-4" />
               </button>
               {menuOpen ? (
                 <div
@@ -426,7 +516,7 @@ export function PurchaseOrderDetailModal({
                 type="submit"
                 disabled={pending || !canEdit}
                 onClick={() => setIntent("save")}
-                className="rounded border bg-white px-4 py-2 text-sm font-semibold text-[var(--bt-text)] disabled:opacity-50 hover:bg-black/5"
+                className="rounded border bg-white px-4 py-2 text-sm font-semibold text-[var(--bt-text)] hover:bg-black/5 disabled:opacity-50"
                 style={{ borderColor: "var(--bt-border)" }}
               >
                 {pending && intent === "save" ? "Saving…" : "Save"}
